@@ -1,0 +1,2734 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Gestión de Fallas — La Florida</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f6f4; --panel:#ffffff; --ink:#1c2b23; --ink-soft:#55665c; --line:#dbe2dc;
+    --primary:#1f4d3d; --primary-light:#2f6b54; --amber:#d98e2f; --red:#c1443c; --green:#3a8a5c;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--ink);}
+  #login{height:100vh;display:flex;align-items:center;justify-content:center;}
+  .login-box{background:#fff;border-radius:16px;padding:36px;width:340px;box-shadow:0 8px 30px rgba(0,0,0,0.08);}
+  .login-box h1{font-size:17px;margin:0 0 4px;}
+  .login-box p{font-size:12.5px;color:var(--ink-soft);margin:0 0 20px;}
+  .login-box input{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:8px;font-size:13.5px;margin-bottom:10px;}
+  .login-box button{width:100%;padding:11px;border:none;border-radius:8px;background:var(--primary);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;}
+  .login-box button:hover{background:var(--primary-light);}
+  .login-error{color:var(--red);font-size:12px;margin-top:8px;min-height:16px;}
+  #app{display:none; grid-template-columns:1fr 340px; grid-template-rows:56px 1fr; height:100vh;}
+  header{grid-column:1/3;background:var(--primary);color:#fff;display:flex;align-items:center;padding:0 20px;gap:14px;z-index:20;}
+  header .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;}
+  header .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--amber);}
+  header .userinfo{margin-left:auto;font-size:12px;display:flex;align-items:center;gap:10px;}
+  header .role-badge{background:rgba(255,255,255,0.15);padding:4px 10px;border-radius:20px;font-weight:600;text-transform:uppercase;font-size:10.5px;letter-spacing:.03em;}
+  header button.logout{background:transparent;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 10px;border-radius:6px;font-size:11.5px;cursor:pointer;}
+  #map{width:100%;height:100%;position:relative;z-index:600;}
+  .report-panel{
+    display:none; position:absolute; top:16px; left:16px; z-index:900;
+    background:#fff; border-radius:12px; padding:16px 16px 14px; width:520px;
+    max-height:75vh; overflow-y:auto; box-shadow:0 10px 34px rgba(0,0,0,0.2);
+  }
+  .report-panel.visible{display:block;}
+  .falla-opcion-row{
+    display:flex; align-items:center; gap:10px;
+    padding:6px 0; border-bottom:1px solid var(--line); font-size:11.5px;
+  }
+  .falla-opcion-row .falla-opcion-desc{flex:1; color:var(--ink);}
+  .falla-opcion-row .codigo-btn{flex-shrink:0;}
+  .report-panel .close-x{
+    position:absolute; top:8px; right:10px; cursor:pointer; font-weight:700;
+    color:var(--ink-soft); background:none; border:none; font-size:16px; line-height:1;
+  }
+  .report-panel .close-x:hover{color:var(--ink);}
+
+  #controlesMapaSuperiores{
+    position:absolute; top:16px; right:16px; z-index:800;
+    display:flex; flex-direction:column; align-items:flex-end; gap:8px;
+  }
+  #controlesMapaSuperiores .fit-comuna-btn{position:static;}
+  .fit-comuna-btn{
+    background:#fff; border:1.5px solid var(--line); border-radius:10px;
+    padding:9px 14px; font-size:12.5px; font-weight:700; color:var(--ink);
+    cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.12);
+  }
+  .fit-comuna-btn:hover{border-color:var(--primary); color:var(--primary);}
+
+  .search-box{
+    position:absolute; top:116px; right:16px; z-index:800;
+    background:#fff; border:1.5px solid var(--line); border-radius:12px;
+    padding:12px; width:210px; box-shadow:0 4px 16px rgba(0,0,0,0.14);
+  }
+  .search-box input{
+    width:100%; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px;
+    font-size:12.5px; margin-bottom:8px; box-sizing:border-box;
+  }
+  .search-box input:disabled{background:#f4f6f4; color:var(--ink-soft);}
+  .suggestions{
+    display:none; position:absolute; top:100%; left:0; right:0; z-index:10;
+    margin-top:-6px; max-height:150px; overflow-y:auto; background:#fff;
+    border:1.5px solid var(--line); border-radius:8px; box-shadow:0 6px 18px rgba(0,0,0,0.14);
+  }
+  .suggestions.visible{display:block;}
+  .suggestion-item{padding:7px 10px; font-size:12px; cursor:pointer;}
+  .suggestion-item:hover{background:#f2f4f2;}
+  .search-box button{
+    width:100%; padding:9px; border:none; border-radius:8px; background:var(--primary);
+    color:#fff; font-weight:700; font-size:12.5px; cursor:pointer;
+  }
+  .search-box button:hover{background:var(--primary-light);}
+
+  .modal-overlay{
+    display:none; position:fixed; inset:0; background:rgba(20,30,25,0.45);
+    z-index:2000; align-items:center; justify-content:center;
+  }
+  .modal-overlay.visible{display:flex;}
+  .modal-card{
+    background:#fff; border-radius:16px; padding:26px 28px; width:520px;
+    max-height:82vh; overflow-y:auto; position:relative; box-shadow:0 20px 60px rgba(0,0,0,0.3);
+  }
+  .modal-card h2{margin:0 0 14px; font-size:17px;}
+  .modal-card h3{font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:20px 0 10px;}
+  .modal-card .close-x{position:absolute; top:14px; right:16px; font-size:20px;}
+  .periodo-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
+  .periodo-btn{border:1.5px solid var(--line); background:#fff; padding:7px 12px; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;}
+  .periodo-btn.active{border-color:var(--primary); background:var(--primary); color:#fff;}
+  .periodo-row input[type=date]{border:1.5px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12.5px;}
+  .stat-grid-modal{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px;}
+  .stat-box-modal{background:#f7f8f7; border-radius:12px; padding:9px 14px;}
+  .stat-box-modal .num{font-size:26px; font-weight:800; color:var(--primary);}
+  .stat-box-modal .lbl{font-size:11.5px; color:var(--ink-soft); margin-top:2px;}
+  .stat-row{display:flex; justify-content:space-between; font-size:13px; padding:7px 0; border-bottom:1px solid var(--line);}
+  .stat-row span:last-child{font-weight:700;}
+
+  .modal-card.modal-card-wide{width:min(920px, 92vw);}
+  #todasFallasTabla tbody tr{border-bottom:1px solid var(--line); cursor:pointer;}
+  #todasFallasTabla tbody tr:hover{background:#f7f8f7;}
+  #todasFallasTabla td{padding:8px 10px; vertical-align:middle;}
+  #todasFallasTabla td.mono{font-variant-numeric:tabular-nums; color:var(--ink-soft); font-size:11px;}
+  .sort-btn{border:none; background:none; cursor:pointer; font-size:12px; color:var(--ink-soft); padding:0 2px; vertical-align:middle;}
+  .sort-btn:hover{color:var(--primary);}
+  .sort-btn.activo{color:var(--primary); font-weight:700;}
+
+  .bottom-panel{
+    display:none; flex-direction:column; background:#fff; border-top:1px solid var(--line);
+    height:340px; min-height:140px; max-height:75vh; position:relative;
+    box-shadow:0 -6px 20px rgba(0,0,0,0.08); z-index:500; flex-shrink:0;
+  }
+  .bottom-panel.visible{display:flex;}
+  .resize-handle{
+    height:10px; cursor:ns-resize; background:#eef1ee; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .resize-handle::after{content:''; width:38px; height:4px; background:#c7cec9; border-radius:2px;}
+  .bottom-panel-header{
+    display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    padding:10px 20px; border-bottom:1px solid var(--line); flex-shrink:0;
+  }
+  .bottom-panel-body{flex:1; overflow:auto; padding:14px 20px;}
+  #sidebar{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column;position:relative;}
+  .sidebar-resize-handle{
+    position:absolute; top:0; left:0; width:6px; height:100%; cursor:ew-resize; z-index:900;
+  }
+  .sidebar-resize-handle:hover{background:rgba(31,77,61,0.15);}
+  .section{padding:16px 18px;border-bottom:1px solid var(--line);}
+  .section h3{margin:0 0 10px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-weight:700;}
+  .mode-btn{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1.5px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:8px;}
+  .mode-btn.active{border-color:var(--primary);background:#eef5f1;color:var(--primary);}
+  .mode-btn-blue{background:#2563a8; color:#fff; border:1.5px solid #000; text-align:center; justify-content:center;}
+  .mode-btn-blue:hover{background:#1e4f87;}
+  .mode-btn .swatch{width:12px;height:12px;border-radius:50%;flex-shrink:0;background:var(--red);}
+  .mode-btn.line .swatch{border-radius:2px;width:16px;height:4px;}
+  .hint{font-size:11.5px;color:var(--ink-soft);line-height:1.5;margin-top:4px;}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px;color:var(--ink-soft);}
+  .legend-item .swatch{width:11px;height:11px;border-radius:50%;flex-shrink:0;}
+  .filtro-estado-swatch{transition:opacity 0.15s ease;}
+  .legend-item svg{transition:opacity 0.15s ease;}
+  .legend-item .swatch.ln{width:16px;height:3px;border-radius:2px;}
+  #fallasList{flex:1;overflow-y:auto;}
+  .falla-item{padding:10px 18px;border-bottom:1px solid var(--line);font-size:12.5px;}
+  .falla-item .row1{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  .badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;text-transform:uppercase;}
+  .badge.reportada{background:#fbe7e5;color:var(--red);}
+  .badge.pendiente{background:#fbf0dd;color:var(--amber);}
+  .badge.reiterada{background:#f1e6f7;color:#8e44ad;}
+  .badge.reparada{background:#e3f2e8;color:var(--green);}
+  .badge.asignacion{background:#eef4fb;color:#2563a8;}
+  .falla-item .meta{color:var(--ink-soft);font-size:11px;}
+  .falla-item button{font-size:10.5px;border:1px solid var(--line);background:#fff;padding:4px 8px;border-radius:6px;cursor:pointer;font-weight:600;margin-top:6px;}
+  .empty-state{padding:30px 18px;text-align:center;color:var(--ink-soft);font-size:12.5px;line-height:1.6;}
+  .leaflet-popup-content{font-size:12.5px;line-height:1.5;}
+  .popup-btn{margin-top:6px;background:var(--primary);color:#fff;border:none;padding:7px 12px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;width:100%;}
+  .popup-btn:hover{background:var(--primary-light);}
+  .codigo-row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;}
+  .codigo-btn{border:1.5px solid var(--primary);background:var(--primary);color:#fff;padding:5px 10px;border-radius:6px;font-size:11.5px;font-weight:700;cursor:pointer;}
+  .codigo-btn.sel{border-color:var(--amber);background:var(--amber);color:#1c2b23;box-shadow:0 0 0 2px rgba(217,142,47,0.35);}
+  .rosca{display:grid;grid-template-columns:repeat(3,32px);grid-template-rows:repeat(3,32px);gap:3px;margin:8px 0;justify-content:center;}
+  .rosca button{border:1.5px solid var(--line);background:#fff;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;}
+  .rosca button.sel{border-color:var(--primary);background:var(--primary);color:#fff;}
+  .rosca .n{grid-column:2;grid-row:1;} .rosca .o{grid-column:3;grid-row:2;}
+  .rosca .c{grid-column:2;grid-row:2;font-size:9px;color:var(--ink-soft);}
+  .rosca .p{grid-column:1;grid-row:2;} .rosca .s{grid-column:2;grid-row:3;}
+  textarea.popup-input{width:100%;font-size:12px;padding:6px;border:1.5px solid var(--line);border-radius:6px;margin-top:6px;resize:vertical;min-height:50px;font-family:inherit;}
+  ::-webkit-scrollbar{width:8px;} ::-webkit-scrollbar-thumb{background:#d3dad5;border-radius:10px;}
+
+  @keyframes pulseFalla {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+  .falla-reportada { animation: pulseFalla 1.1s ease-in-out infinite; }
+  .falla-pendiente { opacity: 0.9; }
+
+  @keyframes pulsoResaltado {
+    0%, 100% { opacity: 0.25; }
+    50% { opacity: 1; }
+  }
+  .resaltado-consulta { animation: pulsoResaltado 2.2s ease-in-out infinite; }
+
+  /* ========== RESPONSIVE / MÓVIL ==========
+     Se activa SOLO con la clase body.modo-movil (interruptor manual "🖥️ / 📱" en el encabezado).
+     Nunca se activa automáticamente por ancho de ventana ni por tipo de puntero — así el modo
+     escritorio de siempre queda intacto pase lo que pase. */
+  body.modo-movil{ overflow-x:hidden; }
+
+  /* Header: permite que los botones se envuelvan en vez de desbordar */
+  body.modo-movil #app{ grid-template-rows:auto 1fr !important; grid-template-columns:1fr !important; }
+  body.modo-movil header{ flex-wrap:wrap; padding:8px 10px; gap:8px; row-gap:6px; }
+  body.modo-movil header .brand{ font-size:13px; }
+  body.modo-movil header .userinfo{ flex-wrap:wrap; gap:6px; margin-left:0; width:100%; justify-content:flex-start; }
+  body.modo-movil header .role-badge{ font-size:9.5px; padding:3px 8px; }
+  body.modo-movil header select#viewAsSelect{ font-size:11px; }
+
+  /* El panel lateral pasa a ser un cajón (drawer) sobre el mapa en vez de achicar el mapa */
+  body.modo-movil #sidebar{
+    display:none; position:fixed !important; top:0; right:0; height:100%; width:88vw; max-width:340px;
+    z-index:1500; box-shadow:-6px 0 24px rgba(0,0,0,0.25); border-left:1px solid var(--line);
+  }
+  body.modo-movil #sidebar.abierto-movil{ display:flex !important; }
+  body.modo-movil .sidebar-resize-handle{ display:none; } /* redimensionar con el mouse no aplica en táctil */
+
+  /* Fondo oscuro detrás del cajón cuando está abierto, para cerrar tocando afuera */
+  #sidebarOverlayMovil{ display:none; position:fixed; inset:0; background:rgba(20,30,25,0.4); z-index:1400; }
+  #sidebarOverlayMovil.visible{ display:block; }
+
+  /* Panel de reporte de falla y controles del mapa: ancho ajustado a la pantalla */
+  body.modo-movil .report-panel{ width:calc(100vw - 24px); max-width:520px; left:12px; right:12px; top:12px; max-height:70vh; }
+  body.modo-movil .report-panel > div[style*="display:flex"]{ flex-wrap:wrap; }
+  body.modo-movil #controlesMapaSuperiores{ top:12px; right:12px; max-width:60vw; }
+  body.modo-movil #controlesMapaSuperiores .fit-comuna-btn{ font-size:11.5px; padding:8px 10px; }
+  body.modo-movil .search-box{ top:auto; bottom:12px; right:12px; left:12px; width:auto; }
+
+  /* Modales y panel inferior a ancho de pantalla */
+  body.modo-movil .modal-card{ width:calc(100vw - 28px) !important; padding:18px 16px; }
+  body.modo-movil .modal-card.modal-card-wide{ width:calc(100vw - 16px) !important; }
+  body.modo-movil #todasFallasTabla{ display:block; overflow-x:auto; white-space:nowrap; }
+  body.modo-movil .bottom-panel{ height:min(340px, 60vh); }
+
+  /* Objetivos táctiles un poco más grandes */
+  body.modo-movil .codigo-btn{ padding:8px 12px; font-size:12.5px; }
+  body.modo-movil .rosca{ grid-template-columns:repeat(3,38px); grid-template-rows:repeat(3,38px); }
+  body.modo-movil header button.logout{ padding:8px 10px; font-size:12px; }
+  body.modo-movil .login-box{ width:calc(100vw - 48px); padding:24px; }
+
+  #toggleModoDispositivoBtn{ font-size:15px; }
+</style>
+</head>
+<body>
+
+<div id="login">
+  <div class="login-box">
+    <h1>Fallas Alumbrado — La Florida</h1>
+    <p>Ingresa con tu cuenta institucional</p>
+    <form id="loginForm">
+      <input type="email" id="loginEmail" name="email" placeholder="Correo electrónico" autocomplete="username" required>
+      <div style="position:relative;">
+        <input type="password" id="loginPass" name="password" placeholder="Contraseña" autocomplete="current-password" required style="padding-right:38px;">
+        <button type="button" id="togglePassBtn" title="Mostrar/ocultar contraseña" style="position:absolute; right:4px; top:50%; transform:translateY(-50%); width:30px; height:30px; display:flex; align-items:center; justify-content:center; padding:0; background:none; border:none; cursor:pointer; font-size:15px; color:var(--ink-soft);">👁</button>
+      </div>
+      <button type="submit" id="loginBtn">Ingresar</button>
+    </form>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<div id="app">
+  <header>
+    <div class="brand"><span class="dot"></span>Fallas Alumbrado — La Florida</div>
+    <button class="logout" id="fallasRapidoBtn" style="display:none; width:27px; height:27px; padding:0; font-size:14px; margin-left:4px; align-items:center; justify-content:center;" title="Ver todas las fallas">⚡</button>
+    <button class="logout" id="historialModoBtn" style="display:none; width:27px; height:27px; padding:0; font-size:14px; margin-left:4px; align-items:center; justify-content:center;" title="Modo historial: clic en un punto o circuito para ver su historial">👀</button>
+    <div class="userinfo">
+      <span id="userNombre"></span>
+      <span class="role-badge" id="userRol"></span>
+      <select id="viewAsSelect" style="display:none; border-radius:6px; border:1px solid rgba(255,255,255,0.4); background:rgba(255,255,255,0.12); color:#fff; font-size:11.5px; padding:5px 6px;">
+        <option value="" style="color:#000;">Ver como: Admin</option>
+        <option value="ito" style="color:#000;">Ver como: ITO</option>
+        <option value="ito2" style="color:#000;">Ver como: ITO2</option>
+        <option value="contratista" style="color:#000;">Ver como: Contratista</option>
+        <option value="camion" style="color:#000;">Ver como: Camión</option>
+        <option value="observador" style="color:#000;">Ver como: Observador</option>
+      </select>
+      <button class="logout" id="statsBtn" style="margin-right:4px;">📊 Estadísticas</button>
+      <button class="logout" id="todasBtn" style="margin-right:4px; display:none;">📋 Todas las fallas</button>
+      <button class="logout" id="toggleSearchBtn" style="margin-right:4px;">🔍 Buscador</button>
+      <button class="logout" id="usuariosBtn" style="margin-right:4px; display:none;">👥 Usuarios</button>
+      <button class="logout" id="cambiarPassBtn" style="margin-right:4px;">🔑 Contraseña</button>
+      <button class="logout" id="toggleSidebarBtn" title="Mostrar/ocultar panel">☰ Panel</button>
+      <button class="logout" id="toggleModoDispositivoBtn" title="Cambiar entre modo Escritorio y modo Móvil" style="margin-left:4px;">🖥️ Escritorio</button>
+      <button class="logout" id="logoutBtn">Salir</button>
+    </div>
+  </header>
+  <div id="mapArea" style="display:flex; flex-direction:column; min-height:0; height:100%;">
+    <div id="map" style="flex:1; min-height:0; position:relative;">
+      <div id="reportPanel" class="report-panel"></div>
+      <div id="controlesMapaSuperiores">
+        <select id="zonaSelect" class="fit-comuna-btn" style="cursor:pointer;">
+          <option value="">🗺️ Ver comuna / zonas...</option>
+          <option value="comuna">Ver comuna completa</option>
+          <option value="zona1">Zona 1 — Fabián Bazán</option>
+          <option value="zona2">Zona 2 — Daniel Castillo</option>
+          <option value="zona3">Zona 3 — Ernesto Orozco</option>
+          <option value="zona4">Zona 4 — Marco Vásquez</option>
+          <option value="zona5">Zona 5 — Matías Rodríguez</option>
+          <option value="zona6">Zona 6 — Ricardo Mella</option>
+          <option value="zona7">Zona 7 — Pablo Alvarado</option>
+        </select>
+        <button id="toggleZonasBtn" class="fit-comuna-btn" style="cursor:pointer;">👁️ Ver zonas de inspección</button>
+      </div>
+      <div id="searchBox" class="search-box" style="display:none;">
+        <div style="position:relative;">
+          <input type="text" id="searchCalle" placeholder="Calle" autocomplete="off">
+          <div id="calleSuggestions" class="suggestions"></div>
+        </div>
+        <div style="position:relative;">
+          <input type="text" id="searchNumero" placeholder="Número" autocomplete="off" disabled>
+          <div id="numeroSuggestions" class="suggestions"></div>
+        </div>
+        <button id="searchGoBtn">🔍 Buscar dirección</button>
+      </div>
+    </div>
+    <div id="todasPanel" class="bottom-panel">
+      <div id="resizeHandle" class="resize-handle"></div>
+      <div class="bottom-panel-header">
+        <h2 style="margin:0; font-size:15px;" id="panelInferiorTitulo">Todas las fallas de la comuna</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="mode-btn" id="toggleExportBtn" style="background:var(--primary); color:#fff; border-color:var(--primary);">📥 Exportar</button>
+          <button class="close-x" id="closeTodasBtn" style="position:static; font-size:20px;">×</button>
+        </div>
+      </div>
+      <div class="bottom-panel-body">
+        <div id="todasContenido">
+        <div class="hint" style="margin-bottom:10px;">Incluye activas, en reparación y reparadas (últimas 500). Haz clic en una fila para ubicarla en el mapa.</div>
+
+        
+        <table id="todasFallasTabla" style="width:100%; border-collapse:collapse; font-size:12.5px;">
+          <thead>
+            <tr style="text-align:left; border-bottom:2px solid var(--line);">
+              <th style="padding:8px 10px;">OT</th>
+              <th style="padding:8px 10px;">Fecha informada <button class="sort-btn" onclick="ordenarTodasFallas('fecha_creacion')" title="Ordenar por fecha informada">⇅</button></th>
+              <th style="padding:8px 10px; display:none;" id="thFechaReal">Fecha real <button class="sort-btn" onclick="ordenarTodasFallas('creado_en')" title="Ordenar por fecha real">⇅</button></th>
+              <th style="padding:8px 10px;">Reportado por</th>
+              <th style="padding:8px 10px; display:none;" id="thIngresadoPorReal">Ingresado por (real)</th>
+              <th style="padding:8px 10px;">Código</th>
+              <th style="padding:8px 10px;">N° Cliente</th>
+              <th style="padding:8px 10px;">N° Llave</th>
+              <th style="padding:8px 10px;">Puntos afectados</th>
+              <th style="padding:8px 10px;">Estado</th>
+              <th style="padding:8px 10px;"></th>
+            </tr>
+          </thead>
+          <tbody id="todasFallasTbody">
+            <tr><td colspan="11" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+          </tbody>
+        </table>
+        </div>
+
+        <div id="historialContenido" style="display:none;">
+          <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+            <thead>
+              <tr style="text-align:left; border-bottom:2px solid var(--line);">
+                <th style="padding:8px 10px;">OT</th>
+                <th style="padding:8px 10px;">Fecha / hora</th>
+                <th style="padding:8px 10px;">Evento</th>
+                <th style="padding:8px 10px;">Código</th>
+                <th style="padding:8px 10px;">Quién</th>
+                <th style="padding:8px 10px;">Detalle</th>
+              </tr>
+            </thead>
+            <tbody id="historialTbody">
+              <tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="sidebarOverlayMovil"></div>
+  <div id="sidebar">
+    <div id="sidebarResizeHandle" class="sidebar-resize-handle"></div>
+    <div id="sidebarNormal" style="display:flex; flex-direction:column; flex:1; min-height:0;">
+      <div class="section" id="reportSection" style="display:none; flex-shrink:0;">
+        <div id="menuInformarInicial" style="text-align:center;">
+          <button class="mode-btn mode-btn-blue" id="btnInformarFalla" style="display:inline-flex; margin:0 auto 8px;">📋 Informar falla</button>
+          <div id="submenuInformar" style="display:none; margin-top:6px; gap:8px; justify-content:center;">
+            <button class="mode-btn mode-btn-blue" id="btnAgregarFalla" style="flex:0 1 auto;">Agregar falla</button>
+            <button class="mode-btn mode-btn-blue" id="btnInformarInspeccion" style="flex:0 1 auto;">Informar inspección</button>
+          </div>
+        </div>
+        <div id="modoActivoBox" style="display:none;">
+          <div class="hint" id="modoActivoTexto" style="margin-bottom:8px; font-weight:600; color:var(--primary);"></div>
+          <div id="informarPorOtroBox" style="display:none; margin-bottom:10px;">
+            <div class="hint">Informar en nombre de (opcional, por defecto tú mismo):</div>
+            <select id="informarPorOtroSelect" class="popup-input" style="width:100%;">
+              <option value="">Yo mismo</option>
+            </select>
+          </div>
+          <div id="fechaInspeccionBox" style="display:none; margin-bottom:10px;">
+            <div class="hint">Fecha de la inspección (aplica a todas las fallas que ingreses ahora):</div>
+            <input type="date" id="fechaInspeccionInput" class="popup-input" style="width:100%;">
+            <button class="popup-btn" id="comenzarInspeccionBtn" style="margin-top:6px; width:100%; border:1.5px solid #000; background:#2563a8;">Comenzar</button>
+          </div>
+          <button class="popup-btn" id="btnListoModo" style="background:var(--primary); border:1.5px solid #000; display:none;">✓ Listo</button>
+        </div>
+      </div>
+
+      <div class="section" id="repararSection" style="display:none; flex-shrink:0;">
+        <h3>Fallas activas para reparar</h3>
+        <div class="hint">Haz clic en una falla del mapa o de la lista de abajo para registrar su reparación.</div>
+      </div>
+
+      <div class="section" style="padding-bottom:8px;"><h3>Últimas fallas registradas</h3></div>
+      <div id="fallasList" style="flex:1; overflow-y:auto; min-height:80px;"><div class="empty-state">Navega el mapa para ver fallas del sector.</div></div>
+
+      <div class="section" style="flex-shrink:0;">
+        <h3>Leyenda</h3>
+        <div class="legend-item"><span class="swatch ln" style="background:#8a9a90"></span>Circuitos (zoom ≥ 17)</div>
+        <div class="legend-item" style="cursor:pointer;" onclick="toggleFiltroEmpalmes()"><svg id="swatchEmpalmes" width="12" height="12" viewBox="0 0 24 24"><polygon points="12,1 15,9 23,9 17,14 19,22 12,17 5,22 7,14 1,9 9,9" fill="#b23a48"/></svg><span style="margin-left:6px;">Empalmes (zoom ≥ 19)</span></div>
+        <div class="legend-item"><span class="swatch" style="background:#5b7a68"></span>Punto Lumínico (zoom ≥ 17)</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; column-gap:6px; margin-left:14px;">
+          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroPoste('HORMIGON')"><svg id="swatchPosteHORMIGON" width="11" height="11" viewBox="0 0 10 10"><rect x="1.2" y="1.2" width="7.6" height="7.6" fill="#5b7a68"/></svg><span style="margin-left:6px;">P. Hormigón</span></div>
+          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroPoste('ACERO')"><svg id="swatchPosteACERO" width="11" height="11" viewBox="0 0 10 10"><polygon points="5,0.6 9.3,9 0.7,9" fill="#5b7a68"/></svg><span style="margin-left:6px;">P. Acero</span></div>
+          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroPoste('MONOPOSTE')"><svg id="swatchPosteMONOPOSTE" width="11" height="11" viewBox="0 0 10 10"><polygon points="5,0.6 8.75,2.8 8.75,7.2 5,9.4 1.25,7.2 1.25,2.8" fill="#5b7a68"/></svg><span style="margin-left:6px;">Monoposte</span></div>
+          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroPoste('FACHADA')"><svg id="swatchPosteFACHADA" width="11" height="11" viewBox="0 0 10 10"><path d="M1,5 A4,4 0 0 1 9,5 Z" fill="#5b7a68"/></svg><span style="margin-left:6px;">Fachada</span></div>
+          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroPoste('ORNAMENTAL')"><svg id="swatchPosteORNAMENTAL" width="11" height="11" viewBox="0 0 10 10"><polygon points="5,0.6 9.3,4 7.6,9.2 2.4,9.2 0.7,4" fill="#5b7a68"/></svg><span style="margin-left:6px;">P. Ornamental</span></div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; column-gap:6px; margin-top:8px;">
+          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroEstado('reportada')"><span class="swatch filtro-estado-swatch" id="swatchReportada" style="background:var(--red)"></span>Reportada</div>
+          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroEstado('pendiente')"><span class="swatch filtro-estado-swatch" id="swatchPendiente" style="background:#d98e2f"></span>Pendiente</div>
+          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroEstado('reparada')"><span class="swatch filtro-estado-swatch" id="swatchReparada" style="background:var(--green)"></span>Reparada</div>
+          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroEstado('reiterada')"><span class="swatch filtro-estado-swatch" id="swatchReiterada" style="background:#8e44ad"></span>Reiterada</div>
+          <div class="legend-item" style="margin-bottom:3px;"><span class="swatch" style="background:#2563a8"></span>Del período (📊)</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="sidebarStats" style="display:none; flex-direction:column; flex:1; min-height:0;">
+      <div class="section">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <button class="mode-btn" id="backFromStats" style="margin-bottom:0;">← Volver</button>
+          <button id="descargarPdfBtn" title="Descargar PDF" style="width:30px; height:30px; padding:0; border:1.5px solid #000; border-radius:8px; background:#2563a8; color:#fff; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center;">📄</button>
+        </div>
+        <h3>Ver estadísticas por</h3>
+        <div class="toggle-row" style="margin-bottom:12px;">
+          <button id="tabDia" class="active">Día específico</button>
+          <button id="tabPeriodo">Período</button>
+        </div>
+        <div id="selectorDia">
+          <input type="date" id="fechaDiaEspecifico" class="popup-input" style="width:100%;">
+        </div>
+        <div id="selectorPeriodo" style="display:none;">
+          <div class="periodo-row" style="margin-bottom:10px;">
+            <button class="periodo-btn" data-p="semana">Últimos 7 días</button>
+            <button class="periodo-btn" data-p="mes">Últimos 30 días</button>
+          </div>
+          <div class="hint">O elige un rango manual:</div>
+          <div style="display:flex; gap:6px; margin-top:6px;">
+            <input type="date" id="fechaInicioRango" class="popup-input" style="flex:1;">
+            <input type="date" id="fechaFinRango" class="popup-input" style="flex:1;">
+          </div>
+        </div>
+      </div>
+      <div id="statsContent" style="flex:1; overflow-y:auto; padding:0 18px 18px;"><div class="empty-state">Selecciona una fecha.</div></div>
+    </div>
+  </div>
+</div>
+
+<div id="usuariosModal" class="modal-overlay">
+  <div class="modal-card modal-card-wide">
+    <button class="close-x" id="closeUsuariosBtn">×</button>
+    <h2>Gestión de usuarios</h2>
+    <div class="hint" style="margin-bottom:12px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita.</div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+        <thead>
+          <tr style="text-align:left; border-bottom:2px solid var(--line);">
+            <th style="padding:8px 10px;">Nombre</th>
+            <th style="padding:8px 10px;">Email</th>
+            <th style="padding:8px 10px;">Rol</th>
+            <th style="padding:8px 10px;"></th>
+            <th style="padding:8px 10px;"></th>
+          </tr>
+        </thead>
+        <tbody id="usuariosTbody">
+          <tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="passModal" class="modal-overlay">
+  <div class="modal-card" style="width:340px;">
+    <button class="close-x" id="closePassBtn">×</button>
+    <h2>Cambiar mi contraseña</h2>
+    <input type="password" id="passNueva" class="popup-input" placeholder="Nueva contraseña" style="width:100%; margin-bottom:8px;">
+    <input type="password" id="passConfirmar" class="popup-input" placeholder="Confirma la nueva contraseña" style="width:100%; margin-bottom:10px;">
+    <div class="login-error" id="passError" style="margin-bottom:8px;"></div>
+    <button class="popup-btn" id="guardarPassBtn">Guardar nueva contraseña</button>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://rcwtqvhssgtufgypnobn.supabase.co";
+const SUPABASE_KEY = "sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu";
+
+// ---------- Cliente REST propio (sin depender de librerías externas) ----------
+let accessToken = null;
+
+const db = {
+  async signIn(email, password){
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.error_description || data.msg || 'Error de autenticación');
+    accessToken = data.access_token;
+    return data.user;
+  },
+  signOut(){ accessToken = null; },
+  headers(){
+    return {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    };
+  },
+  async select(tabla, query){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?${query}`, { headers: this.headers() });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.message || 'Error consultando ' + tabla);
+    return data;
+  },
+  async insert(tabla, filas){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabla}`, {
+      method: 'POST',
+      headers: { ...this.headers(), 'Prefer': 'return=representation' },
+      body: JSON.stringify(filas)
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.message || 'Error insertando en ' + tabla);
+    return data;
+  },
+  async delete(tabla, query){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?${query}`, {
+      method: 'DELETE',
+      headers: { ...this.headers(), 'Prefer': 'return=representation' }
+    });
+    const data = await res.json().catch(() => []);
+    if(!res.ok){
+      throw new Error(data.message || 'Error eliminando en ' + tabla);
+    }
+    if(!Array.isArray(data) || data.length === 0){
+      throw new Error('No se eliminó ninguna fila. Probablemente no tienes permiso para eliminar este registro específico.');
+    }
+    return true;
+  },
+  async update(tabla, query, cambios){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?${query}`, {
+      method: 'PATCH',
+      headers: { ...this.headers(), 'Prefer': 'return=representation' },
+      body: JSON.stringify(cambios)
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.message || 'Error actualizando ' + tabla);
+    return data;
+  },
+  async rpc(funcion, params){
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${funcion}`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify(params)
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.message || 'Error ejecutando ' + funcion);
+    return data;
+  }
+};
+
+function inicializarBuscadorDirecciones(){
+  const inputCalle = document.getElementById('searchCalle');
+  const inputNumero = document.getElementById('searchNumero');
+  const sugCalle = document.getElementById('calleSuggestions');
+  const sugNumero = document.getElementById('numeroSuggestions');
+  let calleSeleccionada = null;
+  let timerCalle, timerNumero;
+
+  function mostrarSugerencias(container, items, onSelect){
+    if(!items.length){ container.classList.remove('visible'); container.innerHTML = ''; return; }
+    container.innerHTML = items.map((v,i) => `<div class="suggestion-item" data-i="${i}">${v}</div>`).join('');
+    container.classList.add('visible');
+    Array.from(container.children).forEach((el) => {
+      el.onclick = () => onSelect(items[parseInt(el.dataset.i)]);
+    });
+  }
+
+  inputCalle.addEventListener('input', () => {
+    calleSeleccionada = null;
+    inputNumero.value = '';
+    inputNumero.disabled = true;
+    sugNumero.classList.remove('visible');
+    clearTimeout(timerCalle);
+    const texto = inputCalle.value.trim();
+    if(texto.length < 2){ sugCalle.classList.remove('visible'); return; }
+    timerCalle = setTimeout(async () => {
+      try{
+        const resultados = await db.rpc('buscar_calles_loteos', {texto});
+        mostrarSugerencias(sugCalle, resultados.map(r => r.calle), (calle) => {
+          inputCalle.value = calle;
+          calleSeleccionada = calle;
+          sugCalle.classList.remove('visible');
+          inputNumero.disabled = false;
+          inputNumero.focus();
+        });
+      }catch(e){ console.error('Error buscando calles:', e); }
+    }, 250);
+  });
+
+  inputNumero.addEventListener('input', () => {
+    clearTimeout(timerNumero);
+    if(!calleSeleccionada) return;
+    const texto = inputNumero.value.trim();
+    timerNumero = setTimeout(async () => {
+      try{
+        const resultados = await db.rpc('buscar_numeros_loteos', {calle_input: calleSeleccionada, texto});
+        mostrarSugerencias(sugNumero, resultados.map(r => r.numero), (numero) => {
+          inputNumero.value = numero;
+          sugNumero.classList.remove('visible');
+        });
+      }catch(e){ console.error('Error buscando números:', e); }
+    }, 200);
+  });
+
+  document.getElementById('searchGoBtn').onclick = async () => {
+    const calle = calleSeleccionada || inputCalle.value.trim();
+    const numero = inputNumero.value.trim();
+    if(!calle || !numero){ alert('Elige una calle (de la lista) y escribe un número.'); return; }
+    try{
+      const geojson = await db.rpc('buscar_loteo', {calle_input: calle, numero_input: numero});
+      searchResultLayerGroup.clearLayers();
+      if(!geojson || !geojson.features.length){
+        alert(`No se encontró "${calle} ${numero}" en Loteos.`);
+        return;
+      }
+      const layer = L.geoJSON(geojson, {
+        style:{color:'#2563a8', weight:3, fillColor:'#2563a8', fillOpacity:0.35}
+      }).addTo(searchResultLayerGroup);
+      map.fitBounds(layer.getBounds(), {padding:[60,60], maxZoom:19});
+      sugCalle.classList.remove('visible');
+      sugNumero.classList.remove('visible');
+    }catch(e){
+      alert('Error buscando la dirección: ' + e.message);
+    }
+  };
+
+  // cerrar sugerencias al hacer clic fuera de ellas
+  document.addEventListener('click', (e) => {
+    if(!document.getElementById('searchBox').contains(e.target)){
+      sugCalle.classList.remove('visible');
+      sugNumero.classList.remove('visible');
+    }
+  });
+}
+
+let currentUser = null; // {id, nombre, rol}
+let modoVista = null; // permite a un admin "ver como" otro rol, sin cambiar sus permisos reales
+let map, layerCalles, layerCircuitos, layerPuntos, layerLoteos, layerEmpalmes, fallasLayerGroup, fallasPeriodoLayerGroup, searchResultLayerGroup;
+let fallasEnArea = [];
+
+// ---------- LOGIN ----------
+document.getElementById('loginForm').addEventListener('submit', (e) => { e.preventDefault(); login(); });
+document.getElementById('togglePassBtn').onclick = () => {
+  const inp = document.getElementById('loginPass');
+  const btn = document.getElementById('togglePassBtn');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+  btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+};
+
+async function login(){
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPass').value;
+  const errBox = document.getElementById('loginError');
+  errBox.textContent = '';
+  try{
+    const user = await db.signIn(email, pass);
+    await cargarPerfilYIniciar(user.id);
+  }catch(e){
+    errBox.textContent = 'No se pudo iniciar sesión: ' + e.message;
+  }
+}
+
+async function cargarPerfilYIniciar(userId){
+  try{
+    const data = await db.select('usuarios', `id=eq.${userId}&select=id,nombre,rol`);
+    if(!data || !data.length){
+      document.getElementById('loginError').textContent = 'Tu usuario no tiene un perfil asignado. Contacta al administrador.';
+      return;
+    }
+    currentUser = data[0];
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('app').style.display = 'grid';
+    document.getElementById('userNombre').textContent = currentUser.nombre;
+    document.getElementById('userRol').textContent = currentUser.rol;
+    if(currentUser.rol === 'admin'){
+      // El selector "Ver como" y el botón ⚡ SIEMPRE se mantienen visibles para el
+      // admin real, sin importar qué rol esté simulando en un momento dado.
+      document.getElementById('viewAsSelect').style.display = 'inline-block';
+      document.getElementById('viewAsSelect').onchange = (e) => {
+        modoVista = e.target.value || null;
+        actualizarVisibilidadPorRol();
+      };
+      document.getElementById('fallasRapidoBtn').style.display = 'inline-flex';
+      document.getElementById('historialModoBtn').style.display = 'inline-flex';
+    }
+    actualizarVisibilidadPorRol();
+    initMap();
+  }catch(e){
+    document.getElementById('loginError').textContent = 'Error cargando tu perfil: ' + e.message;
+  }
+}
+
+function rolEfectivo(){ return modoVista || currentUser.rol; }
+
+function actualizarVisibilidadPorRol(){
+  const rol = rolEfectivo();
+  // El botón de gestión de usuarios sí sigue la simulación (un ITO/Contratista/Observador
+  // real no vería este botón, así que tampoco debe verse al simular esos roles)
+  document.getElementById('usuariosBtn').style.display = (rol === 'admin') ? 'inline-block' : 'none';
+  document.getElementById('reportSection').style.display = (rol === 'ito' || rol === 'ito2' || rol === 'admin') ? 'block' : 'none';
+  document.getElementById('repararSection').style.display = ['contratista','camion'].includes(rol) ? 'block' : 'none';
+  document.getElementById('statsBtn').style.display = rol === 'contratista' ? 'none' : 'inline-block';
+  document.getElementById('todasBtn').style.display = (rol === 'admin' || rol === 'ito' || rol === 'ito2' || rol === 'contratista') ? 'inline-block' : 'none';
+  // si cambia el rol efectivo (ej. "ver como"), se sale de cualquier modo de reporte activo
+  salirModoInformar();
+}
+
+// ---------- MENÚ "INFORMAR FALLA" (Admin e ITO) ----------
+document.getElementById('btnInformarFalla').onclick = () => {
+  const sub = document.getElementById('submenuInformar');
+  sub.style.display = sub.style.display === 'none' ? 'flex' : 'none';
+};
+
+document.getElementById('btnAgregarFalla').onclick = async () => {
+  modoIngreso = 'agregar';
+  fechaInspeccionSesion = null;
+  document.getElementById('menuInformarInicial').style.display = 'none';
+  document.getElementById('modoActivoBox').style.display = 'block';
+  document.getElementById('fechaInspeccionBox').style.display = 'none';
+  document.getElementById('btnListoModo').style.display = 'block';
+  document.getElementById('modoActivoTexto').textContent = 'Modo: Agregar falla — haz clic en un punto o circuito (fecha actual).';
+  await mostrarSelectorInformarPorOtro();
+  renderFallasOnMap(); // redibuja para que las fallas reparadas dejen pasar el clic hacia postes/circuitos
+};
+
+document.getElementById('btnInformarInspeccion').onclick = async () => {
+  document.getElementById('menuInformarInicial').style.display = 'none';
+  document.getElementById('modoActivoBox').style.display = 'block';
+  document.getElementById('modoActivoTexto').textContent = 'Elige la fecha de la inspección para continuar:';
+  document.getElementById('fechaInspeccionBox').style.display = 'block';
+  document.getElementById('btnListoModo').style.display = 'none';
+  document.getElementById('fechaInspeccionInput').value = new Date().toISOString().slice(0,10);
+  await mostrarSelectorInformarPorOtro();
+};
+
+async function mostrarSelectorInformarPorOtro(){
+  const rol = rolEfectivo();
+  const boxOtro = document.getElementById('informarPorOtroBox');
+  if(rol === 'ito2' || rol === 'admin'){
+    boxOtro.style.display = 'block';
+    await cargarListaItos();
+  } else {
+    boxOtro.style.display = 'none';
+    document.getElementById('informarPorOtroSelect').value = '';
+    informadoPorSesion = null;
+  }
+}
+
+// Actualiza en vivo a quién se informa (aplica de inmediato en "Agregar falla",
+// y también sirve como valor inicial para cuando se confirme "Comenzar" en Inspección)
+document.getElementById('informarPorOtroSelect').addEventListener('change', (e) => {
+  informadoPorSesion = e.target.value || null;
+});
+
+let listaItosCargada = false;
+async function cargarListaItos(){
+  if(listaItosCargada) return;
+  try{
+    const itos = await db.rpc('listar_itos', {});
+    const select = document.getElementById('informarPorOtroSelect');
+    itos.forEach(u => {
+      if(u.id === currentUser.id) return; // "Yo mismo" ya está como opción por defecto
+      const opt = document.createElement('option');
+      opt.value = u.id;
+      opt.textContent = u.nombre;
+      select.appendChild(opt);
+    });
+    listaItosCargada = true;
+  }catch(e){ console.error('Error cargando lista de ITOs:', e); }
+}
+
+document.getElementById('comenzarInspeccionBtn').onclick = () => {
+  const fecha = document.getElementById('fechaInspeccionInput').value;
+  if(!fecha){ alert('Selecciona una fecha.'); return; }
+  modoIngreso = 'inspeccion';
+  fechaInspeccionSesion = fecha;
+  informadoPorSesion = document.getElementById('informarPorOtroSelect').value || null;
+  document.getElementById('fechaInspeccionBox').style.display = 'none';
+  const fechaLegible = new Date(fecha + 'T00:00:00-04:00').toLocaleDateString('es-CL');
+  const nombreOtro = informadoPorSesion ? document.getElementById('informarPorOtroSelect').selectedOptions[0].textContent : null;
+  const textoOtro = nombreOtro ? ` — a nombre de: ${nombreOtro}` : '';
+  document.getElementById('modoActivoTexto').textContent = `Modo: Informar inspección — fecha: ${fechaLegible}${textoOtro}. Haz clic en un punto o circuito.`;
+  document.getElementById('btnListoModo').style.display = 'block';
+  renderFallasOnMap(); // redibuja para que las fallas reparadas dejen pasar el clic hacia postes/circuitos
+};
+
+document.getElementById('btnListoModo').onclick = () => salirModoInformar();
+
+function salirModoInformar(){
+  modoIngreso = null;
+  fechaInspeccionSesion = null;
+  informadoPorSesion = null;
+  document.getElementById('informarPorOtroSelect').value = '';
+  document.getElementById('informarPorOtroBox').style.display = 'none';
+  const submenu = document.getElementById('submenuInformar');
+  if(submenu) submenu.style.display = 'none';
+  const menuInicial = document.getElementById('menuInformarInicial');
+  const modoActivo = document.getElementById('modoActivoBox');
+  if(menuInicial) menuInicial.style.display = 'block';
+  if(modoActivo) modoActivo.style.display = 'none';
+  renderFallasOnMap(); // redibuja para que las fallas reparadas vuelvan a mostrar su popup normal
+}
+
+document.getElementById('toggleSearchBtn').onclick = () => {
+  const box = document.getElementById('searchBox');
+  box.style.display = box.style.display === 'none' ? 'block' : 'none';
+};
+
+function esMovil(){ return document.body.classList.contains('modo-movil'); }
+
+// ---------- Interruptor manual Escritorio / Móvil (el modo escritorio nunca cambia solo) ----------
+function aplicarModoDispositivo(modo){
+  const movil = modo === 'movil';
+  document.body.classList.toggle('modo-movil', movil);
+  const btn = document.getElementById('toggleModoDispositivoBtn');
+  if(btn) btn.textContent = movil ? '📱 Móvil' : '🖥️ Escritorio';
+  // Limpiamos estilos inline que haya dejado el otro modo, para que no choquen con las reglas CSS.
+  const sidebar = document.getElementById('sidebar');
+  const app = document.getElementById('app');
+  if(sidebar){ sidebar.style.display = ''; sidebar.classList.remove('abierto-movil'); }
+  const overlay = document.getElementById('sidebarOverlayMovil');
+  if(overlay) overlay.classList.remove('visible');
+  if(app) app.style.gridTemplateColumns = '';
+  try{ localStorage.setItem('modoDispositivo', modo); }catch(e){}
+  setTimeout(() => { if(typeof map !== 'undefined' && map) map.invalidateSize(); }, 60);
+}
+const btnModoDispositivo = document.getElementById('toggleModoDispositivoBtn');
+if(btnModoDispositivo){
+  btnModoDispositivo.onclick = () => aplicarModoDispositivo(esMovil() ? 'escritorio' : 'movil');
+}
+// Detecta si es realmente un teléfono/tablet (por el dispositivo, no por el ancho de la ventana),
+// para que una ventana de escritorio angosta nunca se confunda con un celular.
+function detectarMovilPorDispositivo(){
+  const ua = navigator.userAgent || '';
+  if(/iPhone|iPod|Android.*Mobile|Windows Phone/i.test(ua)) return true; // celulares
+  if(/iPad|Android(?!.*Mobile)/i.test(ua)) return true; // tablets "clásicas"
+  // iPadOS moderno se identifica como "Macintosh" pero con soporte táctil real
+  if(/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1) return true;
+  return false;
+}
+
+(function inicializarModoDispositivo(){
+  let guardado = null;
+  try{ guardado = localStorage.getItem('modoDispositivo'); }catch(e){}
+  const sugerido = detectarMovilPorDispositivo() ? 'movil' : 'escritorio';
+  aplicarModoDispositivo(guardado || sugerido);
+})();
+
+function cerrarSidebarMovil(){
+  document.getElementById('sidebar').classList.remove('abierto-movil');
+  document.getElementById('sidebarOverlayMovil').classList.remove('visible');
+  setTimeout(() => { if(map) map.invalidateSize(); }, 50);
+}
+
+let ultimoAnchoSidebar = 340;
+document.getElementById('toggleSidebarBtn').onclick = () => {
+  const sidebar = document.getElementById('sidebar');
+  const app = document.getElementById('app');
+
+  if(esMovil()){
+    // En móvil el panel es un cajón (drawer) que flota sobre el mapa, no cambia el ancho del mapa.
+    const abierto = sidebar.classList.contains('abierto-movil');
+    sidebar.classList.toggle('abierto-movil', !abierto);
+    document.getElementById('sidebarOverlayMovil').classList.toggle('visible', !abierto);
+    setTimeout(() => { if(map) map.invalidateSize(); }, 50);
+    return;
+  }
+
+  const oculto = sidebar.style.display === 'none';
+  if(oculto){
+    sidebar.style.display = 'flex';
+    app.style.gridTemplateColumns = `1fr ${ultimoAnchoSidebar}px`;
+  } else {
+    ultimoAnchoSidebar = sidebar.getBoundingClientRect().width || ultimoAnchoSidebar;
+    sidebar.style.display = 'none';
+    app.style.gridTemplateColumns = '1fr';
+  }
+  setTimeout(() => { if(map) map.invalidateSize(); }, 50);
+};
+document.getElementById('sidebarOverlayMovil').onclick = cerrarSidebarMovil;
+
+document.getElementById('logoutBtn').onclick = () => {
+  db.signOut();
+  location.reload();
+};
+
+// ---------- PANEL FLOTANTE (independiente del mapa, no se destruye al moverlo) ----------
+function mostrarPanel(innerHtml){
+  const panel = document.getElementById('reportPanel');
+  panel.innerHTML = '<button class="close-x" onclick="cerrarPanel()">×</button>' + innerHtml;
+  panel.classList.add('visible');
+  return panel;
+}
+function cerrarPanel(){
+  document.getElementById('reportPanel').classList.remove('visible');
+  quitarResaltadoConsulta();
+}
+window.cerrarPanel = cerrarPanel;
+
+// ---------- RESALTADO: borde celeste titilante sobre lo que se está consultando ----------
+let capaResaltadoConsulta = null;
+function resaltarPuntoConsulta(lat, lon){
+  quitarResaltadoConsulta();
+  capaResaltadoConsulta = L.circleMarker([lat, lon], {
+    radius: 15, color: '#00bcd4', weight: 3, fill: false,
+    className: 'resaltado-consulta', pane: 'fallasPane', interactive: false
+  }).addTo(map);
+}
+function resaltarCircuitoConsulta(feature){
+  quitarResaltadoConsulta();
+  capaResaltadoConsulta = L.geoJSON(feature, {
+    style: { color: '#00bcd4', weight: 9, opacity: 0.9, className: 'resaltado-consulta' },
+    interactive: false
+  }).addTo(map);
+}
+function quitarResaltadoConsulta(){
+  if(capaResaltadoConsulta){ map.removeLayer(capaResaltadoConsulta); capaResaltadoConsulta = null; }
+}
+
+// ---------- SIMBOLOGÍA DE PUNTOS SEGÚN TIPO DE POSTE (simb_poste) ----------
+function iconoEstrellaEmpalme(){
+  const svg = `<svg width="26" height="26" viewBox="0 0 24 24">
+    <polygon points="12,1 15,9 23,9 17,14 19,22 12,17 5,22 7,14 1,9 9,9" fill="#b23a48" stroke="#7a232f" stroke-width="1"/>
+  </svg>`;
+  return L.divIcon({html: svg, className: '', iconSize: [26,26], iconAnchor: [13,13]});
+}
+
+function iconoParaPunto(simbPoste, colorRelleno, colorBorde){
+  const tipo = (simbPoste || '').toUpperCase().trim();
+  let svgInterno;
+  if(tipo === 'HORMIGON'){
+    // Cuadrado
+    svgInterno = `<rect x="1.2" y="1.2" width="7.6" height="7.6" fill="${colorRelleno}" stroke="${colorBorde}" stroke-width="1"/>`;
+  } else if(tipo === 'ACERO'){
+    // Triángulo
+    svgInterno = `<polygon points="5,0.6 9.3,9 0.7,9" fill="${colorRelleno}" stroke="${colorBorde}" stroke-width="1"/>`;
+  } else if(tipo === 'MONOPOSTE'){
+    // Hexágono
+    svgInterno = `<polygon points="5,0.6 8.75,2.8 8.75,7.2 5,9.4 1.25,7.2 1.25,2.8" fill="${colorRelleno}" stroke="${colorBorde}" stroke-width="1"/>`;
+  } else if(tipo === 'FACHADA'){
+    // Mitad superior de un círculo
+    svgInterno = `<path d="M1,5 A4,4 0 0 1 9,5 Z" fill="${colorRelleno}" stroke="${colorBorde}" stroke-width="1"/>`;
+  } else if(tipo === 'ORNAMENTAL'){
+    // Pentágono
+    svgInterno = `<polygon points="5,0.6 9.3,4 7.6,9.2 2.4,9.2 0.7,4" fill="${colorRelleno}" stroke="${colorBorde}" stroke-width="1"/>`;
+  } else {
+    // Otros: círculo normal
+    svgInterno = `<circle cx="5" cy="5" r="4" fill="${colorRelleno}" stroke="${colorBorde}" stroke-width="1"/>`;
+  }
+  const html = `<svg width="12" height="12" viewBox="0 0 10 10" xmlns="http://www.w3.org/2000/svg">${svgInterno}</svg>`;
+  return L.divIcon({ html, className: '', iconSize: [12,12], iconAnchor: [6,6] });
+}
+
+// ---------- MAPA ----------
+function initMap(){
+  map = L.map('map', {minZoom:12, maxZoom:19, zoomControl:false}).setView([-33.5384, -70.5973], 14);
+  map.createPane('fallasPane');
+  map.getPane('fallasPane').style.zIndex = 650; // por encima del markerPane (600), donde viven los símbolos de postes
+  map.createPane('empalmesPane');
+  map.getPane('empalmesPane').style.zIndex = 550; // por debajo del markerPane (600), para que quede detrás de los puntos
+  L.control.zoom({position:'bottomleft'}).addTo(map);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution:'&copy; OpenStreetMap contributors', subdomains:'abc', maxZoom:19
+  }).addTo(map);
+
+  map.on('click', () => cerrarPanel()); // clic en mapa vacío cierra el panel
+  L.DomEvent.disableClickPropagation(document.getElementById('reportPanel')); // clics dentro del panel no llegan al mapa
+  L.DomEvent.disableScrollPropagation(document.getElementById('reportPanel')); // scroll dentro del panel no hace zoom en el mapa
+
+  const LA_FLORIDA_BOUNDS = [[-33.5735, -70.615], [-33.505, -70.525]];
+  const ZONAS_GEOJSON = {"type":"FeatureCollection","name":"zonas","crs":{"type":"name","properties":{"name":"urn:ogc:def:crs:OGC:1.3:CRS84"}},"features":[{"type":"Feature","properties":{"zona":1,"Encargado":"Fabi\u00e1n Baz\u00e1n"},"geometry":{"type":"Polygon","coordinates":[[[-70.6138558909991,-33.50816541726998],[-70.61228510213617,-33.50827423504374],[-70.61071987092882,-33.509440043531576],[-70.60289144075918,-33.51592098257979],[-70.60240316684094,-33.516402375608905],[-70.59936559416437,-33.52041724573658],[-70.59840216459993,-33.52238281851322],[-70.59810616664473,-33.52342230936588],[-70.59428317740594,-33.53253686436281],[-70.58767019582197,-33.5471493485707],[-70.59006725881854,-33.547133663373906],[-70.59144757257931,-33.54697114092574],[-70.59839338372056,-33.54690276453677],[-70.59957158197679,-33.546818169902096],[-70.60361717612895,-33.54682917093819],[-70.61081803301548,-33.54662709047295],[-70.61077606178105,-33.538929941005286],[-70.61025700391639,-33.53735613068425],[-70.60996281738329,-33.52615122292194],[-70.61036751967829,-33.521561112753176],[-70.61066691002395,-33.520616118429444],[-70.61184640859449,-33.51042963947735],[-70.613882108611,-33.5083640765143],[-70.6138558909991,-33.50816541726998]]]}},{"type":"Feature","properties":{"zona":2,"Encargado":"Daniel Castillo"},"geometry":{"type":"Polygon","coordinates":[[[-70.61228510213617,-33.50827423504374],[-70.61071397842392,-33.50943822671751],[-70.60289144075918,-33.51592098257979],[-70.60240316684094,-33.516402375608905],[-70.59936559416437,-33.52041724573658],[-70.59825984392756,-33.5227302542326],[-70.57989691282935,-33.522583148189966],[-70.57574703932671,-33.522458127623615],[-70.55649407858522,-33.52226017036245],[-70.55658451537607,-33.5217181352286],[-70.55696861625594,-33.520599771766236],[-70.55805953266278,-33.518607115031365],[-70.5582887233422,-33.51799102069189],[-70.55838246479892,-33.51722116837495],[-70.55866414918582,-33.51632879690348],[-70.55899073687476,-33.51594914981534],[-70.55938958565304,-33.51528203012346],[-70.56043033252215,-33.51227667233121],[-70.56055801446382,-33.511667681326415],[-70.56276993348622,-33.51147749499276],[-70.56511046571742,-33.51141928415853],[-70.56566889253925,-33.51163543826835],[-70.58322914426337,-33.51018756528555],[-70.61228510213617,-33.50827423504374]]]}},{"type":"Feature","properties":{"zona":3,"Encargado":"Ernesto Orozco"},"geometry":{"type":"Polygon","coordinates":[[[-70.5525862659658,-33.54207438929665],[-70.54749474728621,-33.54147453530003],[-70.54549005019517,-33.54136685689458],[-70.5422095973565,-33.54000816578865],[-70.54180395087162,-33.539072107933684],[-70.54096402952217,-33.53802079921069],[-70.5399144783261,-33.537334057539944],[-70.53960838122423,-33.53672855529422],[-70.53747965120543,-33.536525763158515],[-70.53589419416902,-33.53567672264202],[-70.5351129444698,-33.53549336299087],[-70.53442613338498,-33.534946861778025],[-70.53554210013434,-33.53369027594811],[-70.5407647754509,-33.5332875602439],[-70.54229780810446,-33.533618374025735],[-70.54189283917658,-33.52947287530917],[-70.542321511464,-33.52927448804386],[-70.54189884303798,-33.52656500614757],[-70.54421126558816,-33.526174224479675],[-70.54332653061903,-33.52097294035712],[-70.5373857900354,-33.52145706274015],[-70.53549924105155,-33.520672076150134],[-70.53137062211793,-33.52180910004342],[-70.52643725583665,-33.52224404061919],[-70.52415155495963,-33.52087258529471],[-70.52259132755908,-33.51897334842175],[-70.52051724663534,-33.51569285551006],[-70.52062652542162,-33.5120597653332],[-70.51980601574591,-33.510440978160176],[-70.52008806782378,-33.507626227560884],[-70.52355330973853,-33.508935001445025],[-70.52711266040377,-33.50903595582058],[-70.52932205280695,-33.510179058987944],[-70.53196643239067,-33.51066520020625],[-70.53473200646553,-33.511487619059466],[-70.53850407846605,-33.51302141102809],[-70.5415165872274,-33.51314080537205],[-70.54187538008343,-33.512255552967844],[-70.56055801446382,-33.511667681326415],[-70.55938958565304,-33.51528203012346],[-70.55899073687476,-33.51594914981534],[-70.55866414918582,-33.51632879690348],[-70.55838246479892,-33.51722116837495],[-70.5582887233422,-33.51799102069189],[-70.55805953266278,-33.518607115031365],[-70.55696861625594,-33.520599771766236],[-70.55658451537607,-33.5217181352286],[-70.55643388234921,-33.522811773076654],[-70.55651403731133,-33.523667417026125],[-70.55637837424065,-33.524537838996906],[-70.55621192038079,-33.524895863532045],[-70.55526742394706,-33.52926941102993],[-70.55520087709553,-33.530380273227564],[-70.5548427606595,-33.53210410473344],[-70.5547064388094,-33.53575562954437],[-70.55443627707044,-33.53676045768931],[-70.5531147047871,-33.53979944912938],[-70.5525862659658,-33.54207438929665]]]}},{"type":"Feature","properties":{"zona":4,"Encargado":"Marco V\u00e1squez"},"geometry":{"type":"Polygon","coordinates":[[[-70.56985357769263,-33.54369359829972],[-70.56893179140982,-33.543614793123034],[-70.56624527491202,-33.543654844192424],[-70.55810278114637,-33.54397175544401],[-70.55699205627245,-33.54410336844169],[-70.55242441210089,-33.545512065835375],[-70.55128769194309,-33.545601724833126],[-70.55203998566688,-33.54294995418195],[-70.5525862659658,-33.54207438929665],[-70.5531147047871,-33.53979944912938],[-70.55443627707044,-33.53676045768931],[-70.5547064388094,-33.53575562954437],[-70.5548427606595,-33.53210410473344],[-70.55520087709553,-33.530380273227564],[-70.55526742394706,-33.52926941102993],[-70.55621192038079,-33.524895863532045],[-70.5564576562228,-33.52413868065213],[-70.55649407858522,-33.52226017036245],[-70.57574703932671,-33.522458127623615],[-70.57879880511436,-33.52254977107169],[-70.57622217533532,-33.52860929371859],[-70.57343975402146,-33.53565471295288],[-70.56985357769263,-33.54369359829972]]]}},{"type":"Feature","properties":{"zona":5,"Encargado":"Mat\u00edas Rodr\u00edguez"},"geometry":{"type":"Polygon","coordinates":[[[-70.58938711211111,-33.543433796104836],[-70.56985357769263,-33.54369359829972],[-70.56811979664113,-33.547520272137675],[-70.55735054469835,-33.56066774981292],[-70.58436453476975,-33.56556729035038],[-70.58767019582197,-33.5471493485707],[-70.58938711211111,-33.543433796104836]]]}},{"type":"Feature","properties":{"zona":6,"Encargado":"Ricardo Mella"},"geometry":{"type":"Polygon","coordinates":[[[-70.60361717612895,-33.54682917093819],[-70.61354571614423,-33.54657045189004],[-70.61499619847768,-33.546310230174015],[-70.61050276902408,-33.561957182421274],[-70.61256397261344,-33.56216863289371],[-70.61153230690493,-33.570440775230274],[-70.60148074770623,-33.56779624181999],[-70.60016082324086,-33.56734276806021],[-70.59868863751467,-33.567229076472785],[-70.59229865275694,-33.570086490446606],[-70.58375979528482,-33.56895333501439],[-70.58767019582197,-33.5471493485707],[-70.58938711211111,-33.543433796104836],[-70.58767019582197,-33.5471493485707],[-70.59006725881854,-33.547133663373906],[-70.59144757257931,-33.54697114092574],[-70.59839338372056,-33.54690276453677],[-70.59957158197679,-33.546818169902096],[-70.60361717612895,-33.54682917093819]]]}},{"type":"Feature","properties":{"zona":7,"Encargado":"Pablo Alvarado"},"geometry":{"type":"Polygon","coordinates":[[[-70.58938711211111,-33.543433796104836],[-70.59428317740594,-33.53253686436281],[-70.59810616664473,-33.52342230936588],[-70.59825984392756,-33.5227302542326],[-70.57879880511436,-33.52254977107169],[-70.5748252216572,-33.53181234963157],[-70.57343975402146,-33.53565471295288],[-70.56985357769263,-33.54369359829972],[-70.5732088427136,-33.54356435702857],[-70.58938711211111,-33.543433796104836]]]}}]};
+  L.DomEvent.disableClickPropagation(document.getElementById('zonaSelect'));
+  L.DomEvent.disableClickPropagation(document.getElementById('toggleZonasBtn'));
+
+  const COLORES_ZONA = ['#c1443c','#2563a8','#d98e2f','#3a8a5c','#7a5ca8','#1f4d3d','#a8562f'];
+  const layerZonas = L.geoJSON(ZONAS_GEOJSON, {
+    interactive: false,
+    style: (feature) => ({
+      color: COLORES_ZONA[(feature.properties.zona - 1) % COLORES_ZONA.length],
+      weight: 2.5, fillOpacity: 0.06, dashArray: '6,4'
+    }),
+    onEachFeature: (feature, layer) => {
+      layer.bindTooltip(`Zona ${feature.properties.zona} — ${feature.properties.Encargado}`, {sticky:true});
+    }
+  });
+  let zonasVisibles = false;
+  document.getElementById('toggleZonasBtn').onclick = () => {
+    zonasVisibles = !zonasVisibles;
+    const btnZonas = document.getElementById('toggleZonasBtn');
+    if(zonasVisibles){
+      layerZonas.addTo(map);
+      btnZonas.textContent = '👁️ Ocultar zonas de inspección';
+      btnZonas.style.background = '#eef5f1';
+    } else {
+      map.removeLayer(layerZonas);
+      btnZonas.textContent = '👁️ Ver zonas de inspección';
+      btnZonas.style.background = '#fff';
+    }
+  };
+
+  L.DomEvent.disableClickPropagation(document.getElementById('searchBox'));
+  inicializarBuscadorDirecciones();
+
+  const ZONAS_INSPECCION = {
+    zona1: [[-33.547150,-70.613882],[-33.508165,-70.587670]],
+    zona2: [[-33.522730,-70.612285],[-33.508274,-70.556494]],
+    zona3: [[-33.542074,-70.560558],[-33.507626,-70.519806]],
+    zona4: [[-33.545602,-70.578799],[-33.522260,-70.551288]],
+    zona5: [[-33.565567,-70.589387],[-33.543434,-70.557351]],
+    zona6: [[-33.570441,-70.614996],[-33.543434,-70.583760]],
+    zona7: [[-33.543694,-70.598260],[-33.522550,-70.569854]],
+  };
+  document.getElementById('zonaSelect').onchange = (e) => {
+    const val = e.target.value;
+    if(val === 'comuna'){
+      map.fitBounds(LA_FLORIDA_BOUNDS, {padding:[20,20]});
+    } else if(ZONAS_INSPECCION[val]){
+      map.fitBounds(ZONAS_INSPECCION[val], {padding:[20,20]});
+    }
+    e.target.value = ''; // vuelve al placeholder para poder re-elegir la misma zona después
+  };
+
+  layerCalles = L.geoJSON(null, {style:{color:'#9aa79e',weight:1.4,opacity:0.9}});
+  layerCircuitos = L.geoJSON(null, {
+    style:{color:'#8a9a90',weight:2.5,opacity:0.85},
+    onEachFeature:(f,l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); handleCircuitoClick(f,l); })
+  });
+  layerPuntos = L.geoJSON(null, {
+    pointToLayer:(f,latlng) => L.marker(latlng, {icon: iconoParaPunto(f.properties.simb_poste, '#5b7a68', '#3d5548')}),
+    onEachFeature:(f,l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); handlePuntoClick(f,l); })
+  });
+  layerLoteos = L.geoJSON(null, {interactive:false, style:{color:'#c9d6cc',weight:1,fillColor:'#e7ede8',fillOpacity:0.35}});
+  layerEmpalmes = L.geoJSON(null, {
+    pane: 'empalmesPane',
+    pointToLayer: (f, latlng) => L.marker(latlng, {icon: iconoEstrellaEmpalme(), pane: 'empalmesPane'}),
+    onEachFeature: (f, l) => l.on('click', (e) => {
+      L.DomEvent.stopPropagation(e);
+      mostrarPanel(`<b>Empalme</b>
+        <div class="hint">N.° de Medidor: <b>${f.properties.n_empalmes ?? '—'}</b></div>
+        <div class="hint">Cliente: <b>${f.properties.cliente_1 ?? '—'}</b></div>`);
+    })
+  });
+  fallasLayerGroup = L.layerGroup().addTo(map);
+  fallasPeriodoLayerGroup = L.layerGroup().addTo(map);
+  searchResultLayerGroup = L.layerGroup().addTo(map);
+
+
+  map.on('moveend zoomend', cargarDatosDelAreaDebounced);
+  // El zoom no cambia qué fallas existen, solo su estilo (radio, umbral de cascada),
+  // así que solo se vuelve a dibujar con los datos ya descargados — sin ir a la red.
+  map.on('zoomend', renderFallasDesdeCache);
+  cargarDatosDelArea();
+  renderFallasOnMap();
+
+  // refresco periódico de fallas (mientras llega Realtime real en Fase 4)
+  // Se pausa si la pestaña no está visible (usuario minimizado / en otra pestaña) para no gastar datos al pedo.
+  setInterval(async () => {
+    if(document.hidden) return;
+    cargarFallasDelArea();
+    await renderFallasOnMap();
+    if(document.getElementById('sidebarStats').style.display === 'flex'){
+      fallasPeriodoLayerGroup.eachLayer(l => l.bringToFront());
+    }
+  }, 120000);
+}
+
+// ---------- Cache simple por zona (bbox) para las capas de área ----------
+// Evita volver a pedir circuitos/puntos/loteos/empalmes cuando el usuario
+// solo se desplaza un poco dentro de una zona que ya se descargó antes.
+const areaCache = { circuitos:null, puntos:null, loteos:null, empalmes:null };
+function expandirBbox(bbox, margen){
+  const w = bbox[2]-bbox[0], h = bbox[3]-bbox[1];
+  return [bbox[0]-w*margen, bbox[1]-h*margen, bbox[2]+w*margen, bbox[3]+h*margen];
+}
+function bboxContenido(exterior, interior){
+  return exterior && interior[0] >= exterior[0] && interior[1] >= exterior[1]
+    && interior[2] <= exterior[2] && interior[3] <= exterior[3];
+}
+
+let cargarDatosDelAreaTimeout = null;
+function cargarDatosDelAreaDebounced(){
+  clearTimeout(cargarDatosDelAreaTimeout);
+  cargarDatosDelAreaTimeout = setTimeout(cargarDatosDelArea, 250);
+}
+
+async function cargarDatosDelArea(){
+  const z = map.getZoom();
+  const b = map.getBounds();
+  const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+
+  toggleLayer(layerCircuitos, z >= 17);
+  toggleLayer(layerCalles, false); // DESACTIVADA TEMPORALMENTE para revisar otras capas — reactivar con: z >= 14
+  toggleLayer(layerPuntos, z >= 17);
+  toggleLayer(layerLoteos, z >= 19);
+  toggleLayer(layerEmpalmes, z >= 19 && empalmesVisible);
+
+  if(z >= 17 && !bboxContenido(areaCache.circuitos, bbox)){
+    const data = await db.rpc('circuitos_en_area', {min_lon:bbox[0],min_lat:bbox[1],max_lon:bbox[2],max_lat:bbox[3]});
+    if(data){ layerCircuitos.clearLayers(); layerCircuitos.addData(data); areaCache.circuitos = expandirBbox(bbox, 0.5); }
+  }
+  // Capa de calles desactivada temporalmente (ver línea de arriba); se deja de consultar para no gastar llamadas de más
+  // if(z >= 14){
+  //   const data = await db.rpc('calles_en_area', {min_lon:bbox[0],min_lat:bbox[1],max_lon:bbox[2],max_lat:bbox[3]});
+  //   if(data){ layerCalles.clearLayers(); layerCalles.addData(data); }
+  // }
+  if(z >= 17 && !bboxContenido(areaCache.puntos, bbox)){
+    const data = await db.rpc('puntos_en_area', {min_lon:bbox[0],min_lat:bbox[1],max_lon:bbox[2],max_lat:bbox[3]});
+    if(data){ ultimoPuntosGeoJSON = data; redibujarPuntos(); areaCache.puntos = expandirBbox(bbox, 0.5); }
+  }
+  if(z >= 19 && !bboxContenido(areaCache.loteos, bbox)){
+    const data = await db.rpc('loteos_en_area', {min_lon:bbox[0],min_lat:bbox[1],max_lon:bbox[2],max_lat:bbox[3]});
+    if(data){ layerLoteos.clearLayers(); layerLoteos.addData(data); areaCache.loteos = expandirBbox(bbox, 0.5); }
+  }
+  if(z >= 19 && !bboxContenido(areaCache.empalmes, bbox)){
+    const data = await db.rpc('empalmes_en_area', {min_lon:bbox[0],min_lat:bbox[1],max_lon:bbox[2],max_lat:bbox[3]});
+    if(data){ layerEmpalmes.clearLayers(); layerEmpalmes.addData(data); areaCache.empalmes = expandirBbox(bbox, 0.5); }
+  }
+  cargarFallasDelArea();
+}
+function toggleLayer(layer, shouldShow){
+  const has = map.hasLayer(layer);
+  if(shouldShow && !has) layer.addTo(map);
+  if(!shouldShow && has) map.removeLayer(layer);
+}
+
+// ---------- CLICK EN PUNTO / CIRCUITO ----------
+let modoIngreso = null; // null | 'agregar' | 'inspeccion'
+let fechaInspeccionSesion = null;
+let informadoPorSesion = null;
+
+function puedeReportar(){
+  const r = rolEfectivo();
+  return (r === 'ito' || r === 'ito2' || r === 'admin') && (modoIngreso === 'agregar' || modoIngreso === 'inspeccion');
+}
+
+let modoHistorial = false;
+
+function handlePuntoClick(feature, layer){
+  if(modoHistorial && currentUser.rol === 'admin'){
+    resaltarPuntoConsulta(feature.geometry.coordinates[1], feature.geometry.coordinates[0]);
+    mostrarHistorial('punto', feature.properties.gid, `Punto lumínico ${feature.properties.llave ?? ''}`);
+    return;
+  }
+  if(!puedeReportar()){
+    const [lon, lat] = feature.geometry.coordinates;
+    resaltarPuntoConsulta(lat, lon);
+    mostrarPanel(`<b>Punto lumínico</b>
+      <div class="hint">N.° de Llave: <b>${feature.properties.llave ?? '—'}</b></div>
+      <div class="hint">N.° Municipal: <b>${feature.properties.nro_mun ?? '—'}</b></div>
+      <div class="hint">${feature.properties.calle_1||''} ${feature.properties.direccion||''}</div>`);
+    return;
+  }
+  verificarDuplicadoYAbrir('ref_punto_gid', feature.properties.gid,
+    () => {
+      const esMonoposte = (feature.properties.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
+      abrirFormularioFallaPunto(feature.properties.gid, feature.properties.llave, esMonoposte, feature.properties.nro_mun);
+    });
+}
+function handleCircuitoClick(feature, layer){
+  map.fitBounds(layer.getBounds(), {padding:[50,50]});
+  if(modoHistorial && currentUser.rol === 'admin'){
+    resaltarCircuitoConsulta(feature);
+    mostrarHistorial('linea', feature.properties.gid, `Circuito ${feature.properties.id ?? ''}`);
+    return;
+  }
+  if(!puedeReportar()){
+    resaltarCircuitoConsulta(feature);
+    mostrarPanel(`<b>Circuito ${feature.properties.id||''}</b><div class="hint">${feature.properties.cantidad_luminarias_cliente||0} luminarias</div>`);
+    return;
+  }
+  verificarDuplicadoYAbrir('ref_circuito_gid', feature.properties.gid,
+    () => abrirFormularioFallaCircuito(feature.properties.gid, feature.properties.id));
+}
+
+async function verificarDuplicadoYAbrir(campo, gid, siguientePaso){
+  try{
+    // No confiamos solo en la columna "estado" (puede haber quedado desactualizada en fallas
+    // reparadas antes de esta corrección); revisamos si existe una reparación registrada.
+    const existentes = await db.select('fallas', `${campo}=eq.${gid}&select=id,tipo_falla,estado,reparaciones(id)`);
+    const activas = (existentes || []).filter(f => !(f.reparaciones && f.reparaciones.length));
+    if(activas.length){
+      const f = activas[0];
+      mostrarPanel(`<b>Ya existe una falla activa aquí</b><div class="hint">Código ${f.tipo_falla} · estado: ${f.estado.replace('_',' ')}.<br>No se puede duplicar el reporte; si crees que es un error, revísala en la lista lateral.</div>`);
+      return;
+    }
+    siguientePaso();
+  }catch(e){
+    alert('No se pudo verificar duplicados: ' + e.message);
+  }
+}
+
+const CATALOGO_FALLAS_PUNTO = [
+  {c:'F01', d:'Luminaria vial apagada'},
+  {c:'F04', d:'Luminaria vial encendida de día'},
+  {c:'F05', d:'Luminaria vial intermitente'},
+  {c:'F22', d:'Luminaria agotada o tenue'},
+  {c:'F23', d:'Luminaria virada - gancho virado'},
+  {c:'F29', d:'Luminaria peatonal apagada'},
+  {c:'F32', d:'Luminaria peatonal encendida de día'},
+  {c:'F33', d:'Luminaria peatonal intermitente'},
+  {c:'F35', d:'Aplomar poste'},
+  {c:'F38', d:'Luminaria faltante'},
+  {c:'F43', d:'Dos luminarias apagadas'},
+  {c:'OTRO', d:'Otro (describe la falla)'},
+];
+
+function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
+  let codigoSel = null, cardSel = null;
+  const catalogo = esMonoposte
+    ? [{c:'F02', d:'Monoposte apagado'}, {c:'F03', d:'Monoposte encendido de día'}, {c:'OTRO', d:'Otro (describe la falla)'}]
+    : CATALOGO_FALLAS_PUNTO;
+  const filasCatalogo = catalogo.map(item => `
+    <div class="falla-opcion-row">
+      <button class="codigo-btn" data-c="${item.c}">${item.c}</button>
+      <span class="falla-opcion-desc">${item.d}</span>
+    </div>
+  `).join('');
+  const panel = mostrarPanel(`
+    <b>Falla individual - Pto. Lumínico Llave N.° ${llave}</b>
+    <div class="hint" style="margin-top:2px;">N.° Municipal: <b>${nroMun ?? '—'}</b></div>
+    <div style="display:flex; gap:14px; margin-top:10px;">
+      <div style="flex-shrink:0; width:110px;">
+        <div class="hint" style="margin-bottom:4px;">Cardinalidad (opcional):</div>
+        <div class="rosca">
+          <button class="n" data-r="N">N</button>
+          <button class="o" data-r="O">O</button>
+          <button class="c" data-r="">·</button>
+          <button class="p" data-r="P">P</button>
+          <button class="s" data-r="S">S</button>
+        </div>
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div>
+          ${filasCatalogo}
+        </div>
+        <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
+      </div>
+    </div>
+    <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
+  `);
+  panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
+    panel.querySelectorAll('.codigo-btn').forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel'); codigoSel = b.dataset.c;
+  });
+  panel.querySelectorAll('.rosca button').forEach(b => b.onclick = () => {
+    panel.querySelectorAll('.rosca button').forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel'); cardSel = b.dataset.r || null;
+  });
+  panel.querySelector('#confirmarBtn').onclick = async () => {
+    if(!codigoSel){ alert('Selecciona un código de falla.'); return; }
+    const desc = panel.querySelector('#otroDesc').value.trim();
+    if(codigoSel === 'OTRO' && !desc){ alert('Describe la falla.'); return; }
+    const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
+    await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom);
+    cerrarPanel();
+  };
+}
+
+const CATALOGO_FALLAS_CIRCUITO = [
+  {c:'F02', d:'Circuito vial apagado'},
+  {c:'F03', d:'Circuito vial encendido de día'},
+  {c:'F30', d:'Circuito peatonal apagado'},
+  {c:'F31', d:'Circuito peatonal encendido de día'},
+  {c:'OTRO', d:'Otro (describe la falla)'},
+];
+
+function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
+  let codigoSel = null;
+  const filasCatalogo = CATALOGO_FALLAS_CIRCUITO.map(item => `
+    <div class="falla-opcion-row">
+      <button class="codigo-btn" data-c="${item.c}">${item.c}</button>
+      <span class="falla-opcion-desc">${item.d}</span>
+    </div>
+  `).join('');
+  const panel = mostrarPanel(`
+    <b>Falla de circuito ${idOriginal||''}</b>
+    <div style="margin-top:10px;">
+      ${filasCatalogo}
+    </div>
+    <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
+    <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
+  `);
+  panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
+    panel.querySelectorAll('.codigo-btn').forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel'); codigoSel = b.dataset.c;
+  });
+  panel.querySelector('#confirmarBtn').onclick = async () => {
+    if(!codigoSel){ alert('Selecciona un código de falla.'); return; }
+    const desc = panel.querySelector('#otroDesc').value.trim();
+    if(codigoSel === 'OTRO' && !desc){ alert('Describe la falla.'); return; }
+    const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
+    await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null);
+    cerrarPanel();
+  };
+}
+
+// ---------- DIBUJAR FALLAS EN EL MAPA (visibles en cualquier zoom) ----------
+const colorEstado = {reportada:'#c1443c', pendiente:'#d98e2f', reparada:'#3a8a5c', reiterada:'#8e44ad'};
+
+let filtrosEstadoVisible = {reportada:true, pendiente:true, reparada:true, reiterada:true};
+function toggleFiltroEstado(estado){
+  filtrosEstadoVisible[estado] = !filtrosEstadoVisible[estado];
+  const swatch = document.getElementById('swatch' + estado.charAt(0).toUpperCase() + estado.slice(1));
+  if(swatch) swatch.style.opacity = filtrosEstadoVisible[estado] ? '1' : '0.3';
+  renderFallasOnMap();
+}
+window.toggleFiltroEstado = toggleFiltroEstado;
+
+let ultimoPuntosGeoJSON = null;
+let filtrosPosteVisible = {HORMIGON:true, ACERO:true, MONOPOSTE:true, FACHADA:true, ORNAMENTAL:true, OTRO:true};
+function toggleFiltroPoste(tipo){
+  filtrosPosteVisible[tipo] = !filtrosPosteVisible[tipo];
+  const swatch = document.getElementById('swatchPoste' + tipo);
+  if(swatch) swatch.style.opacity = filtrosPosteVisible[tipo] ? '1' : '0.3';
+  redibujarPuntos();
+}
+window.toggleFiltroPoste = toggleFiltroPoste;
+function redibujarPuntos(){
+  if(!ultimoPuntosGeoJSON) return;
+  layerPuntos.clearLayers();
+  const featuresVisibles = ultimoPuntosGeoJSON.features.filter(f => {
+    const tipo = (f.properties.simb_poste || '').toUpperCase().trim();
+    const clave = filtrosPosteVisible.hasOwnProperty(tipo) ? tipo : 'OTRO';
+    return filtrosPosteVisible[clave] !== false;
+  });
+  layerPuntos.addData({type:'FeatureCollection', features: featuresVisibles});
+  layerPuntos.eachLayer(l => l.on('click', (e) => { L.DomEvent.stopPropagation(e); handlePuntoClick(l.feature, l); }));
+}
+
+let empalmesVisible = true;
+function toggleFiltroEmpalmes(){
+  empalmesVisible = !empalmesVisible;
+  const swatch = document.getElementById('swatchEmpalmes');
+  if(swatch) swatch.style.opacity = empalmesVisible ? '1' : '0.3';
+  const z = map.getZoom();
+  toggleLayer(layerEmpalmes, z >= 19 && empalmesVisible);
+}
+window.toggleFiltroEmpalmes = toggleFiltroEmpalmes;
+
+
+let ultimoFallasGeoJSON = null;
+
+async function renderFallasOnMap(){
+  try{
+    const geojson = await db.rpc('fallas_geojson', {});
+    ultimoFallasGeoJSON = geojson;
+  }catch(e){ console.error('Error cargando fallas:', e); return; }
+  renderFallasDesdeCache();
+}
+
+// Vuelve a dibujar las fallas usando lo último descargado (ultimoFallasGeoJSON),
+// sin ir a la red. Se usa en cada zoom, porque el zoom solo cambia el estilo
+// (radio del punto, umbral de visibilidad de cascada), no qué fallas existen.
+function renderFallasDesdeCache(){
+  try{
+    const geojson = ultimoFallasGeoJSON;
+    fallasLayerGroup.clearLayers();
+    if(!geojson || !geojson.features) return;
+    geojson.features.forEach(feat => {
+      const estado = feat.properties.estado;
+      if(filtrosEstadoVisible[estado] === false) return;
+      const color = colorEstado[estado] || '#999';
+      const fallaId = feat.properties.id;
+      // Si la falla ya está reparada y el usuario está en modo "agregar/informar falla" (y no viendo
+      // historial), dejamos el marcador/línea sin interacción para que el clic "atraviese" hacia la capa
+      // de postes/circuitos de abajo y así pueda informar una falla nueva sobre ese mismo punto o circuito.
+      const dejarPasarClick = estado === 'reparada' && puedeReportar() && !modoHistorial;
+      if(feat.geometry.type === 'Point'){
+        // Puntos individuales: siempre visibles (aunque sean "menos preocupantes" que un circuito completo)
+        // Puntos por cascada de circuito: solo visibles desde el mismo zoom que los puntos lumínicos normales,
+        // para no "adelantar" visualmente que hay muchos puntos afectados hasta que se acerque a confirmarlo
+        if(feat.properties.cascada && map.getZoom() < 17) return;
+        const [lon, lat] = feat.geometry.coordinates;
+        const radioFalla = map.getZoom() <= 16 ? 4 : 8;
+        const marker = L.circleMarker([lat, lon], {
+          radius: radioFalla, color:'#fff', weight:2, fillColor:color, fillOpacity:0.95, pane:'fallasPane',
+          interactive: !dejarPasarClick
+        }).addTo(fallasLayerGroup);
+        if(!dejarPasarClick){
+          marker.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            if(modoHistorial && currentUser.rol === 'admin'){
+              resaltarPuntoConsulta(feat.geometry.coordinates[1], feat.geometry.coordinates[0]);
+              mostrarHistorial('punto', feat.properties.ref_punto_gid, `Punto lumínico`);
+              return;
+            }
+            abrirPopupFalla(feat);
+          });
+        }
+      } else {
+        // Circuito: la línea parpadea mientras está "reportada"
+        const claseCss = estado === 'reportada' ? 'falla-reportada' : '';
+        const lineLayer = L.geoJSON(feat, {
+          pane:'fallasPane',
+          style:{color:color, weight:6, opacity:0.9, className: claseCss},
+          interactive: !dejarPasarClick
+        }).addTo(fallasLayerGroup);
+        if(!dejarPasarClick){
+          lineLayer.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            map.fitBounds(lineLayer.getBounds(), {padding:[50,50]});
+            if(modoHistorial && currentUser.rol === 'admin'){
+              resaltarCircuitoConsulta(feat);
+              mostrarHistorial('linea', feat.properties.ref_circuito_gid, `Circuito`);
+              return;
+            }
+            abrirPopupFalla(feat);
+          });
+        }
+      }
+    });
+  }catch(e){ console.error('Error dibujando fallas:', e); }
+}
+
+function formatearDuracion(fechaInicio){
+  const ms = Date.now() - new Date(fechaInicio).getTime();
+  if(ms < 0) return '0 min';
+  const minutosTotal = Math.floor(ms / 60000);
+  const dias = Math.floor(minutosTotal / (60*24));
+  const horas = Math.floor((minutosTotal % (60*24)) / 60);
+  const minutos = minutosTotal % 60;
+  const partes = [];
+  if(dias > 0) partes.push(`${dias} día${dias !== 1 ? 's' : ''}`);
+  if(horas > 0) partes.push(`${horas} h`);
+  if(dias === 0 && minutos > 0) partes.push(`${minutos} min`);
+  return partes.length ? partes.join(' ') : '0 min';
+}
+
+async function abrirPopupFalla(feat){
+  const p = feat.properties;
+  // El comentario puede no venir incluido en la función fallas_geojson de la base de datos;
+  // lo pedimos aparte directamente a la tabla "fallas" para asegurarnos de que siempre se vea.
+  if(p.descripcion_otro === undefined && p.id){
+    try{
+      const filas = await db.select('fallas', `id=eq.${p.id}&select=descripcion_otro`);
+      if(filas && filas.length) p.descripcion_otro = filas[0].descripcion_otro;
+    }catch(e){ console.error('No se pudo cargar el comentario:', e); }
+  }
+  // Último comentario de asignación (el más reciente que haya dejado
+  // contratista/admin al asignar o reasignar la falla a un camión).
+  let ultimoComentarioAsignacion = null;
+  if(p.id){
+    try{
+      const filasComentario = await db.select(
+        'fallas_comentarios',
+        `falla_id=eq.${p.id}&tipo=eq.asignacion&select=comentario,autor_nombre,creado_en&order=creado_en.desc&limit=1`
+      );
+      if(filasComentario && filasComentario.length) ultimoComentarioAsignacion = filasComentario[0];
+    }catch(e){ console.error('No se pudo cargar el comentario de asignación:', e); }
+  }
+  if(p.tipo === 'punto'){
+    const [lon, lat] = feat.geometry.coordinates;
+    resaltarPuntoConsulta(lat, lon);
+  } else {
+    resaltarCircuitoConsulta(feat);
+  }
+  const tipoLabel = p.tipo === 'punto' ? (p.cascada ? 'Punto (por circuito)' : 'Punto lumínico') : 'Circuito';
+  const infoCardinalidad = (p.tipo === 'punto' && p.cardinalidad)
+    ? `<div class="hint" style="margin-top:4px;"><b>Luminaria ${p.cardinalidad}</b></div>`
+    : '';
+  const fechaFalla = p.fecha_falla ? new Date(p.fecha_falla).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+  const duracion = p.fecha_falla ? formatearDuracion(p.fecha_falla) : '—';
+  const infoComentario = p.descripcion_otro
+    ? `<div class="hint" style="margin-top:4px;">Comentario:</div><div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.descripcion_otro}</div>`
+    : '';
+  const infoComentarioAsignacion = ultimoComentarioAsignacion ? (() => {
+    const fechaCom = new Date(ultimoComentarioAsignacion.creado_en).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `
+      <div style="margin-top:6px; padding:6px 8px; background:#eef4fb; border-left:3px solid #2563a8; border-radius:4px;">
+        <div class="hint" style="margin-bottom:2px;">💬 Comentario de Asignación — <b>${ultimoComentarioAsignacion.autor_nombre || '—'}</b> · ${fechaCom}</div>
+        <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${ultimoComentarioAsignacion.comentario}</div>
+      </div>
+    `;
+  })() : '';
+  const infoGeneral = `
+    <div class="hint" style="margin-top:6px;">Fecha y hora: <b>${fechaFalla}</b></div>
+    <div class="hint">Duración: <b>${duracion}</b></div>
+    <div class="hint">Inspector: <b>${p.nombre_creador || '—'}</b></div>
+    <div class="hint">Puntos lumínicos afectados: <b>${p.puntos_afectados ?? '—'}</b></div>
+    <div class="hint">Asignado a: <b>${p.asignado_camion_nombre || 'Sin asignar'}</b></div>
+    ${infoComentario}
+    ${infoComentarioAsignacion}
+  `;
+  let infoReparacion = '';
+  if(p.estado === 'reparada' && p.reparado_por_nombre){
+    const fechaResp = p.fecha_reparacion ? new Date(p.fecha_reparacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+    infoReparacion = `
+      <div class="hint" style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">Responde: <b>${p.reparado_por_nombre}</b></div>
+      <div class="hint">Fecha respuesta: <b>${fechaResp}</b></div>
+      <div class="hint" style="margin-top:2px;">Cierre:</div>
+      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.descripcion_reparacion || '—'}</div>
+    `;
+  } else if(p.estado === 'pendiente' && p.pendiente_por_nombre){
+    const fechaResp = p.fecha_pendiente ? new Date(p.fecha_pendiente).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+    infoReparacion = `
+      <div class="hint" style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">Responde: <b>${p.pendiente_por_nombre}</b></div>
+      <div class="hint">Fecha respuesta: <b>${fechaResp}</b></div>
+      <div class="hint" style="margin-top:2px;">Cierre:</div>
+      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.motivo_pendiente || '—'}</div>
+    `;
+  }
+  const CATALOGO_CIERRES = [
+  {c:'001', d:'Cambio de lámpara quemada'},
+  {c:'009', d:'Luminaria en funcionamiento normal'},
+  {c:'011', d:'Cambio de Ballast'},
+  {c:'012', d:'Cambio de CFE dañada'},
+  {c:'013', d:'Cambio de CFE averiada'},
+  {c:'026', d:'Reparación de conexión'},
+  {c:'037', d:'Cambio de contactor dañado'},
+  {c:'041', d:'Circuito en funcionamiento normal'},
+  {c:'047', d:'Cambio de porta CFE'},
+  {c:'052', d:'Cambio de Ignitor'},
+  {c:'054', d:'Falla subterránea'},
+  {c:'072', d:'Normalización de luminaria o gancho virado'},
+  {c:'126', d:'Cambio de lámpara agotada'},
+  {c:'129', d:'Apriete CFE suelta'},
+  {c:'130', d:'Automático operado'},
+  {c:'131', d:'Automático operado por 3eros'},
+];
+
+// Botón "Eliminar": admin puede eliminar cualquiera en cualquier momento;
+  // el creador (ITO/ITO2/admin) solo su propia falla, no reparada, dentro de 15 min
+  let puedeEliminar = false;
+  if(currentUser.rol === 'admin'){
+    puedeEliminar = true;
+  } else if(p.creado_por === currentUser.id && !p.cascada && p.estado !== 'reparada'){
+    const minutosTranscurridos = (Date.now() - new Date(p.fecha_falla_real).getTime()) / 60000;
+    puedeEliminar = minutosTranscurridos <= 15;
+  }
+  const botonEliminarHtml = puedeEliminar
+    ? `<button id="eliminarDesdeMapaBtn" title="Eliminar falla" style="flex-shrink:0; width:26px; height:26px; padding:0; border:1.5px solid var(--red); border-radius:6px; background:#fbe7e5; color:var(--red); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>`
+    : '';
+  const puedeAsignarCamion = ['contratista','admin'].includes(rolEfectivo()) && !p.cascada;
+  const asignarCamionHtml = puedeAsignarCamion ? `
+    <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
+      <div class="hint" style="margin-bottom:4px;">Asignar a camión:</div>
+      <select id="asignarCamionSelect" class="popup-input" style="width:100%; margin-bottom:6px;">
+        <option value="">Cargando camiones...</option>
+      </select>
+      <textarea class="popup-input" id="comentarioAsignacionInput" placeholder="Comentario de asignación (opcional, lo verá el camión)" style="width:100%; min-height:60px; box-sizing:border-box; margin-bottom:6px;"></textarea>
+      <button class="popup-btn" id="confirmarAsignarCamionBtn" style="background:#2563a8;">Asignar</button>
+    </div>
+  ` : '';
+
+  const tituloConEliminar = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">${botonEliminarHtml}<b>${tipoLabel} · ${p.tipo_falla}</b></div>
+    <div class="hint" style="margin-bottom:4px;">OT: <b>${p.ot || '—'}</b></div>`;
+
+  let contenidoPanel;
+  if(['contratista','camion'].includes(rolEfectivo()) && !p.cascada && p.estado !== 'reparada'){
+    const filasCierre = CATALOGO_CIERRES.map(item => `
+      <div class="falla-opcion-row">
+        <button class="codigo-btn cierre-btn" data-desc="${(item.c + ' ' + item.d).replace(/"/g,'&quot;')}">${item.c}</button>
+        <span class="falla-opcion-desc">${item.d}</span>
+      </div>
+    `).join('');
+    const columnaIzquierda = `
+      ${tituloConEliminar}
+      <div class="hint">Estado: ${p.estado.replace('_',' ')}</div>
+      ${infoCardinalidad}
+      ${infoGeneral}
+      ${infoReparacion}
+      ${asignarCamionHtml}
+      <div id="cierrePreview" style="margin-top:8px; font-size:11.5px; color:var(--ink); font-weight:600; line-height:1.5;"></div>
+      <div class="hint" style="margin-top:8px;">Información adicional:</div>
+      <textarea class="popup-input" id="cierreDesc" placeholder="Ej: Información adicional" style="width:100%; min-height:120px; box-sizing:border-box;"></textarea>
+    `;
+    contenidoPanel = `
+      <div style="display:flex; gap:14px;">
+        <div style="flex:1; min-width:0;">${columnaIzquierda}</div>
+        <div style="flex:1; min-width:0;">${filasCierre}</div>
+      </div>
+      <button class="popup-btn" id="confirmarCierreBtn" style="margin-top:12px;">Registrar reparación y cerrar falla</button>
+      <button class="popup-btn" id="dejarPendienteBtn" style="background:#d98e2f; color:#000; border:1.5px solid #000; margin-top:6px;">Se deja pendiente</button>
+    `;
+  } else {
+    contenidoPanel = `
+      ${tituloConEliminar}
+      <div class="hint">Estado: ${p.estado.replace('_',' ')}</div>
+      ${infoCardinalidad}
+      ${infoGeneral}
+      ${infoReparacion}
+      ${asignarCamionHtml}
+      ${p.cascada ? '<div class="hint" style="margin-top:8px;">Este punto se cierra automáticamente al reparar su circuito.</div>' : ''}
+    `;
+  }
+
+  const panel = mostrarPanel(contenidoPanel);
+
+  if(puedeAsignarCamion){
+    (async () => {
+      try{
+        const camiones = await db.rpc('listar_camiones', {});
+        const select = panel.querySelector('#asignarCamionSelect');
+        if(!select) return;
+        select.innerHTML = '<option value="">Sin asignar</option>' +
+          camiones.map(c => `<option value="${c.id}" ${c.id === p.asignado_camion_id ? 'selected' : ''}>${c.nombre}</option>`).join('');
+      }catch(e){ console.error('Error cargando camiones:', e); }
+    })();
+    const btnAsignar = panel.querySelector('#confirmarAsignarCamionBtn');
+    if(btnAsignar){
+      btnAsignar.onclick = async () => {
+        const camionId = panel.querySelector('#asignarCamionSelect').value || null;
+        const comentarioInput = panel.querySelector('#comentarioAsignacionInput');
+        const comentario = comentarioInput ? comentarioInput.value.trim() : '';
+        try{
+          await db.update('fallas', `id=eq.${p.id}`, {asignado_camion_id: camionId});
+          await guardarComentarioFalla(p.id, 'asignacion', comentario);
+          cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+          cerrarPanel();
+        }catch(e){ alert('No se pudo asignar: ' + e.message); }
+      };
+    }
+  }
+
+  const btnEliminarMapa = panel.querySelector('#eliminarDesdeMapaBtn');
+  if(btnEliminarMapa){
+    btnEliminarMapa.onclick = async () => {
+      if(!confirm('¿Eliminar esta falla? Esta acción no se puede deshacer.')) return;
+      await eliminarFallaPropia(p.id);
+      cerrarPanel();
+    };
+  }
+
+  // Botones de cierre rápido: al hacer clic, agregan su texto al cuadro;
+  // al volver a hacer clic, lo quitan. Se puede elegir más de uno.
+  let seleccionCierre = [];
+
+  function renderPreviewCierre(){
+    const preview = panel.querySelector('#cierrePreview');
+    if(!preview) return;
+    preview.innerHTML = seleccionCierre.map((t, i) => `
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="flex:1;">${t}</span>
+        <span data-i="${i}" class="quitar-cierre-x" style="cursor:pointer; color:var(--red); font-weight:700; flex-shrink:0;">×</span>
+      </div>
+    `).join('');
+    preview.querySelectorAll('.quitar-cierre-x').forEach(x => {
+      x.onclick = () => {
+        const i = parseInt(x.dataset.i);
+        const desc = seleccionCierre[i];
+        seleccionCierre.splice(i, 1);
+        const btnCorrespondiente = panel.querySelector(`.cierre-btn[data-desc="${CSS.escape(desc)}"]`);
+        if(btnCorrespondiente) btnCorrespondiente.classList.remove('sel');
+        renderPreviewCierre();
+      };
+    });
+  }
+
+  panel.querySelectorAll('.cierre-btn').forEach(b => {
+    b.onclick = () => {
+      const desc = b.dataset.desc;
+      const idx = seleccionCierre.indexOf(desc);
+      if(idx === -1){ seleccionCierre.push(desc); b.classList.add('sel'); }
+      else { seleccionCierre.splice(idx, 1); b.classList.remove('sel'); }
+      renderPreviewCierre();
+    };
+  });
+
+  function obtenerDescripcionCompleta(){
+    const libre = panel.querySelector('#cierreDesc').value.trim();
+    const partes = [...seleccionCierre];
+    if(libre) partes.push(libre);
+    return partes.join('\n');
+  }
+
+  const btn = panel.querySelector('#confirmarCierreBtn');
+  if(btn){
+    btn.onclick = async () => {
+      const desc = obtenerDescripcionCompleta();
+      if(!desc){ alert('Describe la reparación realizada.'); return; }
+      await registrarReparacion(p.id, desc);
+      cerrarPanel();
+    };
+  }
+  const btnPendiente = panel.querySelector('#dejarPendienteBtn');
+  if(btnPendiente){
+    btnPendiente.onclick = async () => {
+      const desc = obtenerDescripcionCompleta();
+      if(!desc){ alert('Debes escribir algo en el cuadro de texto antes de dejarla pendiente.'); return; }
+      await marcarFallaPendiente(p.id, desc);
+      cerrarPanel();
+    };
+  }
+}
+
+async function marcarFallaPendiente(fallaId, motivo){
+  try{
+    await db.update('fallas', `id=eq.${fallaId}`, {
+      estado: 'pendiente',
+      pendiente_por: currentUser.id,
+      fecha_pendiente: new Date().toISOString(),
+      motivo_pendiente: motivo
+    });
+    await guardarComentarioFalla(fallaId, 'pendiente', motivo);
+    cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+  }catch(e){ alert('No se pudo marcar como pendiente: ' + e.message); }
+}
+
+// Guarda una copia de cualquier comentario relevante de una falla en
+// fallas_comentarios, para tener un único log histórico unificado
+// (reporte, asignación, pendiente, reparación). No reemplaza las
+// columnas propias de "fallas" que ya usa el resto de la app — es
+// puramente aditivo, así que si esta tabla no existe todavía o falla
+// por permisos, no debe interrumpir el flujo principal.
+async function guardarComentarioFalla(fallaId, tipo, comentario){
+  if(!comentario) return;
+  try{
+    await db.insert('fallas_comentarios', {
+      falla_id: fallaId,
+      tipo,
+      comentario,
+      autor_id: currentUser.id,
+      autor_nombre: currentUser.nombre
+    });
+  }catch(e){ console.error(`No se pudo guardar el comentario (${tipo}) en fallas_comentarios:`, e); }
+}
+
+
+
+// Centrar el mapa en una falla desde la lista lateral
+function enfocarFalla(fallaId){
+  if(!ultimoFallasGeoJSON) return;
+  const feat = ultimoFallasGeoJSON.features.find(f => f.properties.id === fallaId);
+  if(!feat) return;
+  if(feat.geometry.type === 'Point'){
+    const [lon, lat] = feat.geometry.coordinates;
+    map.flyTo([lat, lon], Math.max(map.getZoom(), 18));
+  } else {
+    const bounds = L.geoJSON(feat).getBounds();
+    map.fitBounds(bounds, {padding:[50,50]});
+  }
+}
+window.enfocarFalla = enfocarFalla;
+async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom){
+  try{
+    const fila = {
+      tipo:'punto', ref_punto_gid:puntoGid, tipo_falla:tipoFalla,
+      cardinalidad, descripcion_otro:descripcionOtro,
+      cascada:false, creado_por: currentUser.id
+    };
+    if(fechaCustom) fila.fecha_falla = new Date(fechaCustom + 'T23:50:00-04:00').toISOString();
+    if(informadoPorSesion) fila.informado_por = informadoPorSesion;
+    const filaCreada = await db.insert('fallas', fila);
+    if(filaCreada && filaCreada[0]) await guardarComentarioFalla(filaCreada[0].id, 'reporte', descripcionOtro);
+    cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+  }catch(e){ alert('Error al crear la falla: ' + e.message); }
+}
+
+async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripcionOtro){
+  try{
+    const filaLineaObj = {
+      tipo:'linea', ref_circuito_gid:circuitoGid, tipo_falla:tipoFalla,
+      descripcion_otro:descripcionOtro,
+      cascada:false, creado_por: currentUser.id
+    };
+    if(fechaCustom) filaLineaObj.fecha_falla = new Date(fechaCustom + 'T23:50:00-04:00').toISOString();
+    if(informadoPorSesion) filaLineaObj.informado_por = informadoPorSesion;
+    const filaLinea = await db.insert('fallas', filaLineaObj);
+    const fallaLinea = filaLinea[0];
+    if(fallaLinea) await guardarComentarioFalla(fallaLinea.id, 'reporte', descripcionOtro);
+
+    const puntos = await db.rpc('puntos_de_circuito', {circuito_gid: circuitoGid});
+    if(puntos && puntos.length){
+      const filasCascada = puntos.map(p => {
+        const f = {
+          tipo:'punto', ref_punto_gid:p.gid, tipo_falla:tipoFalla,
+          descripcion_otro:descripcionOtro,
+          cascada:true, circuito_origen_id: fallaLinea.id, creado_por: currentUser.id
+        };
+        if(fechaCustom) f.fecha_falla = new Date(fechaCustom + 'T23:50:00-04:00').toISOString();
+        if(informadoPorSesion) f.informado_por = informadoPorSesion;
+        return f;
+      });
+      await db.insert('fallas', filasCascada);
+    }
+    cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+  }catch(e){ alert('Error al crear la falla: ' + e.message); }
+}
+
+// ---------- LISTA Y REPARACIÓN (contratista) ----------
+async function cargarFallasDelArea(){
+  try{
+    const query = 'select=id,ot,tipo,tipo_falla,estado,cascada,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre)'
+      + '&estado=neq.reparada&cascada=eq.false&order=fecha_falla.desc&limit=20';
+    fallasEnArea = await db.select('fallas', query);
+    renderFallasList();
+  }catch(e){ console.error(e); }
+}
+
+function renderFallasList(){
+  const list = document.getElementById('fallasList');
+  if(!fallasEnArea.length){
+    list.innerHTML = '<div class="empty-state">No hay fallas activas registradas.</div>';
+    return;
+  }
+  list.innerHTML = fallasEnArea.map(f => {
+    const tipoLabel = f.tipo === 'punto' ? (f.cascada ? 'Punto (circuito)' : 'Punto') : 'Circuito';
+    const fecha = new Date(f.fecha_creacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const nombreCreador = f.usuarios ? f.usuarios.nombre : '—';
+    let botonReparar = '';
+    let botonEliminar = '';
+    if(['contratista','camion'].includes(rolEfectivo()) && !f.cascada){
+      botonReparar = `<button onclick="event.stopPropagation(); abrirFormularioReparacion('${f.id}')">Registrar reparación</button>`;
+    }
+    if(rolEfectivo() === 'admin'){
+      botonEliminar = `<button onclick="event.stopPropagation(); eliminarFallaPropia('${f.id}')" style="color:var(--red); border-color:var(--red); margin-top:0;">Eliminar</button>`;
+    } else if(f.creado_por === currentUser.id){
+      const minutosTranscurridos = (Date.now() - new Date(f.creado_en).getTime()) / 60000;
+      if(minutosTranscurridos <= 15){
+        botonEliminar = `<button onclick="event.stopPropagation(); eliminarFallaPropia('${f.id}')" style="color:var(--red); border-color:var(--red); margin-top:0;">Eliminar (error)</button>`;
+      }
+    }
+    return `<div class="falla-item" style="cursor:pointer;" onclick="enfocarFalla('${f.id}')">
+      <div class="row1"><span><b>${tipoLabel}</b> · ${f.tipo_falla} <span class="hint">(OT ${f.ot || '—'})</span></span><span style="display:flex; align-items:center; gap:6px;"><span class="badge ${f.estado}">${f.estado.replace('_',' ')}</span>${botonEliminar}</span></div>
+      <div class="meta">Reportado por ${nombreCreador} · ${fecha}</div>
+      ${botonReparar}
+    </div>`;
+  }).join('');
+}
+
+async function eliminarFallaPropia(fallaId){
+  if(!confirm('¿Eliminar esta falla? Esta acción no se puede deshacer.')) return;
+  try{
+    await db.delete('fallas', `id=eq.${fallaId}`);
+    cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+  }catch(e){ alert('No se pudo eliminar: ' + e.message); }
+}
+window.eliminarFallaPropia = eliminarFallaPropia;
+
+function abrirFormularioReparacion(fallaId){
+  const f = (fallasEnArea || []).find(x => x.id === fallaId);
+  const infoComentario = (f && f.descripcion_otro)
+    ? `<div class="hint" style="margin-top:8px;">Comentario del inspector:</div>
+       <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink); background:#f7f8f7; border-radius:6px; padding:8px;">${f.descripcion_otro}</div>`
+    : '';
+  const panel = mostrarPanel(`
+    <b>Registrar reparación</b>
+    ${f ? `<div class="hint" style="margin-top:2px;">${f.tipo === 'punto' ? 'Punto lumínico' : 'Circuito'} · Código ${f.tipo_falla}</div>` : ''}
+    ${infoComentario}
+    <textarea class="popup-input" id="descReparacion" placeholder="Describe la reparación realizada" style="margin-top:10px; min-height:80px;"></textarea>
+    <button class="popup-btn" id="confirmarReparacionBtn" style="margin-top:10px;">Confirmar reparación</button>
+  `);
+  panel.querySelector('#confirmarReparacionBtn').onclick = async () => {
+    const desc = panel.querySelector('#descReparacion').value.trim();
+    if(!desc){ alert('La descripción no puede estar vacía.'); return; }
+    await registrarReparacion(fallaId, desc);
+    cerrarPanel();
+  };
+}
+
+async function registrarReparacion(fallaId, descripcion){
+  try{
+    await db.insert('reparaciones', { falla_id: fallaId, reparado_por: currentUser.id, descripcion });
+    // Aseguramos que la fila quede marcada como reparada (por si no hay trigger que lo haga en la BD).
+    await db.update('fallas', `id=eq.${fallaId}`, { estado: 'reparada' });
+    // Si era una falla de circuito, cerramos también los puntos individuales creados en cascada por ese circuito.
+    await db.update('fallas', `circuito_origen_id=eq.${fallaId}`, { estado: 'reparada' });
+    await guardarComentarioFalla(fallaId, 'reparacion', descripcion);
+    cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+  }catch(e){ alert('Error al registrar la reparación: ' + e.message); }
+}
+window.abrirFormularioReparacion = abrirFormularioReparacion;
+
+// ---------- ESTADÍSTICAS (panel lateral) ----------
+document.getElementById('statsBtn').onclick = () => mostrarSidebarStats();
+document.getElementById('backFromStats').onclick = () => ocultarSidebarStats();
+
+function mostrarSidebarStats(){
+  document.getElementById('sidebarNormal').style.display = 'none';
+  document.getElementById('sidebarStats').style.display = 'flex';
+  if(!document.getElementById('fechaDiaEspecifico').value){
+    document.getElementById('fechaDiaEspecifico').value = new Date().toISOString().slice(0,10);
+  }
+  actualizarEstadisticasYMapa();
+}
+function ocultarSidebarStats(){
+  document.getElementById('sidebarStats').style.display = 'none';
+  document.getElementById('sidebarNormal').style.display = 'flex';
+  limpiarCapaPeriodo();
+  mostrarCapaActivas(); // al volver, siempre se ven las activas de nuevo
+}
+
+// ---------- TODAS LAS FALLAS (admin / ito) — panel inferior redimensionable ----------
+document.getElementById('todasBtn').onclick = () => mostrarModalTodas();
+document.getElementById('fallasRapidoBtn').onclick = () => mostrarModalTodas();
+document.getElementById('historialModoBtn').onclick = () => {
+  modoHistorial = !modoHistorial;
+  const btn = document.getElementById('historialModoBtn');
+  btn.style.background = modoHistorial ? '#2563a8' : 'transparent';
+  btn.title = modoHistorial
+    ? 'Modo historial ACTIVO — clic en un punto o circuito (clic aquí de nuevo para salir)'
+    : 'Modo historial: clic en un punto o circuito para ver su historial';
+  renderFallasDesdeCache();
+};
+document.getElementById('closeTodasBtn').onclick = () => cerrarModalTodas();
+document.getElementById('toggleExportBtn').onclick = () => {
+  const panel = mostrarPanel(`
+    <b>Exportar fallas a CSV</b>
+    <div class="hint" style="margin:8px 0;">Selecciona el rango de fechas a exportar (incluye datos de la reparación):</div>
+    <input type="date" id="exportFechaInicio" class="popup-input" style="width:100%; margin-bottom:6px;">
+    <div class="hint" style="text-align:center; margin:2px 0;">hasta</div>
+    <input type="date" id="exportFechaFin" class="popup-input" style="width:100%; margin-bottom:10px;">
+    <button class="popup-btn" id="descargarCsvBtn">Descargar CSV</button>
+  `);
+  panel.querySelector('#descargarCsvBtn').onclick = () => exportarCsv();
+};
+
+function mostrarModalTodas(){
+  quitarResaltadoConsulta();
+  document.getElementById('panelInferiorTitulo').textContent = 'Todas las fallas de la comuna';
+  document.getElementById('todasContenido').style.display = 'block';
+  document.getElementById('historialContenido').style.display = 'none';
+  document.getElementById('toggleExportBtn').style.display = ['admin','ito','ito2','contratista'].includes(rolEfectivo()) ? 'inline-block' : 'none';
+  document.getElementById('todasPanel').classList.add('visible');
+  cargarTodasFallas(); // usa caché salvo que algo la haya invalidado (ver todasFallasCacheVigente)
+  setTimeout(() => { if(map) map.invalidateSize(); }, 50);
+}
+function cerrarModalTodas(){
+  document.getElementById('todasPanel').classList.remove('visible');
+  quitarResaltadoConsulta();
+  setTimeout(() => { if(map) map.invalidateSize(); }, 50);
+}
+
+async function mostrarHistorial(tipoEntidad, gid, etiqueta){
+  document.getElementById('panelInferiorTitulo').textContent = `Historial — ${etiqueta}`;
+  document.getElementById('todasContenido').style.display = 'none';
+  document.getElementById('historialContenido').style.display = 'block';
+  document.getElementById('toggleExportBtn').style.display = 'none';
+  document.getElementById('todasPanel').classList.add('visible');
+  setTimeout(() => { if(map) map.invalidateSize(); }, 50);
+
+  const tbody = document.getElementById('historialTbody');
+  tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  try{
+    const filas = await db.rpc('historial_entidad', {tipo_entidad: tipoEntidad, entidad_gid: gid});
+    if(!filas || !filas.length){
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Sin fallas registradas para este elemento todavía.</td></tr>';
+      return;
+    }
+
+    // Comentarios de asignación de todas las fallas de este punto/circuito
+    // (se guardan todos en el tiempo, no solo el último).
+    // Nota: historial_entidad devuelve el id de la falla como "falla_id", no "id".
+    let comentariosPorFalla = {};
+    try{
+      const idsFallas = filas.map(f => f.falla_id).filter(id => id !== undefined && id !== null);
+      if(idsFallas.length){
+        const comentarios = await db.select(
+          'fallas_comentarios',
+          `falla_id=in.(${idsFallas.join(',')})&tipo=eq.asignacion&select=falla_id,comentario,autor_nombre,creado_en&order=creado_en.asc`
+        );
+        comentarios.forEach(c => {
+          if(!comentariosPorFalla[c.falla_id]) comentariosPorFalla[c.falla_id] = [];
+          comentariosPorFalla[c.falla_id].push(c);
+        });
+      }
+    }catch(e){ console.error('No se pudieron cargar los comentarios de asignación:', e); }
+
+    // Comentario del inspector al reportar (columna descripcion_otro en fallas).
+    // La función historial_entidad no lo trae, así que se busca aparte.
+    let comentarioReporte = {};
+    try{
+      const idsFallas = filas.map(f => f.falla_id).filter(id => id !== undefined && id !== null);
+      if(idsFallas.length){
+        const filasDesc = await db.select(
+          'fallas',
+          `id=in.(${idsFallas.join(',')})&select=id,descripcion_otro`
+        );
+        filasDesc.forEach(r => { if(r.descripcion_otro) comentarioReporte[r.id] = r.descripcion_otro; });
+      }
+    }catch(e){ console.error('No se pudo cargar el comentario de reporte:', e); }
+
+    // Cada falla puede generar hasta 3 eventos distintos en la línea de tiempo:
+    // cuándo se reportó, cuándo quedó pendiente, y cuándo se reparó.
+    // A eso se suman los comentarios de asignación registrados para esa falla.
+    let eventos = [];
+    filas.forEach(f => {
+      const etiquetaCascada = f.cascada ? ' <span class="hint">(por cascada de circuito)</span>' : '';
+      eventos.push({
+        fecha: f.fecha_falla,
+        ot: f.ot || '—',
+        evento: 'Reportada',
+        codigo: `${f.tipo_falla}${etiquetaCascada}`,
+        quien: f.nombre_creador || '—',
+        detalle: comentarioReporte[f.falla_id] || '—'
+      });
+      if(f.pendiente_por_nombre){
+        eventos.push({
+          fecha: f.fecha_pendiente,
+          ot: f.ot || '—',
+          evento: 'Dejada pendiente',
+          codigo: f.tipo_falla,
+          quien: f.pendiente_por_nombre,
+          detalle: f.motivo_pendiente || '—'
+        });
+      }
+      if(f.reparado_por_nombre){
+        eventos.push({
+          fecha: f.fecha_reparacion,
+          ot: f.ot || '—',
+          evento: 'Reparada',
+          codigo: f.tipo_falla,
+          quien: f.reparado_por_nombre,
+          detalle: f.descripcion_reparacion || '—'
+        });
+      }
+      (comentariosPorFalla[f.falla_id] || []).forEach(c => {
+        eventos.push({
+          fecha: c.creado_en,
+          ot: f.ot || '—',
+          evento: 'Comentario de Asignación',
+          codigo: f.tipo_falla,
+          quien: c.autor_nombre || '—',
+          detalle: c.comentario
+        });
+      });
+    });
+    eventos.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+
+    const claseEvento = (ev) => ev === 'Reportada' ? 'reportada' : ev === 'Dejada pendiente' ? 'pendiente' : ev === 'Comentario de Asignación' ? 'asignacion' : 'reparada';
+    tbody.innerHTML = eventos.map(ev => {
+      const fecha = new Date(ev.fecha).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      return `<tr>
+        <td class="mono">${ev.ot}</td>
+        <td>${fecha}</td>
+        <td><span class="badge ${claseEvento(ev.evento)}">${ev.evento}</span></td>
+        <td>${ev.codigo}</td>
+        <td>${ev.quien}</td>
+        <td>${ev.detalle}</td>
+      </tr>`;
+    }).join('');
+  }catch(e){
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando historial: ${e.message}</td></tr>`;
+  }
+}
+window.mostrarHistorial = mostrarHistorial;
+
+// Arrastrar la barra superior del panel para ajustar su alto
+// Arrastrar el borde izquierdo del panel lateral para ajustar su ancho
+(function habilitarRedimensionSidebar(){
+  const handle = document.getElementById('sidebarResizeHandle');
+  const app = document.getElementById('app');
+  let arrastrando = false;
+
+  handle.addEventListener('mousedown', (e) => { arrastrando = true; e.preventDefault(); });
+  document.addEventListener('mousemove', (e) => {
+    if(!arrastrando) return;
+    let nuevoAncho = window.innerWidth - e.clientX;
+    nuevoAncho = Math.max(260, Math.min(nuevoAncho, 700));
+    app.style.gridTemplateColumns = `1fr ${nuevoAncho}px`;
+    if(map) map.invalidateSize();
+  });
+  document.addEventListener('mouseup', () => { arrastrando = false; });
+})();
+
+(function habilitarRedimensionPanel(){
+  const handle = document.getElementById('resizeHandle');
+  const panel = document.getElementById('todasPanel');
+  const mapArea = document.getElementById('mapArea');
+  let arrastrando = false;
+
+  handle.addEventListener('mousedown', (e) => { arrastrando = true; e.preventDefault(); });
+  document.addEventListener('mousemove', (e) => {
+    if(!arrastrando) return;
+    const rect = mapArea.getBoundingClientRect();
+    let nuevoAlto = rect.bottom - e.clientY;
+    nuevoAlto = Math.max(140, Math.min(nuevoAlto, rect.height - 100));
+    panel.style.height = nuevoAlto + 'px';
+    if(map) map.invalidateSize();
+  });
+  document.addEventListener('mouseup', () => { arrastrando = false; });
+
+  // soporte táctil básico (tablets)
+  handle.addEventListener('touchstart', () => { arrastrando = true; }, {passive:true});
+  document.addEventListener('touchmove', (e) => {
+    if(!arrastrando || !e.touches[0]) return;
+    const rect = mapArea.getBoundingClientRect();
+    let nuevoAlto = rect.bottom - e.touches[0].clientY;
+    nuevoAlto = Math.max(140, Math.min(nuevoAlto, rect.height - 100));
+    panel.style.height = nuevoAlto + 'px';
+    if(map) map.invalidateSize();
+  }, {passive:true});
+  document.addEventListener('touchend', () => { arrastrando = false; });
+})();
+
+let ultimosTodasFallas = [];
+
+function toDatetimeLocalValue(iso){
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+async function actualizarFechaFalla(fallaId, nuevoValor){
+  if(!nuevoValor) return;
+  try{
+    const nuevaFechaIso = new Date(nuevoValor).toISOString();
+    await db.update('fallas', `id=eq.${fallaId}`, {fecha_falla: nuevaFechaIso});
+    const item = ultimosTodasFallas.find(x => x.id === fallaId);
+    if(item) item.fecha_creacion = nuevaFechaIso;
+    renderTodasFallasTabla();
+    cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+  }catch(e){ alert('No se pudo actualizar la fecha: ' + e.message); }
+}
+window.actualizarFechaFalla = actualizarFechaFalla;
+
+let ordenTodasFallas = {campo: 'fecha_creacion', asc: false};
+
+// "Todas las fallas" no cambia solo porque el admin abra y cierre el panel varias veces;
+// se vuelve a pedir solo la primera vez o después de crear/editar/eliminar una falla
+// (ver invalidarCacheTodasFallas, llamado desde esos flujos).
+let todasFallasCacheVigente = false;
+function invalidarCacheTodasFallas(){
+  todasFallasCacheVigente = false;
+  // Las cachés de estadísticas y de la capa de período (declaradas más abajo) también
+  // quedan obsoletas ante cualquier alta/edición/reparación/eliminación de una falla.
+  if(typeof cacheEstadisticasPorRango !== 'undefined'){
+    Object.keys(cacheEstadisticasPorRango).forEach(k => delete cacheEstadisticasPorRango[k]);
+  }
+  if(typeof cachePeriodoGeojsonPorRango !== 'undefined'){
+    Object.keys(cachePeriodoGeojsonPorRango).forEach(k => delete cachePeriodoGeojsonPorRango[k]);
+  }
+}
+
+async function cargarTodasFallas(){
+  const tbody = document.getElementById('todasFallasTbody');
+  const esAdmin = rolEfectivo() === 'admin';
+  document.getElementById('thFechaReal').style.display = esAdmin ? 'table-cell' : 'none';
+  document.getElementById('thIngresadoPorReal').style.display = esAdmin ? 'table-cell' : 'none';
+  if(todasFallasCacheVigente){
+    renderTodasFallasTabla();
+    return;
+  }
+  tbody.innerHTML = '<tr><td colspan="11" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  try{
+    const todas = await db.rpc('resumen_todas_fallas', {limite: 500});
+    ultimosTodasFallas = todas || [];
+    todasFallasCacheVigente = true;
+    ordenTodasFallas = {campo: 'fecha_creacion', asc: false};
+    renderTodasFallasTabla();
+  }catch(e){
+    tbody.innerHTML = `<tr><td colspan="11" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
+  }
+}
+
+function ordenarTodasFallas(campo){
+  if(campo === 'creado_en' && rolEfectivo() !== 'admin') return; // por si acaso, aunque el botón no debería verse
+  if(ordenTodasFallas.campo === campo){
+    ordenTodasFallas.asc = !ordenTodasFallas.asc;
+  } else {
+    ordenTodasFallas = {campo, asc: false};
+  }
+  renderTodasFallasTabla();
+}
+
+function renderTodasFallasTabla(){
+  const tbody = document.getElementById('todasFallasTbody');
+  const esAdmin = rolEfectivo() === 'admin';
+
+  if(!ultimosTodasFallas.length){
+    tbody.innerHTML = '<tr><td colspan="11" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
+    return;
+  }
+
+  // marcar visualmente qué columna está activa para ordenar
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('activo'));
+  const btnActivo = document.querySelector(`.sort-btn[onclick="ordenarTodasFallas('${ordenTodasFallas.campo}')"]`);
+  if(btnActivo) btnActivo.classList.add('activo');
+
+  const datosOrdenados = [...ultimosTodasFallas].sort((a,b) => {
+    const fa = new Date(a[ordenTodasFallas.campo]).getTime();
+    const fb = new Date(b[ordenTodasFallas.campo]).getTime();
+    return ordenTodasFallas.asc ? fa - fb : fb - fa;
+  });
+
+  tbody.innerHTML = datosOrdenados.map(f => {
+    const fecha = new Date(f.fecha_creacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const fechaCelda = esAdmin
+      ? `<input type="datetime-local" class="popup-input" style="margin:0; padding:4px 6px; font-size:11.5px; width:170px;" value="${toDatetimeLocalValue(f.fecha_creacion)}" onclick="event.stopPropagation();" onchange="event.stopPropagation(); actualizarFechaFalla('${f.id}', this.value)">`
+      : fecha;
+    const fechaReal = esAdmin ? `<td style="display:table-cell;">${new Date(f.creado_en).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</td>` : '';
+    const ingresadoPorReal = esAdmin ? `<td style="display:table-cell;">${f.nombre_real_creador || '—'}</td>` : '';
+    const idCorto = f.id.slice(0,8);
+    let boton = '';
+    if(rolEfectivo() === 'admin'){
+      boton = `<button onclick="event.stopPropagation(); eliminarDesdeTodas('${f.id}')" style="color:var(--red); border-color:var(--red); font-size:11px; border:1px solid var(--red); background:#fff; border-radius:6px; padding:4px 8px; cursor:pointer;">Eliminar</button>`;
+    } else if(f.creado_por === currentUser.id && f.estado !== 'reparada'){
+      const minutosTranscurridos = (Date.now() - new Date(f.creado_en).getTime()) / 60000;
+      if(minutosTranscurridos <= 15){
+        boton = `<button onclick="event.stopPropagation(); eliminarDesdeTodas('${f.id}')" style="color:var(--red); border-color:var(--red); font-size:11px; border:1px solid var(--red); background:#fff; border-radius:6px; padding:4px 8px; cursor:pointer;">Eliminar</button>`;
+      }
+    }
+
+    // Tooltip del código: OTRO -> su descripción; con cardinalidad -> "Luminaria X"; si no hay nada, sin tooltip
+    let tooltipCodigo = '';
+    if(f.tipo_falla === 'OTRO' && f.descripcion_otro){
+      tooltipCodigo = f.descripcion_otro;
+    } else if(f.cardinalidad){
+      tooltipCodigo = `Luminaria ${f.cardinalidad}`;
+    }
+
+    // Tooltip del estado: si está reparada, muestra el detalle de la reparación
+    let tooltipEstado = '';
+    if(f.estado === 'reparada' && f.descripcion_reparacion){
+      const fechaRep = f.fecha_reparacion ? new Date(f.fecha_reparacion).toLocaleString('es-CL') : '';
+      tooltipEstado = `Reparado por ${f.reparado_por_nombre || '—'} · ${fechaRep}\n${f.descripcion_reparacion}`;
+    } else if(f.estado === 'pendiente' && f.pendiente_por_nombre){
+      const fechaPend = f.fecha_pendiente ? new Date(f.fecha_pendiente).toLocaleString('es-CL') : '';
+      tooltipEstado = `Dejado pendiente por ${f.pendiente_por_nombre} · ${fechaPend}\n${f.motivo_pendiente || ''}`;
+    }
+
+    return `<tr onclick="enfocarFalla('${f.id}')">
+      <td class="mono">${f.ot || '—'}</td>
+      <td>${fechaCelda}</td>
+      ${fechaReal}
+      <td>${f.nombre_creador || '—'}</td>
+      ${ingresadoPorReal}
+      <td><b ${tooltipCodigo ? `title="${tooltipCodigo.replace(/"/g,'&quot;')}"` : ''} style="${tooltipCodigo ? 'cursor:help; border-bottom:1px dotted var(--ink-soft);' : ''}">${f.tipo_falla}</b></td>
+      <td>${f.n_cliente || '—'}</td>
+      <td>${f.tipo === 'punto' ? (f.llave ?? '—') : '—'}</td>
+      <td>${f.puntos_afectados}</td>
+      <td><span class="badge ${f.estado}" ${tooltipEstado ? `title="${tooltipEstado.replace(/"/g,'&quot;')}"` : ''} style="${tooltipEstado ? 'cursor:help;' : ''}">${f.estado.replace('_',' ')}</span></td>
+      <td>${boton}</td>
+    </tr>`;
+  }).join('');
+}
+window.ordenarTodasFallas = ordenarTodasFallas;
+
+
+async function eliminarDesdeTodas(fallaId){
+  if(!confirm('¿Eliminar esta falla? Esta acción no se puede deshacer.')) return;
+  try{
+    await db.delete('fallas', `id=eq.${fallaId}`);
+    invalidarCacheTodasFallas();
+    cargarTodasFallas();
+    cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+  }catch(e){ alert('No se pudo eliminar: ' + e.message); }
+}
+window.eliminarDesdeTodas = eliminarDesdeTodas;
+
+// ---------- EXPORTAR CSV (incluye datos de reparación) ----------
+async function exportarCsv(){
+  const ini = document.getElementById('exportFechaInicio').value;
+  const fin = document.getElementById('exportFechaFin').value;
+  if(!ini || !fin){ alert('Selecciona la fecha de inicio y de fin.'); return; }
+  const fechaInicio = new Date(ini + 'T00:00:00-04:00').toISOString();
+  const fechaFin = new Date(fin + 'T23:59:59-04:00').toISOString();
+
+  const btn = document.getElementById('descargarCsvBtn');
+  const textoOriginal = btn.textContent;
+  btn.textContent = 'Generando...'; btn.disabled = true;
+  try{
+    const filas = await db.rpc('resumen_fallas_exportar', {fecha_inicio: fechaInicio, fecha_fin: fechaFin});
+    if(!filas || !filas.length){ alert('No hay fallas en ese rango de fechas.'); return; }
+
+    const esAdmin = rolEfectivo() === 'admin';
+    const encabezados = ['OT','Tipo','Código','Estado','Fecha reporte','Reportado por','N° Cliente',
+      'N° Llave','N° Municipal','Tipo de poste','Puntos afectados',
+      'Reparado por','Fecha reparación','Descripción reparación',
+      'Dejado pendiente por','Fecha pendiente','Motivo pendiente'
+      ].concat(esAdmin ? ['Fecha real','Ingresado por (real)'] : []);
+    const escapar = (v) => `"${String(v ?? '').replace(/\r?\n/g, ' | ').replace(/"/g,'""')}"`;
+    const filasCsv = filas.map(f => {
+      const base = [
+        f.ot || '', f.tipo, f.tipo_falla, f.estado,
+        new Date(f.fecha_creacion).toLocaleString('es-CL'),
+        f.nombre_creador || '', f.n_cliente || '',
+        f.llave ?? '', f.nro_mun ?? '', f.simb_poste || '',
+        f.puntos_afectados,
+        f.reparado_por_nombre || '',
+        f.fecha_reparacion ? new Date(f.fecha_reparacion).toLocaleString('es-CL') : '',
+        f.descripcion_reparacion || '',
+        f.pendiente_por_nombre || '',
+        f.fecha_pendiente ? new Date(f.fecha_pendiente).toLocaleString('es-CL') : '',
+        f.motivo_pendiente || ''
+      ];
+      if(esAdmin){
+        base.push(f.fecha_creacion_real ? new Date(f.fecha_creacion_real).toLocaleString('es-CL') : '');
+        base.push(f.nombre_real_creador || '');
+      }
+      return base.map(escapar).join(',');
+    });
+    const csv = [encabezados.map(escapar).join(','), ...filasCsv].join('\n');
+
+    const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fallas_${ini}_a_${fin}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }catch(e){
+    alert('Error generando el CSV: ' + e.message);
+  }finally{
+    btn.textContent = textoOriginal; btn.disabled = false;
+  }
+}
+
+function ocultarCapaActivas(){
+  if(map.hasLayer(fallasLayerGroup)) map.removeLayer(fallasLayerGroup);
+}
+function mostrarCapaActivas(){
+  if(!map.hasLayer(fallasLayerGroup)) map.addLayer(fallasLayerGroup);
+}
+
+document.getElementById('tabDia').onclick = () => {
+  document.getElementById('tabDia').classList.add('active');
+  document.getElementById('tabPeriodo').classList.remove('active');
+  document.getElementById('selectorDia').style.display = 'block';
+  document.getElementById('selectorPeriodo').style.display = 'none';
+  actualizarEstadisticasYMapa();
+};
+document.getElementById('tabPeriodo').onclick = () => {
+  document.getElementById('tabPeriodo').classList.add('active');
+  document.getElementById('tabDia').classList.remove('active');
+  document.getElementById('selectorPeriodo').style.display = 'block';
+  document.getElementById('selectorDia').style.display = 'none';
+  if(!document.getElementById('fechaInicioRango').value) seleccionarPeriodoRapido('semana');
+  else actualizarEstadisticasYMapa();
+};
+document.getElementById('fechaDiaEspecifico').onchange = actualizarEstadisticasYMapa;
+document.getElementById('fechaInicioRango').onchange = () => { document.querySelectorAll('.periodo-btn').forEach(x=>x.classList.remove('active')); actualizarEstadisticasYMapa(); };
+document.getElementById('fechaFinRango').onchange = () => { document.querySelectorAll('.periodo-btn').forEach(x=>x.classList.remove('active')); actualizarEstadisticasYMapa(); };
+document.querySelectorAll('.periodo-btn').forEach(b => b.onclick = () => seleccionarPeriodoRapido(b.dataset.p));
+
+function seleccionarPeriodoRapido(periodo){
+  document.querySelectorAll('.periodo-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
+  const ahora = new Date();
+  const dias = periodo === 'semana' ? 7 : 30;
+  const inicio = new Date(ahora.getTime() - dias*24*60*60*1000);
+  document.getElementById('fechaInicioRango').value = inicio.toISOString().slice(0,10);
+  document.getElementById('fechaFinRango').value = ahora.toISOString().slice(0,10);
+  actualizarEstadisticasYMapa();
+}
+
+function obtenerRangoSeleccionado(){
+  const esDia = document.getElementById('tabDia').classList.contains('active');
+  if(esDia){
+    const fechaStr = document.getElementById('fechaDiaEspecifico').value;
+    if(!fechaStr) return null;
+    return {
+      inicio: new Date(fechaStr + 'T00:00:00-04:00').toISOString(),
+      fin: new Date(fechaStr + 'T23:59:59-04:00').toISOString()
+    };
+  } else {
+    const ini = document.getElementById('fechaInicioRango').value;
+    const fin = document.getElementById('fechaFinRango').value;
+    if(!ini || !fin) return null;
+    return {
+      inicio: new Date(ini + 'T00:00:00-04:00').toISOString(),
+      fin: new Date(fin + 'T23:59:59-04:00').toISOString()
+    };
+  }
+}
+
+function actualizarEstadisticasYMapa(){
+  const rango = obtenerRangoSeleccionado();
+  if(!rango) return;
+  cargarEstadisticas(rango.inicio, rango.fin);
+  renderFallasPeriodoEnMapa(rango.inicio, rango.fin);
+  ocultarCapaActivas();
+}
+
+// ---------- CAPA AZUL: fallas del período consultado (separada de las activas) ----------
+// Cacheada por rango de fechas: cambiar de pestaña o reabrir el panel con el mismo
+// rango no debe volver a descargar las mismas geometrías.
+const cachePeriodoGeojsonPorRango = {};
+async function renderFallasPeriodoEnMapa(fechaInicio, fechaFin){
+  const clave = fechaInicio + '|' + fechaFin;
+  try{
+    let geojson = cachePeriodoGeojsonPorRango[clave];
+    if(!geojson){
+      geojson = await db.rpc('fallas_geojson_periodo', {fecha_inicio: fechaInicio, fecha_fin: fechaFin});
+      cachePeriodoGeojsonPorRango[clave] = geojson;
+    }
+    fallasPeriodoLayerGroup.clearLayers();
+    if(!geojson || !geojson.features) return;
+    geojson.features.forEach(feat => {
+      const p = feat.properties;
+      const fecha = new Date(p.fecha_creacion).toLocaleDateString('es-CL');
+      const tooltip = `${p.tipo_falla} · ${fecha} · ${p.estado.replace('_',' ')}`;
+      if(feat.geometry.type === 'Point'){
+        const [lon, lat] = feat.geometry.coordinates;
+        L.circleMarker([lat, lon], {
+          radius: 4, color:'#fff', weight:1.5, fillColor:'#2563a8', fillOpacity:0.85
+        }).bindTooltip(tooltip).addTo(fallasPeriodoLayerGroup);
+      } else {
+        L.geoJSON(feat, { style:{color:'#2563a8', weight:4, opacity:0.75, dashArray:'4,4'} })
+          .bindTooltip(tooltip).addTo(fallasPeriodoLayerGroup);
+      }
+    });
+  }catch(e){
+    console.error('Error dibujando fallas del período:', e);
+    alert('No se pudo cargar la capa azul del período: ' + e.message + '\n\n¿Corriste el script 11_fallas_geojson_periodo.sql en Supabase?');
+  }
+}
+function limpiarCapaPeriodo(){
+  if(fallasPeriodoLayerGroup) fallasPeriodoLayerGroup.clearLayers();
+}
+
+// Cacheada por rango de fechas, misma razón que la capa azul de período.
+const cacheEstadisticasPorRango = {};
+async function cargarEstadisticas(fechaInicio, fechaFin){
+  const content = document.getElementById('statsContent');
+  const clave = fechaInicio + '|' + fechaFin;
+  content.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try{
+    let d = cacheEstadisticasPorRango[clave];
+    if(!d){
+      d = await db.rpc('estadisticas_fallas', {fecha_inicio: fechaInicio, fecha_fin: fechaFin});
+      cacheEstadisticasPorRango[clave] = d;
+    }
+    const total = d.total_fallas || 0;
+    const pct = (n) => total ? Math.round((n/total)*100) : 0;
+    const entradasCodigo = Object.entries(d.por_codigo || {}).sort((a,b) => b[1]-a[1]);
+
+    content.innerHTML = `
+      <div class="stat-grid-modal">
+        <div class="stat-box-modal">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+            <div>
+              <div class="num">${total}</div>
+              <div class="lbl">Fallas reportadas</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px;">
+              <div style="background:#fff; border-radius:8px; padding:5px 9px; display:flex; justify-content:space-between; gap:8px; font-size:11px; white-space:nowrap;">
+                <span>Individual</span><span><b>${d.fallas_punto_individual||0}</b> (${pct(d.fallas_punto_individual)}%)</span>
+              </div>
+              <div style="background:#fff; border-radius:8px; padding:5px 9px; display:flex; justify-content:space-between; gap:8px; font-size:11px; white-space:nowrap;">
+                <span>Circuito</span><span><b>${d.fallas_circuito||0}</b> (${pct(d.fallas_circuito)}%)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="stat-box-modal"><div class="num">${d.puntos_afectados_total||0}</div><div class="lbl">Puntos lumínicos afectados (${((d.puntos_afectados_total||0)/TOTAL_PUNTOS_COMUNA*100).toFixed(2)}% de la comuna)</div></div>
+      </div>
+
+      <h3>Fallas por Tipo</h3>
+      <div id="graficoCircularFallas"></div>
+
+      <h3>Reparaciones</h3>
+      <div class="stat-grid-modal">
+        <div class="stat-box-modal"><div class="num">${total}</div><div class="lbl">Fallas Reportadas</div></div>
+        <div class="stat-box-modal"><div class="num">${d.reparadas||0}</div><div class="lbl">Fallas Reparadas (${pct(d.reparadas)}%)</div></div>
+      </div>
+
+      <h3>Estado actual (de lo reportado en el período)</h3>
+      <div class="stat-row"><span>Reparadas</span><span>${d.reparadas||0} (${pct(d.reparadas)}%)</span></div>
+      <div class="stat-row"><span>Pendientes</span><span>${d.pendientes||0} (${pct(d.pendientes)}%)</span></div>
+      <div class="stat-row"><span>Reiteradas</span><span>${d.reiteradas||0} (${pct(d.reiteradas)}%)</span></div>
+      <div class="stat-row"><span>Reportadas (activas)</span><span>${d.reportadas_activas||0} (${pct(d.reportadas_activas)}%)</span></div>
+      <h3>Puntos lumínicos afectados</h3>
+      <div class="stat-row"><span>Por falla individual</span><span>${d.puntos_afectados_individual||0}</span></div>
+      <div class="stat-row"><span>Por cascada de circuito</span><span>${d.puntos_afectados_cascada||0}</span></div>
+    `;
+
+    dibujarGraficoCircular(entradasCodigo, total);
+  }catch(e){
+    content.innerHTML = `<div class="empty-state">Error cargando estadísticas: ${e.message}</div>`;
+  }
+}
+
+const TOTAL_PUNTOS_COMUNA = 36090; // total real de puntos lumínicos de La Florida (Fase 1)
+const COLORES_GRAFICO = ['#1f4d3d','#2563a8','#d98e2f','#c1443c','#7a5ca8','#3a8a5c','#e0b400'];
+
+document.getElementById('descargarPdfBtn').onclick = () => generarPdfEstadisticas();
+
+async function generarPdfEstadisticas(){
+  const btn = document.getElementById('descargarPdfBtn');
+  const textoOriginal = btn.textContent;
+  btn.textContent = '…'; btn.disabled = true;
+  try{
+    const contenido = document.getElementById('statsContent');
+    const canvasStats = await html2canvas(contenido, { scale: 1.5, backgroundColor: '#ffffff', useCORS: true });
+
+    const mapaEl = document.getElementById('map');
+    const canvasMapa = await html2canvas(mapaEl, { scale: 1.2, backgroundColor: '#ffffff', useCORS: true, allowTaint: true });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const anchoPagina = pdf.internal.pageSize.getWidth();
+    const altoPagina = pdf.internal.pageSize.getHeight();
+    const margen = 12;
+
+    // Encabezado del reporte
+    pdf.setFontSize(14);
+    pdf.setTextColor(31, 77, 61);
+    pdf.text('Sistema de Gestión de Fallas de Alumbrado — La Florida', margen, 15);
+    pdf.setFontSize(10);
+    pdf.setTextColor(85, 102, 92);
+    pdf.text('Resumen ejecutivo de estadísticas', margen, 21);
+
+    const esDia = document.getElementById('tabDia').classList.contains('active');
+    let rangoTexto = '';
+    if(esDia){
+      rangoTexto = 'Día: ' + (document.getElementById('fechaDiaEspecifico').value || '—');
+    } else {
+      const ini = document.getElementById('fechaInicioRango').value || '—';
+      const fin = document.getElementById('fechaFinRango').value || '—';
+      rangoTexto = `Período: ${ini} a ${fin}`;
+    }
+    pdf.text(rangoTexto + '   ·   Generado el ' + new Date().toLocaleString('es-CL'), margen, 26);
+    pdf.setDrawColor(219, 226, 220);
+    pdf.line(margen, 29, anchoPagina - margen, 29);
+
+    // Subtítulos de cada bloque
+    const yInicioContenido = 34;
+    pdf.setFontSize(10);
+    pdf.setTextColor(31, 77, 61);
+    pdf.text('Estadísticas', margen, yInicioContenido);
+    const yTituloMapa = yInicioContenido; // se recalcula abajo según alto real de stats
+
+    // Calcular tamaños naturales a ancho completo
+    const anchoDisponible = anchoPagina - margen*2;
+    const altoStatsNatural = (canvasStats.height * anchoDisponible) / canvasStats.width;
+    const altoMapaNatural = (canvasMapa.height * anchoDisponible) / canvasMapa.width;
+    const espacioEntreBloques = 10; // deja lugar para el subtítulo "Mapa de fallas del período"
+    const espacioDisponibleTotal = altoPagina - yInicioContenido - margen - 4;
+
+    let altoStatsFinal = altoStatsNatural;
+    let altoMapaFinal = altoMapaNatural;
+    let anchoStatsFinal = anchoDisponible;
+    let anchoMapaFinal = anchoDisponible;
+
+    const totalNatural = altoStatsNatural + altoMapaNatural + espacioEntreBloques;
+    if(totalNatural > espacioDisponibleTotal){
+      const factor = espacioDisponibleTotal / totalNatural;
+      altoStatsFinal = altoStatsNatural * factor;
+      altoMapaFinal = altoMapaNatural * factor;
+      anchoStatsFinal = anchoDisponible * factor;
+      anchoMapaFinal = anchoDisponible * factor;
+    }
+
+    const xStats = margen + (anchoDisponible - anchoStatsFinal) / 2;
+    pdf.addImage(canvasStats.toDataURL('image/png'), 'PNG', xStats, yInicioContenido + 3, anchoStatsFinal, altoStatsFinal);
+
+    const yMapaTitulo = yInicioContenido + 3 + altoStatsFinal + 5;
+    pdf.setFontSize(10);
+    pdf.setTextColor(31, 77, 61);
+    pdf.text('Mapa de fallas del período consultado', margen, yMapaTitulo);
+    const xMapa = margen + (anchoDisponible - anchoMapaFinal) / 2;
+    pdf.addImage(canvasMapa.toDataURL('image/png'), 'PNG', xMapa, yMapaTitulo + 3, anchoMapaFinal, altoMapaFinal);
+
+    const nombreArchivo = `estadisticas_fallas_${new Date().toISOString().slice(0,10)}.pdf`;
+    pdf.save(nombreArchivo);
+  }catch(e){
+    alert('Error generando el PDF: ' + e.message);
+  }finally{
+    btn.textContent = textoOriginal; btn.disabled = false;
+  }
+}
+
+
+function dibujarGraficoCircular(entradas, total){
+  const cont = document.getElementById('graficoCircularFallas');
+  if(!cont) return;
+  if(!total || !entradas.length){
+    cont.innerHTML = '<div class="hint" style="margin-bottom:10px;">Sin datos para graficar.</div>';
+    return;
+  }
+  const cx = 60, cy = 60, r = 55;
+  let anguloActual = -90; // empezar arriba
+  const slices = entradas.map(([cod, cnt], i) => {
+    const porcentaje = cnt / total;
+    const anguloInicio = anguloActual;
+    const anguloFin = anguloActual + porcentaje * 360;
+    anguloActual = anguloFin;
+    const color = COLORES_GRAFICO[i % COLORES_GRAFICO.length];
+    const [x1, y1] = puntoEnCirculo(cx, cy, r, anguloInicio);
+    const [x2, y2] = puntoEnCirculo(cx, cy, r, anguloFin);
+    const granArco = (anguloFin - anguloInicio) > 180 ? 1 : 0;
+    const path = `M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${granArco} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z`;
+    return {cod, cnt, color, path};
+  });
+
+  const svg = `
+    <svg width="130" height="130" viewBox="0 0 120 120" style="flex-shrink:0;">
+      ${slices.map(s => `<path d="${s.path}" fill="${s.color}" stroke="#fff" stroke-width="1.5"><title>${s.cod}: ${s.cnt}</title></path>`).join('')}
+    </svg>
+  `;
+  const leyenda = slices.map(s => `
+    <div style="display:flex; align-items:center; gap:6px; font-size:12px; margin-bottom:5px;">
+      <span style="width:10px; height:10px; border-radius:3px; background:${s.color}; flex-shrink:0;"></span>
+      <span>${s.cod}: <b>${s.cnt}</b> (${Math.round(s.cnt/total*100)}%)</span>
+    </div>
+  `).join('');
+
+  cont.innerHTML = `<div style="display:flex; gap:16px; align-items:center; justify-content:center; margin-bottom:10px;">
+    ${svg}
+    <div>${leyenda}</div>
+  </div>`;
+}
+
+function puntoEnCirculo(cx, cy, r, anguloGrados){
+  const rad = (anguloGrados * Math.PI) / 180;
+  return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
+}
+
+// ---------- GESTIÓN DE USUARIOS (admin) ----------
+document.getElementById('usuariosBtn').onclick = () => mostrarModalUsuarios();
+document.getElementById('closeUsuariosBtn').onclick = () => document.getElementById('usuariosModal').classList.remove('visible');
+document.getElementById('usuariosModal').addEventListener('click', (e) => {
+  if(e.target.id === 'usuariosModal') document.getElementById('usuariosModal').classList.remove('visible');
+});
+
+function mostrarModalUsuarios(){
+  document.getElementById('usuariosModal').classList.add('visible');
+  cargarUsuarios();
+}
+
+const ROLES_DISPONIBLES = ['admin','ito','ito2','contratista','camion','observador'];
+
+async function cargarUsuarios(){
+  const tbody = document.getElementById('usuariosTbody');
+  tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  try{
+    const usuarios = await db.select('usuarios', 'select=id,nombre,rol,email&order=nombre.asc');
+    if(!usuarios.length){
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = usuarios.map(u => {
+      const opciones = ROLES_DISPONIBLES.map(r => `<option value="${r}" ${r===u.rol?'selected':''}>${r}</option>`).join('');
+      return `<tr data-id="${u.id}">
+        <td><input type="text" class="popup-input nombre-input" value="${u.nombre||''}" style="margin:0; padding:6px 8px;"></td>
+        <td>${u.email || '—'}</td>
+        <td><select class="rol-select" style="padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; font-size:12px;">${opciones}</select></td>
+        <td><button class="guardar-usuario-btn" style="font-size:11px; border:1px solid var(--primary); color:var(--primary); background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer;">Guardar</button></td>
+        <td><button class="reset-pass-btn" style="font-size:11px; border:1px solid var(--amber); color:var(--amber); background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer;" ${!u.email?'disabled':''}>Enviar reset</button></td>
+      </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('tr').forEach(tr => {
+      const id = tr.dataset.id;
+      tr.querySelector('.guardar-usuario-btn').onclick = () => guardarUsuario(
+        id, tr.querySelector('.nombre-input').value.trim(), tr.querySelector('.rol-select').value
+      );
+      const email = tr.children[1].textContent.trim();
+      tr.querySelector('.reset-pass-btn').onclick = () => enviarResetPassword(email);
+    });
+  }catch(e){
+    tbody.innerHTML = `<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
+  }
+}
+
+async function guardarUsuario(id, nombre, rol){
+  if(!nombre){ alert('El nombre no puede estar vacío.'); return; }
+  try{
+    await db.update('usuarios', `id=eq.${id}`, {nombre, rol});
+    alert('Usuario actualizado.');
+    if(id === currentUser.id){
+      currentUser.nombre = nombre; currentUser.rol = rol;
+      document.getElementById('userNombre').textContent = nombre;
+      document.getElementById('userRol').textContent = rol;
+    }
+  }catch(e){ alert('No se pudo guardar: ' + e.message); }
+}
+
+async function enviarResetPassword(email){
+  if(!email || email === '—'){ alert('Este usuario no tiene email registrado.'); return; }
+  if(!confirm(`¿Enviar un correo de recuperación de contraseña a ${email}?`)) return;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    if(!res.ok){ const d = await res.json().catch(()=>({})); throw new Error(d.message || d.msg || 'Error desconocido'); }
+    alert(`Se envió un correo de recuperación a ${email}.`);
+  }catch(e){ alert('No se pudo enviar el reseteo: ' + e.message); }
+}
+
+// ---------- CAMBIAR MI CONTRASEÑA (todos los roles) ----------
+document.getElementById('cambiarPassBtn').onclick = () => {
+  document.getElementById('passNueva').value = '';
+  document.getElementById('passConfirmar').value = '';
+  document.getElementById('passError').textContent = '';
+  document.getElementById('passModal').classList.add('visible');
+};
+document.getElementById('closePassBtn').onclick = () => document.getElementById('passModal').classList.remove('visible');
+document.getElementById('passModal').addEventListener('click', (e) => {
+  if(e.target.id === 'passModal') document.getElementById('passModal').classList.remove('visible');
+});
+
+document.getElementById('guardarPassBtn').onclick = async () => {
+  const nueva = document.getElementById('passNueva').value;
+  const confirmar = document.getElementById('passConfirmar').value;
+  const errBox = document.getElementById('passError');
+  errBox.textContent = '';
+  if(nueva.length < 6){ errBox.textContent = 'La contraseña debe tener al menos 6 caracteres.'; return; }
+  if(nueva !== confirmar){ errBox.textContent = 'Las contraseñas no coinciden.'; return; }
+  try{
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      method: 'PUT',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: nueva })
+    });
+    const data = await res.json();
+    if(!res.ok) throw new Error(data.message || data.msg || 'No se pudo cambiar la contraseña');
+    document.getElementById('passModal').classList.remove('visible');
+    alert('Contraseña actualizada correctamente.');
+  }catch(e){
+    errBox.textContent = 'Error: ' + e.message;
+  }
+};
+</script>
+</body>
+</html>
