@@ -1285,6 +1285,8 @@ const CATALOGO_FALLAS_CIRCUITO = [
   {c:'F03', d:'Circuito vial encendido de día'},
   {c:'F30', d:'Circuito peatonal apagado'},
   {c:'F31', d:'Circuito peatonal encendido de día'},
+  {c:'F45', d:'Circuito vial intermitente'},
+  {c:'F46', d:'Circuito peatonal intermitente'},
   {c:'OTRO', d:'Otro (describe la falla)'},
 ];
 
@@ -1526,7 +1528,7 @@ async function abrirPopupFalla(feat){
   const CATALOGO_CIERRES = [
   {c:'001', d:'Cambio de lámpara quemada'},
   {c:'009', d:'Luminaria en funcionamiento normal'},
-  {c:'011', d:'Cambio de Ballast'},
+  {c:'011', d:'Cambio de Ballast o Driver'},
   {c:'012', d:'Cambio de CFE dañada'},
   {c:'013', d:'Cambio de CFE averiada'},
   {c:'026', d:'Reparación de conexión'},
