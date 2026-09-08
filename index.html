@@ -497,6 +497,15 @@
 const SUPABASE_URL = "https://rcwtqvhssgtufgypnobn.supabase.co";
 const SUPABASE_KEY = "sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu";
 
+// Construye una fecha/hora usando el huso horario LOCAL del navegador (Chile),
+// dejando que JS resuelva el offset vigente (-03:00 / -04:00) según haya o no
+// horario de verano. Evita el bug de offset fijo hardcodeado que se rompía
+// cada vez que Chile cambiaba de hora.
+function fechaChileLocal(fechaStr, hh = 0, mm = 0, ss = 0){
+  const [y, m, d] = fechaStr.split('-').map(Number);
+  return new Date(y, m - 1, d, hh, mm, ss);
+}
+
 // ---------- Cliente REST propio (sin depender de librerías externas) ----------
 let accessToken = null;
 
@@ -800,7 +809,7 @@ document.getElementById('comenzarInspeccionBtn').onclick = () => {
   fechaInspeccionSesion = fecha;
   informadoPorSesion = document.getElementById('informarPorOtroSelect').value || null;
   document.getElementById('fechaInspeccionBox').style.display = 'none';
-  const fechaLegible = new Date(fecha + 'T00:00:00-04:00').toLocaleDateString('es-CL');
+  const fechaLegible = fechaChileLocal(fecha, 0, 0, 0).toLocaleDateString('es-CL');
   const nombreOtro = informadoPorSesion ? document.getElementById('informarPorOtroSelect').selectedOptions[0].textContent : null;
   const textoOtro = nombreOtro ? ` — a nombre de: ${nombreOtro}` : '';
   document.getElementById('modoActivoTexto').textContent = `Modo: Informar inspección — fecha: ${fechaLegible}${textoOtro}. Haz clic en un punto o circuito.`;
@@ -1764,7 +1773,7 @@ async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtr
       cardinalidad, descripcion_otro:descripcionOtro,
       cascada:false, creado_por: currentUser.id
     };
-    if(fechaCustom) fila.fecha_falla = new Date(fechaCustom + 'T23:50:00-04:00').toISOString();
+    if(fechaCustom) fila.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
     if(informadoPorSesion) fila.informado_por = informadoPorSesion;
     const filaCreada = await db.insert('fallas', fila);
     if(filaCreada && filaCreada[0]) await guardarComentarioFalla(filaCreada[0].id, 'reporte', descripcionOtro);
@@ -1779,7 +1788,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
       descripcion_otro:descripcionOtro,
       cascada:false, creado_por: currentUser.id
     };
-    if(fechaCustom) filaLineaObj.fecha_falla = new Date(fechaCustom + 'T23:50:00-04:00').toISOString();
+    if(fechaCustom) filaLineaObj.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
     if(informadoPorSesion) filaLineaObj.informado_por = informadoPorSesion;
     const filaLinea = await db.insert('fallas', filaLineaObj);
     const fallaLinea = filaLinea[0];
@@ -1793,7 +1802,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
           descripcion_otro:descripcionOtro,
           cascada:true, circuito_origen_id: fallaLinea.id, creado_por: currentUser.id
         };
-        if(fechaCustom) f.fecha_falla = new Date(fechaCustom + 'T23:50:00-04:00').toISOString();
+        if(fechaCustom) f.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
         if(informadoPorSesion) f.informado_por = informadoPorSesion;
         return f;
       });
@@ -2269,8 +2278,8 @@ async function exportarCsv(){
   const ini = document.getElementById('exportFechaInicio').value;
   const fin = document.getElementById('exportFechaFin').value;
   if(!ini || !fin){ alert('Selecciona la fecha de inicio y de fin.'); return; }
-  const fechaInicio = new Date(ini + 'T00:00:00-04:00').toISOString();
-  const fechaFin = new Date(fin + 'T23:59:59-04:00').toISOString();
+  const fechaInicio = fechaChileLocal(ini, 0, 0, 0).toISOString();
+  const fechaFin = fechaChileLocal(fin, 23, 59, 59).toISOString();
 
   const btn = document.getElementById('descargarCsvBtn');
   const textoOriginal = btn.textContent;
@@ -2367,16 +2376,16 @@ function obtenerRangoSeleccionado(){
     const fechaStr = document.getElementById('fechaDiaEspecifico').value;
     if(!fechaStr) return null;
     return {
-      inicio: new Date(fechaStr + 'T00:00:00-04:00').toISOString(),
-      fin: new Date(fechaStr + 'T23:59:59-04:00').toISOString()
+      inicio: fechaChileLocal(fechaStr, 0, 0, 0).toISOString(),
+      fin: fechaChileLocal(fechaStr, 23, 59, 59).toISOString()
     };
   } else {
     const ini = document.getElementById('fechaInicioRango').value;
     const fin = document.getElementById('fechaFinRango').value;
     if(!ini || !fin) return null;
     return {
-      inicio: new Date(ini + 'T00:00:00-04:00').toISOString(),
-      fin: new Date(fin + 'T23:59:59-04:00').toISOString()
+      inicio: fechaChileLocal(ini, 0, 0, 0).toISOString(),
+      fin: fechaChileLocal(fin, 23, 59, 59).toISOString()
     };
   }
 }
