@@ -1513,6 +1513,7 @@ async function abrirPopupFalla(feat){
     <div class="hint">Inspector: <b>${p.nombre_creador || '—'}</b></div>
     <div class="hint">Puntos lumínicos afectados: <b>${p.puntos_afectados ?? '—'}</b></div>
     <div class="hint">Asignado a: <b>${p.asignado_camion_nombre || 'Sin asignar'}</b></div>
+    ${p.asignado_camion_nombre ? `<div class="hint">Asignado por: <b>${p.asignado_por_nombre || '—'}</b></div>` : ''}
     ${infoComentario}
     ${infoComentarioAsignacion}
   `;
@@ -1639,7 +1640,7 @@ async function abrirPopupFalla(feat){
         const comentarioInput = panel.querySelector('#comentarioAsignacionInput');
         const comentario = comentarioInput ? comentarioInput.value.trim() : '';
         try{
-          await db.update('fallas', `id=eq.${p.id}`, {asignado_camion_id: camionId});
+          await db.update('fallas', `id=eq.${p.id}`, {asignado_camion_id: camionId, asignado_por_id: camionId ? currentUser.id : null});
           await guardarComentarioFalla(p.id, 'asignacion', comentario);
           cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
           cerrarPanel();
