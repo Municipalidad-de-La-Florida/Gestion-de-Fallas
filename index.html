@@ -503,7 +503,6 @@
         </div>
         <div id="selectorInspecciones" style="display:none;">
           <div class="periodo-row" style="margin-bottom:10px;">
-            <button class="insp-rango-btn" data-p="recientes">Últimas 6</button>
             <button class="insp-rango-btn" data-p="semana">Últimos 7 días</button>
             <button class="insp-rango-btn" data-p="mes">Últimos 30 días</button>
           </div>
@@ -2711,7 +2710,11 @@ document.getElementById('tabInspecciones').onclick = () => {
   // Esta pestaña muestra solo las fallas de la inspección abierta: se ocultan las otras capas de fallas.
   ocultarCapaActivas();
   limpiarCapaPeriodo();
-  if(!document.getElementById('fechaInspInicio').value && !inspeccionesModoRecientes) seleccionarRangoInspecciones('recientes', false);
+  // Sin fechas elegidas todavía: muestra las últimas 6 inspecciones (sin necesitar un botón aparte).
+  if(!document.getElementById('fechaInspInicio').value){
+    inspeccionesModoRecientes = true;
+    document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.remove('active'));
+  }
   cargarListadoInspecciones();
 };
 
@@ -2728,16 +2731,9 @@ function salirTabInspecciones(){
   if(document.getElementById('inspeccionContenido').style.display === 'block') cerrarModalTodas();
 }
 
-let inspeccionesModoRecientes = false;   // true = "Últimas 6" (sin fechas); false = rango de fechas
+let inspeccionesModoRecientes = true;   // true = últimas 6, sin fechas elegidas; false = rango de fechas buscado
 function seleccionarRangoInspecciones(periodo, cargar = true){
   document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
-  if(periodo === 'recientes'){
-    inspeccionesModoRecientes = true;
-    document.getElementById('fechaInspInicio').value = '';
-    document.getElementById('fechaInspFin').value = '';
-    if(cargar) cargarListadoInspecciones();
-    return;
-  }
   inspeccionesModoRecientes = false;
   const dias = periodo === 'semana' ? 7 : 30;
   const hoy = hoyChileStr();
@@ -2818,7 +2814,7 @@ function renderListadoInspecciones(){
       <div class="stat-box-modal"><div class="num">${filas.length}</div><div class="lbl">Inspecciones</div></div>
       <div class="stat-box-modal"><div class="num">${totalFallas}</div><div class="lbl">Fallas informadas</div></div>
     </div>
-    <div class="hint" style="margin-bottom:8px;">${inspeccionesModoRecientes ? 'Últimas inspecciones registradas' : 'Inspecciones del rango elegido'}. Haz clic en una para ver el detalle y ubicarla en el mapa.</div>
+    <div class="hint" style="margin-bottom:8px;">${inspeccionesModoRecientes ? 'Mostrando las últimas 6 inspecciones. Elige un rango de fechas para ver más.' : 'Inspecciones del rango elegido.'} Haz clic en una para ver el detalle y ubicarla en el mapa.</div>
     ${filas.map(i => `
       <div class="insp-card ${i.inspeccion_id === inspeccionSeleccionadaId ? 'sel' : ''}" data-id="${escHtml(i.inspeccion_id)}">
         <div class="insp-card-top"><b>${escHtml(i.ito_nombre)}</b><span class="hint" style="margin:0;">${escHtml(fmtDiaInspeccion(i.fecha))}</span></div>
