@@ -503,6 +503,7 @@
         </div>
         <div id="selectorInspecciones" style="display:none;">
           <div class="periodo-row" style="margin-bottom:10px;">
+            <button class="insp-rango-btn" data-p="recientes">Últimas 6</button>
             <button class="insp-rango-btn" data-p="semana">Últimos 7 días</button>
             <button class="insp-rango-btn" data-p="mes">Últimos 30 días</button>
           </div>
@@ -2710,7 +2711,7 @@ document.getElementById('tabInspecciones').onclick = () => {
   // Esta pestaña muestra solo las fallas de la inspección abierta: se ocultan las otras capas de fallas.
   ocultarCapaActivas();
   limpiarCapaPeriodo();
-  if(!document.getElementById('fechaInspInicio').value) seleccionarRangoInspecciones('semana', false);
+  if(!document.getElementById('fechaInspInicio').value && !inspeccionesModoRecientes) seleccionarRangoInspecciones('recientes', false);
   cargarListadoInspecciones();
 };
 
@@ -2727,8 +2728,17 @@ function salirTabInspecciones(){
   if(document.getElementById('inspeccionContenido').style.display === 'block') cerrarModalTodas();
 }
 
+let inspeccionesModoRecientes = false;   // true = "Últimas 6" (sin fechas); false = rango de fechas
 function seleccionarRangoInspecciones(periodo, cargar = true){
   document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
+  if(periodo === 'recientes'){
+    inspeccionesModoRecientes = true;
+    document.getElementById('fechaInspInicio').value = '';
+    document.getElementById('fechaInspFin').value = '';
+    if(cargar) cargarListadoInspecciones();
+    return;
+  }
+  inspeccionesModoRecientes = false;
   const dias = periodo === 'semana' ? 7 : 30;
   const hoy = hoyChileStr();
   document.getElementById('fechaInspInicio').value = sumarDiasStr(hoy, -(dias - 1));
@@ -2738,6 +2748,7 @@ function seleccionarRangoInspecciones(periodo, cargar = true){
 document.querySelectorAll('.insp-rango-btn').forEach(b => b.onclick = () => seleccionarRangoInspecciones(b.dataset.p));
 ['fechaInspInicio','fechaInspFin'].forEach(id => {
   document.getElementById(id).onchange = () => {
+    inspeccionesModoRecientes = false;
     document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.remove('active'));
     cargarListadoInspecciones();
   };
@@ -2746,12 +2757,25 @@ document.getElementById('inspItoSelect').onchange = () => renderListadoInspeccio
 
 async function cargarListadoInspecciones(){
   const content = document.getElementById('statsContent');
+  const req = ++inspListadoReq;
+  content.innerHTML = '<div class="empty-state">Cargando...</div>';
+  if(inspeccionesModoRecientes){
+    try{
+      const filas = await db.rpc('inspecciones_recientes', {p_limite: 6});
+      if(req !== inspListadoReq) return;
+      inspeccionesCache = Array.isArray(filas) ? filas : [];
+      actualizarSelectorIto();
+      renderListadoInspecciones();
+    }catch(e){
+      if(req !== inspListadoReq) return;
+      content.innerHTML = `<div class="empty-state">Error cargando inspecciones: ${escHtml(e.message)}<br><br>¿Ejecutaste el script bloqueE_recientes.sql en Supabase?</div>`;
+    }
+    return;
+  }
   const ini = document.getElementById('fechaInspInicio').value;
   const fin = document.getElementById('fechaInspFin').value;
   if(!ini || !fin){ content.innerHTML = '<div class="empty-state">Elige un rango de fechas.</div>'; return; }
   if(ini > fin){ content.innerHTML = '<div class="empty-state">La fecha de inicio no puede ser posterior a la de fin.</div>'; return; }
-  const req = ++inspListadoReq;
-  content.innerHTML = '<div class="empty-state">Cargando...</div>';
   try{
     // Siempre se trae el rango completo (todos los ITOs); el filtro por ITO se aplica en pantalla.
     const filas = await db.rpc('inspecciones_listado', {p_inicio: ini, p_fin: fin, p_ito: null});
@@ -2794,7 +2818,7 @@ function renderListadoInspecciones(){
       <div class="stat-box-modal"><div class="num">${filas.length}</div><div class="lbl">Inspecciones</div></div>
       <div class="stat-box-modal"><div class="num">${totalFallas}</div><div class="lbl">Fallas informadas</div></div>
     </div>
-    <div class="hint" style="margin-bottom:8px;">Haz clic en una inspección para ver el detalle y ubicarla en el mapa.</div>
+    <div class="hint" style="margin-bottom:8px;">${inspeccionesModoRecientes ? 'Últimas inspecciones registradas' : 'Inspecciones del rango elegido'}. Haz clic en una para ver el detalle y ubicarla en el mapa.</div>
     ${filas.map(i => `
       <div class="insp-card ${i.inspeccion_id === inspeccionSeleccionadaId ? 'sel' : ''}" data-id="${escHtml(i.inspeccion_id)}">
         <div class="insp-card-top"><b>${escHtml(i.ito_nombre)}</b><span class="hint" style="margin:0;">${escHtml(fmtDiaInspeccion(i.fecha))}</span></div>
