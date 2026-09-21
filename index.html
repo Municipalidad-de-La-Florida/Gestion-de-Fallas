@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
   :root{
@@ -3056,6 +3057,7 @@ function descripcionCodigoAnalisis(tipo, codigo){
 }
 
 function renderAnalisis(d){
+  ultimoAnalisis = d;
   const content = document.getElementById('statsContent');
   const r = d.resumen || {};
   const pct = r.fallas ? Math.round((r.reiteradas || 0) / r.fallas * 100) : 0;
@@ -3137,6 +3139,7 @@ function renderAnalisis(d){
       </tbody></table>` : '';
 
   content.innerHTML = `
+    <button class="popup-btn" id="anaPdfBtn" style="margin-top:10px;">📄 Descargar informe PDF</button>
     ${tiles}
     <div class="ana-tit">Tiempo de reparación por código de falla</div>${porCodigo}
     <div class="ana-tit">Por ITO que informa</div>${porIto}
@@ -3152,6 +3155,8 @@ function renderAnalisis(d){
     <div class="ana-tit">Cobertura de inspecciones</div>${porDia}
     <div class="ana-tit">Por ITO</div>${cobIto}
   `;
+
+  document.getElementById('anaPdfBtn').onclick = () => generarPdfAnalisis();
 
   // Marcadores de críticos en el mapa
   if(!analisisLayerGroup) analisisLayerGroup = L.layerGroup().addTo(map);
@@ -3175,6 +3180,191 @@ function renderAnalisis(d){
       m.openTooltip();
     };
   });
+}
+
+// ---------- INFORME PDF DEL ANÁLISIS ----------
+// PDF con texto real (varias páginas, tablas), no una foto de la pantalla.
+let ultimoAnalisis = null;   // datos de la última consulta de Análisis
+
+async function generarPdfAnalisis(){
+  const d = ultimoAnalisis;
+  if(!d){ alert('Primero carga el análisis.'); return; }
+  if(!window.jspdf || !window.jspdf.jsPDF){ alert('No se pudo cargar la librería de PDF. Revisa tu conexión y recarga la página.'); return; }
+  const btn = document.getElementById('anaPdfBtn');
+  const textoOriginal = btn ? btn.textContent : '';
+  if(btn){ btn.textContent = 'Generando PDF…'; btn.disabled = true; }
+  try{
+    const pdf = new window.jspdf.jsPDF({orientation: 'portrait', unit: 'mm', format: 'a4'});
+    if(typeof pdf.autoTable !== 'function'){ throw new Error('No se cargó el complemento de tablas del PDF. Recarga la página.'); }
+    const ancho = pdf.internal.pageSize.getWidth();
+    const alto = pdf.internal.pageSize.getHeight();
+    const margen = 12;
+    const VERDE = [31, 77, 61];
+    const gris = [85, 102, 92];
+    const num = (x) => (x === null || x === undefined) ? '-' : String(x).replace('.', ',');
+    const dias = (x) => (x === null || x === undefined) ? '-' : String(x).replace('.', ',') + ' d';
+    const ini = d.rango ? d.rango.inicio : '', fin = d.rango ? d.rango.fin : '';
+    const fmtF = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7) + '-' + String(s).slice(0, 4);
+
+    // Encabezado
+    pdf.setFontSize(14); pdf.setTextColor(...VERDE);
+    pdf.text('Sistema de Gestión de Fallas de Alumbrado — La Florida', margen, 15);
+    pdf.setFontSize(11);
+    pdf.text('Análisis de fallas', margen, 21);
+    pdf.setFontSize(9); pdf.setTextColor(...gris);
+    pdf.text(`Período: ${fmtF(ini)} a ${fmtF(fin)}   ·   Generado el ${new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE})} por ${currentUser ? currentUser.nombre : '-'}`, margen, 26);
+    pdf.setDrawColor(219, 226, 220); pdf.line(margen, 29, ancho - margen, 29);
+    let y = 34;
+
+    const estilosTabla = {
+      margin: {left: margen, right: margen},
+      styles: {fontSize: 8, cellPadding: 1.6, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1},
+      headStyles: {fillColor: VERDE, textColor: 255, fontSize: 8, fontStyle: 'bold'},
+      alternateRowStyles: {fillColor: [247, 248, 247]}
+    };
+    const titulo = (texto, nota) => {
+      if(y > alto - 40){ pdf.addPage(); y = 16; }
+      pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text(texto, margen, y);
+      y += 2;
+      if(nota){ pdf.setFontSize(8); pdf.setTextColor(...gris); const l = pdf.splitTextToSize(nota, ancho - margen * 2); pdf.text(l, margen, y + 3); y += 3 + l.length * 3.4; }
+      y += 1;
+    };
+    const tabla = (opts) => { pdf.autoTable({...estilosTabla, startY: y, ...opts}); y = pdf.lastAutoTable.finalY + 8; };
+    const vacio = (t) => { pdf.setFontSize(8.5); pdf.setTextColor(...gris); pdf.text(t, margen, y + 3); y += 10; };
+
+    // 1) Resumen
+    const r = d.resumen || {};
+    const pct = r.fallas ? Math.round((r.reiteradas || 0) / r.fallas * 100) : 0;
+    titulo('Resumen del período', '"Desde la inspección" cuenta desde el día en que el ITO vio la falla; "desde el ingreso" cuenta desde que se registró en el sistema. Un circuito cuenta como una falla.');
+    tabla({
+      head: [['Indicador', 'Valor']],
+      body: [
+        ['Fallas del período', num(r.fallas)],
+        ['Reparadas', num(r.reparadas)],
+        ['Abiertas', num(r.abiertas)],
+        ['Reiteradas', `${num(r.reiteradas)} (${pct}% de las fallas)`],
+        ['Mediana de reparación desde la inspección', dias(r.mediana_dias_insp)],
+        ['Mediana de reparación desde el ingreso', dias(r.mediana_dias_ing)],
+        ['Promedio de reparación desde la inspección', dias(r.promedio_dias_insp)],
+        ['Promedio de reparación desde el ingreso', dias(r.promedio_dias_ing)],
+        ['Antigüedad mediana de las fallas abiertas', dias(r.antiguedad_mediana_abiertas)]
+      ],
+      columnStyles: {1: {halign: 'right', cellWidth: 45}}
+    });
+
+    // 2) Tiempos por código
+    titulo('Tiempo de reparación por código de falla');
+    if((d.por_codigo || []).length){
+      tabla({
+        head: [['Código', 'Descripción', 'Fallas', 'Rep.', 'Reit.', 'Med. insp.', 'Med. ing.', 'Máx. insp.']],
+        body: d.por_codigo.map(c => [c.tipo_falla + (c.tipo === 'linea' ? ' (circ.)' : ''), descripcionCodigoAnalisis(c.tipo, c.tipo_falla), c.fallas, c.reparadas, c.reiteradas, dias(c.mediana_insp), dias(c.mediana_ing), dias(c.max_insp)]),
+        columnStyles: {2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}, 6: {halign: 'right'}, 7: {halign: 'right'}}
+      });
+    } else vacio('Sin fallas en este rango.');
+
+    // 3) Por ITO
+    titulo('Por ITO que informa');
+    if((d.por_ito || []).length){
+      tabla({
+        head: [['ITO', 'Fallas', 'Reparadas', 'Reiteradas', 'Med. insp.', 'Med. ing.']],
+        body: d.por_ito.map(i => [i.nombre, i.fallas, i.reparadas, i.reiteradas, dias(i.mediana_insp), dias(i.mediana_ing)]),
+        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}}
+      });
+    } else vacio('Sin datos.');
+
+    // 4) Por quien repara
+    titulo('Por quien repara');
+    if((d.por_camion || []).length){
+      tabla({
+        head: [['Quién repara', 'Reparadas', 'Med. insp.', 'Med. ing.', 'Máx. insp.', 'Máx. ing.']],
+        body: d.por_camion.map(c => [c.nombre, c.reparadas, dias(c.mediana_insp), dias(c.mediana_ing), dias(c.max_insp), dias(c.max_ing)]),
+        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}}
+      });
+    } else vacio('Sin reparaciones en este rango.');
+
+    // 5) Críticos
+    titulo('Puntos críticos', 'Puntos con 2 o más fallas en el período, o con alguna reiterada.');
+    if((d.criticos_puntos || []).length){
+      tabla({
+        head: [['Llave', 'N.º municipal', 'Dirección', 'Fallas', 'Reiteradas', 'Abiertas', 'Códigos']],
+        body: d.criticos_puntos.map(p => [num(p.llave), num(p.nro_mun), p.direccion || '-', p.fallas, p.reiteradas, p.abiertas, p.codigos || '']),
+        columnStyles: {3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}}
+      });
+    } else vacio('Ningún punto se repite en este rango.');
+    titulo('Circuitos críticos');
+    if((d.criticos_circuitos || []).length){
+      tabla({
+        head: [['Circuito', 'Fallas', 'Reiteradas', 'Abiertas', 'Códigos']],
+        body: d.criticos_circuitos.map(c => [num(c.circuito), c.fallas, c.reiteradas, c.abiertas, c.codigos || '']),
+        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}}
+      });
+    } else vacio('Ningún circuito se repite en este rango.');
+
+    // 6) Pendientes
+    const pen = d.pendientes || {};
+    titulo('Pendientes', `${pen.total_alguna_vez || 0} falla(s) quedaron pendientes alguna vez; ${pen.actuales || 0} siguen pendientes (antigüedad mediana ${dias(pen.antiguedad_mediana_actuales)}).`);
+    if((pen.motivos || []).length){
+      tabla({
+        head: [['Motivo', 'Veces', 'Aún pendientes', 'Ya reparadas']],
+        body: pen.motivos.map(m => [m.motivo, m.veces, m.aun_pendientes, m.ya_reparadas]),
+        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}}
+      });
+    } else vacio('Ninguna falla del rango quedó pendiente con un motivo registrado.');
+
+    // 7) Cobertura
+    const cob = d.cobertura || {};
+    const diasCob = cob.por_dia || [];
+    const habilesSin = diasCob.filter(x => x.dow >= 1 && x.dow <= 5 && !x.inspecciones).length;
+    titulo('Cobertura de inspecciones', `${habilesSin} día(s) hábil(es) sin inspección registrada (puede incluir feriados). Filas naranjas: día hábil sin inspección.`);
+    if(diasCob.length){
+      tabla({
+        head: [['Día', 'Inspecciones', 'Fallas', 'ITO']],
+        body: diasCob.map(x => [DIAS_SEM_CORTO[x.dow] + ' ' + fmtF(x.fecha), x.inspecciones, x.fallas, x.itos || '-']),
+        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}},
+        didParseCell: (h) => {
+          if(h.section !== 'body') return;
+          const x = diasCob[h.row.index];
+          if(x && !x.inspecciones){
+            const finde = x.dow === 0 || x.dow === 6;
+            if(finde) h.cell.styles.textColor = [140, 150, 145];
+            else h.cell.styles.fillColor = [253, 243, 226];
+          }
+        }
+      });
+    }
+    titulo('Cobertura por ITO');
+    if((cob.por_ito || []).length){
+      tabla({
+        head: [['ITO', 'Inspecciones', 'Sin fallas', 'Fallas', 'Días distintos']],
+        body: cob.por_ito.map(i => [i.nombre, i.inspecciones, i.sin_fallas, i.fallas, i.dias_distintos]),
+        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}}
+      });
+    } else vacio('Sin inspecciones registradas en este rango.');
+
+    // 8) Mapa con los críticos (si se puede capturar)
+    try{
+      if(typeof html2canvas === 'function' && Object.keys(analisisCapas).length){
+        const canvasMapa = await html2canvas(document.getElementById('map'), {scale: 1.2, backgroundColor: '#ffffff', useCORS: true, allowTaint: true});
+        pdf.addPage();
+        pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text('Mapa de puntos y circuitos críticos', margen, 16);
+        const w = ancho - margen * 2;
+        const h = Math.min((canvasMapa.height * w) / canvasMapa.width, alto - 40);
+        pdf.addImage(canvasMapa.toDataURL('image/jpeg', 0.85), 'JPEG', margen, 20, w, h);
+      }
+    }catch(e){ console.warn('No se pudo incluir el mapa en el PDF:', e); }
+
+    // Pie de página
+    const paginas = pdf.internal.getNumberOfPages();
+    for(let p = 1; p <= paginas; p++){
+      pdf.setPage(p); pdf.setFontSize(8); pdf.setTextColor(...gris);
+      pdf.text(`Página ${p} de ${paginas}`, ancho - margen, alto - 7, {align: 'right'});
+    }
+    pdf.save(`analisis_fallas_${ini}_a_${fin}.pdf`);
+  }catch(e){
+    alert('Error generando el PDF: ' + e.message);
+  }finally{
+    if(btn){ btn.textContent = textoOriginal; btn.disabled = false; }
+  }
 }
 
 // Cacheada por rango de fechas, misma razón que la capa azul de período.
