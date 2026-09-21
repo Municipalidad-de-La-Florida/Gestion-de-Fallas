@@ -108,6 +108,28 @@
   .stat-row{display:flex; justify-content:space-between; font-size:13px; padding:7px 0; border-bottom:1px solid var(--line);}
   .stat-row span:last-child{font-weight:700;}
 
+  /* Pestañas de la barra de estadísticas (Día / Período / Inspecciones) */
+  .toggle-row{display:flex; gap:6px;}
+  .toggle-row button{flex:1; padding:7px 6px; border:1.5px solid var(--line); background:#fff; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; color:var(--ink);}
+  .toggle-row button.active{border-color:var(--primary); background:var(--primary); color:#fff;}
+
+  /* Pestaña "Inspecciones": selector de rango/ITO, tarjetas y detalle */
+  .insp-rango-btn{border:1.5px solid var(--line); background:#fff; padding:7px 12px; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;}
+  .insp-rango-btn.active{border-color:var(--primary); background:var(--primary); color:#fff;}
+  #selectorInspecciones input[type=date], #selectorInspecciones select{border:1.5px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12.5px; background:#fff; font-family:inherit;}
+  .insp-card{border:1.5px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer; background:#fff;}
+  .insp-card:hover{border-color:var(--primary-light); background:#f7f8f7;}
+  .insp-card.sel{border-color:var(--primary); background:#eef5f1;}
+  .insp-card-top{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
+  .insp-pills{display:flex; flex-wrap:wrap; gap:4px; margin-top:6px;}
+  #inspeccionTabla th{font-size:12px; color:var(--ink-soft);}
+  #inspeccionTabla td{padding:8px 10px; vertical-align:top; border-bottom:1px solid var(--line); font-size:12.5px;}
+  #inspeccionTabla tbody tr{cursor:pointer;}
+  #inspeccionTabla tbody tr:hover{background:#f7f8f7;}
+  #inspeccionTabla tbody tr.sel{background:#eef5f1;}
+  #inspeccionTabla td.mono{font-variant-numeric:tabular-nums; color:var(--ink-soft); font-size:11px; white-space:nowrap;}
+  .insp-txt{white-space:pre-line;}
+
   .modal-card.modal-card-wide{width:min(920px, 92vw);}
   #todasFallasTabla tbody tr{border-bottom:1px solid var(--line); cursor:pointer;}
   #todasFallasTabla tbody tr:hover{background:#f7f8f7;}
@@ -365,6 +387,8 @@
             </tbody>
           </table>
         </div>
+
+        <div id="inspeccionContenido" style="display:none;"></div>
       </div>
     </div>
   </div>
@@ -439,6 +463,7 @@
         <div class="toggle-row" style="margin-bottom:12px;">
           <button id="tabDia" class="active">Día específico</button>
           <button id="tabPeriodo">Período</button>
+          <button id="tabInspecciones" style="display:none;">Inspecciones</button>
         </div>
         <div id="selectorDia">
           <input type="date" id="fechaDiaEspecifico" class="popup-input" style="width:100%;">
@@ -453,6 +478,21 @@
             <input type="date" id="fechaInicioRango" class="popup-input" style="flex:1;">
             <input type="date" id="fechaFinRango" class="popup-input" style="flex:1;">
           </div>
+        </div>
+        <div id="selectorInspecciones" style="display:none;">
+          <div class="periodo-row" style="margin-bottom:10px;">
+            <button class="insp-rango-btn" data-p="semana">Últimos 7 días</button>
+            <button class="insp-rango-btn" data-p="mes">Últimos 30 días</button>
+          </div>
+          <div class="hint">O elige un rango manual:</div>
+          <div style="display:flex; gap:6px; margin-top:6px;">
+            <input type="date" id="fechaInspInicio" style="flex:1; min-width:0;">
+            <input type="date" id="fechaInspFin" style="flex:1; min-width:0;">
+          </div>
+          <div class="hint" style="margin-top:10px;">ITO:</div>
+          <select id="inspItoSelect" style="width:100%; margin-top:4px;">
+            <option value="">Todos los ITOs</option>
+          </select>
         </div>
       </div>
       <div id="statsContent" style="flex:1; overflow-y:auto; padding:0 18px 18px;"><div class="empty-state">Selecciona una fecha.</div></div>
@@ -1996,12 +2036,22 @@ document.getElementById('backFromStats').onclick = () => ocultarSidebarStats();
 function mostrarSidebarStats(){
   document.getElementById('sidebarNormal').style.display = 'none';
   document.getElementById('sidebarStats').style.display = 'flex';
+  // La pestaña "Inspecciones" solo la ven admin, ito e ito2 (la base de datos también lo exige).
+  document.getElementById('tabInspecciones').style.display = ['admin','ito','ito2'].includes(rolEfectivo()) ? '' : 'none';
   if(!document.getElementById('fechaDiaEspecifico').value){
     document.getElementById('fechaDiaEspecifico').value = hoyChileStr();
   }
   actualizarEstadisticasYMapa();
 }
 function ocultarSidebarStats(){
+  if(document.getElementById('tabInspecciones').classList.contains('active')){
+    salirTabInspecciones();
+    // Deja "Día específico" como pestaña activa para la próxima vez que se abra el panel.
+    document.getElementById('tabDia').classList.add('active');
+    document.getElementById('tabPeriodo').classList.remove('active');
+    document.getElementById('selectorDia').style.display = 'block';
+    document.getElementById('selectorPeriodo').style.display = 'none';
+  }
   document.getElementById('sidebarStats').style.display = 'none';
   document.getElementById('sidebarNormal').style.display = 'flex';
   limpiarCapaPeriodo();
@@ -2038,6 +2088,7 @@ function mostrarModalTodas(){
   document.getElementById('panelInferiorTitulo').textContent = 'Todas las fallas de la comuna';
   document.getElementById('todasContenido').style.display = 'block';
   document.getElementById('historialContenido').style.display = 'none';
+  document.getElementById('inspeccionContenido').style.display = 'none';
   document.getElementById('toggleExportBtn').style.display = ['admin','ito','ito2','contratista'].includes(rolEfectivo()) ? 'inline-block' : 'none';
   document.getElementById('todasPanel').classList.add('visible');
   cargarTodasFallas(); // usa caché salvo que algo la haya invalidado (ver todasFallasCacheVigente)
@@ -2053,6 +2104,7 @@ async function mostrarHistorial(tipoEntidad, gid, etiqueta){
   document.getElementById('panelInferiorTitulo').textContent = `Historial — ${etiqueta}`;
   document.getElementById('todasContenido').style.display = 'none';
   document.getElementById('historialContenido').style.display = 'block';
+  document.getElementById('inspeccionContenido').style.display = 'none';
   document.getElementById('toggleExportBtn').style.display = 'none';
   document.getElementById('todasPanel').classList.add('visible');
   setTimeout(() => { if(map) map.invalidateSize(); }, 50);
@@ -2434,6 +2486,7 @@ function mostrarCapaActivas(){
 }
 
 document.getElementById('tabDia').onclick = () => {
+  salirTabInspecciones();
   document.getElementById('tabDia').classList.add('active');
   document.getElementById('tabPeriodo').classList.remove('active');
   document.getElementById('selectorDia').style.display = 'block';
@@ -2441,6 +2494,7 @@ document.getElementById('tabDia').onclick = () => {
   actualizarEstadisticasYMapa();
 };
 document.getElementById('tabPeriodo').onclick = () => {
+  salirTabInspecciones();
   document.getElementById('tabPeriodo').classList.add('active');
   document.getElementById('tabDia').classList.remove('active');
   document.getElementById('selectorPeriodo').style.display = 'block';
@@ -2529,6 +2583,328 @@ async function renderFallasPeriodoEnMapa(fechaInicio, fechaFin){
 }
 function limpiarCapaPeriodo(){
   if(fallasPeriodoLayerGroup) fallasPeriodoLayerGroup.clearLayers();
+}
+
+// =====================================================================
+// PESTAÑA "INSPECCIONES" (dentro de Estadísticas)
+// Lista las inspecciones de un rango de fechas (de cualquier ITO) y permite abrir
+// cada una para ver lo que se notificó y cómo se cerró cada falla.
+// Datos: funciones SQL inspecciones_listado e inspeccion_detalle (paso 5).
+// =====================================================================
+let inspeccionesCache = [];          // filas del listado para el rango consultado
+let inspeccionSeleccionadaId = null;
+let inspListadoReq = 0;              // evita que una respuesta lenta pise a una más nueva
+let inspDetalleReq = 0;
+let fallasInspeccionLayerGroup = null;
+let capasInspeccionPorFalla = {};
+
+function escHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtFechaHoraChile(iso){
+  if(!iso) return '—';
+  return new Date(iso).toLocaleString('es-CL', {timeZone: ZONA_CHILE, day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+}
+// fechaStr = 'YYYY-MM-DD' (día de la inspección)
+function fmtDiaInspeccion(fechaStr){
+  if(!fechaStr) return '—';
+  return fechaChileLocal(fechaStr, 12, 0, 0).toLocaleDateString('es-CL', {timeZone: ZONA_CHILE, weekday:'short', day:'2-digit', month:'2-digit', year:'numeric'});
+}
+
+function pillsEstadoHtml(o){
+  const p = [];
+  if(o.reparadas)  p.push(`<span class="badge reparada">${o.reparadas} reparada${o.reparadas>1?'s':''}</span>`);
+  if(o.pendientes) p.push(`<span class="badge pendiente">${o.pendientes} pendiente${o.pendientes>1?'s':''}</span>`);
+  if(o.reiteradas) p.push(`<span class="badge reiterada">${o.reiteradas} reiterada${o.reiteradas>1?'s':''}</span>`);
+  if(o.reportadas) p.push(`<span class="badge reportada">${o.reportadas} reportada${o.reportadas>1?'s':''}</span>`);
+  return p.join('');
+}
+
+document.getElementById('tabInspecciones').onclick = () => {
+  document.getElementById('tabInspecciones').classList.add('active');
+  document.getElementById('tabDia').classList.remove('active');
+  document.getElementById('tabPeriodo').classList.remove('active');
+  document.getElementById('selectorDia').style.display = 'none';
+  document.getElementById('selectorPeriodo').style.display = 'none';
+  document.getElementById('selectorInspecciones').style.display = 'block';
+  document.getElementById('descargarPdfBtn').style.display = 'none'; // el PDF es solo del panel de estadísticas
+  // Esta pestaña muestra solo las fallas de la inspección abierta: se ocultan las otras capas de fallas.
+  ocultarCapaActivas();
+  limpiarCapaPeriodo();
+  if(!document.getElementById('fechaInspInicio').value) seleccionarRangoInspecciones('semana', false);
+  cargarListadoInspecciones();
+};
+
+// Se llama al cambiar a otra pestaña o al cerrar el panel de estadísticas.
+function salirTabInspecciones(){
+  const tab = document.getElementById('tabInspecciones');
+  if(!tab.classList.contains('active')) return;
+  tab.classList.remove('active');
+  document.getElementById('selectorInspecciones').style.display = 'none';
+  document.getElementById('descargarPdfBtn').style.display = 'flex';
+  inspListadoReq++; inspDetalleReq++; // descarta respuestas pendientes
+  inspeccionSeleccionadaId = null;
+  limpiarCapaInspeccion();
+  if(document.getElementById('inspeccionContenido').style.display === 'block') cerrarModalTodas();
+}
+
+function seleccionarRangoInspecciones(periodo, cargar = true){
+  document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
+  const dias = periodo === 'semana' ? 7 : 30;
+  const hoy = hoyChileStr();
+  document.getElementById('fechaInspInicio').value = sumarDiasStr(hoy, -(dias - 1));
+  document.getElementById('fechaInspFin').value = hoy;
+  if(cargar) cargarListadoInspecciones();
+}
+document.querySelectorAll('.insp-rango-btn').forEach(b => b.onclick = () => seleccionarRangoInspecciones(b.dataset.p));
+['fechaInspInicio','fechaInspFin'].forEach(id => {
+  document.getElementById(id).onchange = () => {
+    document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.remove('active'));
+    cargarListadoInspecciones();
+  };
+});
+document.getElementById('inspItoSelect').onchange = () => renderListadoInspecciones();
+
+async function cargarListadoInspecciones(){
+  const content = document.getElementById('statsContent');
+  const ini = document.getElementById('fechaInspInicio').value;
+  const fin = document.getElementById('fechaInspFin').value;
+  if(!ini || !fin){ content.innerHTML = '<div class="empty-state">Elige un rango de fechas.</div>'; return; }
+  if(ini > fin){ content.innerHTML = '<div class="empty-state">La fecha de inicio no puede ser posterior a la de fin.</div>'; return; }
+  const req = ++inspListadoReq;
+  content.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try{
+    // Siempre se trae el rango completo (todos los ITOs); el filtro por ITO se aplica en pantalla.
+    const filas = await db.rpc('inspecciones_listado', {p_inicio: ini, p_fin: fin, p_ito: null});
+    if(req !== inspListadoReq) return;
+    inspeccionesCache = Array.isArray(filas) ? filas : [];
+    actualizarSelectorIto();
+    renderListadoInspecciones();
+  }catch(e){
+    if(req !== inspListadoReq) return;
+    content.innerHTML = `<div class="empty-state">Error cargando inspecciones: ${escHtml(e.message)}<br><br>¿Ejecutaste el script paso5_inspecciones_consultas.sql en Supabase?</div>`;
+  }
+}
+
+function actualizarSelectorIto(){
+  const sel = document.getElementById('inspItoSelect');
+  const previo = sel.value;
+  const itos = new Map();
+  inspeccionesCache.forEach(i => itos.set(i.ito_id, i.ito_nombre));
+  const ordenados = [...itos.entries()].sort((a,b) => String(a[1]).localeCompare(String(b[1]), 'es'));
+  sel.innerHTML = '<option value="">Todos los ITOs</option>' +
+    ordenados.map(([id, nombre]) => `<option value="${escHtml(id)}">${escHtml(nombre)}</option>`).join('');
+  sel.value = itos.has(previo) ? previo : '';
+}
+
+function renderListadoInspecciones(){
+  const content = document.getElementById('statsContent');
+  const itoSel = document.getElementById('inspItoSelect').value;
+  const filas = inspeccionesCache.filter(i => !itoSel || i.ito_id === itoSel);
+  if(!filas.length){
+    content.innerHTML = `<div class="empty-state">No hay inspecciones registradas ${itoSel ? 'de ese ITO ' : ''}en este rango de fechas.</div>`;
+    return;
+  }
+  const totalFallas = filas.reduce((s, i) => s + (i.fallas || 0), 0);
+  const html = `
+    <div class="stat-grid-modal" style="margin-bottom:12px;">
+      <div class="stat-box-modal"><div class="num">${filas.length}</div><div class="lbl">Inspecciones</div></div>
+      <div class="stat-box-modal"><div class="num">${totalFallas}</div><div class="lbl">Fallas informadas</div></div>
+    </div>
+    <div class="hint" style="margin-bottom:8px;">Haz clic en una inspección para ver el detalle y ubicarla en el mapa.</div>
+    ${filas.map(i => `
+      <div class="insp-card ${i.inspeccion_id === inspeccionSeleccionadaId ? 'sel' : ''}" data-id="${escHtml(i.inspeccion_id)}">
+        <div class="insp-card-top"><b>${escHtml(i.ito_nombre)}</b><span class="hint" style="margin:0;">${escHtml(fmtDiaInspeccion(i.fecha))}</span></div>
+        <div class="hint">${i.fallas ? `${i.fallas} falla${i.fallas>1?'s':''} · ${i.puntos_afectados} punto${i.puntos_afectados===1?'':'s'} lumínico${i.puntos_afectados===1?'':'s'} afectado${i.puntos_afectados===1?'':'s'}` : 'Inspección sin fallas'}</div>
+        ${i.fallas ? `<div class="insp-pills">${pillsEstadoHtml(i)}</div>` : ''}
+        <div class="hint">Ingresada por ${escHtml(i.ingresado_por || '—')} · ${escHtml(fmtFechaHoraChile(i.creado_en))}</div>
+      </div>`).join('')}
+  `;
+  content.innerHTML = html;
+  content.querySelectorAll('.insp-card').forEach(card => {
+    card.onclick = () => abrirDetalleInspeccion(card.dataset.id);
+  });
+}
+
+// ---------- Detalle de una inspección (panel inferior + mapa) ----------
+const CODIGOS_MONOPOSTE = [{c:'F02', d:'Monoposte apagado'}, {c:'F03', d:'Monoposte encendido de día'}];
+function descripcionCodigoFalla(f){
+  if(f.tipo_falla === 'OTRO') return 'Otro';
+  const catalogo = f.tipo === 'linea'
+    ? CATALOGO_FALLAS_CIRCUITO
+    : ((f.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE' ? CODIGOS_MONOPOSTE : CATALOGO_FALLAS_PUNTO);
+  const it = catalogo.find(x => x.c === f.tipo_falla);
+  return it ? it.d : '';
+}
+
+function htmlUbicacionFalla(f){
+  if(f.tipo === 'linea'){
+    return `<b>Circuito ${escHtml(f.circuito_id ?? '—')}</b><div class="hint">${f.puntos_afectados} punto${f.puntos_afectados===1?'':'s'} lumínico${f.puntos_afectados===1?'':'s'} afectado${f.puntos_afectados===1?'':'s'}</div>`;
+  }
+  return `<b>Llave ${escHtml(f.llave ?? '—')}</b>
+    <div class="hint">N.° Municipal: ${escHtml(f.nro_mun ?? '—')}</div>
+    ${f.direccion ? `<div class="hint">${escHtml(f.direccion)}</div>` : ''}`;
+}
+
+function htmlNotificadoFalla(f){
+  const partes = [];
+  if(f.cardinalidad) partes.push(`<div class="hint">Luminaria ${escHtml(f.cardinalidad)}</div>`);
+  partes.push(f.comentario_reporte
+    ? `<div class="insp-txt">${escHtml(f.comentario_reporte)}</div>`
+    : '<span class="hint">Sin comentario</span>');
+  return partes.join('');
+}
+
+function htmlCierreFalla(f){
+  const bloques = [];
+  const rep = f.reparacion, pen = f.pendiente;
+  const bloqueRep = () => `<div><b style="color:var(--green);">Reparada</b> por ${escHtml(rep.por || '—')} · ${escHtml(fmtFechaHoraChile(rep.fecha))}</div>
+      <div class="insp-txt">${escHtml(rep.descripcion || '—')}</div>`;
+  const bloquePen = (atenuado) => `<div${atenuado ? ' class="hint"' : ''}><b style="color:var(--amber);">Dejada pendiente</b> por ${escHtml(pen.por || '—')} · ${escHtml(fmtFechaHoraChile(pen.fecha))}</div>
+      <div class="insp-txt${atenuado ? ' hint' : ''}">${escHtml(pen.motivo || '—')}</div>`;
+  if(f.estado === 'reparada'){
+    if(rep) bloques.push(bloqueRep());
+    else bloques.push('<div class="hint">Marcada como reparada (sin registro de cierre).</div>');
+    if(pen) bloques.push(`<div style="margin-top:6px;">${bloquePen(true)}</div>`);
+  } else {
+    if(pen) bloques.push(bloquePen(false));
+    if(rep) bloques.push(`<div style="margin-top:6px;">${bloqueRep()}</div>`);
+    if(!pen && !rep) bloques.push('<div class="hint">Sin cierre todavía.</div>');
+  }
+  if(f.asignado_camion) bloques.push(`<div class="hint" style="margin-top:6px;">Asignado a: <b>${escHtml(f.asignado_camion)}</b></div>`);
+  const asignaciones = (f.comentarios || []).filter(c => c.tipo === 'asignacion' && c.comentario);
+  if(asignaciones.length){
+    const u = asignaciones[asignaciones.length - 1];
+    bloques.push(`<div class="hint" style="margin-top:2px;">💬 Asignación (${escHtml(u.autor || '—')}): <span class="insp-txt">${escHtml(u.comentario)}</span></div>`);
+  }
+  return bloques.join('');
+}
+
+async function abrirDetalleInspeccion(id){
+  inspeccionSeleccionadaId = id;
+  document.querySelectorAll('.insp-card').forEach(c => c.classList.toggle('sel', c.dataset.id === id));
+  const resumen = inspeccionesCache.find(i => i.inspeccion_id === id);
+  const contenedor = document.getElementById('inspeccionContenido');
+
+  quitarResaltadoConsulta();
+  document.getElementById('panelInferiorTitulo').textContent =
+    `Inspección — ${resumen ? resumen.ito_nombre + ' · ' + fmtDiaInspeccion(resumen.fecha) : ''}`;
+  document.getElementById('todasContenido').style.display = 'none';
+  document.getElementById('historialContenido').style.display = 'none';
+  contenedor.style.display = 'block';
+  document.getElementById('toggleExportBtn').style.display = 'none';
+  document.getElementById('todasPanel').classList.add('visible');
+  setTimeout(() => { if(map) map.invalidateSize(); }, 50);
+  contenedor.innerHTML = '<div class="empty-state">Cargando...</div>';
+
+  const req = ++inspDetalleReq;
+  try{
+    const det = await db.rpc('inspeccion_detalle', {p_inspeccion: id});
+    if(req !== inspDetalleReq) return;
+    if(!det){ contenedor.innerHTML = '<div class="empty-state">No se encontró la inspección o no tienes permiso para verla.</div>'; return; }
+    renderDetalleInspeccion(det);
+    dibujarFallasInspeccionEnMapa(det.fallas || []);
+  }catch(e){
+    if(req !== inspDetalleReq) return;
+    contenedor.innerHTML = `<div class="empty-state">Error cargando la inspección: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderDetalleInspeccion(det){
+  const insp = det.inspeccion, fallas = det.fallas || [];
+  const cont = document.getElementById('inspeccionContenido');
+  const cuenta = {reparada:0, pendiente:0, reiterada:0, reportada:0};
+  fallas.forEach(f => { if(cuenta[f.estado] !== undefined) cuenta[f.estado]++; });
+  const puntos = fallas.reduce((s, f) => s + (f.puntos_afectados || 0), 0);
+
+  const encabezado = `
+    <div style="display:flex; flex-wrap:wrap; gap:8px 28px; margin-bottom:12px;">
+      <div><div class="hint" style="margin:0;">ITO</div><b>${escHtml(insp.ito_nombre)}</b></div>
+      <div><div class="hint" style="margin:0;">Día de la inspección</div><b>${escHtml(fmtDiaInspeccion(insp.fecha))}</b></div>
+      <div><div class="hint" style="margin:0;">Ingresada por</div><b>${escHtml(insp.ingresado_por || '—')}</b> <span class="hint">· ${escHtml(fmtFechaHoraChile(insp.creado_en))}</span></div>
+      <div><div class="hint" style="margin:0;">Fallas</div><b>${fallas.length}</b> <span class="hint">· ${puntos} punto${puntos===1?'':'s'} afectado${puntos===1?'':'s'}</span></div>
+      <div style="align-self:flex-end;"><div class="insp-pills" style="margin:0;">${pillsEstadoHtml({reparadas:cuenta.reparada, pendientes:cuenta.pendiente, reiteradas:cuenta.reiterada, reportadas:cuenta.reportada})}</div></div>
+    </div>`;
+
+  if(!fallas.length){
+    cont.innerHTML = encabezado + '<div class="empty-state">Esta inspección se registró sin fallas.</div>';
+    return;
+  }
+  cont.innerHTML = encabezado + `
+    <table id="inspeccionTabla" style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="text-align:left; border-bottom:2px solid var(--line);">
+          <th style="padding:8px 10px;">OT</th>
+          <th style="padding:8px 10px;">Falla</th>
+          <th style="padding:8px 10px;">Ubicación</th>
+          <th style="padding:8px 10px;">Lo que se notificó</th>
+          <th style="padding:8px 10px;">Estado</th>
+          <th style="padding:8px 10px;">Cierre</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${fallas.map(f => `
+          <tr data-id="${escHtml(f.id)}">
+            <td class="mono">${escHtml(f.ot || '—')}</td>
+            <td><b>${escHtml(f.tipo_falla)}</b><div class="hint">${escHtml(descripcionCodigoFalla(f))}</div></td>
+            <td>${htmlUbicacionFalla(f)}</td>
+            <td>${htmlNotificadoFalla(f)}</td>
+            <td><span class="badge ${escHtml(f.estado)}">${escHtml(String(f.estado).replace('_',' '))}</span></td>
+            <td>${htmlCierreFalla(f)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+  cont.querySelectorAll('#inspeccionTabla tbody tr').forEach(tr => {
+    tr.onclick = () => enfocarFallaInspeccion(tr.dataset.id);
+  });
+}
+
+function dibujarFallasInspeccionEnMapa(fallas){
+  if(!fallasInspeccionLayerGroup) fallasInspeccionLayerGroup = L.layerGroup().addTo(map);
+  fallasInspeccionLayerGroup.clearLayers();
+  capasInspeccionPorFalla = {};
+  fallas.forEach(f => {
+    if(!f.geometry) return;
+    const color = colorEstado[f.estado] || '#2563a8';
+    const tip = `OT ${f.ot || '—'} · ${f.tipo_falla} · ${String(f.estado).replace('_',' ')}`;
+    let capa;
+    if(f.geometry.type === 'Point'){
+      const [lon, lat] = f.geometry.coordinates;
+      capa = L.circleMarker([lat, lon], {radius: 8, color:'#fff', weight:2, fillColor:color, fillOpacity:0.95});
+    } else {
+      capa = L.geoJSON(f.geometry, {style: {color, weight:6, opacity:0.9}});
+    }
+    capa.bindTooltip(tip);
+    capa.on('click', (e) => { L.DomEvent.stopPropagation(e); resaltarFilaInspeccion(f.id); });
+    capa.addTo(fallasInspeccionLayerGroup);
+    if(capa.bringToFront) capa.bringToFront();
+    capasInspeccionPorFalla[f.id] = capa;
+  });
+  const capas = fallasInspeccionLayerGroup.getLayers();
+  if(capas.length){
+    map.fitBounds(L.featureGroup(capas).getBounds(), {padding:[50,50], maxZoom:18});
+  }
+}
+
+function limpiarCapaInspeccion(){
+  if(fallasInspeccionLayerGroup) fallasInspeccionLayerGroup.clearLayers();
+  capasInspeccionPorFalla = {};
+}
+
+function resaltarFilaInspeccion(fallaId){
+  const filas = document.querySelectorAll('#inspeccionTabla tbody tr');
+  filas.forEach(tr => tr.classList.toggle('sel', tr.dataset.id === fallaId));
+  const tr = [...filas].find(x => x.dataset.id === fallaId);
+  if(tr) tr.scrollIntoView({block:'nearest'});
+}
+
+function enfocarFallaInspeccion(fallaId){
+  resaltarFilaInspeccion(fallaId);
+  const capa = capasInspeccionPorFalla[fallaId];
+  if(!capa) return;
+  if(capa.getBounds) map.fitBounds(capa.getBounds(), {padding:[60,60], maxZoom:19});
+  else if(capa.getLatLng) map.setView(capa.getLatLng(), 19);
+  if(capa.openTooltip) capa.openTooltip();
 }
 
 // Cacheada por rango de fechas, misma razón que la capa azul de período.
