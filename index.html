@@ -392,6 +392,7 @@
             <div class="hint">Fecha de la inspección (aplica a todas las fallas que ingreses ahora):</div>
             <input type="date" id="fechaInspeccionInput" class="popup-input" style="width:100%;">
             <button class="popup-btn" id="comenzarInspeccionBtn" style="margin-top:6px; width:100%; border:1.5px solid #000; background:#2563a8;">Comenzar</button>
+            <button class="popup-btn" id="cancelarInspeccionBtn" style="margin-top:6px; width:100%; border:1.5px solid #000; background:#fff; color:var(--ink);">Cancelar</button>
           </div>
           <button class="popup-btn" id="btnListoModo" style="background:var(--primary); border:1.5px solid #000; display:none;">✓ Listo</button>
         </div>
@@ -497,13 +498,50 @@
 const SUPABASE_URL = "https://rcwtqvhssgtufgypnobn.supabase.co";
 const SUPABASE_KEY = "sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu";
 
-// Construye una fecha/hora usando el huso horario LOCAL del navegador (Chile),
-// dejando que JS resuelva el offset vigente (-03:00 / -04:00) según haya o no
-// horario de verano. Evita el bug de offset fijo hardcodeado que se rompía
-// cada vez que Chile cambiaba de hora.
+// ---------- Fechas en hora de Chile (America/Santiago) ----------
+// Todas las fechas de la app (inspecciones, estadísticas, rangos) se interpretan en hora
+// de Chile, sin depender de la zona horaria del computador o teléfono que abre la página.
+// El offset vigente (-03:00 / -04:00) lo resuelve el propio navegador según la fecha.
+const ZONA_CHILE = 'America/Santiago';
+const FMT_PARTES_CHILE = new Intl.DateTimeFormat('en-US', {
+  timeZone: ZONA_CHILE, hourCycle: 'h23',
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit'
+});
+
+// Devuelve el instante (Date) que corresponde a "fechaStr (YYYY-MM-DD) a las hh:mm:ss hora de Chile".
 function fechaChileLocal(fechaStr, hh = 0, mm = 0, ss = 0){
   const [y, m, d] = fechaStr.split('-').map(Number);
-  return new Date(y, m - 1, d, hh, mm, ss);
+  const suponiendoUtc = Date.UTC(y, m - 1, d, hh, mm, ss);
+  // Diferencia (Chile - UTC) vigente en un instante dado, en milisegundos.
+  const desfaseChile = (t) => {
+    const p = Object.fromEntries(FMT_PARTES_CHILE.formatToParts(new Date(t)).map(x => [x.type, x.value]));
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second) - t;
+  };
+  // Se prueban los dos desfases posibles (el de un día antes y el de un día después), porque
+  // el día del cambio de hora puede tener uno u otro. Un candidato es válido si, al volver a
+  // convertirlo a hora de Chile, da exactamente la hora pedida.
+  const DIA = 24 * 3600 * 1000;
+  const candidatos = [...new Set([desfaseChile(suponiendoUtc - DIA), desfaseChile(suponiendoUtc + DIA)])]
+    .map(off => suponiendoUtc - off);
+  const validos = candidatos.filter(t => desfaseChile(t) === suponiendoUtc - t);
+  // Hora repetida (retroceso de reloj): se toma la primera. Hora inexistente (adelanto de reloj,
+  // p. ej. las 00:00 del día que empieza el horario de verano): se toma la posterior,
+  // así el día siguiente no arranca una hora antes de tiempo.
+  const t = validos.length ? Math.min(...validos) : Math.max(...candidatos);
+  return new Date(t);
+}
+
+// Fecha de hoy en Chile como 'YYYY-MM-DD' (no usar toISOString(), que entrega fecha UTC).
+function hoyChileStr(){
+  const p = Object.fromEntries(FMT_PARTES_CHILE.formatToParts(new Date()).map(x => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}`;
+}
+
+// Suma (o resta) días a una fecha 'YYYY-MM-DD' y devuelve otra 'YYYY-MM-DD'.
+function sumarDiasStr(fechaStr, dias){
+  const [y, m, d] = fechaStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + dias)).toISOString().slice(0, 10);
 }
 
 // ---------- Cliente REST propio (sin depender de librerías externas) ----------
@@ -762,7 +800,10 @@ document.getElementById('btnInformarInspeccion').onclick = async () => {
   document.getElementById('modoActivoTexto').textContent = 'Elige la fecha de la inspección para continuar:';
   document.getElementById('fechaInspeccionBox').style.display = 'block';
   document.getElementById('btnListoModo').style.display = 'none';
-  document.getElementById('fechaInspeccionInput').value = new Date().toISOString().slice(0,10);
+  const inputFechaInsp = document.getElementById('fechaInspeccionInput');
+  const hoy = hoyChileStr();
+  inputFechaInsp.max = hoy; // no se puede inspeccionar en una fecha futura
+  inputFechaInsp.value = hoy;
   await mostrarSelectorInformarPorOtro();
 };
 
@@ -805,6 +846,7 @@ async function cargarListaItos(){
 document.getElementById('comenzarInspeccionBtn').onclick = () => {
   const fecha = document.getElementById('fechaInspeccionInput').value;
   if(!fecha){ alert('Selecciona una fecha.'); return; }
+  if(fecha > hoyChileStr()){ alert('La fecha de la inspección no puede ser futura.'); return; }
   modoIngreso = 'inspeccion';
   fechaInspeccionSesion = fecha;
   informadoPorSesion = document.getElementById('informarPorOtroSelect').value || null;
@@ -818,6 +860,11 @@ document.getElementById('comenzarInspeccionBtn').onclick = () => {
 };
 
 document.getElementById('btnListoModo').onclick = () => salirModoInformar();
+// Permite arrepentirse mientras aún se está eligiendo la fecha (antes de "Comenzar").
+document.getElementById('cancelarInspeccionBtn').onclick = () => {
+  document.getElementById('fechaInspeccionBox').style.display = 'none';
+  salirModoInformar();
+};
 
 function salirModoInformar(){
   modoIngreso = null;
@@ -1906,7 +1953,7 @@ function mostrarSidebarStats(){
   document.getElementById('sidebarNormal').style.display = 'none';
   document.getElementById('sidebarStats').style.display = 'flex';
   if(!document.getElementById('fechaDiaEspecifico').value){
-    document.getElementById('fechaDiaEspecifico').value = new Date().toISOString().slice(0,10);
+    document.getElementById('fechaDiaEspecifico').value = hoyChileStr();
   }
   actualizarEstadisticasYMapa();
 }
@@ -2364,11 +2411,11 @@ document.querySelectorAll('.periodo-btn').forEach(b => b.onclick = () => selecci
 
 function seleccionarPeriodoRapido(periodo){
   document.querySelectorAll('.periodo-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
-  const ahora = new Date();
+  // "Últimos N días" = los N días corridos que terminan hoy (hoy incluido), en hora de Chile.
   const dias = periodo === 'semana' ? 7 : 30;
-  const inicio = new Date(ahora.getTime() - dias*24*60*60*1000);
-  document.getElementById('fechaInicioRango').value = inicio.toISOString().slice(0,10);
-  document.getElementById('fechaFinRango').value = ahora.toISOString().slice(0,10);
+  const hoy = hoyChileStr();
+  document.getElementById('fechaInicioRango').value = sumarDiasStr(hoy, -(dias - 1));
+  document.getElementById('fechaFinRango').value = hoy;
   actualizarEstadisticasYMapa();
 }
 
@@ -2377,17 +2424,20 @@ function obtenerRangoSeleccionado(){
   if(esDia){
     const fechaStr = document.getElementById('fechaDiaEspecifico').value;
     if(!fechaStr) return null;
+    // El fin es "las 00:00 del día siguiente" (rango semiabierto): las funciones SQL
+    // usan fecha_falla >= inicio AND fecha_falla < fin, así no se pierde ningún segundo.
     return {
       inicio: fechaChileLocal(fechaStr, 0, 0, 0).toISOString(),
-      fin: fechaChileLocal(fechaStr, 23, 59, 59).toISOString()
+      fin: fechaChileLocal(sumarDiasStr(fechaStr, 1), 0, 0, 0).toISOString()
     };
   } else {
     const ini = document.getElementById('fechaInicioRango').value;
     const fin = document.getElementById('fechaFinRango').value;
     if(!ini || !fin) return null;
+    if(ini > fin){ alert('La fecha de inicio no puede ser posterior a la de fin.'); return null; }
     return {
       inicio: fechaChileLocal(ini, 0, 0, 0).toISOString(),
-      fin: fechaChileLocal(fin, 23, 59, 59).toISOString()
+      fin: fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString()
     };
   }
 }
