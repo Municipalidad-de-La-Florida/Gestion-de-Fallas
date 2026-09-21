@@ -129,6 +129,8 @@
   .ana-tabla tr.ana-sin{background:#fdf3e2;}
   .ana-tabla tr.ana-finde td{color:var(--ink-soft);}
   .ana-crit{border:1.5px solid var(--line); border-radius:10px; padding:8px 10px; margin-top:6px; cursor:pointer; background:#fff;}
+  .ana-num{display:inline-block; min-width:20px; height:20px; line-height:20px; border-radius:10px; text-align:center; color:#fff; font-size:11px; font-weight:700; margin-right:6px; padding:0 4px; box-sizing:border-box;}
+  .ana-pin{width:24px; height:24px; line-height:20px; border-radius:50%; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4); color:#fff; font-size:11px; font-weight:700; text-align:center; box-sizing:border-box;}
   .ana-crit:hover{border-color:var(--primary-light); background:#f7f8f7;}
   #selectorInspecciones input[type=date], #selectorInspecciones select{border:1.5px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12.5px; background:#fff; font-family:inherit;}
   .insp-card{border:1.5px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer; background:#fff;}
@@ -3110,14 +3112,19 @@ function renderAnalisis(d){
           <td class="n">${fmtDias(c.mediana_insp)}</td><td class="n">${fmtDias(c.mediana_ing)}</td><td class="n">${fmtDias(c.max_insp)}</td></tr>`).join('')}
       </tbody></table>` : '<div class="hint">Sin reparaciones en este rango.</div>';
 
-  const critPuntos = (d.criticos_puntos || []).map(p => `
+  // Número temporal de cada crítico (solo para este informe): puntos 1..n, circuitos n+1..
+  const nPuntosCrit = (d.criticos_puntos || []).length;
+  const numPunto = (i) => i + 1;
+  const numCircuito = (i) => nPuntosCrit + i + 1;
+  const insignia = (n, color) => `<span class="ana-num" style="background:${color};">${n}</span>`;
+  const critPuntos = (d.criticos_puntos || []).map((p, i) => `
     <div class="ana-crit" data-k="p-${escHtml(p.gid)}">
-      <div><b>Llave ${escHtml(p.llave ?? '—')}</b> <span class="hint" style="margin:0;">· N.° ${escHtml(p.nro_mun ?? '—')}${p.direccion ? ' · ' + escHtml(p.direccion) : ''}</span></div>
+      <div>${insignia(numPunto(i), '#8e44ad')}<b>Llave ${escHtml(p.llave ?? '—')}</b> <span class="hint" style="margin:0;">· N.° ${escHtml(p.nro_mun ?? '—')}${p.direccion ? ' · ' + escHtml(p.direccion) : ''}</span></div>
       <div class="hint" style="margin:2px 0 0;">${p.fallas} falla${p.fallas === 1 ? '' : 's'} · ${p.reiteradas} reiterada${p.reiteradas === 1 ? '' : 's'} · ${p.abiertas} abierta${p.abiertas === 1 ? '' : 's'} · ${escHtml(p.codigos || '')}</div>
     </div>`).join('');
-  const critCircuitos = (d.criticos_circuitos || []).map(c => `
+  const critCircuitos = (d.criticos_circuitos || []).map((c, i) => `
     <div class="ana-crit" data-k="c-${escHtml(c.gid)}">
-      <div><b>Circuito ${escHtml(c.circuito ?? '—')}</b></div>
+      <div>${insignia(numCircuito(i), '#2563a8')}<b>Circuito ${escHtml(c.circuito ?? '—')}</b></div>
       <div class="hint" style="margin:2px 0 0;">${c.fallas} falla${c.fallas === 1 ? '' : 's'} · ${c.reiteradas} reiterada${c.reiteradas === 1 ? '' : 's'} · ${c.abiertas} abierta${c.abiertas === 1 ? '' : 's'} · ${escHtml(c.codigos || '')}</div>
     </div>`).join('');
 
@@ -3155,16 +3162,16 @@ function renderAnalisis(d){
     <div class="ana-tit">Tiempo de reparación por código de falla</div>${porCodigo}
     <div class="ana-tit">Por ITO que informa</div>${porIto}
     <div class="ana-tit">Por quien repara</div>${porCamion}
-    <div class="ana-tit">Puntos críticos</div>
-    <div class="hint">Puntos con 2 o más fallas en el rango, o con alguna reiterada. Haz clic para ubicarlos en el mapa.</div>
-    ${critPuntos || '<div class="hint">Ningún punto se repite en este rango.</div>'}
-    <div class="ana-tit">Circuitos críticos</div>
-    ${critCircuitos || '<div class="hint">Ningún circuito se repite en este rango.</div>'}
     <div class="ana-tit">Pendientes</div>
     <div class="hint">${pen.total_alguna_vez || 0} falla${pen.total_alguna_vez === 1 ? '' : 's'} quedaron pendientes alguna vez · ${pen.actuales || 0} siguen pendientes (antigüedad mediana ${fmtDias(pen.antiguedad_mediana_actuales)}).</div>
     ${motivos}
     <div class="ana-tit">Cobertura de inspecciones</div>${porDia}
     <div class="ana-tit">Por ITO</div>${cobIto}
+    <div class="ana-tit">Puntos críticos</div>
+    <div class="hint">Puntos con 2 o más fallas en el rango, o con alguna reiterada. El número es temporal (solo de este informe) y es el mismo que ves en el mapa. Haz clic para ubicarlo.</div>
+    ${critPuntos || '<div class="hint">Ningún punto se repite en este rango.</div>'}
+    <div class="ana-tit">Circuitos críticos</div>
+    ${critCircuitos || '<div class="hint">Ningún circuito se repite en este rango.</div>'}
   `;
 
   document.getElementById('anaPdfBtn').onclick = () => generarPdfAnalisis();
@@ -3172,15 +3179,17 @@ function renderAnalisis(d){
   // Marcadores de críticos en el mapa
   if(!analisisLayerGroup) analisisLayerGroup = L.layerGroup().addTo(map);
   limpiarCapaAnalisis();
-  const dibujar = (lista, prefijo, etiqueta) => (lista || []).forEach(x => {
+  const dibujar = (lista, prefijo, etiqueta, numero, color) => (lista || []).forEach((x, i) => {
     if(x.lat == null || x.lon == null) return;
-    const m = L.circleMarker([x.lat, x.lon], {radius: 9, color:'#fff', weight:2, fillColor:'#8e44ad', fillOpacity:0.95, pane:'inspeccionPane'});
+    const icono = L.divIcon({className: '', iconSize: [24, 24], iconAnchor: [12, 12],
+      html: `<div class="ana-pin" style="background:${color};">${numero(i)}</div>`});
+    const m = L.marker([x.lat, x.lon], {icon: icono, pane: 'inspeccionPane'});
     m.bindTooltip(etiqueta(x));
     m.addTo(analisisLayerGroup);
     analisisCapas[prefijo + x.gid] = m;
   });
-  dibujar(d.criticos_puntos, 'p-', x => `Llave ${x.llave ?? '—'} · ${x.fallas} falla${x.fallas === 1 ? '' : 's'}`);
-  dibujar(d.criticos_circuitos, 'c-', x => `Circuito ${x.circuito ?? '—'} · ${x.fallas} falla${x.fallas === 1 ? '' : 's'}`);
+  dibujar(d.criticos_puntos, 'p-', x => `Llave ${x.llave ?? '—'} · ${x.fallas} falla${x.fallas === 1 ? '' : 's'}`, numPunto, '#8e44ad');
+  dibujar(d.criticos_circuitos, 'c-', x => `Circuito ${x.circuito ?? '—'} · ${x.fallas} falla${x.fallas === 1 ? '' : 's'}`, numCircuito, '#2563a8');
   const capas = Object.values(analisisCapas);
   if(capas.length) map.fitBounds(L.featureGroup(capas).getBounds(), {padding:[50,50], maxZoom:16});
   content.querySelectorAll('.ana-crit').forEach(el => {
@@ -3593,15 +3602,108 @@ async function generarPdfAnalisis(){
     const ini = d.rango ? d.rango.inicio : '', fin = d.rango ? d.rango.fin : '';
     const fmtF = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7) + '-' + String(s).slice(0, 4);
 
-    // Encabezado
-    pdf.setFontSize(14); pdf.setTextColor(...VERDE);
-    pdf.text('Sistema de Gestión de Fallas de Alumbrado — La Florida', margen, 15);
-    pdf.setFontSize(11);
-    pdf.text('Análisis de fallas', margen, 21);
-    pdf.setFontSize(9); pdf.setTextColor(...gris);
-    pdf.text(`Período: ${fmtF(ini)} a ${fmtF(fin)}   ·   Generado el ${new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE})} por ${currentUser ? currentUser.nombre : '-'}`, margen, 26);
-    pdf.setDrawColor(219, 226, 220); pdf.line(margen, 29, ancho - margen, 29);
-    let y = 34;
+    // ---------- PORTADA: lo más importante antes del detalle ----------
+    const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
+    const rr = d.resumen || {};
+    const codigos = d.por_codigo || [];
+    const cobP = d.cobertura || {};
+    const diasP = cobP.por_dia || [];
+    const habilesSinP = diasP.filter(x => x.dow >= 1 && x.dow <= 5 && !x.inspecciones).length;
+    const nInspecciones = (cobP.por_ito || []).reduce((s, i) => s + (i.inspecciones || 0), 0);
+    const nDiasRango = Math.round((new Date(fin + 'T00:00:00Z') - new Date(ini + 'T00:00:00Z')) / 86400000) + 1;
+    const pctRep = rr.fallas ? Math.round((rr.reparadas || 0) / rr.fallas * 100) : 0;
+    const pctReit = rr.fallas ? Math.round((rr.reiteradas || 0) / rr.fallas * 100) : 0;
+
+    // Banda superior
+    pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 52, 'F');
+    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5);
+    pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 14);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(27);
+    pdf.text('Análisis de fallas', margen, 29);
+    pdf.setFontSize(14);
+    pdf.text(`${fmtF(ini)}  al  ${fmtF(fin)}`, margen, 40);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
+    pdf.text(`${plural(nDiasRango, 'día', 'días')} · ${plural(nInspecciones, 'inspección', 'inspecciones')}`, margen, 47);
+    pdf.text(`Generado el ${new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE})}`, ancho - margen, 40, {align: 'right'});
+    pdf.text(`por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen, 45, {align: 'right'});
+
+    // Tarjetas de indicadores (2 filas de 3)
+    const tarjetasP = [
+      {v: num(rr.fallas || 0), l: 'Fallas del período', s: 'un circuito cuenta como una'},
+      {v: `${pctRep}%`, l: 'Reparadas', s: `${num(rr.reparadas || 0)} de ${num(rr.fallas || 0)}`},
+      {v: num(rr.abiertas || 0), l: 'Siguen abiertas', s: (rr.abiertas ? 'antigüedad mediana ' + fmtHoras(rr.antiguedad_mediana_abiertas, '-') : 'ninguna')},
+      {v: num(rr.reiteradas || 0), l: 'Reiteradas', s: `${pctReit}% de las fallas`},
+      {v: fmtHoras(rr.mediana_dias_ing, '-'), l: 'Mediana de reparación', s: 'desde el ingreso al sistema'},
+      {v: fmtHoras(rr.mediana_dias_insp, '-'), l: 'Mediana de reparación', s: 'desde la inspección'}
+    ];
+    const cw = (ancho - margen * 2 - 8) / 3, chh = 24;
+    tarjetasP.forEach((t, i) => {
+      const cx = margen + (i % 3) * (cw + 4), cy = 60 + Math.floor(i / 3) * (chh + 4);
+      pdf.setFillColor(247, 248, 247); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(cx, cy, cw, chh, 2, 2, 'FD');
+      pdf.setTextColor(...VERDE); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(20); pdf.text(String(t.v), cx + 4, cy + 10.5);
+      pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text(t.l, cx + 4, cy + 16);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(t.s, cx + 4, cy + 20.5);
+    });
+
+    // Lo más importante (frases generadas con los datos del período)
+    const hallazgos = [];
+    if(codigos.length){
+      const top = codigos[0];
+      hallazgos.push(['Falla más frecuente', `${top.tipo_falla}${top.tipo === 'linea' ? ' (circuito)' : ''} · ${descripcionCodigoAnalisis(top.tipo, top.tipo_falla)}: ${top.fallas} de ${rr.fallas} fallas (${Math.round(top.fallas / rr.fallas * 100)}%).`]);
+      const conRep = codigos.filter(c => c.reparadas >= 3 && c.mediana_ing != null);
+      const base = conRep.length ? conRep : codigos.filter(c => c.mediana_ing != null);
+      if(base.length){
+        const lento = base.slice().sort((a, b) => b.mediana_ing - a.mediana_ing)[0];
+        const rapido = base.slice().sort((a, b) => a.mediana_ing - b.mediana_ing)[0];
+        hallazgos.push(['Tiempos de reparación', `El código más lento de reparar es ${lento.tipo_falla} (${descripcionCodigoAnalisis(lento.tipo, lento.tipo_falla)}), con mediana de ${fmtHoras(lento.mediana_ing)} desde el ingreso` + (rapido !== lento ? `; el más rápido es ${rapido.tipo_falla}, con ${fmtHoras(rapido.mediana_ing)}.` : '.')]);
+      }
+    }
+    if((d.por_ito || []).length){
+      const it = d.por_ito[0];
+      hallazgos.push(['Quién informa', `${it.nombre} informó más fallas: ${it.fallas} (${Math.round(it.fallas / Math.max(1, rr.fallas) * 100)}% del total).`]);
+    }
+    if((d.por_camion || []).length){
+      const cm = d.por_camion[0];
+      hallazgos.push(['Quién repara', `${cm.nombre} realizó más reparaciones: ${cm.reparadas}, con mediana de ${fmtHoras(cm.mediana_ing)} desde el ingreso.`]);
+    }
+    const cP0 = d.criticos_puntos || [], cC0 = d.criticos_circuitos || [];
+    if(cP0.length || cC0.length){
+      const p0 = cP0[0];
+      hallazgos.push(['Puntos y circuitos críticos', `${plural(cP0.length, 'punto crítico', 'puntos críticos')} y ${plural(cC0.length, 'circuito crítico', 'circuitos críticos')}` + (p0 ? `. El más repetido: llave ${p0.llave ?? '-'}${p0.direccion ? ' (' + p0.direccion + ')' : ''}, con ${plural(p0.fallas, 'falla', 'fallas')} y ${plural(p0.reiteradas, 'reiterada', 'reiteradas')}.` : '.') + ' Están numerados y en el mapa al final.']);
+    } else hallazgos.push(['Puntos y circuitos críticos', 'Ningún punto ni circuito se repitió en el período.']);
+    const penP = d.pendientes || {};
+    if(penP.total_alguna_vez){
+      const mo = (penP.motivos || [])[0];
+      hallazgos.push(['Pendientes', `${plural(penP.total_alguna_vez, 'falla quedó', 'fallas quedaron')} pendiente${penP.total_alguna_vez === 1 ? '' : 's'} alguna vez; ${penP.actuales || 0} siguen así.` + (mo ? ` Motivo más frecuente: "${mo.motivo}" (${mo.veces}).` : '')]);
+    }
+    hallazgos.push(['Cobertura', habilesSinP ? `${plural(habilesSinP, 'día hábil', 'días hábiles')} sin inspección registrada (puede incluir feriados).` : 'Todos los días hábiles del período tienen inspección registrada.']);
+
+    let yy = 60 + 2 * (chh + 4) + 6;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(...VERDE);
+    pdf.text('Lo más importante', margen, yy); yy += 3;
+    pdf.setDrawColor(219, 226, 220); pdf.line(margen, yy, ancho - margen, yy); yy += 6;
+    hallazgos.forEach(([tit, txt]) => {
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9.5);
+      const lineas = pdf.splitTextToSize(txt, ancho - margen * 2 - 8);
+      if(yy + 6 + lineas.length * 4.6 > alto - 30) return;
+      pdf.setFillColor(...VERDE); pdf.rect(margen, yy - 2.6, 1.6, 1.6, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...VERDE); pdf.text(tit, margen + 5, yy);
+      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(30, 40, 35); pdf.text(lineas, margen + 5, yy + 4.8);
+      yy += 4.8 + lineas.length * 4.6 + 3.2;
+    });
+
+    // Guía de lectura
+    pdf.setFontSize(8); pdf.setTextColor(...gris);
+    const guia = pdf.splitTextToSize('Cómo leer los tiempos: "desde la inspección" cuenta desde el día en que el ITO vio la falla; "desde el ingreso" cuenta desde que se registró en el sistema. Todos los tiempos se muestran en horas. Detalle en las páginas siguientes: resumen, tiempos por código, por ITO y por quien repara, pendientes, cobertura, y al final los puntos y circuitos críticos con su mapa.', ancho - margen * 2);
+    pdf.text(guia, margen, alto - 14 - guia.length * 3.4);
+
+    pdf.addPage();
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...VERDE);
+    pdf.text('Detalle del análisis', margen, 16);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gris);
+    pdf.text(`Período: ${fmtF(ini)} a ${fmtF(fin)}`, margen, 21);
+    pdf.setDrawColor(219, 226, 220); pdf.line(margen, 24, ancho - margen, 24);
+    let y = 29;
 
     const estilosTabla = {
       margin: {left: margen, right: margen},
@@ -3669,24 +3771,6 @@ async function generarPdfAnalisis(){
       });
     } else vacio('Sin reparaciones en este rango.');
 
-    // 5) Críticos
-    titulo('Puntos críticos', 'Puntos con 2 o más fallas en el período, o con alguna reiterada.');
-    if((d.criticos_puntos || []).length){
-      tabla({
-        head: [['Llave', 'N.º municipal', 'Dirección', 'Fallas', 'Reiteradas', 'Abiertas', 'Códigos']],
-        body: d.criticos_puntos.map(p => [num(p.llave), num(p.nro_mun), p.direccion || '-', p.fallas, p.reiteradas, p.abiertas, p.codigos || '']),
-        columnStyles: {3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}}
-      });
-    } else vacio('Ningún punto se repite en este rango.');
-    titulo('Circuitos críticos');
-    if((d.criticos_circuitos || []).length){
-      tabla({
-        head: [['Circuito', 'Fallas', 'Reiteradas', 'Abiertas', 'Códigos']],
-        body: d.criticos_circuitos.map(c => [num(c.circuito), c.fallas, c.reiteradas, c.abiertas, c.codigos || '']),
-        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}}
-      });
-    } else vacio('Ningún circuito se repite en este rango.');
-
     // 6) Pendientes
     const pen = d.pendientes || {};
     titulo('Pendientes', `${pen.total_alguna_vez || 0} falla(s) quedaron pendientes alguna vez; ${pen.actuales || 0} siguen pendientes (antigüedad mediana ${dias(pen.antiguedad_mediana_actuales)}).`);
@@ -3728,18 +3812,42 @@ async function generarPdfAnalisis(){
       });
     } else vacio('Sin inspecciones registradas en este rango.');
 
-    // 8) Mapa con los críticos (si se puede dibujar)
+    // 8) Críticos (al final del informe): con número temporal, el mismo que lleva el mapa siguiente
+    const cPuntos = d.criticos_puntos || [], cCirc = d.criticos_circuitos || [];
+    titulo('Puntos críticos', 'Puntos con 2 o más fallas en el período, o con alguna reiterada. El N.º es temporal (solo de este informe) y es el mismo que lleva el mapa.');
+    if(cPuntos.length){
+      tabla({
+        head: [['N.º', 'Llave', 'N.º municipal', 'Dirección', 'Fallas', 'Reit.', 'Abiertas', 'Códigos']],
+        body: cPuntos.map((p, i) => [i + 1, num(p.llave), num(p.nro_mun), p.direccion || '-', p.fallas, p.reiteradas, p.abiertas, p.codigos || '']),
+        columnStyles: {0: {halign: 'center', fontStyle: 'bold', cellWidth: 11, textColor: [142, 68, 173]}, 4: {halign: 'right'}, 5: {halign: 'right'}, 6: {halign: 'right'}}
+      });
+    } else vacio('Ningún punto se repite en este rango.');
+    titulo('Circuitos críticos', 'La numeración continúa la de los puntos.');
+    if(cCirc.length){
+      tabla({
+        head: [['N.º', 'Circuito', 'Fallas', 'Reit.', 'Abiertas', 'Códigos']],
+        body: cCirc.map((c, i) => [cPuntos.length + i + 1, num(c.circuito), c.fallas, c.reiteradas, c.abiertas, c.codigos || '']),
+        columnStyles: {0: {halign: 'center', fontStyle: 'bold', cellWidth: 11, textColor: [37, 99, 168]}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}}
+      });
+    } else vacio('Ningún circuito se repite en este rango.');
+
+    // 9) Mapa con los críticos (si se puede dibujar)
     try{
       const items = [];
-      (d.criticos_puntos || []).forEach(p => { if(p.lat != null && p.lon != null) items.push({geom: {type: 'Point', coordinates: [p.lon, p.lat]}, color: '#8e44ad', label: ''}); });
-      (d.criticos_circuitos || []).forEach(c => { if(c.lat != null && c.lon != null) items.push({geom: {type: 'Point', coordinates: [c.lon, c.lat]}, color: '#8e44ad', label: ''}); });
-      const canvasMapa = await renderMapaCanvas(items, {w: 1500, h: 1050, padding: 150, zMax: 17});
+      cPuntos.forEach((p, i) => { if(p.lat != null && p.lon != null) items.push({geom: {type: 'Point', coordinates: [p.lon, p.lat]}, color: '#8e44ad', label: i + 1}); });
+      cCirc.forEach((c, i) => { if(c.lat != null && c.lon != null) items.push({geom: {type: 'Point', coordinates: [c.lon, c.lat]}, color: '#2563a8', label: cPuntos.length + i + 1}); });
+      const canvasMapa = await renderMapaCanvas(items, {w: 1400, h: 1800, padding: 140, zMax: 17});
       if(canvasMapa){
         pdf.addPage();
         pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text('Mapa de puntos y circuitos críticos', margen, 16);
+        // Leyenda
+        pdf.setFontSize(8.5); pdf.setTextColor(...gris);
+        pdf.setFillColor(142, 68, 173); pdf.circle(margen + 1.5, 21.3, 1.5, 'F'); pdf.text('Punto crítico', margen + 5, 22.3);
+        pdf.setFillColor(37, 99, 168); pdf.circle(margen + 32, 21.3, 1.5, 'F'); pdf.text('Circuito crítico (en su centro)', margen + 35.5, 22.3);
+        pdf.text('El número es el de las tablas anteriores.', ancho - margen, 22.3, {align: 'right'});
         const w = ancho - margen * 2;
-        const h = Math.min((canvasMapa.height * w) / canvasMapa.width, alto - 40);
-        pdf.addImage(canvasMapa.toDataURL('image/jpeg', 0.85), 'JPEG', margen, 20, w, h);
+        const h = Math.min((canvasMapa.height * w) / canvasMapa.width, alto - 38);
+        pdf.addImage(canvasMapa.toDataURL('image/jpeg', 0.85), 'JPEG', margen, 26, w, h);
       }
     }catch(e){ console.warn('No se pudo incluir el mapa en el PDF:', e); }
 
