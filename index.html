@@ -2099,9 +2099,11 @@ document.getElementById('backFromStats').onclick = () => ocultarSidebarStats();
 function mostrarSidebarStats(){
   document.getElementById('sidebarNormal').style.display = 'none';
   document.getElementById('sidebarStats').style.display = 'flex';
-  // La pestaña "Inspecciones" solo la ven admin, ito e ito2 (la base de datos también lo exige).
+  // La pestaña "Inspecciones" la ven admin, ito e ito2. El ito solo ve las suyas; admin e ito2, las de todos
+  // (la base de datos también lo exige).
   document.getElementById('tabInspecciones').style.display = ['admin','ito','ito2'].includes(rolEfectivo()) ? '' : 'none';
-  document.getElementById('tabAnalisis').style.display = ['admin','ito','ito2'].includes(rolEfectivo()) ? '' : 'none';
+  // El Análisis solo lo ven admin e ito2 (la base de datos también lo exige).
+  document.getElementById('tabAnalisis').style.display = ['admin','ito2'].includes(rolEfectivo()) ? '' : 'none';
   if(!document.getElementById('fechaInicioRango').value){
     seleccionarPeriodoRapido('hoy');   // por defecto, el día de hoy (también carga las estadísticas)
   } else {
@@ -2765,6 +2767,10 @@ async function cargarListadoInspecciones(){
 
 function actualizarSelectorIto(){
   const sel = document.getElementById('inspItoSelect');
+  // El ITO común solo recibe sus propias inspecciones: no tiene sentido filtrar por ITO.
+  const soloPropias = rolEfectivo() === 'ito';
+  sel.style.display = soloPropias ? 'none' : '';
+  if(sel.previousElementSibling) sel.previousElementSibling.style.display = soloPropias ? 'none' : '';
   const previo = sel.value;
   const itos = new Map();
   inspeccionesCache.forEach(i => itos.set(i.ito_id, i.ito_nombre));
