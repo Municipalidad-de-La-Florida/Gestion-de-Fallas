@@ -479,23 +479,25 @@
         </div>
         <h3>Ver estadísticas por</h3>
         <div class="toggle-row" style="margin-bottom:12px; flex-wrap:wrap;">
-          <button id="tabDia" class="active">Día específico</button>
-          <button id="tabPeriodo">Período</button>
+          <button id="tabDia" style="display:none;">Día específico</button>
+          <button id="tabPeriodo" class="active">Día o período</button>
           <button id="tabInspecciones" style="display:none;">Inspecciones</button>
           <button id="tabAnalisis" style="display:none;">Análisis</button>
         </div>
-        <div id="selectorDia">
+        <div id="selectorDia" style="display:none;">
           <input type="date" id="fechaDiaEspecifico" class="popup-input" style="width:100%;">
         </div>
-        <div id="selectorPeriodo" style="display:none;">
+        <div id="selectorPeriodo">
           <div class="periodo-row" style="margin-bottom:10px;">
+            <button class="periodo-btn" data-p="hoy">Hoy</button>
             <button class="periodo-btn" data-p="semana">Últimos 7 días</button>
             <button class="periodo-btn" data-p="mes">Últimos 30 días</button>
           </div>
-          <div class="hint">O elige un rango manual:</div>
-          <div style="display:flex; gap:6px; margin-top:6px;">
-            <input type="date" id="fechaInicioRango" class="popup-input" style="flex:1;">
-            <input type="date" id="fechaFinRango" class="popup-input" style="flex:1;">
+          <div class="hint">O elige las fechas (para un solo día, la misma en ambas):</div>
+          <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
+            <input type="date" id="fechaInicioRango" class="popup-input" style="flex:1;" title="Desde">
+            <span class="hint" style="margin:0;">a</span>
+            <input type="date" id="fechaFinRango" class="popup-input" style="flex:1;" title="Hasta">
           </div>
         </div>
         <div id="selectorInspecciones" style="display:none;">
@@ -2091,20 +2093,19 @@ function mostrarSidebarStats(){
   // La pestaña "Inspecciones" solo la ven admin, ito e ito2 (la base de datos también lo exige).
   document.getElementById('tabInspecciones').style.display = ['admin','ito','ito2'].includes(rolEfectivo()) ? '' : 'none';
   document.getElementById('tabAnalisis').style.display = ['admin','ito','ito2'].includes(rolEfectivo()) ? '' : 'none';
-  if(!document.getElementById('fechaDiaEspecifico').value){
-    document.getElementById('fechaDiaEspecifico').value = hoyChileStr();
+  if(!document.getElementById('fechaInicioRango').value){
+    seleccionarPeriodoRapido('hoy');   // por defecto, el día de hoy (también carga las estadísticas)
+  } else {
+    actualizarEstadisticasYMapa();
   }
-  actualizarEstadisticasYMapa();
 }
 function ocultarSidebarStats(){
   if(document.getElementById('tabInspecciones').classList.contains('active') || document.getElementById('tabAnalisis').classList.contains('active')){
     salirTabInspecciones();
     salirTabAnalisis();
-    // Deja "Día específico" como pestaña activa para la próxima vez que se abra el panel.
-    document.getElementById('tabDia').classList.add('active');
-    document.getElementById('tabPeriodo').classList.remove('active');
-    document.getElementById('selectorDia').style.display = 'block';
-    document.getElementById('selectorPeriodo').style.display = 'none';
+    // Deja "Día o período" como pestaña activa para la próxima vez que se abra el panel.
+    document.getElementById('tabPeriodo').classList.add('active');
+    document.getElementById('selectorPeriodo').style.display = 'block';
   }
   document.getElementById('sidebarStats').style.display = 'none';
   document.getElementById('sidebarNormal').style.display = 'flex';
@@ -2555,18 +2556,28 @@ document.getElementById('tabPeriodo').onclick = () => {
   document.getElementById('tabDia').classList.remove('active');
   document.getElementById('selectorPeriodo').style.display = 'block';
   document.getElementById('selectorDia').style.display = 'none';
-  if(!document.getElementById('fechaInicioRango').value) seleccionarPeriodoRapido('semana');
+  if(!document.getElementById('fechaInicioRango').value) seleccionarPeriodoRapido('hoy');
   else actualizarEstadisticasYMapa();
 };
 document.getElementById('fechaDiaEspecifico').onchange = actualizarEstadisticasYMapa;
-document.getElementById('fechaInicioRango').onchange = () => { document.querySelectorAll('.periodo-btn').forEach(x=>x.classList.remove('active')); actualizarEstadisticasYMapa(); };
-document.getElementById('fechaFinRango').onchange = () => { document.querySelectorAll('.periodo-btn').forEach(x=>x.classList.remove('active')); actualizarEstadisticasYMapa(); };
+document.getElementById('fechaInicioRango').onchange = () => {
+  document.querySelectorAll('.periodo-btn').forEach(x=>x.classList.remove('active'));
+  const ini = document.getElementById('fechaInicioRango'), fin = document.getElementById('fechaFinRango');
+  if(ini.value && (!fin.value || fin.value < ini.value)) fin.value = ini.value;   // "Desde" posterior a "Hasta": ajusta "Hasta"
+  actualizarEstadisticasYMapa();
+};
+document.getElementById('fechaFinRango').onchange = () => {
+  document.querySelectorAll('.periodo-btn').forEach(x=>x.classList.remove('active'));
+  const ini = document.getElementById('fechaInicioRango'), fin = document.getElementById('fechaFinRango');
+  if(fin.value && (!ini.value || ini.value > fin.value)) ini.value = fin.value;   // "Hasta" anterior a "Desde": ajusta "Desde"
+  actualizarEstadisticasYMapa();
+};
 document.querySelectorAll('.periodo-btn').forEach(b => b.onclick = () => seleccionarPeriodoRapido(b.dataset.p));
 
 function seleccionarPeriodoRapido(periodo){
   document.querySelectorAll('.periodo-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
   // "Últimos N días" = los N días corridos que terminan hoy (hoy incluido), en hora de Chile.
-  const dias = periodo === 'semana' ? 7 : 30;
+  const dias = periodo === 'hoy' ? 1 : (periodo === 'semana' ? 7 : 30);
   const hoy = hoyChileStr();
   document.getElementById('fechaInicioRango').value = sumarDiasStr(hoy, -(dias - 1));
   document.getElementById('fechaFinRango').value = hoy;
@@ -4040,7 +4051,7 @@ async function generarPdfEstadisticas(){
     } else {
       const ini = document.getElementById('fechaInicioRango').value || '—';
       const fin = document.getElementById('fechaFinRango').value || '—';
-      rangoTexto = `Período: ${ini} a ${fin}`;
+      rangoTexto = ini === fin ? `Día: ${ini}` : `Período: ${ini} a ${fin}`;
     }
     pdf.text(rangoTexto + '   ·   Generado el ' + new Date().toLocaleString('es-CL'), margen, 26);
     pdf.setDrawColor(219, 226, 220);
