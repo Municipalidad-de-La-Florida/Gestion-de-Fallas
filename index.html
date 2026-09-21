@@ -3053,7 +3053,14 @@ async function cargarAnalisis(){
   }
 }
 
-function fmtDias(x){ return (x === null || x === undefined) ? '—' : String(x).replace('.', ',') + ' d'; }
+// Los tiempos llegan de la base en días (decimales); en pantalla y PDF se muestran siempre en horas.
+function fmtHoras(dias, vacio){
+  if(dias === null || dias === undefined || isNaN(dias)) return vacio === undefined ? '—' : vacio;
+  const h = Number(dias) * 24;
+  const txt = h < 10 ? (Math.round(h * 10) / 10).toFixed(1).replace('.', ',') : String(Math.round(h));
+  return txt + ' h';
+}
+function fmtDias(x){ return fmtHoras(x); }
 const DIAS_SEM_CORTO = ['dom','lun','mar','mié','jue','vie','sáb'];
 
 function descripcionCodigoAnalisis(tipo, codigo){
@@ -3367,7 +3374,7 @@ async function generarPdfInspeccion(){
       // Tarjetas de indicadores
       const repDias = fallas.filter(f => f.reparacion && f.reparacion.fecha).map(f => (new Date(f.reparacion.fecha) - new Date(f.fecha_falla)) / 86400000).map(x => Math.max(0, x));
       const med = mediana(repDias);
-      const fmtD = (x) => x === null ? '-' : (Math.round(x * 10) / 10).toString().replace('.', ',') + ' d';
+      const fmtD = (x) => fmtHoras(x, '-');
       const pctRep = Math.round(cuenta.reparada / fallas.length * 100);
       const tarjetas = [
         {v: String(fallas.length), l: 'Fallas informadas', s: `${plural(nPuntos, 'punto', 'puntos')} · ${plural(nCircuitos, 'circuito', 'circuitos')}`},
@@ -3582,7 +3589,7 @@ async function generarPdfAnalisis(){
     const VERDE = [31, 77, 61];
     const gris = [85, 102, 92];
     const num = (x) => (x === null || x === undefined) ? '-' : String(x).replace('.', ',');
-    const dias = (x) => (x === null || x === undefined) ? '-' : String(x).replace('.', ',') + ' d';
+    const dias = (x) => fmtHoras(x, '-');
     const ini = d.rango ? d.rango.inicio : '', fin = d.rango ? d.rango.fin : '';
     const fmtF = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7) + '-' + String(s).slice(0, 4);
 
