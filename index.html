@@ -1037,6 +1037,19 @@ function mostrarPanel(innerHtml){
   panel.classList.add('visible');
   return panel;
 }
+// Evita envíos dobles: mientras el guardado está en curso, el botón se ignora y se deshabilita.
+function protegerClick(btn){
+  if(!btn || !btn.onclick) return;
+  const original = btn.onclick;
+  let enCurso = false;
+  btn.onclick = async function(e){
+    if(enCurso) return;
+    enCurso = true; btn.disabled = true;
+    try{ await original.call(this, e); }
+    finally{ enCurso = false; btn.disabled = false; }
+  };
+}
+
 function cerrarPanel(){
   document.getElementById('reportPanel').classList.remove('visible');
   quitarResaltadoConsulta();
@@ -1413,6 +1426,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom);
     cerrarPanel();
   };
+  protegerClick(panel.querySelector('#confirmarBtn'));
 }
 
 const CATALOGO_FALLAS_CIRCUITO = [
@@ -1453,6 +1467,7 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
     await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null);
     cerrarPanel();
   };
+  protegerClick(panel.querySelector('#confirmarBtn'));
 }
 
 // ---------- DIBUJAR FALLAS EN EL MAPA (visibles en cualquier zoom) ----------
@@ -1772,6 +1787,7 @@ async function abrirPopupFalla(feat){
           cerrarPanel();
         }catch(e){ alert('No se pudo asignar: ' + e.message); }
       };
+      protegerClick(btnAsignar);
     }
   }
 
@@ -1834,6 +1850,7 @@ async function abrirPopupFalla(feat){
       await registrarReparacion(p.id, desc);
       cerrarPanel();
     };
+    protegerClick(btn);
   }
   const btnPendiente = panel.querySelector('#dejarPendienteBtn');
   if(btnPendiente){
@@ -1843,6 +1860,7 @@ async function abrirPopupFalla(feat){
       await marcarFallaPendiente(p.id, desc);
       cerrarPanel();
     };
+    protegerClick(btnPendiente);
   }
 }
 
@@ -2014,6 +2032,7 @@ function abrirFormularioReparacion(fallaId){
     await registrarReparacion(fallaId, desc);
     cerrarPanel();
   };
+  protegerClick(panel.querySelector('#confirmarReparacionBtn'));
 }
 
 async function registrarReparacion(fallaId, descripcion){
