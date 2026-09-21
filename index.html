@@ -133,6 +133,7 @@
   .ana-crit{border:1.5px solid var(--line); border-radius:10px; padding:8px 10px; margin-top:6px; cursor:pointer; background:#fff;}
   .ana-num{display:inline-block; min-width:20px; height:20px; line-height:20px; border-radius:10px; text-align:center; color:#fff; font-size:11px; font-weight:700; margin-right:6px; padding:0 4px; box-sizing:border-box;}
   .ana-pin{width:24px; height:24px; line-height:20px; border-radius:50%; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.4); color:#fff; font-size:11px; font-weight:700; text-align:center; box-sizing:border-box;}
+  .mapa-suave{filter: grayscale(1) contrast(.82) brightness(1.1);}
   .ana-crit:hover{border-color:var(--primary-light); background:#f7f8f7;}
   #selectorInspecciones input[type=date], #selectorInspecciones select{border:1.5px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12.5px; background:#fff; font-family:inherit;}
   .insp-card{border:1.5px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer; background:#fff;}
@@ -1153,9 +1154,17 @@ function initMap(){
   map.createPane('empalmesPane');
   map.getPane('empalmesPane').style.zIndex = 550; // por debajo del markerPane (600), para que quede detrás de los puntos
   L.control.zoom({position:'bottomleft'}).addTo(map);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution:'&copy; OpenStreetMap contributors', subdomains:'abc', maxZoom:19
-  }).addTo(map);
+  // Fondo del mapa: mismas calles de OpenStreetMap (gratis y sin clave), en dos versiones:
+  // "Suave" (gris y clarito, para que resalten las fallas) o "Color" (el original).
+  const OSM_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const osmOpciones = {attribution:'&copy; OpenStreetMap contributors', subdomains:'abc', maxZoom:19};
+  const fondoSuave = L.tileLayer(OSM_URL, {...osmOpciones, className: 'mapa-suave'});
+  const fondoColor = L.tileLayer(OSM_URL, osmOpciones);
+  let fondoElegido = 'suave';
+  try{ if(localStorage.getItem('fondoMapa') === 'color') fondoElegido = 'color'; }catch(e){}
+  (fondoElegido === 'color' ? fondoColor : fondoSuave).addTo(map);
+  L.control.layers({'Fondo suave': fondoSuave, 'Fondo a color': fondoColor}, null, {position:'bottomright', collapsed:true}).addTo(map);
+  map.on('baselayerchange', (e) => { try{ localStorage.setItem('fondoMapa', e.layer === fondoColor ? 'color' : 'suave'); }catch(err){} });
 
   map.on('click', () => cerrarPanel()); // clic en mapa vacío cierra el panel
   L.DomEvent.disableClickPropagation(document.getElementById('reportPanel')); // clics dentro del panel no llegan al mapa
@@ -3287,6 +3296,16 @@ async function renderMapaCanvas(items, opciones = {}){
     }
   }
   await Promise.all(tareas);
+  // Mismo aspecto "suave" del mapa de la app: gris y clarito, para que resalten las fallas
+  try{
+    const im = ctx.getImageData(0, 0, W, H), px = im.data;
+    for(let i = 0; i < px.length; i += 4){
+      const g = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+      const v = Math.max(0, Math.min(255, ((g / 255 - 0.5) * 0.82 + 0.5) * 1.1 * 255));
+      px[i] = px[i + 1] = px[i + 2] = v;
+    }
+    ctx.putImageData(im, 0, 0);
+  }catch(e){ console.warn('No se pudo suavizar el fondo del mapa del PDF:', e); }
 
   const P = (lon, lat) => { const p = mundo(lon, lat, z); return [p[0] - ox, p[1] - oy]; };
   ctx.lineCap = 'round'; ctx.lineJoin = 'round';
