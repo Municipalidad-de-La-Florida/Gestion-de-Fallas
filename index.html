@@ -3211,8 +3211,8 @@ function cargarImagenTile(url){
 
 async function renderMapaCanvas(items, opciones = {}){
   const W = opciones.w || 1700, H = opciones.h || 1058;
-  const padding = opciones.padding || 130;      // margen alrededor de las fallas (px del canvas)
-  const zMax = opciones.zMax || 18, zMin = 12;
+  const padding = opciones.padding || 90;      // margen alrededor de las fallas (px del canvas)
+  const zMax = opciones.zMax || 19, zMin = 12;
   const validos = (items || []).filter(it => it.geom);
   const lineas = (g) => g.type === 'LineString' ? [g.coordinates] : (g.type === 'MultiLineString' ? g.coordinates : []);
   const coords = [];   // [lon, lat]
@@ -3228,13 +3228,14 @@ async function renderMapaCanvas(items, opciones = {}){
     const s = Math.sin(lat * Math.PI / 180);
     return [(lon + 180) / 360 * e, (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * e];
   };
-  // Zoom más alto en que todas las fallas caben dentro del lienzo (con margen)
-  let z = zMin;
-  for(let zi = zMax; zi >= zMin; zi--){
-    const ps = coords.map(c => mundo(c[0], c[1], zi));
-    const xs = ps.map(p => p[0]), ys = ps.map(p => p[1]);
-    if(Math.max(...xs) - Math.min(...xs) <= W - 2 * padding && Math.max(...ys) - Math.min(...ys) <= H - 2 * padding){ z = zi; break; }
-  }
+  // Zoom fraccionario: el más alto en que todas las fallas caben dentro del lienzo (con margen)
+  const ps0 = coords.map(c => mundo(c[0], c[1], zMax));
+  const sx = Math.max(...ps0.map(p => p[0])) - Math.min(...ps0.map(p => p[0]));
+  const sy = Math.max(...ps0.map(p => p[1])) - Math.min(...ps0.map(p => p[1]));
+  const factor = Math.max(sx / Math.max(1, W - 2 * padding), sy / Math.max(1, H - 2 * padding), 1e-9);
+  const z = Math.min(zMax, Math.max(zMin, zMax - Math.log2(factor)));
+  const zt = Math.min(19, Math.max(0, Math.floor(z)));   // nivel de mosaicos a descargar
+  const ts = 256 * Math.pow(2, z - zt);                  // tamaño en pantalla de cada mosaico
   const ps = coords.map(c => mundo(c[0], c[1], z));
   const xs = ps.map(p => p[0]), ys = ps.map(p => p[1]);
   const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
@@ -3245,14 +3246,14 @@ async function renderMapaCanvas(items, opciones = {}){
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#e5e5e5'; ctx.fillRect(0, 0, W, H);
 
-  const n = Math.pow(2, z);
+  const n = Math.pow(2, zt);
   const tareas = [];
-  for(let tx = Math.floor(ox / 256); tx <= Math.floor((ox + W) / 256); tx++){
-    for(let ty = Math.floor(oy / 256); ty <= Math.floor((oy + H) / 256); ty++){
+  for(let tx = Math.floor(ox / ts); tx <= Math.floor((ox + W) / ts); tx++){
+    for(let ty = Math.floor(oy / ts); ty <= Math.floor((oy + H) / ts); ty++){
       if(ty < 0 || ty >= n) continue;
       const txw = ((tx % n) + n) % n;
-      tareas.push(cargarImagenTile(`https://tile.openstreetmap.org/${z}/${txw}/${ty}.png`).then(img => {
-        if(img) ctx.drawImage(img, tx * 256 - ox, ty * 256 - oy, 256, 256);
+      tareas.push(cargarImagenTile(`https://tile.openstreetmap.org/${zt}/${txw}/${ty}.png`).then(img => {
+        if(img) ctx.drawImage(img, tx * ts - ox, ty * ts - oy, ts + 0.5, ts + 0.5);
       }));
     }
   }
