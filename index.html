@@ -1115,6 +1115,8 @@ function initMap(){
   map = L.map('map', {minZoom:12, maxZoom:19, zoomControl:false}).setView([-33.5384, -70.5973], 14);
   map.createPane('fallasPane');
   map.getPane('fallasPane').style.zIndex = 650; // por encima del markerPane (600), donde viven los símbolos de postes
+  map.createPane('inspeccionPane');
+  map.getPane('inspeccionPane').style.zIndex = 660; // fallas de una inspección: por encima de símbolos (600) y de las demás fallas (650), para poder pincharlas
   map.createPane('empalmesPane');
   map.getPane('empalmesPane').style.zIndex = 550; // por debajo del markerPane (600), para que quede detrás de los puntos
   L.control.zoom({position:'bottomleft'}).addTo(map);
@@ -2889,11 +2891,12 @@ function dibujarFallasInspeccionEnMapa(fallas){
     let capa;
     if(f.geometry.type === 'Point'){
       const [lon, lat] = f.geometry.coordinates;
-      capa = L.circleMarker([lat, lon], {radius: 8, color:'#fff', weight:2, fillColor:color, fillOpacity:0.95});
+      capa = L.circleMarker([lat, lon], {radius: 9, color:'#fff', weight:2, fillColor:color, fillOpacity:0.95, pane:'inspeccionPane'});
     } else {
-      capa = L.geoJSON(f.geometry, {style: {color, weight:6, opacity:0.9}});
+      capa = L.geoJSON(f.geometry, {pane:'inspeccionPane', style: {color, weight:6, opacity:0.9}});
     }
     capa.bindTooltip(tip);
+    capa.bindPopup(() => htmlPopupFallaInspeccion(f), {maxWidth: 340, maxHeight: 360, pane: 'popupPane'});
     capa.on('click', (e) => { L.DomEvent.stopPropagation(e); resaltarFilaInspeccion(f.id); });
     capa.addTo(fallasInspeccionLayerGroup);
     if(capa.bringToFront) capa.bringToFront();
@@ -2903,6 +2906,20 @@ function dibujarFallasInspeccionEnMapa(fallas){
   if(capas.length){
     map.fitBounds(L.featureGroup(capas).getBounds(), {padding:[50,50], maxZoom:18});
   }
+}
+
+// Ficha completa de una falla, para el popup al pincharla en el mapa.
+function htmlPopupFallaInspeccion(f){
+  return `<div class="insp-popup" style="font-size:12px; line-height:1.4;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+      <b class="mono">OT ${escHtml(f.ot || '—')}</b>
+      <span class="badge ${escHtml(f.estado)}">${escHtml(String(f.estado).replace('_',' '))}</span>
+    </div>
+    <div style="margin-top:4px;"><b>${escHtml(f.tipo_falla)}</b> · ${escHtml(descripcionCodigoFalla(f))}</div>
+    <div style="margin-top:6px;">${htmlUbicacionFalla(f)}</div>
+    <div style="margin-top:6px;">${htmlNotificadoFalla(f)}</div>
+    <div style="margin-top:8px; padding-top:6px; border-top:1px solid var(--line);">${htmlCierreFalla(f)}</div>
+  </div>`;
 }
 
 function limpiarCapaInspeccion(){
@@ -2923,7 +2940,9 @@ function enfocarFallaInspeccion(fallaId){
   if(!capa) return;
   if(capa.getBounds) map.fitBounds(capa.getBounds(), {padding:[60,60], maxZoom:19});
   else if(capa.getLatLng) map.setView(capa.getLatLng(), 19);
-  if(capa.openTooltip) capa.openTooltip();
+  if(capa.closeTooltip) capa.closeTooltip();
+  if(capa.getBounds && capa.openPopup) capa.openPopup(capa.getBounds().getCenter());
+  else if(capa.openPopup) capa.openPopup();
 }
 
 // Cacheada por rango de fechas, misma razón que la capa azul de período.
