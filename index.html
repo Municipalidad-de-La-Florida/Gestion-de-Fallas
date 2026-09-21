@@ -392,6 +392,7 @@
             <div class="hint">Fecha de la inspección (aplica a todas las fallas que ingreses ahora):</div>
             <input type="date" id="fechaInspeccionInput" class="popup-input" style="width:100%;">
             <button class="popup-btn" id="comenzarInspeccionBtn" style="margin-top:6px; width:100%; border:1.5px solid #000; background:#2563a8;">Comenzar</button>
+            <button class="popup-btn" id="inspeccionSinFallasBtn" style="margin-top:6px; width:100%; border:1.5px solid #000; background:#fff; color:var(--ink);">Registrar inspección sin fallas</button>
             <button class="popup-btn" id="cancelarInspeccionBtn" style="margin-top:6px; width:100%; border:1.5px solid #000; background:#fff; color:var(--ink);">Cancelar</button>
           </div>
           <button class="popup-btn" id="btnListoModo" style="background:var(--primary); border:1.5px solid #000; display:none;">✓ Listo</button>
@@ -860,6 +861,31 @@ document.getElementById('comenzarInspeccionBtn').onclick = () => {
 };
 
 document.getElementById('btnListoModo').onclick = () => salirModoInformar();
+// Deja constancia de una inspección en la que no se encontró ninguna falla
+// (usa la fecha y el ITO elegidos arriba, sin pasar por "Comenzar").
+document.getElementById('inspeccionSinFallasBtn').onclick = async () => {
+  const fecha = document.getElementById('fechaInspeccionInput').value;
+  if(!fecha){ alert('Selecciona una fecha.'); return; }
+  if(fecha > hoyChileStr()){ alert('La fecha de la inspección no puede ser futura.'); return; }
+  const select = document.getElementById('informarPorOtroSelect');
+  const ito = select.value || null;
+  const nombreIto = ito ? select.selectedOptions[0].textContent : 'ti';
+  const fechaLegible = fechaChileLocal(fecha, 12, 0, 0).toLocaleDateString('es-CL');
+  if(!confirm(`¿Registrar la inspección del ${fechaLegible} a nombre de ${nombreIto}, sin fallas?`)) return;
+  const btn = document.getElementById('inspeccionSinFallasBtn');
+  btn.disabled = true;
+  try{
+    await db.rpc('obtener_o_crear_inspeccion', { p_fecha: fecha, p_ito: ito });
+    alert('Inspección registrada sin fallas.');
+    document.getElementById('fechaInspeccionBox').style.display = 'none';
+    salirModoInformar();
+  }catch(e){
+    alert('No se pudo registrar la inspección: ' + e.message);
+  }finally{
+    btn.disabled = false;
+  }
+};
+
 // Permite arrepentirse mientras aún se está eligiendo la fecha (antes de "Comenzar").
 document.getElementById('cancelarInspeccionBtn').onclick = () => {
   document.getElementById('fechaInspeccionBox').style.display = 'none';
@@ -1207,6 +1233,19 @@ function toggleLayer(layer, shouldShow){
 let modoIngreso = null; // null | 'agregar' | 'inspeccion'
 let fechaInspeccionSesion = null;
 let informadoPorSesion = null;
+
+// Una inspección = un ITO + un día. Se crea en la base al ingresar la primera falla
+// (o con el botón "Registrar inspección sin fallas"), no al pulsar "Comenzar".
+// Se guarda el id por combinación fecha|ITO, porque el ITO puede cambiarse a mitad de sesión.
+let inspeccionCache = { clave: null, id: null };
+async function obtenerInspeccionIdSesion(){
+  if(modoIngreso !== 'inspeccion' || !fechaInspeccionSesion) return null;
+  const clave = fechaInspeccionSesion + '|' + (informadoPorSesion || '');
+  if(inspeccionCache.clave === clave && inspeccionCache.id) return inspeccionCache.id;
+  const id = await db.rpc('obtener_o_crear_inspeccion', { p_fecha: fechaInspeccionSesion, p_ito: informadoPorSesion });
+  inspeccionCache = { clave, id };
+  return id;
+}
 
 function puedeReportar(){
   const r = rolEfectivo();
@@ -1824,6 +1863,8 @@ async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtr
     };
     if(fechaCustom) fila.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
     if(informadoPorSesion) fila.informado_por = informadoPorSesion;
+    const inspeccionId = await obtenerInspeccionIdSesion();
+    if(inspeccionId) fila.inspeccion_id = inspeccionId;
     const filaCreada = await db.insert('fallas', fila);
     if(filaCreada && filaCreada[0]) await guardarComentarioFalla(filaCreada[0].id, 'reporte', descripcionOtro);
     cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
@@ -1839,6 +1880,8 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
     };
     if(fechaCustom) filaLineaObj.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
     if(informadoPorSesion) filaLineaObj.informado_por = informadoPorSesion;
+    const inspeccionId = await obtenerInspeccionIdSesion();
+    if(inspeccionId) filaLineaObj.inspeccion_id = inspeccionId;
     const filaLinea = await db.insert('fallas', filaLineaObj);
     const fallaLinea = filaLinea[0];
     if(fallaLinea) await guardarComentarioFalla(fallaLinea.id, 'reporte', descripcionOtro);
@@ -1853,6 +1896,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
         };
         if(fechaCustom) f.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
         if(informadoPorSesion) f.informado_por = informadoPorSesion;
+        if(inspeccionId) f.inspeccion_id = inspeccionId;
         return f;
       });
       await db.insert('fallas', filasCascada);
