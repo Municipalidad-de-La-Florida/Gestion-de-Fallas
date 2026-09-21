@@ -116,6 +116,19 @@
   /* Pestaña "Inspecciones": selector de rango/ITO, tarjetas y detalle */
   .insp-rango-btn{border:1.5px solid var(--line); background:#fff; padding:7px 12px; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;}
   .insp-rango-btn.active{border-color:var(--primary); background:var(--primary); color:#fff;}
+  .ana-rango-btn{border:1.5px solid var(--line); background:#fff; padding:7px 12px; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;}
+  .ana-rango-btn.active{border-color:var(--primary); background:var(--primary); color:#fff;}
+  #selectorAnalisis input[type=date]{border:1.5px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12.5px; background:#fff; font-family:inherit;}
+  .ana-tit{font-size:13px; font-weight:800; color:var(--primary); margin:18px 0 4px;}
+  .ana-tabla{width:100%; border-collapse:collapse; font-size:11px; margin-top:6px; table-layout:auto;}
+  .ana-tabla th{text-align:left; font-size:10px; color:var(--ink-soft); font-weight:700; padding:4px 3px; border-bottom:1.5px solid var(--line);}
+  .ana-tabla td{padding:5px 3px; border-bottom:1px solid var(--line); vertical-align:top;}
+  .ana-tabla td:first-child{word-break:break-word;}
+  .ana-tabla .n{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .ana-tabla tr.ana-sin{background:#fdf3e2;}
+  .ana-tabla tr.ana-finde td{color:var(--ink-soft);}
+  .ana-crit{border:1.5px solid var(--line); border-radius:10px; padding:8px 10px; margin-top:6px; cursor:pointer; background:#fff;}
+  .ana-crit:hover{border-color:var(--primary-light); background:#f7f8f7;}
   #selectorInspecciones input[type=date], #selectorInspecciones select{border:1.5px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12.5px; background:#fff; font-family:inherit;}
   .insp-card{border:1.5px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; cursor:pointer; background:#fff;}
   .insp-card:hover{border-color:var(--primary-light); background:#f7f8f7;}
@@ -460,10 +473,11 @@
           <button id="descargarPdfBtn" title="Descargar PDF" style="width:30px; height:30px; padding:0; border:1.5px solid #000; border-radius:8px; background:#2563a8; color:#fff; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center;">📄</button>
         </div>
         <h3>Ver estadísticas por</h3>
-        <div class="toggle-row" style="margin-bottom:12px;">
+        <div class="toggle-row" style="margin-bottom:12px; flex-wrap:wrap;">
           <button id="tabDia" class="active">Día específico</button>
           <button id="tabPeriodo">Período</button>
           <button id="tabInspecciones" style="display:none;">Inspecciones</button>
+          <button id="tabAnalisis" style="display:none;">Análisis</button>
         </div>
         <div id="selectorDia">
           <input type="date" id="fechaDiaEspecifico" class="popup-input" style="width:100%;">
@@ -493,6 +507,18 @@
           <select id="inspItoSelect" style="width:100%; margin-top:4px;">
             <option value="">Todos los ITOs</option>
           </select>
+        </div>
+        <div id="selectorAnalisis" style="display:none;">
+          <div class="periodo-row" style="margin-bottom:10px;">
+            <button class="ana-rango-btn" data-p="semana">Últimos 7 días</button>
+            <button class="ana-rango-btn" data-p="mes">Últimos 30 días</button>
+            <button class="ana-rango-btn" data-p="trimestre">Últimos 90 días</button>
+          </div>
+          <div class="hint">O elige un rango manual:</div>
+          <div style="display:flex; gap:6px; margin-top:6px;">
+            <input type="date" id="fechaAnaInicio" style="flex:1; min-width:0;">
+            <input type="date" id="fechaAnaFin" style="flex:1; min-width:0;">
+          </div>
         </div>
       </div>
       <div id="statsContent" style="flex:1; overflow-y:auto; padding:0 18px 18px;"><div class="empty-state">Selecciona una fecha.</div></div>
@@ -2059,14 +2085,16 @@ function mostrarSidebarStats(){
   document.getElementById('sidebarStats').style.display = 'flex';
   // La pestaña "Inspecciones" solo la ven admin, ito e ito2 (la base de datos también lo exige).
   document.getElementById('tabInspecciones').style.display = ['admin','ito','ito2'].includes(rolEfectivo()) ? '' : 'none';
+  document.getElementById('tabAnalisis').style.display = ['admin','ito','ito2'].includes(rolEfectivo()) ? '' : 'none';
   if(!document.getElementById('fechaDiaEspecifico').value){
     document.getElementById('fechaDiaEspecifico').value = hoyChileStr();
   }
   actualizarEstadisticasYMapa();
 }
 function ocultarSidebarStats(){
-  if(document.getElementById('tabInspecciones').classList.contains('active')){
+  if(document.getElementById('tabInspecciones').classList.contains('active') || document.getElementById('tabAnalisis').classList.contains('active')){
     salirTabInspecciones();
+    salirTabAnalisis();
     // Deja "Día específico" como pestaña activa para la próxima vez que se abra el panel.
     document.getElementById('tabDia').classList.add('active');
     document.getElementById('tabPeriodo').classList.remove('active');
@@ -2508,6 +2536,7 @@ function mostrarCapaActivas(){
 
 document.getElementById('tabDia').onclick = () => {
   salirTabInspecciones();
+  salirTabAnalisis();
   document.getElementById('tabDia').classList.add('active');
   document.getElementById('tabPeriodo').classList.remove('active');
   document.getElementById('selectorDia').style.display = 'block';
@@ -2516,6 +2545,7 @@ document.getElementById('tabDia').onclick = () => {
 };
 document.getElementById('tabPeriodo').onclick = () => {
   salirTabInspecciones();
+  salirTabAnalisis();
   document.getElementById('tabPeriodo').classList.add('active');
   document.getElementById('tabDia').classList.remove('active');
   document.getElementById('selectorPeriodo').style.display = 'block';
@@ -2642,6 +2672,7 @@ function pillsEstadoHtml(o){
 }
 
 document.getElementById('tabInspecciones').onclick = () => {
+  salirTabAnalisis();
   document.getElementById('tabInspecciones').classList.add('active');
   document.getElementById('tabDia').classList.remove('active');
   document.getElementById('tabPeriodo').classList.remove('active');
@@ -2943,6 +2974,207 @@ function enfocarFallaInspeccion(fallaId){
   if(capa.closeTooltip) capa.closeTooltip();
   if(capa.getBounds && capa.openPopup) capa.openPopup(capa.getBounds().getCenter());
   else if(capa.openPopup) capa.openPopup();
+}
+
+// ---------- ANÁLISIS (pestaña de Estadísticas) ----------
+// Una sola consulta (analisis_fallas) trae tiempos de reparación, puntos críticos,
+// pendientes y cobertura de inspecciones para el rango elegido.
+let analisisReq = 0;                 // evita que una respuesta lenta pise a una más nueva
+let analisisLayerGroup = null;       // marcadores de puntos/circuitos críticos
+let analisisCapas = {};              // clave -> marcador, para centrar el mapa al hacer clic
+
+document.getElementById('tabAnalisis').onclick = () => {
+  salirTabInspecciones();
+  ['tabDia','tabPeriodo','tabInspecciones'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById('tabAnalisis').classList.add('active');
+  document.getElementById('selectorDia').style.display = 'none';
+  document.getElementById('selectorPeriodo').style.display = 'none';
+  document.getElementById('selectorInspecciones').style.display = 'none';
+  document.getElementById('selectorAnalisis').style.display = 'block';
+  document.getElementById('descargarPdfBtn').style.display = 'none';
+  ocultarCapaActivas();
+  limpiarCapaPeriodo();
+  if(!document.getElementById('fechaAnaInicio').value) seleccionarRangoAnalisis('mes', false);
+  cargarAnalisis();
+};
+
+function salirTabAnalisis(){
+  const tab = document.getElementById('tabAnalisis');
+  if(!tab.classList.contains('active')) return;
+  tab.classList.remove('active');
+  document.getElementById('selectorAnalisis').style.display = 'none';
+  document.getElementById('descargarPdfBtn').style.display = 'flex';
+  analisisReq++;
+  limpiarCapaAnalisis();
+}
+
+function limpiarCapaAnalisis(){
+  if(analisisLayerGroup) analisisLayerGroup.clearLayers();
+  analisisCapas = {};
+}
+
+function seleccionarRangoAnalisis(periodo, cargar = true){
+  document.querySelectorAll('.ana-rango-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
+  const dias = periodo === 'semana' ? 7 : (periodo === 'trimestre' ? 90 : 30);
+  const hoy = hoyChileStr();
+  document.getElementById('fechaAnaInicio').value = sumarDiasStr(hoy, -(dias - 1));
+  document.getElementById('fechaAnaFin').value = hoy;
+  if(cargar) cargarAnalisis();
+}
+document.querySelectorAll('.ana-rango-btn').forEach(b => b.onclick = () => seleccionarRangoAnalisis(b.dataset.p));
+['fechaAnaInicio','fechaAnaFin'].forEach(id => {
+  document.getElementById(id).onchange = () => {
+    document.querySelectorAll('.ana-rango-btn').forEach(x => x.classList.remove('active'));
+    cargarAnalisis();
+  };
+});
+
+async function cargarAnalisis(){
+  const content = document.getElementById('statsContent');
+  const ini = document.getElementById('fechaAnaInicio').value;
+  const fin = document.getElementById('fechaAnaFin').value;
+  if(!ini || !fin){ content.innerHTML = '<div class="empty-state">Elige un rango de fechas.</div>'; return; }
+  if(ini > fin){ content.innerHTML = '<div class="empty-state">La fecha de inicio no puede ser posterior a la de fin.</div>'; return; }
+  const req = ++analisisReq;
+  content.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try{
+    const d = await db.rpc('analisis_fallas', {p_inicio: ini, p_fin: fin});
+    if(req !== analisisReq) return;
+    if(!d){ content.innerHTML = '<div class="empty-state">No tienes permiso para ver este análisis.</div>'; return; }
+    renderAnalisis(d);
+  }catch(e){
+    if(req !== analisisReq) return;
+    content.innerHTML = `<div class="empty-state">Error cargando el análisis: ${escHtml(e.message)}<br><br>¿Ejecutaste el script bloqueC_analisis.sql en Supabase?</div>`;
+  }
+}
+
+function fmtDias(x){ return (x === null || x === undefined) ? '—' : String(x).replace('.', ',') + ' d'; }
+const DIAS_SEM_CORTO = ['dom','lun','mar','mié','jue','vie','sáb'];
+
+function descripcionCodigoAnalisis(tipo, codigo){
+  return descripcionCodigoFalla({tipo, tipo_falla: codigo, simb_poste: (tipo === 'punto' && (codigo === 'F02' || codigo === 'F03')) ? 'MONOPOSTE' : ''});
+}
+
+function renderAnalisis(d){
+  const content = document.getElementById('statsContent');
+  const r = d.resumen || {};
+  const pct = r.fallas ? Math.round((r.reiteradas || 0) / r.fallas * 100) : 0;
+
+  const tiles = `
+    <div class="stat-grid-modal" style="margin-top:6px;">
+      <div class="stat-box-modal"><div class="num">${r.fallas || 0}</div><div class="lbl">Fallas del período</div></div>
+      <div class="stat-box-modal"><div class="num">${r.reparadas || 0}</div><div class="lbl">Reparadas (${r.abiertas || 0} abiertas)</div></div>
+      <div class="stat-box-modal"><div class="num">${fmtDias(r.mediana_dias_insp)}</div><div class="lbl">Mediana de reparación desde la inspección</div></div>
+      <div class="stat-box-modal"><div class="num">${fmtDias(r.mediana_dias_ing)}</div><div class="lbl">Mediana de reparación desde el ingreso al sistema</div></div>
+      <div class="stat-box-modal"><div class="num">${r.reiteradas || 0}</div><div class="lbl">Reiteradas (${pct}% de las fallas)</div></div>
+      <div class="stat-box-modal"><div class="num">${fmtDias(r.antiguedad_mediana_abiertas)}</div><div class="lbl">Antigüedad mediana de las abiertas</div></div>
+    </div>
+    <div class="hint" style="margin-top:8px;">"Desde la inspección" cuenta desde el día en que el ITO vio la falla; "desde el ingreso" cuenta desde que se registró en el sistema. Un circuito cuenta como una falla.</div>`;
+
+  const porCodigo = (d.por_codigo || []).length ? `
+    <table class="ana-tabla">
+      <thead><tr><th>Código</th><th class="n">Fallas</th><th class="n">Rep.</th><th class="n" title="Mediana desde la inspección">Med. insp.</th><th class="n" title="Mediana desde el ingreso">Med. ing.</th><th class="n" title="Máximo desde la inspección">Máx.</th></tr></thead>
+      <tbody>${d.por_codigo.map(c => `
+        <tr><td><b>${escHtml(c.tipo_falla)}</b>${c.tipo === 'linea' ? ' <span class="hint" style="margin:0;">(circuito)</span>' : ''}
+            <div class="hint" style="margin:0;">${escHtml(descripcionCodigoAnalisis(c.tipo, c.tipo_falla))}</div></td>
+          <td class="n">${c.fallas}</td><td class="n">${c.reparadas}</td>
+          <td class="n">${fmtDias(c.mediana_insp)}</td><td class="n">${fmtDias(c.mediana_ing)}</td><td class="n">${fmtDias(c.max_insp)}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="hint">Sin fallas en este rango.</div>';
+
+  const porIto = (d.por_ito || []).length ? `
+    <table class="ana-tabla">
+      <thead><tr><th>ITO</th><th class="n">Fallas</th><th class="n">Rep.</th><th class="n">Reit.</th><th class="n">Med. insp.</th><th class="n">Med. ing.</th></tr></thead>
+      <tbody>${d.por_ito.map(i => `
+        <tr><td>${escHtml(i.nombre)}</td><td class="n">${i.fallas}</td><td class="n">${i.reparadas}</td><td class="n">${i.reiteradas}</td>
+          <td class="n">${fmtDias(i.mediana_insp)}</td><td class="n">${fmtDias(i.mediana_ing)}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="hint">Sin datos.</div>';
+
+  const porCamion = (d.por_camion || []).length ? `
+    <table class="ana-tabla">
+      <thead><tr><th>Quién repara</th><th class="n">Rep.</th><th class="n">Med. insp.</th><th class="n">Med. ing.</th><th class="n">Máx. insp.</th></tr></thead>
+      <tbody>${d.por_camion.map(c => `
+        <tr><td>${escHtml(c.nombre)}</td><td class="n">${c.reparadas}</td>
+          <td class="n">${fmtDias(c.mediana_insp)}</td><td class="n">${fmtDias(c.mediana_ing)}</td><td class="n">${fmtDias(c.max_insp)}</td></tr>`).join('')}
+      </tbody></table>` : '<div class="hint">Sin reparaciones en este rango.</div>';
+
+  const critPuntos = (d.criticos_puntos || []).map(p => `
+    <div class="ana-crit" data-k="p-${escHtml(p.gid)}">
+      <div><b>Llave ${escHtml(p.llave ?? '—')}</b> <span class="hint" style="margin:0;">· N.° ${escHtml(p.nro_mun ?? '—')}${p.direccion ? ' · ' + escHtml(p.direccion) : ''}</span></div>
+      <div class="hint" style="margin:2px 0 0;">${p.fallas} falla${p.fallas === 1 ? '' : 's'} · ${p.reiteradas} reiterada${p.reiteradas === 1 ? '' : 's'} · ${p.abiertas} abierta${p.abiertas === 1 ? '' : 's'} · ${escHtml(p.codigos || '')}</div>
+    </div>`).join('');
+  const critCircuitos = (d.criticos_circuitos || []).map(c => `
+    <div class="ana-crit" data-k="c-${escHtml(c.gid)}">
+      <div><b>Circuito ${escHtml(c.circuito ?? '—')}</b></div>
+      <div class="hint" style="margin:2px 0 0;">${c.fallas} falla${c.fallas === 1 ? '' : 's'} · ${c.reiteradas} reiterada${c.reiteradas === 1 ? '' : 's'} · ${c.abiertas} abierta${c.abiertas === 1 ? '' : 's'} · ${escHtml(c.codigos || '')}</div>
+    </div>`).join('');
+
+  const pen = d.pendientes || {};
+  const motivos = (pen.motivos || []).length ? `
+    <table class="ana-tabla">
+      <thead><tr><th>Motivo</th><th class="n">Veces</th><th class="n">Aún pend.</th></tr></thead>
+      <tbody>${pen.motivos.map(m => `<tr><td>${escHtml(m.motivo)}</td><td class="n">${m.veces}</td><td class="n">${m.aun_pendientes}</td></tr>`).join('')}</tbody>
+    </table>` : '<div class="hint">Ninguna falla del rango quedó pendiente con un motivo registrado.</div>';
+
+  const cob = d.cobertura || {};
+  const dias = cob.por_dia || [];
+  const habilesSin = dias.filter(x => x.dow >= 1 && x.dow <= 5 && !x.inspecciones).length;
+  const porDia = dias.length ? `
+    <div class="hint">${habilesSin} día${habilesSin === 1 ? '' : 's'} hábil${habilesSin === 1 ? '' : 'es'} sin inspección registrada (puede incluir feriados).</div>
+    <table class="ana-tabla">
+      <thead><tr><th>Día</th><th class="n">Insp.</th><th class="n">Fallas</th><th>ITO</th></tr></thead>
+      <tbody>${dias.map(x => {
+        const sin = !x.inspecciones;
+        const finde = x.dow === 0 || x.dow === 6;
+        const clase = sin ? (finde ? 'ana-finde' : 'ana-sin') : '';
+        return `<tr class="${clase}"><td>${DIAS_SEM_CORTO[x.dow]} ${escHtml(String(x.fecha).slice(8, 10) + '-' + String(x.fecha).slice(5, 7))}</td>
+          <td class="n">${x.inspecciones}</td><td class="n">${x.fallas}</td><td>${escHtml(x.itos || '—')}</td></tr>`;
+      }).join('')}</tbody></table>` : '';
+  const cobIto = (cob.por_ito || []).length ? `
+    <table class="ana-tabla">
+      <thead><tr><th>ITO</th><th class="n">Insp.</th><th class="n">Sin fallas</th><th class="n">Fallas</th><th class="n">Días</th></tr></thead>
+      <tbody>${cob.por_ito.map(i => `
+        <tr><td>${escHtml(i.nombre)}</td><td class="n">${i.inspecciones}</td><td class="n">${i.sin_fallas}</td><td class="n">${i.fallas}</td><td class="n">${i.dias_distintos}</td></tr>`).join('')}
+      </tbody></table>` : '';
+
+  content.innerHTML = `
+    ${tiles}
+    <div class="ana-tit">Tiempo de reparación por código de falla</div>${porCodigo}
+    <div class="ana-tit">Por ITO que informa</div>${porIto}
+    <div class="ana-tit">Por quien repara</div>${porCamion}
+    <div class="ana-tit">Puntos críticos</div>
+    <div class="hint">Puntos con 2 o más fallas en el rango, o con alguna reiterada. Haz clic para ubicarlos en el mapa.</div>
+    ${critPuntos || '<div class="hint">Ningún punto se repite en este rango.</div>'}
+    <div class="ana-tit">Circuitos críticos</div>
+    ${critCircuitos || '<div class="hint">Ningún circuito se repite en este rango.</div>'}
+    <div class="ana-tit">Pendientes</div>
+    <div class="hint">${pen.total_alguna_vez || 0} falla${pen.total_alguna_vez === 1 ? '' : 's'} quedaron pendientes alguna vez · ${pen.actuales || 0} siguen pendientes (antigüedad mediana ${fmtDias(pen.antiguedad_mediana_actuales)}).</div>
+    ${motivos}
+    <div class="ana-tit">Cobertura de inspecciones</div>${porDia}
+    <div class="ana-tit">Por ITO</div>${cobIto}
+  `;
+
+  // Marcadores de críticos en el mapa
+  if(!analisisLayerGroup) analisisLayerGroup = L.layerGroup().addTo(map);
+  limpiarCapaAnalisis();
+  const dibujar = (lista, prefijo, etiqueta) => (lista || []).forEach(x => {
+    if(x.lat == null || x.lon == null) return;
+    const m = L.circleMarker([x.lat, x.lon], {radius: 9, color:'#fff', weight:2, fillColor:'#8e44ad', fillOpacity:0.95, pane:'inspeccionPane'});
+    m.bindTooltip(etiqueta(x));
+    m.addTo(analisisLayerGroup);
+    analisisCapas[prefijo + x.gid] = m;
+  });
+  dibujar(d.criticos_puntos, 'p-', x => `Llave ${x.llave ?? '—'} · ${x.fallas} falla${x.fallas === 1 ? '' : 's'}`);
+  dibujar(d.criticos_circuitos, 'c-', x => `Circuito ${x.circuito ?? '—'} · ${x.fallas} falla${x.fallas === 1 ? '' : 's'}`);
+  const capas = Object.values(analisisCapas);
+  if(capas.length) map.fitBounds(L.featureGroup(capas).getBounds(), {padding:[50,50], maxZoom:16});
+  content.querySelectorAll('.ana-crit').forEach(el => {
+    el.onclick = () => {
+      const m = analisisCapas[el.dataset.k];
+      if(!m) return;
+      map.setView(m.getLatLng(), 18);
+      m.openTooltip();
+    };
+  });
 }
 
 // Cacheada por rango de fechas, misma razón que la capa azul de período.
