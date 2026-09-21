@@ -3286,8 +3286,9 @@ async function renderMapaCanvas(items, opciones = {}){
       ls.forEach(l => { ctx.beginPath(); l.forEach((c, i) => { const [x, y] = P(c[0], c[1]); if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke(); });
     });
   });
+  const R = 17;   // radio del círculo numerado
   const circulo = (x, y, color, label) => {
-    ctx.beginPath(); ctx.arc(x, y, 17, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2);
     ctx.fillStyle = color; ctx.fill();
     ctx.lineWidth = 3.5; ctx.strokeStyle = '#ffffff'; ctx.stroke();
     if(label !== '' && label != null){
@@ -3296,19 +3297,60 @@ async function renderMapaCanvas(items, opciones = {}){
       ctx.fillText(String(label), x, y + 1);
     }
   };
+  // Marcas numeradas: cada punto, y el centro de cada circuito
+  const marcas = [];
   validos.forEach(it => {
     if(it.geom.type === 'Point'){
       const [x, y] = P(it.geom.coordinates[0], it.geom.coordinates[1]);
-      circulo(x, y, it.color, it.label);
+      marcas.push({ax: x, ay: y, color: it.color, label: it.label});
     } else {
       const ls = lineas(it.geom);
       if(ls.length && ls[0].length){
         const l = ls[0], a = l[Math.floor((l.length - 1) / 2)], b = l[Math.ceil((l.length - 1) / 2)];
         const [x, y] = P((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);   // punto medio de la línea
-        circulo(x, y, '#1f4d3d', it.label);
+        marcas.push({ax: x, ay: y, color: '#1f4d3d', label: it.label});
       }
     }
   });
+  // Separar los números que se tapan: cada uno se aparta de sus vecinos y queda unido
+  // con un conector a su ubicación real.
+  marcas.forEach((m, i) => { m.x = m.ax; m.y = m.ay; });
+  const minD = 2 * R + 20;
+  for(let iter = 0; iter < 400; iter++){
+    let movido = false;
+    for(let i = 0; i < marcas.length; i++){
+      for(let j = i + 1; j < marcas.length; j++){
+        const A = marcas[i], B = marcas[j];
+        let dx = B.x - A.x, dy = B.y - A.y, dd = Math.hypot(dx, dy);
+        if(dd >= minD) continue;
+        if(dd < 0.01){ const ang = (i * 2.399963 + j) % (Math.PI * 2); dx = Math.cos(ang); dy = Math.sin(ang); dd = 1; }
+        const empuje = (minD - dd) / 2 + 0.3;
+        const ux = dx / dd, uy = dy / dd;
+        A.x -= ux * empuje; A.y -= uy * empuje; B.x += ux * empuje; B.y += uy * empuje;
+        movido = true;
+      }
+    }
+    // Un tirón suave hacia su ubicación real y dentro del lienzo
+    marcas.forEach(m => {
+      m.x += (m.ax - m.x) * 0.004; m.y += (m.ay - m.y) * 0.004;
+      m.x = Math.min(W - R - 4, Math.max(R + 4, m.x)); m.y = Math.min(H - R - 30, Math.max(R + 4, m.y));
+    });
+    if(!movido && iter > 20) break;
+  }
+  const separada = (m) => Math.hypot(m.x - m.ax, m.y - m.ay) > R * 0.9;
+  // 1) conectores
+  marcas.filter(separada).forEach(m => {
+    ctx.beginPath(); ctx.moveTo(m.ax, m.ay); ctx.lineTo(m.x, m.y);
+    ctx.lineCap = 'round'; ctx.lineWidth = 6; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = m.color; ctx.stroke();
+  });
+  // 2) ubicación real de las que se movieron (puntito)
+  marcas.filter(separada).forEach(m => {
+    ctx.beginPath(); ctx.arc(m.ax, m.ay, 5.5, 0, Math.PI * 2);
+    ctx.fillStyle = m.color; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+  });
+  // 3) círculos numerados
+  marcas.forEach(m => circulo(m.x, m.y, m.color, m.label));
   ctx.font = '15px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
   const attrib = '© OpenStreetMap contributors';
   const tw = ctx.measureText(attrib).width;
