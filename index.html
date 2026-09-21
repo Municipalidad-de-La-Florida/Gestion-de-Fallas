@@ -3645,52 +3645,84 @@ async function generarPdfAnalisis(){
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(t.s, cx + 4, cy + 20.5);
     });
 
-    // Lo más importante (frases generadas con los datos del período)
-    const hallazgos = [];
-    if(codigos.length){
-      const top = codigos[0];
-      hallazgos.push(['Falla más frecuente', `${top.tipo_falla}${top.tipo === 'linea' ? ' (circuito)' : ''} · ${descripcionCodigoAnalisis(top.tipo, top.tipo_falla)}: ${top.fallas} de ${rr.fallas} fallas (${Math.round(top.fallas / rr.fallas * 100)}%).`]);
-      const conRep = codigos.filter(c => c.reparadas >= 3 && c.mediana_ing != null);
-      const base = conRep.length ? conRep : codigos.filter(c => c.mediana_ing != null);
-      if(base.length){
-        const lento = base.slice().sort((a, b) => b.mediana_ing - a.mediana_ing)[0];
-        const rapido = base.slice().sort((a, b) => a.mediana_ing - b.mediana_ing)[0];
-        hallazgos.push(['Tiempos de reparación', `El código más lento de reparar es ${lento.tipo_falla} (${descripcionCodigoAnalisis(lento.tipo, lento.tipo_falla)}), con mediana de ${fmtHoras(lento.mediana_ing)} desde el ingreso` + (rapido !== lento ? `; el más rápido es ${rapido.tipo_falla}, con ${fmtHoras(rapido.mediana_ing)}.` : '.')]);
-      }
-    }
-    if((d.por_ito || []).length){
-      const it = d.por_ito[0];
-      hallazgos.push(['Quién informa', `${it.nombre} informó más fallas: ${it.fallas} (${Math.round(it.fallas / Math.max(1, rr.fallas) * 100)}% del total).`]);
-    }
-    if((d.por_camion || []).length){
-      const cm = d.por_camion[0];
-      hallazgos.push(['Quién repara', `${cm.nombre} realizó más reparaciones: ${cm.reparadas}, con mediana de ${fmtHoras(cm.mediana_ing)} desde el ingreso.`]);
-    }
     const cP0 = d.criticos_puntos || [], cC0 = d.criticos_circuitos || [];
-    if(cP0.length || cC0.length){
-      const p0 = cP0[0];
-      hallazgos.push(['Puntos y circuitos críticos', `${plural(cP0.length, 'punto crítico', 'puntos críticos')} y ${plural(cC0.length, 'circuito crítico', 'circuitos críticos')}` + (p0 ? `. El más repetido: llave ${p0.llave ?? '-'}${p0.direccion ? ' (' + p0.direccion + ')' : ''}, con ${plural(p0.fallas, 'falla', 'fallas')} y ${plural(p0.reiteradas, 'reiterada', 'reiteradas')}.` : '.') + ' Están numerados y en el mapa al final.']);
-    } else hallazgos.push(['Puntos y circuitos críticos', 'Ningún punto ni circuito se repitió en el período.']);
-    const penP = d.pendientes || {};
-    if(penP.total_alguna_vez){
-      const mo = (penP.motivos || [])[0];
-      hallazgos.push(['Pendientes', `${plural(penP.total_alguna_vez, 'falla quedó', 'fallas quedaron')} pendiente${penP.total_alguna_vez === 1 ? '' : 's'} alguna vez; ${penP.actuales || 0} siguen así.` + (mo ? ` Motivo más frecuente: "${mo.motivo}" (${mo.veces}).` : '')]);
-    }
-    hallazgos.push(['Cobertura', habilesSinP ? `${plural(habilesSinP, 'día hábil', 'días hábiles')} sin inspección registrada (puede incluir feriados).` : 'Todos los días hábiles del período tienen inspección registrada.']);
+    // Comparación con el período anterior (misma cantidad de días, justo antes)
+    const prevFin = sumarDiasStr(ini, -1), prevIni = sumarDiasStr(prevFin, -(nDiasRango - 1));
+    let prev = null;
+    try{ prev = await db.rpc('analisis_fallas', {p_inicio: prevIni, p_fin: prevFin}); }catch(e){ console.warn('No se pudo obtener el período anterior:', e); }
 
     let yy = 60 + 2 * (chh + 4) + 6;
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(...VERDE);
-    pdf.text('Lo más importante', margen, yy); yy += 3;
-    pdf.setDrawColor(219, 226, 220); pdf.line(margen, yy, ancho - margen, yy); yy += 6;
-    hallazgos.forEach(([tit, txt]) => {
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9.5);
-      const lineas = pdf.splitTextToSize(txt, ancho - margen * 2 - 8);
-      if(yy + 6 + lineas.length * 4.6 > alto - 30) return;
-      pdf.setFillColor(...VERDE); pdf.rect(margen, yy - 2.6, 1.6, 1.6, 'F');
-      pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...VERDE); pdf.text(tit, margen + 5, yy);
-      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(30, 40, 35); pdf.text(lineas, margen + 5, yy + 4.8);
-      yy += 4.8 + lineas.length * 4.6 + 3.2;
-    });
+    pdf.text('Comparación con el período anterior', margen, yy); yy += 3;
+    pdf.setDrawColor(219, 226, 220); pdf.line(margen, yy, ancho - margen, yy); yy += 5;
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...gris);
+
+    if(!prev || !prev.resumen){
+      pdf.text('No se pudo obtener el período anterior para comparar.', margen, yy + 2);
+    } else {
+      pdf.text(`Este período: ${fmtF(ini)} al ${fmtF(fin)} (${plural(nDiasRango, 'día', 'días')})   ·   Anterior: ${fmtF(prevIni)} al ${fmtF(prevFin)} (${plural(nDiasRango, 'día', 'días')})`, margen, yy + 2);
+      yy += 6;
+      const pr = prev.resumen || {};
+      const cobPrev = prev.cobertura || {};
+      const insPrev = (cobPrev.por_ito || []).reduce((s, i) => s + (i.inspecciones || 0), 0);
+      const sinPrev = (cobPrev.por_dia || []).filter(x => x.dow >= 1 && x.dow <= 5 && !x.inspecciones).length;
+      const pctDe = (r) => r.fallas ? Math.round((r.reparadas || 0) / r.fallas * 100) : null;
+      const pctPrev = pctDe(pr);
+      // mejor: 'menos' (bajar es bueno), 'mas' (subir es bueno) o null (sin juicio: depende de cuánto se inspeccione)
+      const filas = [
+        {l: 'Fallas del período', a: rr.fallas || 0, b: pr.fallas || 0, t: 'n', mejor: null},
+        {l: 'Inspecciones realizadas', a: nInspecciones, b: insPrev, t: 'n', mejor: 'mas'},
+        {l: 'Días hábiles sin inspección', a: habilesSinP, b: sinPrev, t: 'n', mejor: 'menos'},
+        {l: 'Fallas reparadas (%)', a: pctDe(rr), b: pctPrev, t: 'pp', mejor: 'mas'},
+        {l: 'Fallas abiertas hoy', a: rr.abiertas || 0, b: pr.abiertas || 0, t: 'n', mejor: 'menos'},
+        {l: 'Fallas reiteradas', a: rr.reiteradas || 0, b: pr.reiteradas || 0, t: 'n', mejor: 'menos'},
+        {l: 'Mediana de reparación desde el ingreso', a: rr.mediana_dias_ing, b: pr.mediana_dias_ing, t: 'h', mejor: 'menos'},
+        {l: 'Mediana de reparación desde la inspección', a: rr.mediana_dias_insp, b: pr.mediana_dias_insp, t: 'h', mejor: 'menos'},
+        {l: 'Puntos críticos', a: cP0.length, b: (prev.criticos_puntos || []).length, t: 'n', mejor: 'menos'},
+        {l: 'Circuitos críticos', a: cC0.length, b: (prev.criticos_circuitos || []).length, t: 'n', mejor: 'menos'}
+      ];
+      const signo = (x) => x > 0 ? '+' : (x < 0 ? '-' : '');
+      const valor = (f, v) => v === null || v === undefined ? '-' : (f.t === 'h' ? fmtHoras(v) : (f.t === 'pp' ? v + '%' : String(v)));
+      const cuerpo = filas.map(f => {
+        let varTxt = '-', dir = 0;
+        if(f.a !== null && f.a !== undefined && f.b !== null && f.b !== undefined){
+          const dif = f.a - f.b;
+          if(f.t === 'h'){
+            const dh = Math.round(dif * 24 * 10) / 10;
+            dir = dh === 0 ? 0 : Math.sign(dh);
+            varTxt = dh === 0 ? 'Sin cambio' : `${signo(dh)}${Math.abs(dh) < 10 ? String(Math.abs(dh)).replace('.', ',') : Math.round(Math.abs(dh))} h` + (f.b > 0 ? ` (${signo(dif)}${Math.abs(Math.round(dif / f.b * 100))}%)` : '');
+          } else if(f.t === 'pp'){
+            dir = dif === 0 ? 0 : Math.sign(dif);
+            varTxt = dif === 0 ? 'Sin cambio' : `${signo(dif)}${Math.abs(dif)} pp`;
+          } else {
+            dir = dif === 0 ? 0 : Math.sign(dif);
+            varTxt = dif === 0 ? 'Sin cambio' : `${signo(dif)}${Math.abs(dif)}` + (f.b > 0 ? ` (${signo(dif)}${Math.abs(Math.round(dif / f.b * 100))}%)` : '');
+          }
+        }
+        return {fila: [f.l, valor(f, f.a), valor(f, f.b), varTxt], dir, mejor: f.mejor};
+      });
+      pdf.autoTable({
+        startY: yy, margin: {left: margen, right: margen},
+        styles: {fontSize: 9, cellPadding: 2.2, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1},
+        headStyles: {fillColor: VERDE, textColor: 255, fontSize: 8.5, fontStyle: 'bold'},
+        alternateRowStyles: {fillColor: [247, 248, 247]},
+        head: [['Indicador', 'Este período', 'Anterior', 'Variación']],
+        body: cuerpo.map(c => c.fila),
+        columnStyles: {1: {halign: 'right', fontStyle: 'bold'}, 2: {halign: 'right'}, 3: {halign: 'right', fontStyle: 'bold'}},
+        didParseCell: (hk) => {
+          if(hk.section === 'head' && hk.column.index >= 1) hk.cell.styles.halign = 'right';
+          if(hk.section !== 'body' || hk.column.index !== 3) return;
+          const c = cuerpo[hk.row.index];
+          if(!c || !c.mejor || !c.dir) return;
+          const bueno = (c.mejor === 'mas') === (c.dir > 0);
+          hk.cell.styles.textColor = bueno ? [46, 125, 79] : [192, 57, 43];
+        }
+      });
+      yy = pdf.lastAutoTable.finalY + 4;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris);
+      const notaComp = pdf.splitTextToSize('Verde: mejora respecto del período anterior; rojo: empeora. Las fallas del período y las inspecciones no se colorean porque dependen de cuánto se inspeccionó. "Fallas abiertas hoy" y "reparadas" se miden al día de generación del informe. pp = puntos porcentuales.', ancho - margen * 2);
+      pdf.text(notaComp, margen, yy);
+    }
 
     // Guía de lectura
     pdf.setFontSize(8); pdf.setTextColor(...gris);
