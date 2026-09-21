@@ -2864,6 +2864,7 @@ async function abrirDetalleInspeccion(id){
 }
 
 function renderDetalleInspeccion(det){
+  ultimoDetalleInspeccion = det;
   const insp = det.inspeccion, fallas = det.fallas || [];
   const cont = document.getElementById('inspeccionContenido');
   const cuenta = {reparada:0, pendiente:0, reiterada:0, reportada:0};
@@ -2877,10 +2878,12 @@ function renderDetalleInspeccion(det){
       <div><div class="hint" style="margin:0;">Ingresada por</div><b>${escHtml(insp.ingresado_por || '—')}</b> <span class="hint">· ${escHtml(fmtFechaHoraChile(insp.creado_en))}</span></div>
       <div><div class="hint" style="margin:0;">Fallas</div><b>${fallas.length}</b> <span class="hint">· ${puntos} punto${puntos===1?'':'s'} afectado${puntos===1?'':'s'}</span></div>
       <div style="align-self:flex-end;"><div class="insp-pills" style="margin:0;">${pillsEstadoHtml({reparadas:cuenta.reparada, pendientes:cuenta.pendiente, reiteradas:cuenta.reiterada, reportadas:cuenta.reportada})}</div></div>
+      <div style="margin-left:auto; align-self:flex-end;"><button class="popup-btn" id="inspPdfBtn" style="width:auto; margin:0; padding:7px 14px;">📄 Exportar PDF</button></div>
     </div>`;
 
   if(!fallas.length){
     cont.innerHTML = encabezado + '<div class="empty-state">Esta inspección se registró sin fallas.</div>';
+    enlazarPdfInspeccion();
     return;
   }
   cont.innerHTML = encabezado + `
@@ -2910,6 +2913,7 @@ function renderDetalleInspeccion(det){
   cont.querySelectorAll('#inspeccionTabla tbody tr').forEach(tr => {
     tr.onclick = () => enfocarFallaInspeccion(tr.dataset.id);
   });
+  enlazarPdfInspeccion();
 }
 
 function dibujarFallasInspeccionEnMapa(fallas){
@@ -3182,6 +3186,237 @@ function renderAnalisis(d){
   });
 }
 
+// ---------- INFORME PDF DE UNA INSPECCIÓN ----------
+let ultimoDetalleInspeccion = null;   // detalle de la inspección abierta en el panel inferior
+
+function enlazarPdfInspeccion(){
+  const b = document.getElementById('inspPdfBtn');
+  if(b) b.onclick = () => generarPdfInspeccion();
+}
+
+// ---- Mapa para PDF ----
+// Se dibuja aparte, en un canvas (mosaicos de OpenStreetMap + capas propias). No se usa html2canvas
+// porque desplaza los marcadores de Leaflet. items: [{color, label, geom: GeoJSON Point/LineString/MultiLineString}]
+function cargarImagenTile(url){
+  return new Promise(res => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    const t = setTimeout(() => res(null), 8000);
+    img.onload = () => { clearTimeout(t); res(img); };
+    img.onerror = () => { clearTimeout(t); res(null); };
+    img.src = url;
+  });
+}
+
+async function renderMapaCanvas(items){
+  const validos = (items || []).filter(it => it.geom);
+  if(!validos.length || !map) return null;
+  // Encuadra las capas (esto mueve el mapa de la pantalla, igual que al abrir la inspección).
+  const pts = [];
+  const lineas = (g) => g.type === 'LineString' ? [g.coordinates] : (g.type === 'MultiLineString' ? g.coordinates : []);
+  validos.forEach(it => {
+    if(it.geom.type === 'Point') pts.push([it.geom.coordinates[1], it.geom.coordinates[0]]);
+    else lineas(it.geom).forEach(l => l.forEach(c => pts.push([c[1], c[0]])));
+  });
+  if(!pts.length) return null;
+  map.closePopup();
+  map.invalidateSize();
+  map.fitBounds(L.latLngBounds(pts), {padding: [60, 60], maxZoom: 18, animate: false});
+
+  const scale = 1.5;
+  const size = map.getSize();
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(size.x * scale); canvas.height = Math.round(size.y * scale);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#e5e5e5'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const z = Math.round(map.getZoom());
+  const pb = map.getPixelBounds();
+  const n = Math.pow(2, z);
+  const tareas = [];
+  for(let tx = Math.floor(pb.min.x / 256); tx <= Math.floor(pb.max.x / 256); tx++){
+    for(let ty = Math.floor(pb.min.y / 256); ty <= Math.floor(pb.max.y / 256); ty++){
+      if(ty < 0 || ty >= n) continue;
+      const txw = ((tx % n) + n) % n;
+      tareas.push(cargarImagenTile(`https://tile.openstreetmap.org/${z}/${txw}/${ty}.png`).then(img => {
+        if(img) ctx.drawImage(img, (tx * 256 - pb.min.x) * scale, (ty * 256 - pb.min.y) * scale, 256 * scale, 256 * scale);
+      }));
+    }
+  }
+  await Promise.all(tareas);
+
+  const P = (lon, lat) => { const p = map.latLngToContainerPoint([lat, lon]); return [p.x * scale, p.y * scale]; };
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // Circuitos primero (debajo de los puntos)
+  validos.forEach(it => {
+    const ls = lineas(it.geom);
+    if(!ls.length) return;
+    [{w: 9, c: '#ffffff'}, {w: 5.5, c: it.color}].forEach(est => {
+      ctx.lineWidth = est.w * scale; ctx.strokeStyle = est.c;
+      ls.forEach(l => { ctx.beginPath(); l.forEach((c, i) => { const [x, y] = P(c[0], c[1]); if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke(); });
+    });
+  });
+  const circulo = (x, y, color, label) => {
+    ctx.beginPath(); ctx.arc(x, y, 11 * scale, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.lineWidth = 2.5 * scale; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+    if(label){
+      ctx.fillStyle = '#ffffff'; ctx.font = `bold ${12 * scale}px sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(label), x, y + 0.5 * scale);
+    }
+  };
+  validos.forEach(it => {
+    if(it.geom.type === 'Point'){
+      const [x, y] = P(it.geom.coordinates[0], it.geom.coordinates[1]);
+      circulo(x, y, it.color, it.label);
+    } else {
+      const ls = lineas(it.geom);
+      if(ls.length && ls[0].length){
+        const l = ls[0], a = l[Math.floor((l.length - 1) / 2)], b = l[Math.ceil((l.length - 1) / 2)];
+        const [x, y] = P((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);   // punto medio de la línea
+        circulo(x, y, '#1f4d3d', it.label);
+      }
+    }
+  });
+  ctx.font = `${10 * scale}px sans-serif`; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+  const attrib = '© OpenStreetMap contributors';
+  const tw = ctx.measureText(attrib).width;
+  ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.fillRect(canvas.width - tw - 10 * scale, canvas.height - 16 * scale, tw + 10 * scale, 16 * scale);
+  ctx.fillStyle = '#333333'; ctx.fillText(attrib, canvas.width - 5 * scale, canvas.height - 3 * scale);
+  return canvas;
+}
+
+async function capturarMapaInspeccion(det){
+  return renderMapaCanvas((det.fallas || []).map((f, i) => ({
+    geom: f.geometry, label: i + 1, color: colorEstado[f.estado] || '#2563a8'
+  })));
+}
+
+async function generarPdfInspeccion(){
+  const det = ultimoDetalleInspeccion;
+  if(!det){ alert('Primero abre una inspección.'); return; }
+  if(!window.jspdf || !window.jspdf.jsPDF){ alert('No se pudo cargar la librería de PDF. Revisa tu conexión y recarga la página.'); return; }
+  const btn = document.getElementById('inspPdfBtn');
+  const textoOriginal = btn ? btn.textContent : '';
+  if(btn){ btn.textContent = 'Generando PDF…'; btn.disabled = true; }
+  try{
+    const pdf = new window.jspdf.jsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
+    if(typeof pdf.autoTable !== 'function') throw new Error('No se cargó el complemento de tablas del PDF. Recarga la página.');
+    const ancho = pdf.internal.pageSize.getWidth();
+    const alto = pdf.internal.pageSize.getHeight();
+    const margen = 12;
+    const VERDE = [31, 77, 61], gris = [85, 102, 92];
+    const insp = det.inspeccion, fallas = det.fallas || [];
+    const cuenta = {reparada: 0, pendiente: 0, reiterada: 0, reportada: 0};
+    fallas.forEach(f => { if(cuenta[f.estado] !== undefined) cuenta[f.estado]++; });
+    const puntos = fallas.reduce((s, f) => s + (f.puntos_afectados || 0), 0);
+    const dia = fmtDiaInspeccion(insp.fecha);
+
+    pdf.setFontSize(14); pdf.setTextColor(...VERDE);
+    pdf.text('Sistema de Gestión de Fallas de Alumbrado — La Florida', margen, 15);
+    pdf.setFontSize(11); pdf.text('Informe de inspección', margen, 21);
+    pdf.setFontSize(9); pdf.setTextColor(...gris);
+    pdf.text(`Generado el ${new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE})} por ${currentUser ? currentUser.nombre : '-'}`, margen, 26);
+    pdf.setDrawColor(219, 226, 220); pdf.line(margen, 29, ancho - margen, 29);
+
+    const resumen = [
+      ['ITO', insp.ito_nombre || '-', 'Día de la inspección', dia],
+      ['Ingresada por', insp.ingresado_por || '-', 'Ingresada el', fmtFechaHoraChile(insp.creado_en)],
+      ['Fallas', `${fallas.length} (${puntos} punto${puntos === 1 ? '' : 's'} lumínico${puntos === 1 ? '' : 's'} afectado${puntos === 1 ? '' : 's'})`, 'Estado actual',
+        `${cuenta.reparada} reparada(s) · ${cuenta.pendiente} pendiente(s) · ${cuenta.reiterada} reiterada(s) · ${cuenta.reportada} reportada(s)`]
+    ];
+    pdf.autoTable({
+      startY: 33, body: resumen, theme: 'plain', margin: {left: margen, right: margen},
+      styles: {fontSize: 9, cellPadding: 1.4, textColor: [30, 40, 35]},
+      columnStyles: {0: {fontStyle: 'bold', textColor: VERDE, cellWidth: 30}, 1: {cellWidth: 95}, 2: {fontStyle: 'bold', textColor: VERDE, cellWidth: 38}}
+    });
+    let y = pdf.lastAutoTable.finalY + 4;
+
+    if(!fallas.length){
+      pdf.setFontSize(10); pdf.setTextColor(...gris);
+      pdf.text('Esta inspección se registró sin fallas.', margen, y + 4);
+    } else {
+      // Mapa con las fallas numeradas
+      try{
+        const canvas = await capturarMapaInspeccion(det);
+        if(canvas){
+          pdf.setFontSize(10); pdf.setTextColor(...VERDE);
+          pdf.text('Mapa de las fallas (los números corresponden al detalle de las páginas siguientes)', margen, y + 3);
+          const maxW = ancho - margen * 2, maxH = alto - (y + 7) - 12;
+          let w = maxW, h = (canvas.height * w) / canvas.width;
+          if(h > maxH){ h = maxH; w = (canvas.width * h) / canvas.height; }
+          pdf.addImage(canvas.toDataURL('image/jpeg', 0.85), 'JPEG', margen + (maxW - w) / 2, y + 6, w, h);
+        }
+      }catch(e){ console.warn('No se pudo incluir el mapa en el PDF:', e); }
+
+      // Detalle de cada falla
+      const txtUbic = (f) => f.tipo === 'linea'
+        ? `Circuito ${f.circuito_id ?? '-'}\n${f.puntos_afectados} punto${f.puntos_afectados === 1 ? '' : 's'} lumínico${f.puntos_afectados === 1 ? '' : 's'} afectado${f.puntos_afectados === 1 ? '' : 's'}`
+        : `Llave ${f.llave ?? '-'}\nN.º municipal: ${f.nro_mun ?? '-'}${f.direccion ? '\n' + f.direccion : ''}${f.simb_poste ? '\nPoste: ' + f.simb_poste : ''}`;
+      const txtNotif = (f) => [
+        f.cardinalidad ? 'Luminaria ' + f.cardinalidad : null,
+        f.comentario_reporte || 'Sin comentario',
+        `Ingresada ${fmtFechaHoraChile(f.fecha_ingreso)} por ${f.ingresado_por || '-'}`
+      ].filter(Boolean).join('\n');
+      const txtCierre = (f) => {
+        const p = [];
+        const rep = f.reparacion, pen = f.pendiente;
+        if(f.estado === 'reparada'){
+          p.push(rep ? `REPARADA por ${rep.por || '-'} · ${fmtFechaHoraChile(rep.fecha)}\n${rep.descripcion || '-'}` : 'Marcada como reparada (sin registro de cierre).');
+          if(pen) p.push(`Antes pendiente (${pen.por || '-'} · ${fmtFechaHoraChile(pen.fecha)}): ${pen.motivo || '-'}`);
+        } else {
+          if(pen) p.push(`PENDIENTE por ${pen.por || '-'} · ${fmtFechaHoraChile(pen.fecha)}\n${pen.motivo || '-'}`);
+          if(rep) p.push(`Reparación registrada: ${rep.por || '-'} · ${fmtFechaHoraChile(rep.fecha)}\n${rep.descripcion || '-'}`);
+          if(!pen && !rep) p.push('Sin cierre todavía.');
+        }
+        if(f.asignado_camion) p.push('Asignado a: ' + f.asignado_camion);
+        const asig = (f.comentarios || []).filter(c => c.tipo === 'asignacion' && c.comentario);
+        if(asig.length) p.push(`Asignación (${asig[asig.length - 1].autor || '-'}): ${asig[asig.length - 1].comentario}`);
+        return p.join('\n');
+      };
+      const colorEstadoPdf = {reparada: [223, 240, 230], pendiente: [253, 243, 226], reiterada: [238, 226, 246], reportada: [248, 226, 224]};
+
+      pdf.addPage();
+      pdf.setFontSize(11); pdf.setTextColor(...VERDE);
+      pdf.text(`Detalle de las fallas — ${insp.ito_nombre || ''} · ${dia}`, margen, 15);
+      pdf.autoTable({
+        startY: 19, margin: {left: margen, right: margen},
+        head: [['N.º', 'OT', 'Falla', 'Ubicación', 'Lo que se notificó', 'Estado', 'Cierre']],
+        body: fallas.map((f, i) => [
+          i + 1, f.ot || '-',
+          `${f.tipo_falla}\n${descripcionCodigoFalla(f)}`,
+          txtUbic(f), txtNotif(f),
+          String(f.estado).replace('_', ' '),
+          txtCierre(f)
+        ]),
+        styles: {fontSize: 7.5, cellPadding: 1.6, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1, valign: 'top'},
+        headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'},
+        columnStyles: {0: {cellWidth: 9, halign: 'center'}, 1: {cellWidth: 18}, 2: {cellWidth: 40}, 3: {cellWidth: 45}, 4: {cellWidth: 58}, 5: {cellWidth: 20}, 6: {cellWidth: 83}},
+        didParseCell: (h) => {
+          if(h.section === 'body' && h.column.index === 5){
+            const est = fallas[h.row.index] && fallas[h.row.index].estado;
+            if(colorEstadoPdf[est]) h.cell.styles.fillColor = colorEstadoPdf[est];
+            h.cell.styles.fontStyle = 'bold';
+          }
+        }
+      });
+    }
+
+    const paginas = pdf.internal.getNumberOfPages();
+    for(let p = 1; p <= paginas; p++){
+      pdf.setPage(p); pdf.setFontSize(8); pdf.setTextColor(...gris);
+      pdf.text(`Página ${p} de ${paginas}`, ancho - margen, alto - 6, {align: 'right'});
+    }
+    const limpio = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    pdf.save(`inspeccion_${limpio(insp.ito_nombre)}_${insp.fecha}.pdf`);
+  }catch(e){
+    alert('Error generando el PDF: ' + e.message);
+  }finally{
+    if(btn){ btn.textContent = textoOriginal; btn.disabled = false; }
+  }
+}
+
 // ---------- INFORME PDF DEL ANÁLISIS ----------
 // PDF con texto real (varias páginas, tablas), no una foto de la pantalla.
 let ultimoAnalisis = null;   // datos de la última consulta de Análisis
@@ -3341,10 +3576,13 @@ async function generarPdfAnalisis(){
       });
     } else vacio('Sin inspecciones registradas en este rango.');
 
-    // 8) Mapa con los críticos (si se puede capturar)
+    // 8) Mapa con los críticos (si se puede dibujar)
     try{
-      if(typeof html2canvas === 'function' && Object.keys(analisisCapas).length){
-        const canvasMapa = await html2canvas(document.getElementById('map'), {scale: 1.2, backgroundColor: '#ffffff', useCORS: true, allowTaint: true});
+      const items = [];
+      (d.criticos_puntos || []).forEach(p => { if(p.lat != null && p.lon != null) items.push({geom: {type: 'Point', coordinates: [p.lon, p.lat]}, color: '#8e44ad', label: ''}); });
+      (d.criticos_circuitos || []).forEach(c => { if(c.lat != null && c.lon != null) items.push({geom: {type: 'Point', coordinates: [c.lon, c.lat]}, color: '#8e44ad', label: ''}); });
+      const canvasMapa = await renderMapaCanvas(items);
+      if(canvasMapa){
         pdf.addPage();
         pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text('Mapa de puntos y circuitos críticos', margen, 16);
         const w = ancho - margen * 2;
