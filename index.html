@@ -157,6 +157,11 @@
   .sort-btn{border:none; background:none; cursor:pointer; font-size:12px; color:var(--ink-soft); padding:0 2px; vertical-align:middle;}
   .sort-btn:hover{color:var(--primary);}
   .sort-btn.activo{color:var(--primary); font-weight:700;}
+  .chip-estado{display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border:1.5px solid var(--line); border-radius:20px; background:#fff; cursor:pointer; font-size:12px; font-weight:600; color:var(--ink-soft);}
+  .chip-estado:hover{border-color:var(--primary);}
+  .chip-estado.activo{border-color:var(--primary); background:#eef5f1; color:var(--primary);}
+  .chip-estado .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
+  .chip-estado .n{font-weight:500; opacity:.75;}
 
   .bottom-panel{
     display:none; flex-direction:column; background:#fff; border-top:1px solid var(--line);
@@ -366,7 +371,15 @@
         <div id="todasContenido">
         <div class="hint" style="margin-bottom:10px;">Incluye activas, en reparación y reparadas (últimas 500). Haz clic en una fila para ubicarla en el mapa.</div>
 
-        
+        <div id="todasFiltroEstado" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:10px;">
+          <span style="font-size:12px; color:var(--ink-soft); margin-right:2px;">Filtrar por estado:</span>
+          <button type="button" class="chip-estado activo" data-estado="todas" onclick="filtrarTodasFallasPorEstado('todas')">Todas <span class="n" id="cntEstadoTodas"></span></button>
+          <button type="button" class="chip-estado" data-estado="reportada" onclick="filtrarTodasFallasPorEstado('reportada')"><span class="dot" style="background:#c1443c"></span>Reportada <span class="n" id="cntEstadoReportada"></span></button>
+          <button type="button" class="chip-estado" data-estado="pendiente" onclick="filtrarTodasFallasPorEstado('pendiente')"><span class="dot" style="background:#d98e2f"></span>Pendiente <span class="n" id="cntEstadoPendiente"></span></button>
+          <button type="button" class="chip-estado" data-estado="reparada" onclick="filtrarTodasFallasPorEstado('reparada')"><span class="dot" style="background:#3a8a5c"></span>Reparada <span class="n" id="cntEstadoReparada"></span></button>
+          <button type="button" class="chip-estado" data-estado="reiterada" onclick="filtrarTodasFallasPorEstado('reiterada')"><span class="dot" style="background:#8e44ad"></span>Reiterada <span class="n" id="cntEstadoReiterada"></span></button>
+        </div>
+
         <table id="todasFallasTabla" style="width:100%; border-collapse:collapse; font-size:12.5px;">
           <thead>
             <tr style="text-align:left; border-bottom:2px solid var(--line);">
@@ -2352,6 +2365,40 @@ window.actualizarFechaFalla = actualizarFechaFalla;
 
 let ordenTodasFallas = {campo: 'fecha_creacion', asc: false};
 
+// Filtro por estado del panel "Todas las fallas". Es independiente del filtro de la leyenda del mapa
+// (filtrosEstadoVisible) y del export CSV. Conjunto vacío = mostrar todos los estados.
+const ESTADOS_TODAS_FALLAS = ['reportada','pendiente','reparada','reiterada'];
+let filtroEstadoTodasFallas = new Set();
+
+function filtrarTodasFallasPorEstado(estado){
+  if(estado === 'todas'){
+    filtroEstadoTodasFallas.clear();
+  } else {
+    if(filtroEstadoTodasFallas.has(estado)) filtroEstadoTodasFallas.delete(estado);
+    else filtroEstadoTodasFallas.add(estado);
+    // marcar los 4 equivale a "Todas"
+    if(filtroEstadoTodasFallas.size === ESTADOS_TODAS_FALLAS.length) filtroEstadoTodasFallas.clear();
+  }
+  renderTodasFallasTabla();
+}
+window.filtrarTodasFallasPorEstado = filtrarTodasFallasPorEstado;
+
+function actualizarChipsEstadoTodas(){
+  const cont = document.getElementById('todasFiltroEstado');
+  if(!cont) return;
+  const conteo = {};
+  ESTADOS_TODAS_FALLAS.forEach(e => conteo[e] = 0);
+  ultimosTodasFallas.forEach(f => { if(f.estado in conteo) conteo[f.estado]++; });
+  const total = ultimosTodasFallas.length;
+  cont.querySelectorAll('.chip-estado').forEach(chip => {
+    const e = chip.dataset.estado;
+    const activo = e === 'todas' ? filtroEstadoTodasFallas.size === 0 : filtroEstadoTodasFallas.has(e);
+    chip.classList.toggle('activo', activo);
+    const n = chip.querySelector('.n');
+    if(n) n.textContent = '(' + (e === 'todas' ? total : conteo[e]) + ')';
+  });
+}
+
 // "Todas las fallas" no cambia solo porque el admin abra y cierre el panel varias veces;
 // se vuelve a pedir solo la primera vez o después de crear/editar/eliminar una falla
 // (ver invalidarCacheTodasFallas, llamado desde esos flujos).
@@ -2403,6 +2450,8 @@ function renderTodasFallasTabla(){
   const tbody = document.getElementById('todasFallasTbody');
   const esAdmin = rolEfectivo() === 'admin';
 
+  actualizarChipsEstadoTodas();
+
   if(!ultimosTodasFallas.length){
     tbody.innerHTML = '<tr><td colspan="11" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
     return;
@@ -2419,7 +2468,16 @@ function renderTodasFallasTabla(){
     return ordenTodasFallas.asc ? fa - fb : fb - fa;
   });
 
-  tbody.innerHTML = datosOrdenados.map(f => {
+  const datosFiltrados = filtroEstadoTodasFallas.size
+    ? datosOrdenados.filter(f => filtroEstadoTodasFallas.has(f.estado))
+    : datosOrdenados;
+
+  if(!datosFiltrados.length){
+    tbody.innerHTML = '<tr><td colspan="11" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas con el estado seleccionado (entre las últimas 500 cargadas).</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = datosFiltrados.map(f => {
     const fecha = new Date(f.fecha_creacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
     const fechaCelda = esAdmin
       ? `<input type="datetime-local" class="popup-input" style="margin:0; padding:4px 6px; font-size:11.5px; width:170px;" value="${toDatetimeLocalValue(f.fecha_creacion)}" onclick="event.stopPropagation();" onchange="event.stopPropagation(); actualizarFechaFalla('${f.id}', this.value)">`
