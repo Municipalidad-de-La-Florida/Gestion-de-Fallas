@@ -1777,8 +1777,9 @@ async function abrirPopupFalla(feat){
     </div>
   ` : '';
 
-  const tituloConEliminar = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">${botonEliminarHtml}<b>${tipoLabel} · ${p.tipo_falla}</b></div>
-    <div class="hint" style="margin-bottom:4px;">OT: <b>${p.ot || '—'}</b></div>`;
+  const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
+  const tituloConEliminar = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">${botonEliminarHtml}<b>${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</b></div>
+    <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OT: <b>${p.ot || '—'}</b></div>`;
 
   let contenidoPanel;
   if(['contratista','camion'].includes(rolEfectivo()) && !p.cascada && p.estado !== 'reparada'){
