@@ -856,10 +856,12 @@ function actualizarVisibilidadPorRol(){
   // El botón de gestión de usuarios sí sigue la simulación (un ITO/Contratista/Observador
   // real no vería este botón, así que tampoco debe verse al simular esos roles)
   document.getElementById('usuariosBtn').style.display = (rol === 'admin') ? 'inline-block' : 'none';
-  document.getElementById('reportSection').style.display = (rol === 'ito' || rol === 'ito2' || rol === 'admin') ? 'block' : 'none';
-  document.getElementById('repararSection').style.display = ['contratista','camion'].includes(rol) ? 'block' : 'none';
-  document.getElementById('statsBtn').style.display = rol === 'contratista' ? 'none' : 'inline-block';
-  document.getElementById('todasBtn').style.display = (rol === 'admin' || rol === 'ito' || rol === 'ito2' || rol === 'contratista') ? 'inline-block' : 'none';
+  document.getElementById('reportSection').style.display = (rol === 'ito' || rol === 'ito2' || rol === 'admin' || rol === 'contratista2') ? 'block' : 'none';
+  // Contratista2 solo puede ingresar fallas individuales ("Agregar falla"), no inspecciones
+  document.getElementById('btnInformarInspeccion').style.display = (rol === 'contratista2') ? 'none' : '';
+  document.getElementById('repararSection').style.display = ['contratista','contratista2','camion'].includes(rol) ? 'block' : 'none';
+  document.getElementById('statsBtn').style.display = (rol === 'contratista' || rol === 'contratista2') ? 'none' : 'inline-block';
+  document.getElementById('todasBtn').style.display = (rol === 'admin' || rol === 'ito' || rol === 'ito2' || rol === 'contratista' || rol === 'contratista2') ? 'inline-block' : 'none';
   // si cambia el rol efectivo (ej. "ver como"), se sale de cualquier modo de reporte activo
   salirModoInformar();
 }
@@ -1359,6 +1361,7 @@ async function obtenerInspeccionIdSesion(){
 
 function puedeReportar(){
   const r = rolEfectivo();
+  if(r === 'contratista2') return modoIngreso === 'agregar'; // solo fallas individuales, sin inspección
   return (r === 'ito' || r === 'ito2' || r === 'admin') && (modoIngreso === 'agregar' || modoIngreso === 'inspeccion');
 }
 
@@ -1765,7 +1768,7 @@ async function abrirPopupFalla(feat){
   const botonEliminarHtml = puedeEliminar
     ? `<button id="eliminarDesdeMapaBtn" title="Eliminar falla" style="flex-shrink:0; width:26px; height:26px; padding:0; border:1.5px solid var(--red); border-radius:6px; background:#fbe7e5; color:var(--red); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>`
     : '';
-  const puedeAsignarCamion = ['contratista','admin'].includes(rolEfectivo()) && !p.cascada;
+  const puedeAsignarCamion = ['contratista','contratista2','admin'].includes(rolEfectivo()) && !p.cascada;
   const asignarCamionHtml = puedeAsignarCamion ? `
     <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
       <div class="hint" style="margin-bottom:4px;">Asignar a camión:</div>
@@ -1782,7 +1785,7 @@ async function abrirPopupFalla(feat){
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OT: <b>${p.ot || '—'}</b></div>`;
 
   let contenidoPanel;
-  if(['contratista','camion'].includes(rolEfectivo()) && !p.cascada && p.estado !== 'reparada'){
+  if(['contratista','contratista2','camion'].includes(rolEfectivo()) && !p.cascada && p.estado !== 'reparada'){
     const filasCierre = CATALOGO_CIERRES.map(item => `
       <div class="falla-opcion-row">
         <button class="codigo-btn cierre-btn" data-desc="${(item.c + ' ' + item.d).replace(/"/g,'&quot;')}">${item.c}</button>
@@ -2043,7 +2046,7 @@ function renderFallasList(){
     const nombreCreador = f.usuarios ? f.usuarios.nombre : '—';
     let botonReparar = '';
     let botonEliminar = '';
-    if(['contratista','camion'].includes(rolEfectivo()) && !f.cascada){
+    if(['contratista','contratista2','camion'].includes(rolEfectivo()) && !f.cascada){
       botonReparar = `<button onclick="event.stopPropagation(); abrirFormularioReparacion('${f.id}')">Registrar reparación</button>`;
     }
     if(rolEfectivo() === 'admin'){
@@ -2169,7 +2172,7 @@ function mostrarModalTodas(){
   document.getElementById('todasContenido').style.display = 'block';
   document.getElementById('historialContenido').style.display = 'none';
   document.getElementById('inspeccionContenido').style.display = 'none';
-  document.getElementById('toggleExportBtn').style.display = ['admin','ito','ito2','contratista'].includes(rolEfectivo()) ? 'inline-block' : 'none';
+  document.getElementById('toggleExportBtn').style.display = ['admin','ito','ito2','contratista','contratista2'].includes(rolEfectivo()) ? 'inline-block' : 'none';
   document.getElementById('todasPanel').classList.add('visible');
   cargarTodasFallas(); // usa caché salvo que algo la haya invalidado (ver todasFallasCacheVigente)
   setTimeout(() => { if(map) map.invalidateSize(); }, 50);
@@ -4266,7 +4269,7 @@ function mostrarModalUsuarios(){
   cargarUsuarios();
 }
 
-const ROLES_DISPONIBLES = ['admin','ito','ito2','contratista','camion','observador'];
+const ROLES_DISPONIBLES = ['admin','ito','ito2','contratista','contratista2','camion','observador'];
 
 async function cargarUsuarios(){
   const tbody = document.getElementById('usuariosTbody');
