@@ -380,10 +380,15 @@
           <button type="button" class="chip-estado" data-estado="reiterada" onclick="filtrarTodasFallasPorEstado('reiterada')"><span class="dot" style="background:#8e44ad"></span>Reiterada <span class="n" id="cntEstadoReiterada"></span></button>
         </div>
 
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+          <input type="search" id="buscadorTodasFallas" name="buscar-fallas-tabla" autocomplete="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" placeholder="🔍 Buscar por OS, orden externa, código, cliente, llave, nombre, estado, fecha..." style="flex:1; min-width:0; box-sizing:border-box; padding:7px 10px; font-size:12.5px; border:1.5px solid var(--line); border-radius:8px; background:#fff; color:var(--ink);">
+          <span class="hint" id="contadorBusquedaTodas" style="margin:0; white-space:nowrap;"></span>
+        </div>
+
         <table id="todasFallasTabla" style="width:100%; border-collapse:collapse; font-size:12.5px;">
           <thead>
             <tr style="text-align:left; border-bottom:2px solid var(--line);">
-              <th style="padding:8px 10px;">OS</th>
+              <th style="padding:8px 10px;">OS <button class="sort-btn" onclick="ordenarTodasFallas('ot')" title="Ordenar por OS">⇅</button></th>
               <th style="padding:8px 10px;">Orden Externa</th>
               <th style="padding:8px 10px;">Fecha informada <button class="sort-btn" onclick="ordenarTodasFallas('fecha_creacion')" title="Ordenar por fecha informada">⇅</button></th>
               <th style="padding:8px 10px; display:none;" id="thFechaReal">Fecha real <button class="sort-btn" onclick="ordenarTodasFallas('creado_en')" title="Ordenar por fecha real">⇅</button></th>
@@ -2076,7 +2081,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
 async function cargarFallasDelArea(){
   try{
     const query = 'select=id,ot,tipo,tipo_falla,estado,cascada,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre)'
-      + '&estado=neq.reparada&cascada=eq.false&order=fecha_falla.desc&limit=20';
+      + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=20';
     fallasEnArea = await db.select('fallas', query);
     renderFallasList();
   }catch(e){ console.error(e); }
@@ -2488,6 +2493,26 @@ async function cargarTodasFallas(){
   }
 }
 
+// ---------- BUSCADOR de "Todas las fallas" (filtrado dinámico, sin consultar la base) ----------
+let textoBusquedaTodasFallas = '';
+function normalizarBusqueda(t){
+  return String(t ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+}
+function textoBusquedaDeFalla(f, esAdmin){
+  const fecha = f.fecha_creacion ? new Date(f.fecha_creacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+  const partes = [
+    f.ot, f.orden_externa, f.tipo_falla, f.n_cliente,
+    f.tipo === 'punto' ? f.llave : '', f.tipo === 'punto' ? 'punto' : 'circuito',
+    f.nombre_creador, esAdmin ? f.nombre_real_creador : '',
+    f.estado ? String(f.estado).replace('_',' ') : '', fecha, f.puntos_afectados
+  ];
+  return normalizarBusqueda(partes.filter(x => x !== null && x !== undefined && x !== '').join(' '));
+}
+document.getElementById('buscadorTodasFallas').addEventListener('input', (e) => {
+  textoBusquedaTodasFallas = e.target.value;
+  renderTodasFallasTabla();
+});
+
 function ordenarTodasFallas(campo){
   if(campo === 'creado_en' && rolEfectivo() !== 'admin') return; // por si acaso, aunque el botón no debería verse
   if(ordenTodasFallas.campo === campo){
@@ -2515,17 +2540,33 @@ function renderTodasFallasTabla(){
   if(btnActivo) btnActivo.classList.add('activo');
 
   const datosOrdenados = [...ultimosTodasFallas].sort((a,b) => {
+    if(ordenTodasFallas.campo === 'ot'){
+      const c = String(a.ot || '').localeCompare(String(b.ot || ''), 'es', {numeric: true});
+      return ordenTodasFallas.asc ? c : -c;
+    }
     const fa = new Date(a[ordenTodasFallas.campo]).getTime();
     const fb = new Date(b[ordenTodasFallas.campo]).getTime();
     return ordenTodasFallas.asc ? fa - fb : fb - fa;
   });
 
-  const datosFiltrados = filtroEstadoTodasFallas.size
+  const porEstado = filtroEstadoTodasFallas.size
     ? datosOrdenados.filter(f => filtroEstadoTodasFallas.has(f.estado))
     : datosOrdenados;
 
+  // Buscador: todas las palabras escritas deben aparecer en alguna columna de la fila
+  const terminos = normalizarBusqueda(textoBusquedaTodasFallas).split(' ').filter(Boolean);
+  const datosFiltrados = terminos.length
+    ? porEstado.filter(f => { const h = textoBusquedaDeFalla(f, esAdmin); return terminos.every(t => h.includes(t)); })
+    : porEstado;
+
+  const contador = document.getElementById('contadorBusquedaTodas');
+  if(contador) contador.textContent = (terminos.length || filtroEstadoTodasFallas.size) ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
+
   if(!datosFiltrados.length){
-    tbody.innerHTML = '<tr><td colspan="12" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas con el estado seleccionado (entre las últimas 500 cargadas).</td></tr>';
+    const msj = terminos.length
+      ? 'No hay fallas que coincidan con la búsqueda (entre las últimas 500 cargadas).'
+      : 'No hay fallas con el estado seleccionado (entre las últimas 500 cargadas).';
+    tbody.innerHTML = `<tr><td colspan="12" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
     return;
   }
 
