@@ -152,12 +152,12 @@
   .modal-card.modal-card-wide{width:min(920px, 92vw);}
   #todasFallasTabla tbody tr{border-bottom:1px solid var(--line); cursor:pointer;}
   #todasFallasTabla tbody tr:hover{background:#f7f8f7;}
-  #todasFallasTabla td{padding:8px 10px; vertical-align:middle;}
+  #todasFallasTabla td{padding:5px 10px; vertical-align:middle;}
   #todasFallasTabla td.mono{font-variant-numeric:tabular-nums; color:var(--ink-soft); font-size:11px;}
   .sort-btn{border:none; background:none; cursor:pointer; font-size:12px; color:var(--ink-soft); padding:0 2px; vertical-align:middle;}
   .sort-btn:hover{color:var(--primary);}
   .sort-btn.activo{color:var(--primary); font-weight:700;}
-  .chip-estado{display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border:1.5px solid var(--line); border-radius:20px; background:#fff; cursor:pointer; font-size:12px; font-weight:600; color:var(--ink-soft);}
+  .chip-estado{display:inline-flex; align-items:center; gap:6px; padding:2px 9px; border:1.5px solid var(--line); border-radius:20px; background:#fff; cursor:pointer; font-size:11.5px; font-weight:600; color:var(--ink-soft);}
   .chip-estado:hover{border-color:var(--primary);}
   .chip-estado.activo{border-color:var(--primary); background:#eef5f1; color:var(--primary);}
   .chip-estado .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
@@ -170,14 +170,15 @@
   }
   .bottom-panel.visible{display:flex;}
   .resize-handle{
-    height:10px; cursor:ns-resize; background:#eef1ee; display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    height:6px; cursor:ns-resize; background:#eef1ee; display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
   .resize-handle::after{content:''; width:38px; height:4px; background:#c7cec9; border-radius:2px;}
   .bottom-panel-header{
     display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
-    padding:10px 20px; border-bottom:1px solid var(--line); flex-shrink:0;
+    padding:5px 16px; border-bottom:1px solid var(--line); flex-shrink:0;
   }
-  .bottom-panel-body{flex:1; overflow:auto; padding:14px 20px;}
+  .bottom-panel-body{flex:1; overflow:auto; padding:6px 16px 8px;}
+  #todasFallasTabla th{padding:5px 10px !important; font-size:12px;}
   #sidebar{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column;position:relative;}
   .sidebar-resize-handle{
     position:absolute; top:0; left:0; width:6px; height:100%; cursor:ew-resize; z-index:900;
@@ -361,18 +362,20 @@
     <div id="todasPanel" class="bottom-panel">
       <div id="resizeHandle" class="resize-handle"></div>
       <div class="bottom-panel-header">
-        <h2 style="margin:0; font-size:15px;" id="panelInferiorTitulo">Todas las fallas de la comuna</h2>
+        <div style="display:flex; align-items:baseline; gap:10px; min-width:0; flex-wrap:wrap;">
+          <h2 style="margin:0; font-size:15px;" id="panelInferiorTitulo">Todas las fallas de la comuna</h2>
+          <span class="hint" id="panelInferiorPista" style="margin:0; font-size:11px;">Últimas 500 · clic en una fila para ubicarla en el mapa</span>
+        </div>
         <div style="display:flex; gap:8px; align-items:center;">
-          <button class="mode-btn" id="toggleExportBtn" style="background:var(--primary); color:#fff; border-color:var(--primary);">📥 Exportar</button>
-          <button class="close-x" id="closeTodasBtn" style="position:static; font-size:20px;">×</button>
+          <button class="mode-btn" id="toggleExportBtn" style="background:var(--primary); color:#fff; border-color:var(--primary); padding:3px 10px; font-size:11.5px; margin:0; border-radius:7px;">📥 Exportar</button>
+          <button class="close-x" id="closeTodasBtn" style="position:static; font-size:17px; line-height:1; padding:0 2px;">×</button>
         </div>
       </div>
       <div class="bottom-panel-body">
         <div id="todasContenido">
-        <div class="hint" style="margin-bottom:10px;">Incluye activas, en reparación y reparadas (últimas 500). Haz clic en una fila para ubicarla en el mapa.</div>
-
-        <div id="todasFiltroEstado" style="display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-bottom:10px;">
-          <span style="font-size:12px; color:var(--ink-soft); margin-right:2px;">Filtrar por estado:</span>
+        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin-bottom:6px;">
+        <div id="todasFiltroEstado" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
+          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Estado:</span>
           <button type="button" class="chip-estado activo" data-estado="todas" onclick="filtrarTodasFallasPorEstado('todas')">Todas <span class="n" id="cntEstadoTodas"></span></button>
           <button type="button" class="chip-estado" data-estado="reportada" onclick="filtrarTodasFallasPorEstado('reportada')"><span class="dot" style="background:#c1443c"></span>Reportada <span class="n" id="cntEstadoReportada"></span></button>
           <button type="button" class="chip-estado" data-estado="pendiente" onclick="filtrarTodasFallasPorEstado('pendiente')"><span class="dot" style="background:#d98e2f"></span>Pendiente <span class="n" id="cntEstadoPendiente"></span></button>
@@ -380,9 +383,10 @@
           <button type="button" class="chip-estado" data-estado="reiterada" onclick="filtrarTodasFallasPorEstado('reiterada')"><span class="dot" style="background:#8e44ad"></span>Reiterada <span class="n" id="cntEstadoReiterada"></span></button>
         </div>
 
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-          <input type="search" id="buscadorTodasFallas" name="buscar-fallas-tabla" autocomplete="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" placeholder="🔍 Buscar por OS, orden externa, código, cliente, llave, nombre, estado, fecha..." style="flex:1; min-width:0; box-sizing:border-box; padding:7px 10px; font-size:12.5px; border:1.5px solid var(--line); border-radius:8px; background:#fff; color:var(--ink);">
+        <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:220px;">
+          <input type="search" id="buscadorTodasFallas" name="buscar-fallas-tabla" autocomplete="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" placeholder="🔍 Buscar por OS, orden externa, código, cliente, llave, nombre, estado, fecha..." style="flex:1; min-width:0; box-sizing:border-box; padding:4px 9px; font-size:12px; border:1.5px solid var(--line); border-radius:8px; background:#fff; color:var(--ink);">
           <span class="hint" id="contadorBusquedaTodas" style="margin:0; white-space:nowrap;"></span>
+        </div>
         </div>
 
         <table id="todasFallasTabla" style="width:100%; border-collapse:collapse; font-size:12.5px;">
@@ -2222,6 +2226,7 @@ document.getElementById('toggleExportBtn').onclick = () => {
 function mostrarModalTodas(){
   quitarResaltadoConsulta();
   document.getElementById('panelInferiorTitulo').textContent = 'Todas las fallas de la comuna';
+  document.getElementById('panelInferiorPista').style.display = '';
   document.getElementById('todasContenido').style.display = 'block';
   document.getElementById('historialContenido').style.display = 'none';
   document.getElementById('inspeccionContenido').style.display = 'none';
@@ -2238,6 +2243,7 @@ function cerrarModalTodas(){
 
 async function mostrarHistorial(tipoEntidad, gid, etiqueta){
   document.getElementById('panelInferiorTitulo').textContent = `Historial — ${etiqueta}`;
+  document.getElementById('panelInferiorPista').style.display = 'none';
   document.getElementById('todasContenido').style.display = 'none';
   document.getElementById('historialContenido').style.display = 'block';
   document.getElementById('inspeccionContenido').style.display = 'none';
@@ -3044,6 +3050,7 @@ async function abrirDetalleInspeccion(id){
   quitarResaltadoConsulta();
   document.getElementById('panelInferiorTitulo').textContent =
     `Inspección — ${resumen ? resumen.ito_nombre + ' · ' + fmtDiaInspeccion(resumen.fecha) : ''}`;
+  document.getElementById('panelInferiorPista').style.display = 'none';
   document.getElementById('todasContenido').style.display = 'none';
   document.getElementById('historialContenido').style.display = 'none';
   contenedor.style.display = 'block';
