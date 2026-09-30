@@ -1105,6 +1105,7 @@ function protegerClick(btn){
 function cerrarPanel(){
   document.getElementById('reportPanel').classList.remove('visible');
   quitarResaltadoConsulta();
+  quitarFallaHistorica();
 }
 window.cerrarPanel = cerrarPanel;
 
@@ -1469,7 +1470,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
           ${filasCatalogo}
         </div>
         <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
-        <input type="text" class="popup-input" id="ordenExternaInput" maxlength="40" placeholder="Orden Externa (opcional)" style="margin-top:6px; width:100%; box-sizing:border-box; font-size:12px; padding:4px 8px;">
+        <textarea class="popup-input" id="ordenExternaInput" rows="1" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Orden Externa (opcional)" onkeydown="if(event.key==='Enter') event.preventDefault();" style="margin-top:6px; width:100%; box-sizing:border-box; font-size:12px; padding:4px 8px; min-height:0; height:28px; resize:none; overflow:hidden;"></textarea>
       </div>
     </div>
     <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
@@ -1518,7 +1519,7 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
       ${filasCatalogo}
     </div>
     <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
-    <input type="text" class="popup-input" id="ordenExternaInput" maxlength="40" placeholder="Orden Externa (opcional)" style="margin-top:6px; width:100%; box-sizing:border-box; font-size:12px; padding:4px 8px;">
+    <textarea class="popup-input" id="ordenExternaInput" rows="1" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Orden Externa (opcional)" onkeydown="if(event.key==='Enter') event.preventDefault();" style="margin-top:6px; width:100%; box-sizing:border-box; font-size:12px; padding:4px 8px; min-height:0; height:28px; resize:none; overflow:hidden;"></textarea>
     <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
   `);
   panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
@@ -1671,6 +1672,7 @@ function formatearDuracion(fechaInicio){
 
 async function abrirPopupFalla(feat){
   const p = feat.properties;
+  if(!p._vistaHistorica) quitarFallaHistorica();
   // El comentario puede no venir incluido en la función fallas_geojson de la base de datos;
   // lo pedimos aparte directamente a la tabla "fallas" para asegurarnos de que siempre se vea.
   if(p.descripcion_otro === undefined && p.id){
@@ -1772,10 +1774,11 @@ async function abrirPopupFalla(feat){
     const minutosTranscurridos = (Date.now() - new Date(p.fecha_falla_real).getTime()) / 60000;
     puedeEliminar = minutosTranscurridos <= 15;
   }
+  if(p._vistaHistorica) puedeEliminar = false; // falla antigua: solo consulta
   const botonEliminarHtml = puedeEliminar
     ? `<button id="eliminarDesdeMapaBtn" title="Eliminar falla" style="flex-shrink:0; width:26px; height:26px; padding:0; border:1.5px solid var(--red); border-radius:6px; background:#fbe7e5; color:var(--red); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>`
     : '';
-  const puedeAsignarCamion = ['contratista','contratista2','admin'].includes(rolEfectivo()) && !p.cascada;
+  const puedeAsignarCamion = ['contratista','contratista2','admin'].includes(rolEfectivo()) && !p.cascada && !p._vistaHistorica;
   const asignarCamionHtml = puedeAsignarCamion ? `
     <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
       <div class="hint" style="margin-bottom:4px;">Asignar a camión:</div>
@@ -1967,10 +1970,44 @@ async function guardarComentarioFalla(fallaId, tipo, comentario){
 
 
 // Centrar el mapa en una falla desde la lista lateral
-function enfocarFalla(fallaId){
-  if(!ultimoFallasGeoJSON) return;
-  const feat = ultimoFallasGeoJSON.features.find(f => f.properties.id === fallaId);
-  if(!feat) return;
+// ---------- FALLA ANTIGUA (reparada hace más de 16 h): vista temporal desde "Todas las fallas" ----------
+// El mapa solo carga las fallas activas o reparadas recientemente. Al pinchar en la tabla una falla
+// que no está en el mapa, se pide solo esa falla, se dibuja de forma temporal y se abre su ficha
+// (solo lectura). Se quita al cerrar la ficha o al abrir otra falla.
+let capaFallaHistorica = null;
+function quitarFallaHistorica(){
+  if(capaFallaHistorica){ map.removeLayer(capaFallaHistorica); capaFallaHistorica = null; }
+}
+function dibujarFallaHistorica(feat){
+  quitarFallaHistorica();
+  const color = colorEstado[feat.properties.estado] || '#3a8a5c';
+  let capa;
+  if(feat.geometry.type === 'Point'){
+    const [lon, lat] = feat.geometry.coordinates;
+    capa = L.circleMarker([lat, lon], {
+      radius: 9, color:'#fff', weight:2, fillColor:color, fillOpacity:0.95, pane:'fallasPane'
+    });
+  } else {
+    capa = L.geoJSON(feat, { style:{ color, weight:6, opacity:0.9, dashArray:'6,4' }, pane:'fallasPane' });
+  }
+  capa.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirPopupFalla(feat); });
+  capaFallaHistorica = L.layerGroup([capa]).addTo(map);
+}
+
+async function enfocarFalla(fallaId){
+  let feat = ultimoFallasGeoJSON ? ultimoFallasGeoJSON.features.find(f => f.properties.id === fallaId) : null;
+  if(!feat){
+    try{
+      const geojson = await db.rpc('fallas_geojson', {p_id: fallaId});
+      feat = geojson && geojson.features && geojson.features[0];
+    }catch(e){
+      alert('No se pudo cargar la falla: ' + e.message + '\n\n¿Corriste el script ver_falla_antigua.sql en Supabase?');
+      return;
+    }
+    if(!feat){ alert('No se encontró la falla.'); return; }
+    feat.properties._vistaHistorica = true;
+    dibujarFallaHistorica(feat);
+  }
   if(feat.geometry.type === 'Point'){
     const [lon, lat] = feat.geometry.coordinates;
     map.flyTo([lat, lon], Math.max(map.getZoom(), 18));
@@ -1978,6 +2015,7 @@ function enfocarFalla(fallaId){
     const bounds = L.geoJSON(feat).getBounds();
     map.fitBounds(bounds, {padding:[50,50]});
   }
+  if(feat.properties._vistaHistorica) abrirPopupFalla(feat);
 }
 window.enfocarFalla = enfocarFalla;
 async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna){
