@@ -364,7 +364,7 @@
       <div class="bottom-panel-header">
         <div style="display:flex; align-items:baseline; gap:10px; min-width:0; flex-wrap:wrap;">
           <h2 style="margin:0; font-size:15px;" id="panelInferiorTitulo">Todas las fallas de la comuna</h2>
-          <span class="hint" id="panelInferiorPista" style="margin:0; font-size:11px;">Últimas 500 · clic en una fila para ubicarla en el mapa</span>
+          <span class="hint" id="panelInferiorPista" style="margin:0; font-size:11px;">Mostrando las más recientes · clic en una fila para ubicarla en el mapa</span>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
           <button class="mode-btn" id="toggleExportBtn" style="background:var(--primary); color:#fff; border-color:var(--primary); padding:3px 10px; font-size:11.5px; margin:0; border-radius:7px;">📥 Exportar</button>
@@ -410,6 +410,9 @@
             <tr><td colspan="12" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
           </tbody>
         </table>
+        <div id="cargarMasTodasWrap" style="display:none; text-align:center; padding:10px 0 4px;">
+          <button type="button" id="cargarMasTodasBtn" class="mode-btn" style="display:inline-flex; margin:0; padding:5px 14px; font-size:12px;" onclick="cargarMasTodasFallas()">Cargar 500 más</button>
+        </div>
         </div>
 
         <div id="historialContenido" style="display:none;">
@@ -2406,6 +2409,12 @@ window.mostrarHistorial = mostrarHistorial;
 })();
 
 let ultimosTodasFallas = [];
+// Paginación y búsqueda en toda la base (ver todas_fallas_paginacion_busqueda.sql)
+const PAGINA_TODAS_FALLAS = 500;
+let hayMasTodasFallas = false;        // ¿quedan fallas más antiguas sin cargar?
+let cargandoMasTodasFallas = false;
+let busquedaServidor = {activa:false, texto:'', filas:[], hayMas:false, pendiente:false};
+let temporizadorBusquedaServidor = null;
 
 function toDatetimeLocalValue(iso){
   const d = new Date(iso);
@@ -2418,8 +2427,10 @@ async function actualizarFechaFalla(fallaId, nuevoValor){
   try{
     const nuevaFechaIso = new Date(nuevoValor).toISOString();
     await db.update('fallas', `id=eq.${fallaId}`, {fecha_falla: nuevaFechaIso});
-    const item = ultimosTodasFallas.find(x => x.id === fallaId);
-    if(item) item.fecha_creacion = nuevaFechaIso;
+    [ultimosTodasFallas, busquedaServidor.filas].forEach(lista => {
+      const item = lista.find(x => x.id === fallaId);
+      if(item) item.fecha_creacion = nuevaFechaIso;
+    });
     renderTodasFallasTabla();
     cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
   }catch(e){ alert('No se pudo actualizar la fecha: ' + e.message); }
@@ -2451,8 +2462,9 @@ function actualizarChipsEstadoTodas(){
   if(!cont) return;
   const conteo = {};
   ESTADOS_TODAS_FALLAS.forEach(e => conteo[e] = 0);
-  ultimosTodasFallas.forEach(f => { if(f.estado in conteo) conteo[f.estado]++; });
-  const total = ultimosTodasFallas.length;
+  const fuenteConteo = (busquedaServidor.activa && textoBusquedaTodasFallas.trim()) ? busquedaServidor.filas : ultimosTodasFallas;
+  fuenteConteo.forEach(f => { if(f.estado in conteo) conteo[f.estado]++; });
+  const total = fuenteConteo.length;
   cont.querySelectorAll('.chip-estado').forEach(chip => {
     const e = chip.dataset.estado;
     const activo = e === 'todas' ? filtroEstadoTodasFallas.size === 0 : filtroEstadoTodasFallas.has(e);
@@ -2489,11 +2501,14 @@ async function cargarTodasFallas(){
   }
   tbody.innerHTML = '<tr><td colspan="12" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
-    const todas = await db.rpc('resumen_todas_fallas', {limite: 500});
+    const todas = await db.rpc('resumen_todas_fallas', {limite: PAGINA_TODAS_FALLAS, desplazamiento: 0});
     ultimosTodasFallas = todas || [];
+    hayMasTodasFallas = ultimosTodasFallas.length >= PAGINA_TODAS_FALLAS;
+    busquedaServidor = {activa:false, texto:'', filas:[], hayMas:false, pendiente:false};
     todasFallasCacheVigente = true;
     ordenTodasFallas = {campo: 'fecha_creacion', asc: false};
     renderTodasFallasTabla();
+    if(textoBusquedaTodasFallas.trim()) evaluarBusquedaServidor(); // había texto escrito: volver a buscar
   }catch(e){
     tbody.innerHTML = `<tr><td colspan="12" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
   }
@@ -2514,9 +2529,59 @@ function textoBusquedaDeFalla(f, esAdmin){
   ];
   return normalizarBusqueda(partes.filter(x => x !== null && x !== undefined && x !== '').join(' '));
 }
+// Mientras se escribe, se filtra al instante sobre lo cargado; si en la base hay más fallas que las
+// cargadas, pasado un instante se busca también en toda la base y esos resultados reemplazan a los locales.
+function evaluarBusquedaServidor(){
+  clearTimeout(temporizadorBusquedaServidor);
+  const texto = textoBusquedaTodasFallas.trim();
+  if(!texto || !hayMasTodasFallas){
+    busquedaServidor = {activa:false, texto:'', filas:[], hayMas:false, pendiente:false};
+    renderTodasFallasTabla();
+    return;
+  }
+  busquedaServidor = {activa:false, texto:'', filas:[], hayMas:false, pendiente:true};
+  renderTodasFallasTabla();
+  temporizadorBusquedaServidor = setTimeout(async () => {
+    try{
+      const filas = (await db.rpc('resumen_todas_fallas', {limite: PAGINA_TODAS_FALLAS, desplazamiento: 0, busqueda: texto})) || [];
+      if(textoBusquedaTodasFallas.trim() !== texto) return; // el texto cambió mientras se buscaba
+      busquedaServidor = {activa:true, texto, filas, hayMas: filas.length >= PAGINA_TODAS_FALLAS, pendiente:false};
+    }catch(e){
+      console.error('Error buscando en toda la base:', e);
+      busquedaServidor = {activa:false, texto:'', filas:[], hayMas:false, pendiente:false};
+    }
+    renderTodasFallasTabla();
+  }, 350);
+}
+
+async function cargarMasTodasFallas(){
+  if(cargandoMasTodasFallas) return;
+  cargandoMasTodasFallas = true;
+  const btn = document.getElementById('cargarMasTodasBtn');
+  if(btn){ btn.disabled = true; btn.textContent = 'Cargando...'; }
+  try{
+    const enServidor = busquedaServidor.activa && textoBusquedaTodasFallas.trim();
+    const destino = enServidor ? busquedaServidor.filas : ultimosTodasFallas;
+    const params = {limite: PAGINA_TODAS_FALLAS, desplazamiento: destino.length};
+    if(enServidor) params.busqueda = busquedaServidor.texto;
+    const nuevas = (await db.rpc('resumen_todas_fallas', params)) || [];
+    const ids = new Set(destino.map(f => f.id));
+    nuevas.forEach(f => { if(!ids.has(f.id)) destino.push(f); });
+    const hayMas = nuevas.length >= PAGINA_TODAS_FALLAS;
+    if(enServidor) busquedaServidor.hayMas = hayMas; else hayMasTodasFallas = hayMas;
+  }catch(e){
+    alert('No se pudieron cargar más fallas: ' + e.message);
+  }finally{
+    cargandoMasTodasFallas = false;
+    if(btn) btn.disabled = false;
+    renderTodasFallasTabla();
+  }
+}
+window.cargarMasTodasFallas = cargarMasTodasFallas;
+
 document.getElementById('buscadorTodasFallas').addEventListener('input', (e) => {
   textoBusquedaTodasFallas = e.target.value;
-  renderTodasFallasTabla();
+  evaluarBusquedaServidor();
 });
 
 function ordenarTodasFallas(campo){
@@ -2545,7 +2610,11 @@ function renderTodasFallasTabla(){
   const btnActivo = document.querySelector(`.sort-btn[onclick="ordenarTodasFallas('${ordenTodasFallas.campo}')"]`);
   if(btnActivo) btnActivo.classList.add('activo');
 
-  const datosOrdenados = [...ultimosTodasFallas].sort((a,b) => {
+  const terminos = normalizarBusqueda(textoBusquedaTodasFallas).split(' ').filter(Boolean);
+  const enServidor = busquedaServidor.activa && terminos.length > 0;
+  const fuente = enServidor ? busquedaServidor.filas : ultimosTodasFallas;
+
+  const datosOrdenados = [...fuente].sort((a,b) => {
     if(ordenTodasFallas.campo === 'ot'){
       const c = String(a.ot || '').localeCompare(String(b.ot || ''), 'es', {numeric: true});
       return ordenTodasFallas.asc ? c : -c;
@@ -2559,19 +2628,33 @@ function renderTodasFallasTabla(){
     ? datosOrdenados.filter(f => filtroEstadoTodasFallas.has(f.estado))
     : datosOrdenados;
 
-  // Buscador: todas las palabras escritas deben aparecer en alguna columna de la fila
-  const terminos = normalizarBusqueda(textoBusquedaTodasFallas).split(' ').filter(Boolean);
-  const datosFiltrados = terminos.length
+  // Buscador: todas las palabras escritas deben aparecer en alguna columna de la fila.
+  // Si ya se buscó en toda la base (enServidor), esas filas ya vienen filtradas.
+  const datosFiltrados = (terminos.length && !enServidor)
     ? porEstado.filter(f => { const h = textoBusquedaDeFalla(f, esAdmin); return terminos.every(t => h.includes(t)); })
     : porEstado;
 
   const contador = document.getElementById('contadorBusquedaTodas');
-  if(contador) contador.textContent = (terminos.length || filtroEstadoTodasFallas.size) ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
+  if(contador){
+    if(enServidor) contador.textContent = `${datosFiltrados.length}${busquedaServidor.hayMas ? '+' : ''} en toda la base`;
+    else if(busquedaServidor.pendiente && terminos.length) contador.textContent = 'Buscando en toda la base…';
+    else contador.textContent = (terminos.length || filtroEstadoTodasFallas.size) ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
+  }
+  const pista = document.getElementById('panelInferiorPista');
+  if(pista) pista.textContent = `${enServidor ? 'Resultados de la búsqueda' : 'Mostrando ' + ultimosTodasFallas.length + (hayMasTodasFallas ? ' (las más recientes)' : '')} · clic en una fila para ubicarla en el mapa`;
+  const wrapMas = document.getElementById('cargarMasTodasWrap');
+  const hayMasVisible = enServidor ? busquedaServidor.hayMas : (hayMasTodasFallas && !(busquedaServidor.pendiente && terminos.length));
+  if(wrapMas){
+    wrapMas.style.display = hayMasVisible ? 'block' : 'none';
+    const btnMas = document.getElementById('cargarMasTodasBtn');
+    if(btnMas && !cargandoMasTodasFallas) btnMas.textContent = `Cargar ${PAGINA_TODAS_FALLAS} más (mostrando ${fuente.length})`;
+  }
 
   if(!datosFiltrados.length){
+    const donde = enServidor ? 'en toda la base' : (hayMasTodasFallas ? '(entre las cargadas)' : '');
     const msj = terminos.length
-      ? 'No hay fallas que coincidan con la búsqueda (entre las últimas 500 cargadas).'
-      : 'No hay fallas con el estado seleccionado (entre las últimas 500 cargadas).';
+      ? `No hay fallas que coincidan con la búsqueda ${donde}.`
+      : `No hay fallas con el estado seleccionado ${donde}.`;
     tbody.innerHTML = `<tr><td colspan="12" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
     return;
   }
