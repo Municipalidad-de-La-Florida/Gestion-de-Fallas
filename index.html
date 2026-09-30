@@ -383,7 +383,8 @@
         <table id="todasFallasTabla" style="width:100%; border-collapse:collapse; font-size:12.5px;">
           <thead>
             <tr style="text-align:left; border-bottom:2px solid var(--line);">
-              <th style="padding:8px 10px;">OT</th>
+              <th style="padding:8px 10px;">OS</th>
+              <th style="padding:8px 10px;">Orden Externa</th>
               <th style="padding:8px 10px;">Fecha informada <button class="sort-btn" onclick="ordenarTodasFallas('fecha_creacion')" title="Ordenar por fecha informada">⇅</button></th>
               <th style="padding:8px 10px; display:none;" id="thFechaReal">Fecha real <button class="sort-btn" onclick="ordenarTodasFallas('creado_en')" title="Ordenar por fecha real">⇅</button></th>
               <th style="padding:8px 10px;">Reportado por</th>
@@ -397,7 +398,7 @@
             </tr>
           </thead>
           <tbody id="todasFallasTbody">
-            <tr><td colspan="11" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+            <tr><td colspan="12" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
           </tbody>
         </table>
         </div>
@@ -406,7 +407,7 @@
           <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
             <thead>
               <tr style="text-align:left; border-bottom:2px solid var(--line);">
-                <th style="padding:8px 10px;">OT</th>
+                <th style="padding:8px 10px;">OS</th>
                 <th style="padding:8px 10px;">Fecha / hora</th>
                 <th style="padding:8px 10px;">Evento</th>
                 <th style="padding:8px 10px;">Código</th>
@@ -830,7 +831,7 @@ async function cargarPerfilYIniciar(userId){
     document.getElementById('login').style.display = 'none';
     document.getElementById('app').style.display = 'grid';
     document.getElementById('userNombre').textContent = currentUser.nombre;
-    document.getElementById('userRol').textContent = currentUser.rol;
+    document.getElementById('userRol').textContent = rolVisible(currentUser.rol);
     if(currentUser.rol === 'admin'){
       // El selector "Ver como" y el botón ⚡ SIEMPRE se mantienen visibles para el
       // admin real, sin importar qué rol esté simulando en un momento dado.
@@ -850,6 +851,8 @@ async function cargarPerfilYIniciar(userId){
 }
 
 function rolEfectivo(){ return modoVista || currentUser.rol; }
+// Contratista2 se muestra como "contratista" en el recuadro de rol del perfil
+function rolVisible(r){ return r === 'contratista2' ? 'contratista' : r; }
 
 function actualizarVisibilidadPorRol(){
   const rol = rolEfectivo();
@@ -1466,6 +1469,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
           ${filasCatalogo}
         </div>
         <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
+        <input type="text" class="popup-input" id="ordenExternaInput" maxlength="40" placeholder="Orden Externa (opcional)" style="margin-top:6px; width:100%; box-sizing:border-box; font-size:12px; padding:4px 8px;">
       </div>
     </div>
     <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
@@ -1483,7 +1487,8 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     const desc = panel.querySelector('#otroDesc').value.trim();
     if(codigoSel === 'OTRO' && !desc){ alert('Describe la falla.'); return; }
     const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
-    await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom);
+    const ordenExterna = panel.querySelector('#ordenExternaInput').value.trim() || null;
+    await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna);
     cerrarPanel();
   };
   protegerClick(panel.querySelector('#confirmarBtn'));
@@ -1513,6 +1518,7 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
       ${filasCatalogo}
     </div>
     <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
+    <input type="text" class="popup-input" id="ordenExternaInput" maxlength="40" placeholder="Orden Externa (opcional)" style="margin-top:6px; width:100%; box-sizing:border-box; font-size:12px; padding:4px 8px;">
     <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
   `);
   panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
@@ -1523,8 +1529,9 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
     if(!codigoSel){ alert('Selecciona un código de falla.'); return; }
     const desc = panel.querySelector('#otroDesc').value.trim();
     if(codigoSel === 'OTRO' && !desc){ alert('Describe la falla.'); return; }
+    const ordenExterna = panel.querySelector('#ordenExternaInput').value.trim() || null;
     const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
-    await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null);
+    await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna);
     cerrarPanel();
   };
   protegerClick(panel.querySelector('#confirmarBtn'));
@@ -1782,7 +1789,7 @@ async function abrirPopupFalla(feat){
 
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   const tituloConEliminar = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">${botonEliminarHtml}<b>${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</b></div>
-    <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OT: <b>${p.ot || '—'}</b></div>`;
+    <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   let contenidoPanel;
   if(['contratista','contratista2','camion'].includes(rolEfectivo()) && !p.cascada && p.estado !== 'reparada'){
@@ -1973,13 +1980,14 @@ function enfocarFalla(fallaId){
   }
 }
 window.enfocarFalla = enfocarFalla;
-async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom){
+async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna){
   try{
     const fila = {
       tipo:'punto', ref_punto_gid:puntoGid, tipo_falla:tipoFalla,
       cardinalidad, descripcion_otro:descripcionOtro,
       cascada:false, creado_por: currentUser.id
     };
+    if(ordenExterna) fila.orden_externa = ordenExterna;
     if(fechaCustom) fila.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
     if(informadoPorSesion) fila.informado_por = informadoPorSesion;
     const inspeccionId = await obtenerInspeccionIdSesion();
@@ -1990,13 +1998,14 @@ async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtr
   }catch(e){ alert('Error al crear la falla: ' + e.message); }
 }
 
-async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripcionOtro){
+async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripcionOtro, ordenExterna){
   try{
     const filaLineaObj = {
       tipo:'linea', ref_circuito_gid:circuitoGid, tipo_falla:tipoFalla,
       descripcion_otro:descripcionOtro,
       cascada:false, creado_por: currentUser.id
     };
+    if(ordenExterna) filaLineaObj.orden_externa = ordenExterna;
     if(fechaCustom) filaLineaObj.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
     if(informadoPorSesion) filaLineaObj.informado_por = informadoPorSesion;
     const inspeccionId = await obtenerInspeccionIdSesion();
@@ -2013,6 +2022,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
           descripcion_otro:descripcionOtro,
           cascada:true, circuito_origen_id: fallaLinea.id, creado_por: currentUser.id
         };
+        if(ordenExterna) f.orden_externa = ordenExterna;
         if(fechaCustom) f.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
         if(informadoPorSesion) f.informado_por = informadoPorSesion;
         if(inspeccionId) f.inspeccion_id = inspeccionId;
@@ -2058,7 +2068,7 @@ function renderFallasList(){
       }
     }
     return `<div class="falla-item" style="cursor:pointer;" onclick="enfocarFalla('${f.id}')">
-      <div class="row1"><span><b>${tipoLabel}</b> · ${f.tipo_falla} <span class="hint">(OT ${f.ot || '—'})</span></span><span style="display:flex; align-items:center; gap:6px;"><span class="badge ${f.estado}">${f.estado.replace('_',' ')}</span>${botonEliminar}</span></div>
+      <div class="row1"><span><b>${tipoLabel}</b> · ${f.tipo_falla} <span class="hint">(OS ${f.ot || '—'})</span></span><span style="display:flex; align-items:center; gap:6px;"><span class="badge ${f.estado}">${f.estado.replace('_',' ')}</span>${botonEliminar}</span></div>
       <div class="meta">Reportado por ${nombreCreador} · ${fecha}</div>
       ${botonReparar}
     </div>`;
@@ -2428,7 +2438,7 @@ async function cargarTodasFallas(){
     renderTodasFallasTabla();
     return;
   }
-  tbody.innerHTML = '<tr><td colspan="11" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="12" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
     const todas = await db.rpc('resumen_todas_fallas', {limite: 500});
     ultimosTodasFallas = todas || [];
@@ -2436,7 +2446,7 @@ async function cargarTodasFallas(){
     ordenTodasFallas = {campo: 'fecha_creacion', asc: false};
     renderTodasFallasTabla();
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="11" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
   }
 }
 
@@ -2457,7 +2467,7 @@ function renderTodasFallasTabla(){
   actualizarChipsEstadoTodas();
 
   if(!ultimosTodasFallas.length){
-    tbody.innerHTML = '<tr><td colspan="11" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
     return;
   }
 
@@ -2477,7 +2487,7 @@ function renderTodasFallasTabla(){
     : datosOrdenados;
 
   if(!datosFiltrados.length){
-    tbody.innerHTML = '<tr><td colspan="11" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas con el estado seleccionado (entre las últimas 500 cargadas).</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas con el estado seleccionado (entre las últimas 500 cargadas).</td></tr>';
     return;
   }
 
@@ -2519,6 +2529,7 @@ function renderTodasFallasTabla(){
 
     return `<tr onclick="enfocarFalla('${f.id}')">
       <td class="mono">${f.ot || '—'}</td>
+      <td class="mono">${f.orden_externa ? escHtml(f.orden_externa) : '—'}</td>
       <td>${fechaCelda}</td>
       ${fechaReal}
       <td>${f.nombre_creador || '—'}</td>
@@ -2562,7 +2573,7 @@ async function exportarCsv(){
     if(!filas || !filas.length){ alert('No hay fallas en ese rango de fechas.'); return; }
 
     const esAdmin = rolEfectivo() === 'admin';
-    const encabezados = ['OT','Tipo','Código','Estado','Fecha reporte','Reportado por','N° Cliente',
+    const encabezados = ['OS','Orden Externa','Tipo','Código','Estado','Fecha reporte','Reportado por','N° Cliente',
       'N° Llave','N° Municipal','Tipo de poste','Puntos afectados',
       'Reparado por','Fecha reparación','Descripción reparación',
       'Dejado pendiente por','Fecha pendiente','Motivo pendiente'
@@ -2570,7 +2581,7 @@ async function exportarCsv(){
     const escapar = (v) => `"${String(v ?? '').replace(/\r?\n/g, ' | ').replace(/"/g,'""')}"`;
     const filasCsv = filas.map(f => {
       const base = [
-        f.ot || '', f.tipo, f.tipo_falla, f.estado,
+        f.ot || '', f.orden_externa || '', f.tipo, f.tipo_falla, f.estado,
         new Date(f.fecha_creacion).toLocaleString('es-CL'),
         f.nombre_creador || '', f.n_cliente || '',
         f.llave ?? '', f.nro_mun ?? '', f.simb_poste || '',
@@ -3002,7 +3013,7 @@ function renderDetalleInspeccion(det){
     <table id="inspeccionTabla" style="width:100%; border-collapse:collapse;">
       <thead>
         <tr style="text-align:left; border-bottom:2px solid var(--line);">
-          <th style="padding:8px 10px;">OT</th>
+          <th style="padding:8px 10px;">OS</th>
           <th style="padding:8px 10px;">Falla</th>
           <th style="padding:8px 10px;">Ubicación</th>
           <th style="padding:8px 10px;">Lo que se notificó</th>
@@ -3035,7 +3046,7 @@ function dibujarFallasInspeccionEnMapa(fallas){
   fallas.forEach(f => {
     if(!f.geometry) return;
     const color = colorEstado[f.estado] || '#2563a8';
-    const tip = `OT ${f.ot || '—'} · ${f.tipo_falla} · ${String(f.estado).replace('_',' ')}`;
+    const tip = `OS ${f.ot || '—'} · ${f.tipo_falla} · ${String(f.estado).replace('_',' ')}`;
     let capa;
     if(f.geometry.type === 'Point'){
       const [lon, lat] = f.geometry.coordinates;
@@ -3060,7 +3071,7 @@ function dibujarFallasInspeccionEnMapa(fallas){
 function htmlPopupFallaInspeccion(f){
   return `<div class="insp-popup" style="font-size:12px; line-height:1.4;">
     <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-      <b class="mono">OT ${escHtml(f.ot || '—')}</b>
+      <b class="mono">OS ${escHtml(f.ot || '—')}</b>
       <span class="badge ${escHtml(f.estado)}">${escHtml(String(f.estado).replace('_',' '))}</span>
     </div>
     <div style="margin-top:4px;"><b>${escHtml(f.tipo_falla)}</b> · ${escHtml(descripcionCodigoFalla(f))}</div>
@@ -3681,9 +3692,9 @@ async function generarPdfInspeccion(){
       pdf.setFont('helvetica', 'normal');
       pdf.autoTable({
         startY: 19, margin: {left: margen, right: margen},
-        head: [['N.º', 'OT', 'Falla', 'Ubicación', 'Lo que se notificó', 'Estado', 'Cierre']],
+        head: [['N.º', 'OS / Ord. Ext.', 'Falla', 'Ubicación', 'Lo que se notificó', 'Estado', 'Cierre']],
         body: fallas.map((f, i) => [
-          i + 1, f.ot || '-',
+          i + 1, (f.ot || '-') + (f.orden_externa ? `\nExt. ${f.orden_externa}` : ''),
           `${f.tipo_falla}\n${descripcionCodigoFalla(f)}`,
           txtUbic(f), txtNotif(f),
           String(f.estado).replace('_', ' '),
@@ -3691,7 +3702,7 @@ async function generarPdfInspeccion(){
         ]),
         styles: {fontSize: 7.5, cellPadding: 1.6, textColor: TINTA, lineColor: [219, 226, 220], lineWidth: 0.1, valign: 'top'},
         headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'},
-        columnStyles: {0: {cellWidth: 9, halign: 'center'}, 1: {cellWidth: 18}, 2: {cellWidth: 40}, 3: {cellWidth: 45}, 4: {cellWidth: 58}, 5: {cellWidth: 20}, 6: {cellWidth: 83}},
+        columnStyles: {0: {cellWidth: 9, halign: 'center'}, 1: {cellWidth: 24}, 2: {cellWidth: 40}, 3: {cellWidth: 45}, 4: {cellWidth: 58}, 5: {cellWidth: 20}, 6: {cellWidth: 77}},
         didParseCell: (h) => {
           if(h.section === 'body' && h.column.index === 5){
             const est = fallas[h.row.index] && fallas[h.row.index].estado;
@@ -4312,7 +4323,7 @@ async function guardarUsuario(id, nombre, rol){
     if(id === currentUser.id){
       currentUser.nombre = nombre; currentUser.rol = rol;
       document.getElementById('userNombre').textContent = nombre;
-      document.getElementById('userRol').textContent = rol;
+      document.getElementById('userRol').textContent = rolVisible(rol);
     }
   }catch(e){ alert('No se pudo guardar: ' + e.message); }
 }
