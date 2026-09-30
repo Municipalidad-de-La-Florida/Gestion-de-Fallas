@@ -157,6 +157,10 @@
   .sort-btn{border:none; background:none; cursor:pointer; font-size:12px; color:var(--ink-soft); padding:0 2px; vertical-align:middle;}
   .sort-btn:hover{color:var(--primary);}
   .sort-btn.activo{color:var(--primary); font-weight:700;}
+  .oe-toggle{display:inline-flex; border:1.5px solid var(--primary); border-radius:7px; overflow:hidden; flex-shrink:0;}
+  .oe-toggle button{border:none; padding:4px 11px; font-size:12px; font-weight:700; cursor:pointer; background:#fff; color:var(--primary);}
+  .oe-toggle button + button{border-left:1.5px solid var(--primary);}
+  .oe-toggle button.sel{background:var(--primary); color:#fff;}
   .chip-estado{display:inline-flex; align-items:center; gap:6px; padding:2px 9px; border:1.5px solid var(--line); border-radius:20px; background:#fff; cursor:pointer; font-size:11.5px; font-weight:600; color:var(--ink-soft);}
   .chip-estado:hover{border-color:var(--primary);}
   .chip-estado.activo{border-color:var(--primary); background:#eef5f1; color:var(--primary);}
@@ -1452,6 +1456,45 @@ const CATALOGO_FALLAS_PUNTO = [
   {c:'OTRO', d:'Otro (describe la falla)'},
 ];
 
+// ---------- ORDEN EXTERNA: empresa (Sinec / Elecnor) + número -> se guarda como S-XXXX o E-XXXX ----------
+function htmlOrdenExterna(){
+  return `
+    <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+      <div class="oe-toggle" id="oeEmpresa">
+        <button type="button" data-e="S">Sinec</button><button type="button" data-e="E">Elecnor</button>
+      </div>
+      <textarea class="popup-input" id="ordenExternaInput" rows="1" maxlength="38" autocomplete="off" spellcheck="false" placeholder="Orden Externa (opcional)" onkeydown="if(event.key==='Enter') event.preventDefault();" style="flex:1; min-width:0; margin:0; box-sizing:border-box; font-size:12px; padding:4px 8px; min-height:0; height:28px; resize:none; overflow:hidden;"></textarea>
+    </div>
+    <div class="hint" id="oeVistaPrevia" style="margin-top:3px; min-height:16px;"></div>`;
+}
+function activarOrdenExterna(panel){
+  const botones = panel.querySelectorAll('#oeEmpresa button');
+  const input = panel.querySelector('#ordenExternaInput');
+  const preview = panel.querySelector('#oeVistaPrevia');
+  const actualizar = () => {
+    const sel = panel.querySelector('#oeEmpresa button.sel');
+    const num = input.value.trim().replace(/\s+/g, '');
+    preview.style.color = '';
+    preview.innerHTML = (sel && num) ? `Se guardará como: <b>${sel.dataset.e}-${escHtml(num)}</b>` : '';
+  };
+  botones.forEach(b => b.onclick = () => {
+    const yaSel = b.classList.contains('sel');
+    botones.forEach(x => x.classList.remove('sel'));
+    if(!yaSel) b.classList.add('sel'); // un segundo clic lo quita
+    actualizar();
+  });
+  input.addEventListener('input', actualizar);
+}
+// Devuelve {valor, error}. Sin empresa ni número: valor null (es opcional). Con solo uno de los dos: error.
+function leerOrdenExterna(panel){
+  const sel = panel.querySelector('#oeEmpresa button.sel');
+  const num = panel.querySelector('#ordenExternaInput').value.trim().replace(/\s+/g, '');
+  if(!sel && !num) return {valor: null, error: null};
+  if(num && !sel) return {valor: null, error: 'Elige la empresa de la Orden Externa (Sinec o Elecnor).'};
+  if(sel && !num) return {valor: null, error: 'Escribe el número de la Orden Externa, o quita la empresa seleccionada.'};
+  return {valor: sel.dataset.e + '-' + num, error: null};
+}
+
 function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
   let codigoSel = null, cardSel = null;
   const catalogo = esMonoposte
@@ -1482,7 +1525,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
           ${filasCatalogo}
         </div>
         <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
-        <textarea class="popup-input" id="ordenExternaInput" rows="1" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Orden Externa (opcional)" onkeydown="if(event.key==='Enter') event.preventDefault();" style="margin-top:6px; width:100%; box-sizing:border-box; font-size:12px; padding:4px 8px; min-height:0; height:28px; resize:none; overflow:hidden;"></textarea>
+        ${htmlOrdenExterna()}
       </div>
     </div>
     <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
@@ -1500,10 +1543,13 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     const desc = panel.querySelector('#otroDesc').value.trim();
     if(codigoSel === 'OTRO' && !desc){ alert('Describe la falla.'); return; }
     const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
-    const ordenExterna = panel.querySelector('#ordenExternaInput').value.trim() || null;
+    const oe = leerOrdenExterna(panel);
+    if(oe.error){ alert(oe.error); return; }
+    const ordenExterna = oe.valor;
     await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna);
     cerrarPanel();
   };
+  activarOrdenExterna(panel);
   protegerClick(panel.querySelector('#confirmarBtn'));
 }
 
@@ -1531,7 +1577,7 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
       ${filasCatalogo}
     </div>
     <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
-    <textarea class="popup-input" id="ordenExternaInput" rows="1" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Orden Externa (opcional)" onkeydown="if(event.key==='Enter') event.preventDefault();" style="margin-top:6px; width:100%; box-sizing:border-box; font-size:12px; padding:4px 8px; min-height:0; height:28px; resize:none; overflow:hidden;"></textarea>
+    ${htmlOrdenExterna()}
     <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
   `);
   panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
@@ -1542,11 +1588,14 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
     if(!codigoSel){ alert('Selecciona un código de falla.'); return; }
     const desc = panel.querySelector('#otroDesc').value.trim();
     if(codigoSel === 'OTRO' && !desc){ alert('Describe la falla.'); return; }
-    const ordenExterna = panel.querySelector('#ordenExternaInput').value.trim() || null;
+    const oe = leerOrdenExterna(panel);
+    if(oe.error){ alert(oe.error); return; }
+    const ordenExterna = oe.valor;
     const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
     await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna);
     cerrarPanel();
   };
+  activarOrdenExterna(panel);
   protegerClick(panel.querySelector('#confirmarBtn'));
 }
 
