@@ -1778,7 +1778,11 @@ async function abrirPopupFalla(feat){
       </div>
     `;
   })() : '';
+  const infoLlaveMun = p.tipo === 'punto'
+    ? `<div class="hint" style="margin-top:6px;">N.° de Llave: <b>${escHtml(p.llave ?? '—')}</b> · N.° Municipal: <b>${escHtml(p.nro_mun ?? '—')}</b></div>`
+    : '';
   const infoGeneral = `
+    ${infoLlaveMun}
     <div class="hint" style="margin-top:6px;">Fecha y hora: <b>${fechaFalla}</b></div>
     <div class="hint">Duración: <b>${duracion}</b></div>
     <div class="hint">Inspector: <b>${p.nombre_creador || '—'}</b></div>
@@ -2136,7 +2140,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
 // ---------- LISTA Y REPARACIÓN (contratista) ----------
 async function cargarFallasDelArea(){
   try{
-    const query = 'select=id,ot,tipo,tipo_falla,estado,cascada,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre)'
+    const query = 'select=id,ot,tipo,tipo_falla,estado,cascada,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),puntos_luminarios(llave,nro_mun)'
       + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=20';
     fallasEnArea = await db.select('fallas', query);
     renderFallasList();
@@ -2168,6 +2172,7 @@ function renderFallasList(){
     }
     return `<div class="falla-item" style="cursor:pointer;" onclick="enfocarFalla('${f.id}')">
       <div class="row1"><span><b>${tipoLabel}</b> · ${f.tipo_falla} <span class="hint">(OS ${f.ot || '—'})</span></span><span style="display:flex; align-items:center; gap:6px;"><span class="badge ${f.estado}">${f.estado.replace('_',' ')}</span>${botonEliminar}</span></div>
+      ${f.tipo === 'punto' && f.puntos_luminarios ? `<div class="meta">Llave <b>${escHtml(f.puntos_luminarios.llave ?? '—')}</b> · N.° Mun. <b>${escHtml(f.puntos_luminarios.nro_mun ?? '—')}</b></div>` : ''}
       <div class="meta">Reportado por ${nombreCreador} · ${fecha}</div>
       ${botonReparar}
     </div>`;
@@ -2192,6 +2197,7 @@ function abrirFormularioReparacion(fallaId){
   const panel = mostrarPanel(`
     <b>Registrar reparación</b>
     ${f ? `<div class="hint" style="margin-top:2px;">${f.tipo === 'punto' ? 'Punto lumínico' : 'Circuito'} · Código ${f.tipo_falla}</div>` : ''}
+    ${(f && f.tipo === 'punto' && f.puntos_luminarios) ? `<div class="hint" style="margin-top:2px;">N.° de Llave: <b>${escHtml(f.puntos_luminarios.llave ?? '—')}</b> · N.° Municipal: <b>${escHtml(f.puntos_luminarios.nro_mun ?? '—')}</b></div>` : ''}
     ${infoComentario}
     <textarea class="popup-input" id="descReparacion" placeholder="Describe la reparación realizada" style="margin-top:10px; min-height:80px;"></textarea>
     <button class="popup-btn" id="confirmarReparacionBtn" style="margin-top:10px;">Confirmar reparación</button>
