@@ -1429,7 +1429,9 @@ async function verificarDuplicadoYAbrir(campo, gid, siguientePaso){
     // No confiamos solo en la columna "estado" (puede haber quedado desactualizada en fallas
     // reparadas antes de esta corrección); revisamos si existe una reparación registrada.
     const existentes = await db.select('fallas', `${campo}=eq.${gid}&select=id,tipo_falla,estado,reparaciones(id)`);
-    const activas = (existentes || []).filter(f => !(f.reparaciones && f.reparaciones.length));
+    // Los puntos creados en cascada por una falla de circuito se cierran cambiando solo su "estado"
+    // a reparada (no tienen fila propia en "reparaciones"), así que también se descartan por estado.
+    const activas = (existentes || []).filter(f => f.estado !== 'reparada' && !(f.reparaciones && f.reparaciones.length));
     if(activas.length){
       const f = activas[0];
       mostrarPanel(`<b>Ya existe una falla activa aquí</b><div class="hint">Código ${f.tipo_falla} · estado: ${f.estado.replace('_',' ')}.<br>No se puede duplicar el reporte; si crees que es un error, revísala en la lista lateral.</div>`);
