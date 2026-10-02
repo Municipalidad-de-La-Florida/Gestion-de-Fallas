@@ -464,6 +464,7 @@
           <div id="fechaInspeccionBox" style="display:none; margin-bottom:10px;">
             <div class="hint">Fecha de la inspección (aplica a todas las fallas que ingreses ahora):</div>
             <input type="date" id="fechaInspeccionInput" class="popup-input" style="width:100%;">
+            <div id="avisoInspeccionExistente" class="hint" style="display:none; margin-top:6px; padding:6px 8px; background:#eef4fb; border-left:3px solid #2563a8; border-radius:4px; line-height:1.4;"></div>
             <button class="popup-btn" id="comenzarInspeccionBtn" style="margin-top:6px; width:100%; border:1.5px solid #000; background:#2563a8;">Comenzar</button>
             <button class="popup-btn" id="inspeccionSinFallasBtn" style="margin-top:6px; width:100%; border:1.5px solid #000; background:#fff; color:var(--ink);">Registrar inspección sin fallas</button>
             <button class="popup-btn" id="cancelarInspeccionBtn" style="margin-top:6px; width:100%; border:1.5px solid #000; background:#fff; color:var(--ink);">Cancelar</button>
@@ -861,6 +862,7 @@ async function cargarPerfilYIniciar(userId){
     }
     actualizarVisibilidadPorRol();
     initMap();
+    restaurarModoInspeccion();   // retoma una inspección que quedó en curso (si sigue vigente)
   }catch(e){
     document.getElementById('loginError').textContent = 'Error cargando tu perfil: ' + e.message;
   }
@@ -914,6 +916,7 @@ document.getElementById('btnInformarInspeccion').onclick = async () => {
   inputFechaInsp.max = hoy; // no se puede inspeccionar en una fecha futura
   inputFechaInsp.value = hoy;
   await mostrarSelectorInformarPorOtro();
+  actualizarAvisoInspeccionExistente();
 };
 
 async function mostrarSelectorInformarPorOtro(){
@@ -933,7 +936,9 @@ async function mostrarSelectorInformarPorOtro(){
 // y también sirve como valor inicial para cuando se confirme "Comenzar" en Inspección)
 document.getElementById('informarPorOtroSelect').addEventListener('change', (e) => {
   informadoPorSesion = e.target.value || null;
+  actualizarAvisoInspeccionExistente();
 });
+document.getElementById('fechaInspeccionInput').addEventListener('change', () => actualizarAvisoInspeccionExistente());
 
 let listaItosCargada = false;
 async function cargarListaItos(){
@@ -952,23 +957,110 @@ async function cargarListaItos(){
   }catch(e){ console.error('Error cargando lista de ITOs:', e); }
 }
 
-document.getElementById('comenzarInspeccionBtn').onclick = () => {
+// ---------- CONTINUAR UNA INSPECCIÓN (recordar el modo y retomar una ya existente) ----------
+// El modo "Informar inspección" (fecha + ITO) se recuerda en este navegador para que, si cambias de
+// ventana o se recarga la página, la app vuelva sola al mismo modo. Se borra al salir con "Listo".
+const CLAVE_SESION_INSPECCION = 'inspeccion_sesion_v1';
+const DIAS_MAX_CONTINUAR_INSPECCION = 3;   // misma regla que en la base (admin sin límite)
+function guardarSesionInspeccion(){
+  try{
+    if(!currentUser || modoIngreso !== 'inspeccion' || !fechaInspeccionSesion) return;
+    localStorage.setItem(CLAVE_SESION_INSPECCION, JSON.stringify({
+      uid: currentUser.id, fecha: fechaInspeccionSesion, informadoPor: informadoPorSesion, guardado: Date.now()
+    }));
+  }catch(e){}
+}
+function borrarSesionInspeccion(){
+  try{ localStorage.removeItem(CLAVE_SESION_INSPECCION); }catch(e){}
+}
+
+function diasDesdeFechaInspeccion(fecha){
+  return Math.round((fechaChileLocal(hoyChileStr(), 12, 0, 0) - fechaChileLocal(String(fecha).slice(0, 10), 12, 0, 0)) / 86400000);
+}
+
+// Entra al modo "Informar inspección" para esa fecha / ITO (informadoPor = null → el propio usuario).
+function activarModoInspeccion(fecha, informadoPor, retomada){
+  modoIngreso = 'inspeccion';
+  fechaInspeccionSesion = fecha;
+  informadoPorSesion = informadoPor || null;
+  const select = document.getElementById('informarPorOtroSelect');
+  select.value = informadoPorSesion || '';
+  document.getElementById('menuInformarInicial').style.display = 'none';
+  const submenu = document.getElementById('submenuInformar');
+  if(submenu) submenu.style.display = 'none';
+  document.getElementById('modoActivoBox').style.display = 'block';
+  document.getElementById('fechaInspeccionBox').style.display = 'none';
+  const fechaLegible = fechaChileLocal(fecha, 0, 0, 0).toLocaleDateString('es-CL');
+  const nombreOtro = (informadoPorSesion && select.value === informadoPorSesion) ? select.selectedOptions[0].textContent : null;
+  const textoOtro = nombreOtro ? ` — a nombre de: ${nombreOtro}` : '';
+  document.getElementById('modoActivoTexto').textContent =
+    `Modo: Informar inspección — fecha: ${fechaLegible}${textoOtro}${retomada ? ' (inspección retomada)' : ''}. Haz clic en un punto o circuito.`;
+  document.getElementById('btnListoModo').style.display = 'block';
+  guardarSesionInspeccion();
+  renderFallasOnMap(); // redibuja para que las fallas reparadas dejen pasar el clic hacia postes/circuitos
+}
+
+// Al abrir la app: si había una inspección en curso (y sigue vigente), la retoma.
+async function restaurarModoInspeccion(){
+  try{
+    const raw = localStorage.getItem(CLAVE_SESION_INSPECCION);
+    if(!raw) return;
+    const s = JSON.parse(raw);
+    const rol = rolEfectivo();
+    if(!s || !s.fecha || s.uid !== currentUser.id || !['admin','ito','ito2'].includes(rol)) return;
+    const vencida = (Date.now() - (s.guardado || 0)) > 24 * 3600 * 1000
+      || s.fecha > hoyChileStr()
+      || (rol !== 'admin' && diasDesdeFechaInspeccion(s.fecha) > DIAS_MAX_CONTINUAR_INSPECCION);
+    if(vencida){ borrarSesionInspeccion(); return; }
+    await mostrarSelectorInformarPorOtro();   // carga la lista de ITOs (admin / ito2)
+    activarModoInspeccion(s.fecha, s.informadoPor, true);
+  }catch(e){ console.error('No se pudo retomar la inspección en curso:', e); }
+}
+
+// Aviso al elegir fecha: si ya existe una inspección de ese ITO ese día, se avisa que se continuará esa.
+let avisoInspReq = 0;
+async function actualizarAvisoInspeccionExistente(){
+  const aviso = document.getElementById('avisoInspeccionExistente');
+  const btn = document.getElementById('comenzarInspeccionBtn');
+  if(!aviso || !btn) return;
+  const fecha = document.getElementById('fechaInspeccionInput').value;
+  const ito = document.getElementById('informarPorOtroSelect').value || null;
+  const req = ++avisoInspReq;
+  aviso.style.display = 'none';
+  btn.textContent = 'Comenzar';
+  if(!fecha) return;
+  try{
+    const r = await db.rpc('inspeccion_existente', {p_fecha: fecha, p_ito: ito});
+    if(req !== avisoInspReq || !r || !r.existe) return;
+    const fechaLegible = fechaChileLocal(fecha, 12, 0, 0).toLocaleDateString('es-CL');
+    const n = r.fallas || 0;
+    const detalle = n === 0 ? 'registrada sin fallas' : `con <b>${n}</b> falla${n === 1 ? '' : 's'}`;
+    if(r.permitido){
+      aviso.innerHTML = `Ya existe una inspección del <b>${fechaLegible}</b> de <b>${escHtml(r.ito_nombre || '—')}</b>, ${detalle}. Al continuar seguirás ingresando fallas en esa misma inspección.`;
+      btn.textContent = 'Continuar inspección';
+    } else {
+      aviso.innerHTML = `Ya existe una inspección del <b>${fechaLegible}</b> de <b>${escHtml(r.ito_nombre || '—')}</b>, ${detalle}, pero solo se pueden continuar inspecciones de los últimos ${DIAS_MAX_CONTINUAR_INSPECCION} días.`;
+    }
+    aviso.style.display = 'block';
+  }catch(e){ /* si la función aún no existe en la base, simplemente no se muestra el aviso */ }
+}
+
+document.getElementById('comenzarInspeccionBtn').onclick = async () => {
   const fecha = document.getElementById('fechaInspeccionInput').value;
   if(!fecha){ alert('Selecciona una fecha.'); return; }
   if(fecha > hoyChileStr()){ alert('La fecha de la inspección no puede ser futura.'); return; }
-  modoIngreso = 'inspeccion';
-  fechaInspeccionSesion = fecha;
-  informadoPorSesion = document.getElementById('informarPorOtroSelect').value || null;
-  document.getElementById('fechaInspeccionBox').style.display = 'none';
-  const fechaLegible = fechaChileLocal(fecha, 0, 0, 0).toLocaleDateString('es-CL');
-  const nombreOtro = informadoPorSesion ? document.getElementById('informarPorOtroSelect').selectedOptions[0].textContent : null;
-  const textoOtro = nombreOtro ? ` — a nombre de: ${nombreOtro}` : '';
-  document.getElementById('modoActivoTexto').textContent = `Modo: Informar inspección — fecha: ${fechaLegible}${textoOtro}. Haz clic en un punto o circuito.`;
-  document.getElementById('btnListoModo').style.display = 'block';
-  renderFallasOnMap(); // redibuja para que las fallas reparadas dejen pasar el clic hacia postes/circuitos
+  const ito = document.getElementById('informarPorOtroSelect').value || null;
+  try{
+    const r = await db.rpc('inspeccion_existente', {p_fecha: fecha, p_ito: ito});
+    if(r && r.existe && r.permitido === false){
+      alert(`Esa inspección ya existe y solo se pueden continuar inspecciones de los últimos ${DIAS_MAX_CONTINUAR_INSPECCION} días.`);
+      return;
+    }
+  }catch(e){ /* sin la función en la base, se comporta como antes */ }
+  activarModoInspeccion(fecha, ito, false);
 };
 
-document.getElementById('btnListoModo').onclick = () => salirModoInformar();
+document.getElementById('btnListoModo').onclick = () => salirModoInformar(true);
 // Deja constancia de una inspección en la que no se encontró ninguna falla
 // (usa la fecha y el ITO elegidos arriba, sin pasar por "Comenzar").
 document.getElementById('inspeccionSinFallasBtn').onclick = async () => {
@@ -986,7 +1078,7 @@ document.getElementById('inspeccionSinFallasBtn').onclick = async () => {
     await db.rpc('obtener_o_crear_inspeccion', { p_fecha: fecha, p_ito: ito });
     alert('Inspección registrada sin fallas.');
     document.getElementById('fechaInspeccionBox').style.display = 'none';
-    salirModoInformar();
+    salirModoInformar(true);
   }catch(e){
     alert('No se pudo registrar la inspección: ' + e.message);
   }finally{
@@ -997,10 +1089,13 @@ document.getElementById('inspeccionSinFallasBtn').onclick = async () => {
 // Permite arrepentirse mientras aún se está eligiendo la fecha (antes de "Comenzar").
 document.getElementById('cancelarInspeccionBtn').onclick = () => {
   document.getElementById('fechaInspeccionBox').style.display = 'none';
-  salirModoInformar();
+  salirModoInformar(true);
 };
 
-function salirModoInformar(){
+// limpiarGuardado = true cuando el usuario sale a propósito (Listo / Cancelar); si no, el modo
+// recordado se conserva para poder retomarlo (p. ej. al cambiar de "ver como" o recargar).
+function salirModoInformar(limpiarGuardado = false){
+  if(limpiarGuardado) borrarSesionInspeccion();
   modoIngreso = null;
   fechaInspeccionSesion = null;
   informadoPorSesion = null;
@@ -1372,7 +1467,8 @@ let informadoPorSesion = null;
 let inspeccionCache = { clave: null, id: null };
 async function obtenerInspeccionIdSesion(){
   if(modoIngreso !== 'inspeccion' || !fechaInspeccionSesion) return null;
-  const clave = fechaInspeccionSesion + '|' + (informadoPorSesion || '');
+  guardarSesionInspeccion();   // renueva la vigencia del modo recordado mientras se sigue ingresando
+  const clave =fechaInspeccionSesion + '|' + (informadoPorSesion || '');
   if(inspeccionCache.clave === clave && inspeccionCache.id) return inspeccionCache.id;
   const id = await db.rpc('obtener_o_crear_inspeccion', { p_fecha: fechaInspeccionSesion, p_ito: informadoPorSesion });
   inspeccionCache = { clave, id };
@@ -2184,9 +2280,34 @@ function renderFallasList(){
 async function eliminarFallaPropia(fallaId){
   if(!confirm('¿Eliminar esta falla? Esta acción no se puede deshacer.')) return;
   try{
+    // Recordamos a qué inspección pertenecía, para preguntar qué hacer si era la última falla.
+    let inspId = null;
+    try{
+      const filaInsp = await db.select('fallas', `id=eq.${fallaId}&select=inspeccion_id`);
+      inspId = (filaInsp && filaInsp[0]) ? filaInsp[0].inspeccion_id : null;
+    }catch(e){}
     await db.delete('fallas', `id=eq.${fallaId}`);
     cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+    if(inspId) await preguntarSiInspeccionQuedoVacia(inspId);
   }catch(e){ alert('No se pudo eliminar: ' + e.message); }
+}
+
+// Si al eliminar una falla la inspección quedó sin ninguna, se pregunta si se deja registrada
+// "sin fallas" (cuenta en la cobertura) o se quita.
+async function preguntarSiInspeccionQuedoVacia(inspId){
+  try{
+    const info = await db.rpc('inspeccion_info', {p_id: inspId});
+    if(!info || info.fallas !== 0) return;
+    const fechaLegible = fechaChileLocal(String(info.fecha).slice(0, 10), 12, 0, 0).toLocaleDateString('es-CL');
+    const dejarla = confirm(
+      `Eliminaste la última falla de la inspección del ${fechaLegible} de ${info.ito_nombre}.\n\n` +
+      `ACEPTAR = dejarla registrada como inspección SIN fallas.\n` +
+      `CANCELAR = quitar la inspección (como si no se hubiera hecho).`
+    );
+    if(dejarla) return;
+    await db.rpc('eliminar_inspeccion_vacia', {p_id: inspId});
+    if(inspeccionCache.id === inspId) inspeccionCache = { clave: null, id: null };
+  }catch(e){ console.error('No se pudo revisar la inspección vacía:', e); }
 }
 window.eliminarFallaPropia = eliminarFallaPropia;
 
@@ -3227,12 +3348,16 @@ function renderDetalleInspeccion(det){
       <div><div class="hint" style="margin:0;">Ingresada por</div><b>${escHtml(insp.ingresado_por || '—')}</b> <span class="hint">· ${escHtml(fmtFechaHoraChile(insp.creado_en))}</span></div>
       <div><div class="hint" style="margin:0;">Fallas</div><b>${fallas.length}</b> <span class="hint">· ${puntos} punto${puntos===1?'':'s'} afectado${puntos===1?'':'s'}</span></div>
       <div style="align-self:flex-end;"><div class="insp-pills" style="margin:0;">${pillsEstadoHtml({reparadas:cuenta.reparada, pendientes:cuenta.pendiente, reiteradas:cuenta.reiterada, reportadas:cuenta.reportada})}</div></div>
-      <div style="margin-left:auto; align-self:flex-end;"><button class="popup-btn" id="inspPdfBtn" style="width:auto; margin:0; padding:7px 14px;">📄 Exportar PDF</button></div>
+      <div style="margin-left:auto; align-self:flex-end; display:flex; gap:8px;">
+        ${puedeContinuarInspeccion(insp) ? '<button class="popup-btn" id="inspContinuarBtn" style="width:auto; margin:0; padding:7px 14px; background:#2563a8; border:1.5px solid #000;">✏️ Continuar esta inspección</button>' : ''}
+        <button class="popup-btn" id="inspPdfBtn" style="width:auto; margin:0; padding:7px 14px;">📄 Exportar PDF</button>
+      </div>
     </div>`;
 
   if(!fallas.length){
     cont.innerHTML = encabezado + '<div class="empty-state">Esta inspección se registró sin fallas.</div>';
     enlazarPdfInspeccion();
+    enlazarContinuarInspeccion(insp);
     return;
   }
   cont.innerHTML = encabezado + `
@@ -3263,6 +3388,30 @@ function renderDetalleInspeccion(det){
     tr.onclick = () => enfocarFallaInspeccion(tr.dataset.id);
   });
   enlazarPdfInspeccion();
+  enlazarContinuarInspeccion(insp);
+}
+
+// "Continuar esta inspección": solo el ITO dueño (o admin / ito2 para cualquiera), de los últimos
+// 3 días (admin sin límite). La base de datos aplica la misma regla.
+function puedeContinuarInspeccion(insp){
+  const rol = rolEfectivo();
+  if(!insp || !insp.fecha || !['admin','ito','ito2'].includes(rol)) return false;
+  if(rol === 'ito' && insp.ito_id !== currentUser.id) return false;
+  if(rol === 'admin') return true;
+  const dias = diasDesdeFechaInspeccion(insp.fecha);
+  return dias >= 0 && dias <= DIAS_MAX_CONTINUAR_INSPECCION;
+}
+function enlazarContinuarInspeccion(insp){
+  const btn = document.getElementById('inspContinuarBtn');
+  if(!btn) return;
+  btn.onclick = async () => {
+    const otro = insp.ito_id && insp.ito_id !== currentUser.id ? insp.ito_id : null;
+    ocultarSidebarStats();     // vuelve al mapa y al panel normal
+    cerrarModalTodas();
+    salirModoInformar();
+    await mostrarSelectorInformarPorOtro();
+    activarModoInspeccion(String(insp.fecha).slice(0, 10), otro, true);
+  };
 }
 
 function dibujarFallasInspeccionEnMapa(fallas){
