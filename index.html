@@ -3541,7 +3541,7 @@ async function cargarAnalisis(){
   const req = ++analisisReq;
   content.innerHTML = '<div class="empty-state">Cargando...</div>';
   try{
-    const d = await db.rpc('analisis_fallas', {p_inicio: ini, p_fin: fin});
+    const d = await rpcAnalisisFallas(ini, fin);
     if(req !== analisisReq) return;
     if(!d){ content.innerHTML = '<div class="empty-state">No tienes permiso para ver este análisis.</div>'; return; }
     renderAnalisis(d);
@@ -3559,6 +3559,27 @@ function fmtHoras(dias, vacio){
   return txt + ' h';
 }
 function fmtDias(x){ return fmtHoras(x); }
+// Miles con punto (36.105) y porcentaje con coma: 1 decimal desde 1 %, 2 decimales bajo 1 %.
+function fmtMiles(x){
+  if(x === null || x === undefined || isNaN(x)) return '—';
+  return Number(x).toLocaleString('es-CL');
+}
+function fmtPctPuntos(n, total){
+  if(n === null || n === undefined || !total) return '—';
+  const p = Number(n) / Number(total) * 100;
+  return (p >= 1 ? p.toFixed(1) : p.toFixed(2)).replace('.', ',') + ' %';
+}
+// Trae el análisis y le suma los puntos lumínicos afectados (función aparte en la base).
+async function rpcAnalisisFallas(ini, fin){
+  const d = await db.rpc('analisis_fallas', {p_inicio: ini, p_fin: fin});
+  if(d && d.resumen){
+    try{
+      const p = await db.rpc('analisis_puntos_afectados', {p_inicio: ini, p_fin: fin});
+      if(p){ d.resumen.puntos_afectados = p.puntos_afectados; d.resumen.total_puntos = p.total_puntos; }
+    }catch(e){ console.warn('No se pudieron obtener los puntos lumínicos afectados:', e); }
+  }
+  return d;
+}
 const DIAS_SEM_CORTO = ['dom','lun','mar','mié','jue','vie','sáb'];
 
 function descripcionCodigoAnalisis(tipo, codigo){
@@ -3575,12 +3596,12 @@ function renderAnalisis(d){
     <div class="stat-grid-modal" style="margin-top:6px;">
       <div class="stat-box-modal"><div class="num">${r.fallas || 0}</div><div class="lbl">Fallas del período</div></div>
       <div class="stat-box-modal"><div class="num">${r.reparadas || 0}</div><div class="lbl">Reparadas (${r.abiertas || 0} abiertas)</div></div>
-      <div class="stat-box-modal"><div class="num">${fmtDias(r.mediana_dias_insp)}</div><div class="lbl">Mediana de reparación desde la inspección</div></div>
+      <div class="stat-box-modal"><div class="num">${fmtMiles(r.puntos_afectados)}</div><div class="lbl">Puntos lumínicos afectados${r.puntos_afectados !== undefined && r.total_puntos ? ` · <b>${fmtPctPuntos(r.puntos_afectados, r.total_puntos)}</b> del total de ${fmtMiles(r.total_puntos)} puntos lumínicos` : ''}</div></div>
       <div class="stat-box-modal"><div class="num">${fmtDias(r.mediana_dias_ing)}</div><div class="lbl">Mediana de reparación desde el ingreso al sistema</div></div>
       <div class="stat-box-modal"><div class="num">${r.reiteradas || 0}</div><div class="lbl">Reiteradas (${pct}% de las fallas)</div></div>
       <div class="stat-box-modal"><div class="num">${fmtDias(r.antiguedad_mediana_abiertas)}</div><div class="lbl">Antigüedad mediana de las abiertas</div></div>
     </div>
-    <div class="hint" style="margin-top:8px;">"Desde la inspección" cuenta desde el día en que el ITO vio la falla; "desde el ingreso" cuenta desde que se registró en el sistema. Un circuito cuenta como una falla.</div>`;
+    <div class="hint" style="margin-top:8px;">"Desde el ingreso" cuenta desde que la falla se registró en el sistema ("desde la inspección", desde el día en que el ITO la vio, se ve en las tablas de abajo). Un circuito cuenta como una falla. En los puntos lumínicos afectados, cada punto se cuenta una sola vez y un circuito suma los puntos que lo componen.</div>`;
 
   const porCodigo = (d.por_codigo || []).length ? `
     <table class="ana-tabla">
@@ -4182,7 +4203,7 @@ async function generarPdfAnalisis(){
       {v: num(rr.abiertas || 0), l: 'Siguen abiertas', s: (rr.abiertas ? 'antigüedad mediana ' + fmtHoras(rr.antiguedad_mediana_abiertas, '-') : 'ninguna')},
       {v: num(rr.reiteradas || 0), l: 'Reiteradas', s: `${pctReit}% de las fallas`},
       {v: fmtHoras(rr.mediana_dias_ing, '-'), l: 'Mediana de reparación', s: 'desde el ingreso al sistema'},
-      {v: fmtHoras(rr.mediana_dias_insp, '-'), l: 'Mediana de reparación', s: 'desde la inspección'}
+      {v: rr.puntos_afectados === undefined ? '-' : fmtMiles(rr.puntos_afectados), l: 'Puntos lumínicos afectados', s: (rr.puntos_afectados !== undefined && rr.total_puntos) ? `${fmtPctPuntos(rr.puntos_afectados, rr.total_puntos)} de ${fmtMiles(rr.total_puntos)} puntos` : ''}
     ];
     const cw = (ancho - margen * 2 - 8) / 3, chh = 24;
     tarjetasP.forEach((t, i) => {
@@ -4197,7 +4218,7 @@ async function generarPdfAnalisis(){
     // Comparación con el período anterior (misma cantidad de días, justo antes)
     const prevFin = sumarDiasStr(ini, -1), prevIni = sumarDiasStr(prevFin, -(nDiasRango - 1));
     let prev = null;
-    try{ prev = await db.rpc('analisis_fallas', {p_inicio: prevIni, p_fin: prevFin}); }catch(e){ console.warn('No se pudo obtener el período anterior:', e); }
+    try{ prev = await rpcAnalisisFallas(prevIni, prevFin); }catch(e){ console.warn('No se pudo obtener el período anterior:', e); }
 
     let yy = 60 + 2 * (chh + 4) + 6;
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(...VERDE);
@@ -4225,7 +4246,7 @@ async function generarPdfAnalisis(){
         {l: 'Fallas abiertas hoy', a: rr.abiertas || 0, b: pr.abiertas || 0, t: 'n', mejor: 'menos'},
         {l: 'Fallas reiteradas', a: rr.reiteradas || 0, b: pr.reiteradas || 0, t: 'n', mejor: 'menos'},
         {l: 'Mediana de reparación desde el ingreso', a: rr.mediana_dias_ing, b: pr.mediana_dias_ing, t: 'h', mejor: 'menos'},
-        {l: 'Mediana de reparación desde la inspección', a: rr.mediana_dias_insp, b: pr.mediana_dias_insp, t: 'h', mejor: 'menos'},
+        {l: 'Puntos lumínicos afectados', a: rr.puntos_afectados, b: pr.puntos_afectados, t: 'n', mejor: 'menos'},
         {l: 'Puntos críticos', a: cP0.length, b: (prev.criticos_puntos || []).length, t: 'n', mejor: 'menos'},
         {l: 'Circuitos críticos', a: cC0.length, b: (prev.criticos_circuitos || []).length, t: 'n', mejor: 'menos'}
       ];
@@ -4312,7 +4333,7 @@ async function generarPdfAnalisis(){
         ['Reparadas', num(r.reparadas)],
         ['Abiertas', num(r.abiertas)],
         ['Reiteradas', `${num(r.reiteradas)} (${pct}% de las fallas)`],
-        ['Mediana de reparación desde la inspección', dias(r.mediana_dias_insp)],
+        ['Puntos lumínicos afectados', r.puntos_afectados === undefined ? '-' : `${fmtMiles(r.puntos_afectados)}${r.total_puntos ? ` (${fmtPctPuntos(r.puntos_afectados, r.total_puntos)} de ${fmtMiles(r.total_puntos)} puntos)` : ''}`],
         ['Mediana de reparación desde el ingreso', dias(r.mediana_dias_ing)],
         ['Promedio de reparación desde la inspección', dias(r.promedio_dias_insp)],
         ['Promedio de reparación desde el ingreso', dias(r.promedio_dias_ing)],
