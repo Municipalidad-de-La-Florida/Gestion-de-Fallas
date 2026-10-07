@@ -570,7 +570,7 @@
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeUsuariosBtn">×</button>
     <h2>Gestión de usuarios</h2>
-    <div class="hint" style="margin-bottom:12px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita.</div>
+    <div class="hint" style="margin-bottom:12px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). Recuerda pulsar Guardar en la fila.</div>
     <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
         <thead>
@@ -578,12 +578,13 @@
             <th style="padding:8px 10px;">Nombre</th>
             <th style="padding:8px 10px;">Email</th>
             <th style="padding:8px 10px;">Rol</th>
+            <th style="padding:8px 10px;">Notificadores</th>
             <th style="padding:8px 10px;"></th>
             <th style="padding:8px 10px;"></th>
           </tr>
         </thead>
         <tbody id="usuariosTbody">
-          <tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+          <tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -594,17 +595,13 @@
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeNotificadoresBtn">×</button>
     <h2>Notificadores externos</h2>
-    <div class="hint" style="margin-bottom:12px;">Personas sin cuenta que informan fallas. Con el modo activado, ITO, ITO2 y Admin pueden elegir (o escribir) a quién informó cada falla en "Agregar falla". Los nombres escritos a mano quedan "sin validar" hasta que los apruebes o los fusiones con uno existente.</div>
-    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; margin-bottom:12px;">
-      <label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; cursor:pointer;">
-        <input type="checkbox" id="notifModoChk" disabled> Modo notificador externo activado
-      </label>
-      <span class="hint" id="notifModoEstado" style="margin:0;">Cargando...</span>
-    </div>
-    <div style="display:flex; gap:6px; margin-bottom:12px;">
-      <input type="text" id="notifNuevoInput" class="popup-input" maxlength="60" autocomplete="off" placeholder="Agregar notificador frecuente (nombre y apellido)" style="flex:1; margin:0;">
-      <button class="popup-btn" id="notifAgregarBtn" style="width:auto; margin:0; padding:7px 16px;">Agregar</button>
-    </div>
+    <div class="hint" style="margin-bottom:12px;">Personas sin cuenta que informan fallas. Quién puede usarlas se decide por usuario, con la casilla "Notificadores" del botón 👥 Usuarios: esos usuarios pueden elegir (o escribir) a quién informó cada falla en "Agregar falla" y elegir fecha y hora. Los nombres escritos a mano quedan "sin validar" hasta que los apruebes o los fusiones con uno existente.</div>
+    <!-- Va dentro de su propio <form> para que el navegador no lo confunda con el usuario del login
+         (y no le autocomplete el correo guardado). -->
+    <form autocomplete="off" onsubmit="return false;" style="display:flex; gap:6px; margin-bottom:12px;">
+      <input type="text" id="notifNuevoInput" name="notificador_nombre_nuevo" class="popup-input" maxlength="60" autocomplete="off" placeholder="Agregar notificador frecuente (nombre y apellido)" style="flex:1; margin:0;">
+      <button type="button" class="popup-btn" id="notifAgregarBtn" style="width:auto; margin:0; padding:7px 16px;">Agregar</button>
+    </form>
     <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
         <thead>
@@ -4712,22 +4709,31 @@ function mostrarModalUsuarios(){
 }
 
 const ROLES_DISPONIBLES = ['admin','ito','ito2','contratista','contratista2','camion','observador'];
+// Roles que pueden ingresar fallas: solo ellos pueden tener habilitado el notificador externo
+// (la base de datos también lo exige y lo apaga si el rol cambia a otro).
+const ROLES_CON_NOTIFICADOR = ['admin','ito','ito2','contratista2'];
+function htmlCeldaNotificador(rol, habilitado){
+  return ROLES_CON_NOTIFICADOR.includes(rol)
+    ? `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" class="notif-habilitado" ${habilitado ? 'checked' : ''}> Habilitado</label>`
+    : '<span style="color:var(--ink-soft);" title="Este rol no ingresa fallas">—</span>';
+}
 
 async function cargarUsuarios(){
   const tbody = document.getElementById('usuariosTbody');
-  tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
-    const usuarios = await db.select('usuarios', 'select=id,nombre,rol,email&order=nombre.asc');
+    const usuarios = await db.select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado&order=nombre.asc');
     if(!usuarios.length){
-      tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
       return;
     }
     tbody.innerHTML = usuarios.map(u => {
       const opciones = ROLES_DISPONIBLES.map(r => `<option value="${r}" ${r===u.rol?'selected':''}>${r}</option>`).join('');
-      return `<tr data-id="${u.id}">
+      return `<tr data-id="${u.id}" data-notif="${u.notificador_externo_habilitado ? '1' : '0'}">
         <td><input type="text" class="popup-input nombre-input" value="${u.nombre||''}" style="margin:0; padding:6px 8px;"></td>
         <td>${u.email || '—'}</td>
         <td><select class="rol-select" style="padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; font-size:12px;">${opciones}</select></td>
+        <td class="notif-celda" style="white-space:nowrap;">${htmlCeldaNotificador(u.rol, u.notificador_externo_habilitado)}</td>
         <td><button class="guardar-usuario-btn" style="font-size:11px; border:1px solid var(--primary); color:var(--primary); background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer;">Guardar</button></td>
         <td><button class="reset-pass-btn" style="font-size:11px; border:1px solid var(--amber); color:var(--amber); background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer;" ${!u.email?'disabled':''}>Enviar reset</button></td>
       </tr>`;
@@ -4735,24 +4741,39 @@ async function cargarUsuarios(){
 
     tbody.querySelectorAll('tr').forEach(tr => {
       const id = tr.dataset.id;
+      const rolSelect = tr.querySelector('.rol-select');
+      const celdaNotif = tr.querySelector('.notif-celda');
+      // Si se cambia el rol en pantalla, la casilla aparece o se oculta según corresponda
+      const enlazarCasilla = () => {
+        const chk = celdaNotif.querySelector('.notif-habilitado');
+        if(chk) chk.onchange = () => { tr.dataset.notif = chk.checked ? '1' : '0'; };
+      };
+      enlazarCasilla();
+      rolSelect.onchange = () => {
+        celdaNotif.innerHTML = htmlCeldaNotificador(rolSelect.value, tr.dataset.notif === '1');
+        enlazarCasilla();
+      };
       tr.querySelector('.guardar-usuario-btn').onclick = () => guardarUsuario(
-        id, tr.querySelector('.nombre-input').value.trim(), tr.querySelector('.rol-select').value
+        id, tr.querySelector('.nombre-input').value.trim(), rolSelect.value,
+        ROLES_CON_NOTIFICADOR.includes(rolSelect.value) && tr.dataset.notif === '1'
       );
       const email = tr.children[1].textContent.trim();
       tr.querySelector('.reset-pass-btn').onclick = () => enviarResetPassword(email);
     });
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
   }
 }
 
-async function guardarUsuario(id, nombre, rol){
+async function guardarUsuario(id, nombre, rol, notificadorHabilitado){
   if(!nombre){ alert('El nombre no puede estar vacío.'); return; }
   try{
-    await db.update('usuarios', `id=eq.${id}`, {nombre, rol});
+    const filas = await db.update('usuarios', `id=eq.${id}`, {nombre, rol, notificador_externo_habilitado: !!notificadorHabilitado});
+    if(!Array.isArray(filas) || !filas.length) throw new Error('No se guardó ningún cambio (¿sin permiso?).');
     alert('Usuario actualizado.');
     if(id === currentUser.id){
       currentUser.nombre = nombre; currentUser.rol = rol;
+      currentUser.notificador_externo_habilitado = !!filas[0].notificador_externo_habilitado;
       document.getElementById('userNombre').textContent = nombre;
       document.getElementById('userRol').textContent = rolVisible(rol);
     }
@@ -4784,7 +4805,6 @@ document.getElementById('notificadoresModal').addEventListener('click', (e) => {
 
 function mostrarModalNotificadores(){
   document.getElementById('notificadoresModal').classList.add('visible');
-  cargarModoNotificador();
   cargarNotificadoresAdmin();
 }
 
@@ -4795,37 +4815,6 @@ function mensajeErrorNotificador(e){
   if(/notificadores_nombre_largo/i.test(m)) return 'El nombre debe tener entre 2 y 60 caracteres.';
   return m;
 }
-
-async function cargarModoNotificador(){
-  const chk = document.getElementById('notifModoChk');
-  const est = document.getElementById('notifModoEstado');
-  chk.disabled = true;
-  est.textContent = 'Cargando...';
-  try{
-    const r = await db.select('app_config', 'select=valor,actualizado_en,usuarios(nombre)&clave=eq.modo_notificador_externo');
-    const fila = r[0];
-    if(!fila){ est.textContent = 'No se encontró la configuración (¿ejecutaste el paso 1 en Supabase?).'; return; }
-    chk.checked = (fila.valor === 'on');
-    est.textContent = fila.actualizado_en
-      ? `Último cambio: ${fmtFechaHoraChile(fila.actualizado_en)}${fila.usuarios && fila.usuarios.nombre ? ' por ' + fila.usuarios.nombre : ''}`
-      : '';
-    chk.disabled = false;
-  }catch(e){ est.textContent = 'Error: ' + mensajeErrorNotificador(e); }
-}
-
-document.getElementById('notifModoChk').addEventListener('change', async (e) => {
-  const chk = e.target;
-  const quiere = chk.checked;
-  chk.disabled = true;
-  try{
-    const filas = await db.update('app_config', 'clave=eq.modo_notificador_externo', { valor: quiere ? 'on' : 'off' });
-    if(!Array.isArray(filas) || !filas.length) throw new Error('No se pudo cambiar el modo (sin permiso).');
-  }catch(err){
-    chk.checked = !quiere;
-    alert('No se pudo cambiar el modo: ' + mensajeErrorNotificador(err));
-  }
-  await cargarModoNotificador();
-});
 
 async function cargarNotificadoresAdmin(){
   const tbody = document.getElementById('notificadoresTbody');
