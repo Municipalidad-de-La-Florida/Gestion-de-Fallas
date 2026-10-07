@@ -64,8 +64,28 @@
   }
   .fit-comuna-btn:hover{border-color:var(--primary); color:var(--primary);}
 
+  /* Indicador de fallas arriba al centro del mapa */
+  #indicadorFallas{
+    position:absolute; top:16px; left:50%; transform:translateX(-50%); z-index:800; display:none;
+    background:#fff; border:1.5px solid var(--line); border-radius:10px; padding:9px 14px;
+    font-size:12.5px; font-weight:700; color:var(--ink); box-shadow:0 4px 14px rgba(0,0,0,0.12); white-space:nowrap;
+    cursor:default; user-select:none;
+  }
+  #indicadorFallas b{font-size:14px;}
+  #indicadorFallas .pt{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px;}
+  #indicadorFallas .pt.r{background:var(--red);} #indicadorFallas .pt.a{background:var(--amber);}
+  #indicadorFallas .sp{color:#b3beb7; margin:0 8px; font-weight:400;}
+  #indicadorFallas .t-md,#indicadorFallas .t-sm{display:none;}
+  #indicadorFallas.ind-md{padding:8px 11px; font-size:12px;} #indicadorFallas.ind-md .t-lg{display:none;} #indicadorFallas.ind-md .t-md{display:inline;} #indicadorFallas.ind-md .sp{margin:0 6px;}
+  #indicadorFallas.ind-sm{left:12px; top:12px; transform:none; padding:8px 10px; font-size:11.5px;} #indicadorFallas.ind-sm .t-lg,#indicadorFallas.ind-sm .t-md{display:none;} #indicadorFallas.ind-sm .t-sm{display:none;} #indicadorFallas.ind-sm .sp{margin:0 5px;}
+  /* Botón cuadrado de zonas de inspección, al lado del botón de fondo del mapa */
+  .leaflet-control-zonas{clear:none !important; background:#fff; border:2px solid rgba(0,0,0,0.2); border-radius:5px; width:36px; height:36px; box-sizing:content-box; display:flex; align-items:center; justify-content:center; font-size:17px; cursor:pointer; text-decoration:none; color:var(--ink); margin-right:8px !important;}
+  .leaflet-touch .leaflet-control-zonas{width:44px; height:44px;}
+  .leaflet-control-zonas:hover{background:#f4f6f4;}
+  .leaflet-control-zonas.activo{background:#eef5f1; border-color:var(--primary);}
+
   .search-box{
-    position:absolute; top:116px; right:16px; z-index:800;
+    position:absolute; top:64px; right:16px; z-index:800;
     background:#fff; border:1.5px solid var(--line); border-radius:12px;
     padding:12px; width:210px; box-shadow:0 4px 16px rgba(0,0,0,0.14);
   }
@@ -369,8 +389,8 @@
           <option value="zona6">Zona 6 — Ricardo Mella</option>
           <option value="zona7">Zona 7 — Pablo Alvarado</option>
         </select>
-        <button id="toggleZonasBtn" class="fit-comuna-btn" style="cursor:pointer;">👁️ Ver zonas de inspección</button>
       </div>
+      <div id="indicadorFallas" title=""></div>
       <div id="searchBox" class="search-box" style="display:none;">
         <div style="position:relative;">
           <input type="text" id="searchCalle" placeholder="Calle" autocomplete="off">
@@ -1377,6 +1397,20 @@ function initMap(){
   let fondoElegido = 'suave';
   try{ if(localStorage.getItem('fondoMapa') === 'color') fondoElegido = 'color'; }catch(e){}
   (fondoElegido === 'color' ? fondoColor : fondoSuave).addTo(map);
+  // Botón cuadrado "Ver zonas de inspección" (se agrega antes del control de fondo para quedar a su izquierda)
+  const ControlZonas = L.Control.extend({
+    options: {position: 'bottomright'},
+    onAdd: function(){
+      const a = L.DomUtil.create('a', 'leaflet-control leaflet-control-zonas');
+      a.id = 'toggleZonasBtn'; a.href = '#'; a.role = 'button';
+      a.title = 'Ver zonas de inspección'; a.setAttribute('aria-label', 'Ver zonas de inspección');
+      a.textContent = '👁️';
+      L.DomEvent.disableClickPropagation(a);
+      L.DomEvent.on(a, 'click', L.DomEvent.preventDefault);
+      return a;
+    }
+  });
+  new ControlZonas().addTo(map);
   L.control.layers({'Fondo suave': fondoSuave, 'Fondo a color': fondoColor}, null, {position:'bottomright', collapsed:true}).addTo(map);
   map.on('baselayerchange', (e) => { try{ localStorage.setItem('fondoMapa', e.layer === fondoColor ? 'color' : 'suave'); }catch(err){} });
 
@@ -1406,12 +1440,12 @@ function initMap(){
     const btnZonas = document.getElementById('toggleZonasBtn');
     if(zonasVisibles){
       layerZonas.addTo(map);
-      btnZonas.textContent = '👁️ Ocultar zonas de inspección';
-      btnZonas.style.background = '#eef5f1';
+      btnZonas.title = 'Ocultar zonas de inspección';
+      btnZonas.classList.add('activo');
     } else {
       map.removeLayer(layerZonas);
-      btnZonas.textContent = '👁️ Ver zonas de inspección';
-      btnZonas.style.background = '#fff';
+      btnZonas.title = 'Ver zonas de inspección';
+      btnZonas.classList.remove('activo');
     }
   };
 
@@ -2031,12 +2065,41 @@ async function renderFallasOnMap(){
     const geojson = await db.rpc('fallas_geojson', {});
     ultimoFallasGeoJSON = geojson;
   }catch(e){ console.error('Error cargando fallas:', e); return; }
+  actualizarIndicadorFallas();
   renderFallasDesdeCache();
 }
 
 // Vuelve a dibujar las fallas usando lo último descargado (ultimoFallasGeoJSON),
 // sin ir a la red. Se usa en cada zoom, porque el zoom solo cambia el estilo
 // (radio del punto, umbral de visibilidad de cascada), no qué fallas existen.
+// Indicador arriba al centro: fallas activas (todas las no reparadas, pendientes incluidas), puntos afectados y pendientes.
+function actualizarIndicadorFallas(){
+  const el = document.getElementById('indicadorFallas');
+  if(!el || !ultimoFallasGeoJSON || !ultimoFallasGeoJSON.features) return;
+  let fallas = 0, puntos = 0, pendientes = 0;
+  ultimoFallasGeoJSON.features.forEach(ft => {
+    const pr = ft.properties || {};
+    if(pr.estado === 'reparada') return;
+    if(!pr.cascada){ fallas++; if(pr.estado === 'pendiente') pendientes++; }
+    if(ft.geometry && ft.geometry.type === 'Point') puntos++;   // punto suelto o punto de un circuito
+  });
+  const sg = (n, uno, varios) => n === 1 ? uno : varios;
+  el.title = `${fallas} ${sg(fallas, 'falla activa', 'fallas activas')} · ${puntos} ${sg(puntos, 'punto lumínico afectado', 'puntos lumínicos afectados')} · ${pendientes} ${sg(pendientes, 'pendiente', 'pendientes')}`;
+  el.innerHTML = `<span class="pt r"></span><b>${fallas}</b><span class="t-lg"> ${sg(fallas, 'falla activa', 'fallas activas')}</span><span class="t-md"> ${sg(fallas, 'activa', 'activas')}</span><span class="sp">:</span><b>${puntos}</b><span class="t-lg"> ${sg(puntos, 'punto afectado', 'puntos afectados')}</span><span class="t-md"> ${sg(puntos, 'pto.', 'ptos.')}</span><span class="sp">|</span><span class="pt a"></span><b>${pendientes}</b><span class="t-lg"> ${sg(pendientes, 'pendiente', 'pendientes')}</span><span class="t-md"> pend.</span>`;
+  el.style.display = 'block';
+  ajustarIndicadorFallas();
+}
+// Según el ancho del mapa: completo, compacto o mínimo (para no chocar con los otros botones)
+function ajustarIndicadorFallas(){
+  const el = document.getElementById('indicadorFallas'), mapaEl = document.getElementById('map');
+  if(!el || !mapaEl) return;
+  const w = mapaEl.clientWidth;
+  el.classList.toggle('ind-md', w < 1000 && w >= 700);
+  el.classList.toggle('ind-sm', w < 700);
+}
+window.addEventListener('resize', ajustarIndicadorFallas);
+if(window.ResizeObserver) new ResizeObserver(ajustarIndicadorFallas).observe(document.getElementById('map'));
+
 function renderFallasDesdeCache(){
   try{
     const geojson = ultimoFallasGeoJSON;
