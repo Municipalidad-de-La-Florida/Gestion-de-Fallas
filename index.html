@@ -456,6 +456,7 @@
         </div>
         <div id="modoActivoBox" style="display:none;">
           <div class="hint" id="modoActivoTexto" style="margin-bottom:8px; font-weight:600; color:var(--primary);"></div>
+          <div class="hint" id="notifChipBox" style="display:none; margin-bottom:8px; padding:6px 8px; background:#eef4fb; border-left:3px solid #2563a8; border-radius:4px; line-height:1.5;"></div>
           <div id="informarPorOtroBox" style="display:none; margin-bottom:10px;">
             <div class="hint">Informar en nombre de (opcional, por defecto tú mismo):</div>
             <select id="informarPorOtroSelect" class="popup-input" style="width:100%;">
@@ -870,7 +871,13 @@ async function login(){
 
 async function cargarPerfilYIniciar(userId){
   try{
-    const data = await db.select('usuarios', `id=eq.${userId}&select=id,nombre,rol`);
+    let data;
+    try{
+      data = await db.select('usuarios', `id=eq.${userId}&select=id,nombre,rol,notificador_externo_habilitado`);
+    }catch(e){
+      // Respaldo: si la columna aún no existe en la base, se entra igual (sin la opción de notificador)
+      data = await db.select('usuarios', `id=eq.${userId}&select=id,nombre,rol`);
+    }
     if(!data || !data.length){
       document.getElementById('loginError').textContent = 'Tu usuario no tiene un perfil asignado. Contacta al administrador.';
       return;
@@ -932,8 +939,11 @@ document.getElementById('btnAgregarFalla').onclick = async () => {
   document.getElementById('modoActivoBox').style.display = 'block';
   document.getElementById('fechaInspeccionBox').style.display = 'none';
   document.getElementById('btnListoModo').style.display = 'block';
-  document.getElementById('modoActivoTexto').textContent = 'Modo: Agregar falla — haz clic en un punto o circuito (fecha actual).';
+  document.getElementById('modoActivoTexto').textContent = puedeNotificadorExterno()
+    ? 'Modo: Agregar falla — haz clic en un punto o circuito. El notificador y la fecha/hora se eligen en la ventana de la falla.'
+    : 'Modo: Agregar falla — haz clic en un punto o circuito (fecha actual).';
   await mostrarSelectorInformarPorOtro();
+  actualizarChipNotificador();
   renderFallasOnMap(); // redibuja para que las fallas reparadas dejen pasar el clic hacia postes/circuitos
 };
 
@@ -954,6 +964,14 @@ document.getElementById('btnInformarInspeccion').onclick = async () => {
 async function mostrarSelectorInformarPorOtro(){
   const rol = rolEfectivo();
   const boxOtro = document.getElementById('informarPorOtroBox');
+  // En "Agregar falla", quien tiene el notificador externo habilitado elige a quién informó en la
+  // ventana de la falla; el selector de ITO queda solo para las inspecciones.
+  if(modoIngreso === 'agregar' && puedeNotificadorExterno()){
+    boxOtro.style.display = 'none';
+    document.getElementById('informarPorOtroSelect').value = '';
+    informadoPorSesion = null;
+    return;
+  }
   if(rol === 'ito2' || rol === 'admin'){
     boxOtro.style.display = 'block';
     await cargarListaItos();
@@ -1139,6 +1157,7 @@ function salirModoInformar(limpiarGuardado = false){
   const modoActivo = document.getElementById('modoActivoBox');
   if(menuInicial) menuInicial.style.display = 'block';
   if(modoActivo) modoActivo.style.display = 'none';
+  actualizarChipNotificador();
   renderFallasOnMap(); // redibuja para que las fallas reparadas vuelvan a mostrar su popup normal
 }
 
@@ -1221,6 +1240,7 @@ document.getElementById('toggleSidebarBtn').onclick = () => {
 document.getElementById('sidebarOverlayMovil').onclick = cerrarSidebarMovil;
 
 document.getElementById('logoutBtn').onclick = () => {
+  try{ localStorage.removeItem('notificador_sesion_v1'); }catch(e){}
   db.signOut();
   location.reload();
 };
@@ -1625,6 +1645,195 @@ function leerOrdenExterna(panel){
   return {valor: sel.dataset.e + '-' + num, error: null};
 }
 
+// ---------- NOTIFICADOR EXTERNO + FECHA/HORA (solo "Agregar falla", solo con el permiso del admin) ----------
+// El permiso se da por usuario en 👥 Usuarios. La base de datos vuelve a exigir todas estas reglas.
+// Lo elegido (notificador, fecha, hora) se recuerda en este navegador y se olvida tras 2 horas sin
+// ingresar fallas, al pulsar "Limpiar" o al cerrar sesión.
+const CLAVE_NOTIFICADOR_SESION = 'notificador_sesion_v1';
+const MINUTOS_VIGENCIA_NOTIFICADOR = 120;
+const DIAS_MAX_FECHA_FALLA = 3;          // igual que en la base; el admin no tiene límite
+let listaNotificadores = [];
+
+function puedeNotificadorExterno(){
+  return modoIngreso === 'agregar'
+    && !!(currentUser && currentUser.notificador_externo_habilitado)
+    && ['admin','ito','ito2','contratista2'].includes(rolEfectivo());
+}
+
+function leerSesionNotificador(){
+  try{
+    const raw = localStorage.getItem(CLAVE_NOTIFICADOR_SESION);
+    if(!raw) return null;
+    const s = JSON.parse(raw);
+    if(!s || !currentUser || s.uid !== currentUser.id) return null;
+    if(Date.now() - (s.guardado || 0) > MINUTOS_VIGENCIA_NOTIFICADOR * 60000){
+      localStorage.removeItem(CLAVE_NOTIFICADOR_SESION);
+      return null;
+    }
+    return s;
+  }catch(e){ return null; }
+}
+function guardarSesionNotificador(datos){
+  try{ localStorage.setItem(CLAVE_NOTIFICADOR_SESION, JSON.stringify({ uid: currentUser.id, ...datos, guardado: Date.now() })); }catch(e){}
+}
+function borrarSesionNotificador(){
+  try{ localStorage.removeItem(CLAVE_NOTIFICADOR_SESION); }catch(e){}
+  actualizarChipNotificador();
+}
+function horaActualChile(){
+  const p = Object.fromEntries(FMT_PARTES_CHILE.formatToParts(new Date()).map(x => [x.type, x.value]));
+  return `${String(+p.hour % 24).padStart(2, '0')}:${p.minute}`;
+}
+
+// Franja del panel lateral: recuerda lo elegido y avisa si la fecha recordada no es hoy.
+function actualizarChipNotificador(){
+  const box = document.getElementById('notifChipBox');
+  if(!box) return;
+  const s = puedeNotificadorExterno() ? leerSesionNotificador() : null;
+  if(!s){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  const hoy = hoyChileStr();
+  const esHoy = s.fecha === hoy;
+  const fechaTxt = esHoy ? 'hoy' : fechaChileLocal(s.fecha, 12, 0, 0).toLocaleDateString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit'});
+  box.style.display = 'block';
+  box.innerHTML = `Reportando como: <b>${escHtml(s.nombre || 'Yo mismo')}</b><br>`
+    + `<span style="${esHoy ? '' : 'color:var(--red); font-weight:700;'}">${esHoy ? '' : '⚠ '}Fecha: ${fechaTxt}</span> · ${s.horaActual ? 'hora actual' : 'hora ' + escHtml(s.hora || '')} `
+    + `<button type="button" id="notifChipLimpiar" style="font-size:11px; border:1px solid var(--primary); color:var(--primary); background:#fff; border-radius:6px; padding:2px 8px; cursor:pointer; margin-left:6px;">Limpiar</button>`;
+  box.querySelector('#notifChipLimpiar').onclick = borrarSesionNotificador;
+}
+
+async function cargarListaNotificadores(){
+  try{ listaNotificadores = await db.select('notificadores', 'select=id,nombre,validado&activo=eq.true&order=nombre.asc'); }
+  catch(e){ console.error('Error cargando notificadores:', e); }
+  return listaNotificadores;
+}
+
+// Dentro de su propio <form> para que el navegador no autocomplete el correo del login en el campo de nombre.
+function htmlNotificador(){
+  if(!puedeNotificadorExterno()) return '';
+  return `
+    <form id="notifBloque" autocomplete="off" onsubmit="return false;" style="margin:10px 0 0; padding:8px 10px 6px; background:#eef4fb; border-left:3px solid #2563a8; border-radius:6px;">
+      <div class="hint" style="margin-bottom:4px; font-weight:600;">Informó (notificador) y fecha/hora:</div>
+      <select id="notifSelect" class="popup-input" style="width:100%; margin:0;"><option value="">Yo mismo</option></select>
+      <input type="text" id="notifOtroInput" name="notificador_nombre_otro" class="popup-input" maxlength="60" autocomplete="off" placeholder="Escribe el nombre del notificador" style="display:none; width:100%; margin:6px 0 0; box-sizing:border-box;">
+      <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:8px;">
+        <label class="hint" style="margin:0; display:flex; align-items:center; gap:4px;">Fecha <input type="date" id="notifFecha" class="popup-input" style="width:auto; margin:0; padding:4px 6px;"></label>
+        <label class="hint" style="margin:0; display:flex; align-items:center; gap:4px;">Hora <input type="time" id="notifHora" class="popup-input" style="width:auto; margin:0; padding:4px 6px;"></label>
+        <label class="hint" style="margin:0; display:flex; align-items:center; gap:4px;"><input type="checkbox" id="notifHoraActual" checked> usar hora actual</label>
+      </div>
+      <div class="hint" id="notifResumen" style="margin-top:4px; min-height:16px;"></div>
+    </form>`;
+}
+
+function activarNotificador(panel){
+  const bloque = panel.querySelector('#notifBloque');
+  if(!bloque) return;
+  const sel = bloque.querySelector('#notifSelect');
+  const otro = bloque.querySelector('#notifOtroInput');
+  const fecha = bloque.querySelector('#notifFecha');
+  const hora = bloque.querySelector('#notifHora');
+  const chk = bloque.querySelector('#notifHoraActual');
+  const resumen = bloque.querySelector('#notifResumen');
+  const hoy = hoyChileStr();
+  const s = leerSesionNotificador();
+
+  fecha.max = hoy;
+  if(currentUser.rol !== 'admin') fecha.min = sumarDiasStr(hoy, -DIAS_MAX_FECHA_FALLA);
+  fecha.value = (s && s.fecha) || hoy;
+  chk.checked = s ? s.horaActual !== false : true;
+  hora.value = (s && s.hora) || '';
+  hora.disabled = chk.checked;
+
+  const actualizarResumen = () => {
+    const f = fecha.value;
+    if(!f){ resumen.textContent = ''; return; }
+    const fTxt = f === hoy ? 'hoy' : fechaChileLocal(f, 12, 0, 0).toLocaleDateString('es-CL', {timeZone: ZONA_CHILE});
+    resumen.style.color = f === hoy ? '' : 'var(--red)';
+    resumen.textContent = `Se guardará con fecha ${fTxt}, ${chk.checked ? 'a la hora actual' : 'a las ' + (hora.value || '—')}.`;
+  };
+  const poblar = (lista) => {
+    if(!bloque.isConnected) return;
+    const previo = sel.value || (s && s.notificadorId) || '';
+    const opcion = (n) => `<option value="${n.id}" data-nombre="${escHtml(n.nombre)}">${escHtml(n.nombre)}</option>`;
+    const validados = lista.filter(n => n.validado).map(opcion).join('');
+    const sinValidar = lista.filter(n => !n.validado).map(opcion).join('');
+    sel.innerHTML = `<option value="">Yo mismo</option>`
+      + (validados ? `<optgroup label="Notificadores frecuentes">${validados}</optgroup>` : '')
+      + (sinValidar ? `<optgroup label="Escritos por otros (sin validar)">${sinValidar}</optgroup>` : '')
+      + `<option value="__otro__">➕ Otro (escribir nombre)…</option>`;
+    sel.value = [...sel.options].some(o => o.value === previo) ? previo : '';
+    otro.style.display = sel.value === '__otro__' ? 'block' : 'none';
+  };
+  poblar(listaNotificadores);
+  cargarListaNotificadores().then(poblar);
+
+  sel.onchange = () => {
+    otro.style.display = sel.value === '__otro__' ? 'block' : 'none';
+    if(sel.value === '__otro__') otro.focus();
+  };
+  chk.onchange = () => {
+    hora.disabled = chk.checked;
+    if(!chk.checked && !hora.value) hora.value = horaActualChile();
+    actualizarResumen();
+  };
+  fecha.onchange = actualizarResumen;
+  hora.onchange = actualizarResumen;
+  actualizarResumen();
+}
+
+// Valida lo elegido y, si se escribió un nombre nuevo, lo registra (queda "sin validar").
+// Devuelve {error} o {extra: {fechaISO, notificadorId}, recordar}.
+async function leerNotificador(panel){
+  const bloque = panel.querySelector('#notifBloque');
+  if(!bloque) return {extra: null, error: null};
+  const sel = bloque.querySelector('#notifSelect');
+  const otro = bloque.querySelector('#notifOtroInput');
+  const fecha = bloque.querySelector('#notifFecha');
+  const hora = bloque.querySelector('#notifHora');
+  const chk = bloque.querySelector('#notifHoraActual');
+
+  let notificadorId = null, nombre = null;
+  if(sel.value === '__otro__'){
+    nombre = otro.value.trim().replace(/\s+/g, ' ');
+    if(nombre.length < 2) return {error: 'Escribe el nombre del notificador (mínimo 2 letras).'};
+  } else if(sel.value){
+    notificadorId = sel.value;
+    nombre = sel.selectedOptions[0].dataset.nombre || sel.selectedOptions[0].textContent;
+  }
+
+  const hoy = hoyChileStr();
+  const f = fecha.value;
+  if(!f) return {error: 'Elige la fecha de la falla.'};
+  if(f > hoy) return {error: 'La fecha de la falla no puede ser futura.'};
+  if(currentUser.rol !== 'admin' && f < sumarDiasStr(hoy, -DIAS_MAX_FECHA_FALLA)){
+    return {error: `Solo se pueden informar fallas de los últimos ${DIAS_MAX_FECHA_FALLA} días.`};
+  }
+  const hm = chk.checked ? horaActualChile() : hora.value;
+  if(!hm) return {error: 'Elige la hora, o marca "usar hora actual".'};
+  const [hh, mm] = hm.split(':').map(Number);
+  const instante = fechaChileLocal(f, hh, mm, 0);
+  if(instante.getTime() > Date.now() + 60000) return {error: 'La fecha y hora de la falla no pueden ser futuras.'};
+  const personalizada = (f !== hoy) || !chk.checked;   // si es hoy y a la hora actual, la base pone la fecha sola
+
+  if(sel.value === '__otro__'){
+    try{ notificadorId = await db.rpc('obtener_o_crear_notificador', { p_nombre: nombre }); }
+    catch(e){ return {error: 'No se pudo registrar al notificador: ' + e.message}; }
+  }
+  return {
+    error: null,
+    extra: { fechaISO: personalizada ? instante.toISOString() : null, notificadorId },
+    recordar: { notificadorId, nombre, fecha: f, hora: chk.checked ? '' : hm, horaActual: chk.checked }
+  };
+}
+
+// Tras guardar bien una falla: se recuerda lo elegido (si no es lo de siempre) y se renueva el plazo de 2 h.
+function recordarNotificador(r){
+  if(!r || !r.recordar) return;
+  const d = r.recordar;
+  const todoNormal = !d.notificadorId && d.fecha === hoyChileStr() && d.horaActual;
+  if(todoNormal) borrarSesionNotificador();
+  else { guardarSesionNotificador(d); actualizarChipNotificador(); }
+}
+
 function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
   let codigoSel = null, cardSel = null;
   const catalogo = esMonoposte
@@ -1639,6 +1848,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
   const panel = mostrarPanel(`
     <b>Falla individual - Pto. Lumínico Llave N.° ${llave}</b>
     <div class="hint" style="margin-top:2px;">N.° Municipal: <b>${nroMun ?? '—'}</b></div>
+    ${htmlNotificador()}
     <div style="display:flex; gap:14px; margin-top:10px;">
       <div style="flex-shrink:0; width:110px;">
         <div class="hint" style="margin-bottom:4px;">Cardinalidad (opcional):</div>
@@ -1676,10 +1886,14 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     const oe = leerOrdenExterna(panel);
     if(oe.error){ alert(oe.error); return; }
     const ordenExterna = oe.valor;
-    await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna);
+    const notif = puedeNotificadorExterno() ? await leerNotificador(panel) : null;
+    if(notif && notif.error){ alert(notif.error); return; }
+    const ok = await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna, notif && notif.extra);
+    if(ok) recordarNotificador(notif);
     cerrarPanel();
   };
   activarOrdenExterna(panel);
+  activarNotificador(panel);
   protegerClick(panel.querySelector('#confirmarBtn'));
 }
 
@@ -1703,6 +1917,7 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
   `).join('');
   const panel = mostrarPanel(`
     <b>Falla de circuito ${idOriginal||''}</b>
+    ${htmlNotificador()}
     <div style="margin-top:10px;">
       ${filasCatalogo}
     </div>
@@ -1722,10 +1937,14 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
     if(oe.error){ alert(oe.error); return; }
     const ordenExterna = oe.valor;
     const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
-    await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna);
+    const notif = puedeNotificadorExterno() ? await leerNotificador(panel) : null;
+    if(notif && notif.error){ alert(notif.error); return; }
+    const ok = await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna, notif && notif.extra);
+    if(ok) recordarNotificador(notif);
     cerrarPanel();
   };
   activarOrdenExterna(panel);
+  activarNotificador(panel);
   protegerClick(panel.querySelector('#confirmarBtn'));
 }
 
@@ -2213,7 +2432,8 @@ async function enfocarFalla(fallaId){
   if(feat.properties._vistaHistorica) abrirPopupFalla(feat);
 }
 window.enfocarFalla = enfocarFalla;
-async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna){
+// extra (opcional): {fechaISO, notificadorId} elegidos en la ventana de "Agregar falla" (usuarios con el permiso)
+async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna, extra){
   try{
     const fila = {
       tipo:'punto', ref_punto_gid:puntoGid, tipo_falla:tipoFalla,
@@ -2222,16 +2442,19 @@ async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtr
     };
     if(ordenExterna) fila.orden_externa = ordenExterna;
     if(fechaCustom) fila.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
-    if(informadoPorSesion) fila.informado_por = informadoPorSesion;
+    if(extra && extra.fechaISO) fila.fecha_falla = extra.fechaISO;
+    if(extra && extra.notificadorId) fila.notificador_id = extra.notificadorId;
+    else if(informadoPorSesion) fila.informado_por = informadoPorSesion;
     const inspeccionId = await obtenerInspeccionIdSesion();
     if(inspeccionId) fila.inspeccion_id = inspeccionId;
     const filaCreada = await db.insert('fallas', fila);
     if(filaCreada && filaCreada[0]) await guardarComentarioFalla(filaCreada[0].id, 'reporte', descripcionOtro);
     cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
-  }catch(e){ alert('Error al crear la falla: ' + e.message); }
+    return true;
+  }catch(e){ alert('Error al crear la falla: ' + e.message); return false; }
 }
 
-async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripcionOtro, ordenExterna){
+async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripcionOtro, ordenExterna, extra){
   try{
     const filaLineaObj = {
       tipo:'linea', ref_circuito_gid:circuitoGid, tipo_falla:tipoFalla,
@@ -2240,7 +2463,9 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
     };
     if(ordenExterna) filaLineaObj.orden_externa = ordenExterna;
     if(fechaCustom) filaLineaObj.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
-    if(informadoPorSesion) filaLineaObj.informado_por = informadoPorSesion;
+    if(extra && extra.fechaISO) filaLineaObj.fecha_falla = extra.fechaISO;
+    if(extra && extra.notificadorId) filaLineaObj.notificador_id = extra.notificadorId;
+    else if(informadoPorSesion) filaLineaObj.informado_por = informadoPorSesion;
     const inspeccionId = await obtenerInspeccionIdSesion();
     if(inspeccionId) filaLineaObj.inspeccion_id = inspeccionId;
     const filaLinea = await db.insert('fallas', filaLineaObj);
@@ -2257,14 +2482,17 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
         };
         if(ordenExterna) f.orden_externa = ordenExterna;
         if(fechaCustom) f.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
-        if(informadoPorSesion) f.informado_por = informadoPorSesion;
+        if(extra && extra.fechaISO) f.fecha_falla = extra.fechaISO;
+        if(extra && extra.notificadorId) f.notificador_id = extra.notificadorId;
+        else if(informadoPorSesion) f.informado_por = informadoPorSesion;
         if(inspeccionId) f.inspeccion_id = inspeccionId;
         return f;
       });
       await db.insert('fallas', filasCascada);
     }
     cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
-  }catch(e){ alert('Error al crear la falla: ' + e.message); }
+    return true;
+  }catch(e){ alert('Error al crear la falla: ' + e.message); return false; }
 }
 
 // ---------- LISTA Y REPARACIÓN (contratista) ----------
