@@ -2066,6 +2066,141 @@ function renderFallasDesdeCache(){
   }catch(e){ console.error('Error dibujando fallas:', e); }
 }
 
+// ---------- EDITAR UNA FALLA (creador dentro de 15 min, o admin) ----------
+// Se puede cambiar: tipo, comentario, orden externa y (con el permiso de notificador) fecha/hora y notificador.
+// La ubicación no se edita. La base de datos (función editar_falla) vuelve a validar todas las reglas.
+function partesChile(iso){
+  const d = new Date(iso);
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {timeZone: ZONA_CHILE, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', hourCycle:'h23'})
+    .formatToParts(d).map(x => [x.type, x.value]));
+  return {fecha: `${p.year}-${p.month}-${p.day}`, hora: `${p.hour}:${p.minute}`};
+}
+
+async function abrirEditorFalla(p){
+  let fila;
+  try{
+    const filas = await db.select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,fecha_falla,notificador_id,inspeccion_id`);
+    fila = filas && filas[0];
+  }catch(e){ alert('No se pudo cargar la falla: ' + e.message); return; }
+  if(!fila){ alert('No se encontró la falla.'); return; }
+
+  const esCircuito = fila.tipo === 'linea';
+  const catalogo = esCircuito ? CATALOGO_FALLAS_CIRCUITO
+    : (['F02','F03'].includes(fila.tipo_falla)
+        ? [{c:'F02', d:'Monoposte apagado'}, {c:'F03', d:'Monoposte encendido de día'}, {c:'OTRO', d:'Otro (describe la falla)'}]
+        : CATALOGO_FALLAS_PUNTO);
+  const filasCatalogo = catalogo.map(item => `
+    <div class="falla-opcion-row">
+      <button class="codigo-btn${item.c === fila.tipo_falla ? ' sel' : ''}" data-c="${item.c}">${item.c}</button>
+      <span class="falla-opcion-desc">${item.d}</span>
+    </div>`).join('');
+
+  const permisoNotif = !!(currentUser.notificador_externo_habilitado && ROLES_CON_NOTIFICADOR.includes(currentUser.rol)) && !fila.inspeccion_id;
+  const orig = partesChile(fila.fecha_falla);
+  const hoy = hoyChileStr();
+  const bloqueNotif = permisoNotif ? `
+    <form id="edNotifBloque" autocomplete="off" onsubmit="return false;" style="margin:10px 0 0; padding:8px 10px 6px; background:#eef4fb; border-left:3px solid #2563a8; border-radius:6px;">
+      <div class="hint" style="margin-bottom:4px; font-weight:600;">Informó (notificador) y fecha/hora:</div>
+      <select id="edNotifSelect" class="popup-input" style="width:100%; margin:0;"><option value="">Sin notificador externo</option></select>
+      <input type="text" id="edNotifOtro" name="notificador_nombre_otro" class="popup-input" maxlength="60" autocomplete="off" placeholder="Escribe el nombre del notificador" style="display:none; width:100%; margin:6px 0 0; box-sizing:border-box;">
+      <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-top:8px;">
+        <label class="hint" style="margin:0; display:flex; align-items:center; gap:4px;">Fecha <input type="date" id="edFecha" class="popup-input" style="width:auto; margin:0; padding:4px 6px;" value="${orig.fecha}" max="${hoy}" ${currentUser.rol !== 'admin' ? `min="${sumarDiasStr(hoy, -DIAS_MAX_FECHA_FALLA)}"` : ''}></label>
+        <label class="hint" style="margin:0; display:flex; align-items:center; gap:4px;">Hora <input type="time" id="edHora" class="popup-input" style="width:auto; margin:0; padding:4px 6px;" value="${orig.hora}"></label>
+      </div>
+    </form>` : '';
+
+  let codigoSel = fila.tipo_falla;
+  const panel = mostrarPanel(`
+    <b>✏️ Editar falla · OS ${escHtml(p.ot || '—')}</b>
+    <div class="hint" style="margin-top:2px;">${esCircuito ? 'Circuito' : 'Punto lumínico'} · la ubicación no se puede cambiar (si está mal, elimina la falla y créala de nuevo).${esCircuito ? ' Los cambios también se aplican a sus puntos afectados.' : ''}</div>
+    ${bloqueNotif}
+    <div style="margin-top:10px;">${filasCatalogo}</div>
+    <textarea class="popup-input" id="edDesc" placeholder="Comentario (opcional; obligatorio si eliges OTRO)" style="margin-top:8px;"></textarea>
+    ${htmlOrdenExterna()}
+    <button class="popup-btn" id="edGuardarBtn" style="margin-top:12px;">Guardar cambios</button>
+  `);
+  panel.querySelector('#edDesc').value = fila.descripcion_otro || '';
+  panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
+    panel.querySelectorAll('.codigo-btn').forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel'); codigoSel = b.dataset.c;
+  });
+  activarOrdenExterna(panel);
+  const mOE = /^([SE])-(.*)$/.exec(fila.orden_externa || '');
+  if(mOE){
+    const btn = panel.querySelector(`#oeEmpresa button[data-e="${mOE[1]}"]`);
+    if(btn) btn.click();
+    const inp = panel.querySelector('#ordenExternaInput');
+    inp.value = mOE[2]; inp.dispatchEvent(new Event('input'));
+  }
+
+  if(permisoNotif){
+    const sel = panel.querySelector('#edNotifSelect');
+    const otro = panel.querySelector('#edNotifOtro');
+    const poblar = (lista) => {
+      if(!panel.isConnected) return;
+      const previo = sel.value || fila.notificador_id || '';
+      const opcion = (n) => `<option value="${n.id}">${escHtml(n.nombre)}</option>`;
+      const validados = lista.filter(n => n.validado).map(opcion).join('');
+      const sinValidar = lista.filter(n => !n.validado).map(opcion).join('');
+      sel.innerHTML = `<option value="">Sin notificador externo</option>`
+        + (validados ? `<optgroup label="Notificadores frecuentes">${validados}</optgroup>` : '')
+        + (sinValidar ? `<optgroup label="Escritos por otros (sin validar)">${sinValidar}</optgroup>` : '')
+        + `<option value="__otro__">➕ Otro (escribir nombre)…</option>`;
+      sel.value = [...sel.options].some(o => o.value === previo) ? previo : '';
+    };
+    poblar(listaNotificadores);
+    cargarListaNotificadores().then(poblar);
+    sel.onchange = () => { otro.style.display = sel.value === '__otro__' ? 'block' : 'none'; if(sel.value === '__otro__') otro.focus(); };
+  }
+
+  const btnGuardar = panel.querySelector('#edGuardarBtn');
+  btnGuardar.onclick = async () => {
+    const desc = panel.querySelector('#edDesc').value.trim();
+    if(codigoSel === 'OTRO' && !desc){ alert('Describe la falla (obligatorio si eliges OTRO).'); return; }
+    const oe = leerOrdenExterna(panel);
+    if(oe.error){ alert(oe.error); return; }
+    const cambios = {};
+    if(codigoSel !== fila.tipo_falla) cambios.tipo_falla = codigoSel;
+    if(desc !== (fila.descripcion_otro || '')) cambios.descripcion_otro = desc;
+    if((oe.valor || null) !== (fila.orden_externa || null)) cambios.orden_externa = oe.valor;
+
+    if(permisoNotif){
+      const sel = panel.querySelector('#edNotifSelect');
+      const f = panel.querySelector('#edFecha').value, hm = panel.querySelector('#edHora').value;
+      if(!f || !hm){ alert('Elige la fecha y la hora.'); return; }
+      if(f !== orig.fecha || hm !== orig.hora){
+        if(f > hoy){ alert('La fecha no puede ser futura.'); return; }
+        if(currentUser.rol !== 'admin' && f < sumarDiasStr(hoy, -DIAS_MAX_FECHA_FALLA)){ alert(`Solo se pueden informar fallas de los últimos ${DIAS_MAX_FECHA_FALLA} días.`); return; }
+        const [hh, mm] = hm.split(':').map(Number);
+        const instante = fechaChileLocal(f, hh, mm, 0);
+        if(instante.getTime() > Date.now() + 60000){ alert('La fecha y hora no pueden ser futuras.'); return; }
+        cambios.fecha_falla = instante.toISOString();
+      }
+      let nuevoNotif = sel.value;
+      if(nuevoNotif === '__otro__'){
+        const nombre = panel.querySelector('#edNotifOtro').value.trim().replace(/\s+/g, ' ');
+        if(nombre.length < 2){ alert('Escribe el nombre del notificador (mínimo 2 letras).'); return; }
+        try{ nuevoNotif = await db.rpc('obtener_o_crear_notificador', {p_nombre: nombre}); }
+        catch(e){ alert('No se pudo registrar al notificador: ' + e.message); return; }
+      }
+      if((nuevoNotif || null) !== (fila.notificador_id || null)) cambios.notificador_id = nuevoNotif || null;
+    }
+
+    if(!Object.keys(cambios).length){ alert('No hay cambios que guardar.'); return; }
+    btnGuardar.disabled = true;
+    try{
+      await db.rpc('editar_falla', {p_id: p.id, p_cambios: cambios});
+      cerrarPanel();
+      cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+    }catch(e){
+      btnGuardar.disabled = false;
+      alert('No se pudo guardar: ' + e.message);
+    }
+  };
+  protegerClick(btnGuardar);
+}
+window.abrirEditorFalla = abrirEditorFalla;
+
 function formatearDuracion(fechaInicio){
   const ms = Date.now() - new Date(fechaInicio).getTime();
   if(ms < 0) return '0 min';
@@ -2189,6 +2324,11 @@ async function abrirPopupFalla(feat){
     puedeEliminar = minutosTranscurridos <= 15;
   }
   if(p._vistaHistorica) puedeEliminar = false; // falla antigua: solo consulta
+  // Editar: mismas condiciones que eliminar (creador dentro de 15 min / admin), salvo los puntos que vienen de un circuito
+  const puedeEditar = puedeEliminar && !p.cascada && !p._vistaHistorica;
+  const botonEditarHtml = puedeEditar
+    ? `<button id="editarDesdeMapaBtn" title="Editar falla" style="flex-shrink:0; width:26px; height:26px; padding:0; border:1.5px solid var(--primary); border-radius:6px; background:#eef4fb; color:var(--primary); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center;">✏️</button>`
+    : '';
   const botonEliminarHtml = puedeEliminar
     ? `<button id="eliminarDesdeMapaBtn" title="Eliminar falla" style="flex-shrink:0; width:26px; height:26px; padding:0; border:1.5px solid var(--red); border-radius:6px; background:#fbe7e5; color:var(--red); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>`
     : '';
@@ -2205,7 +2345,7 @@ async function abrirPopupFalla(feat){
   ` : '';
 
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
-  const tituloConEliminar = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">${botonEliminarHtml}<b>${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</b></div>
+  const tituloConEliminar = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">${botonEditarHtml}${botonEliminarHtml}<b>${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</b></div>
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   let contenidoPanel;
@@ -2275,6 +2415,9 @@ async function abrirPopupFalla(feat){
       protegerClick(btnAsignar);
     }
   }
+
+  const btnEditarMapa = panel.querySelector('#editarDesdeMapaBtn');
+  if(btnEditarMapa) btnEditarMapa.onclick = () => abrirEditorFalla(p);
 
   const btnEliminarMapa = panel.querySelector('#eliminarDesdeMapaBtn');
   if(btnEliminarMapa){
