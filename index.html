@@ -328,6 +328,7 @@
       <button class="logout" id="todasBtn" style="margin-right:4px; display:none;">📋 Todas las fallas</button>
       <button class="logout" id="toggleSearchBtn" style="margin-right:4px;">🔍 Buscador</button>
       <button class="logout" id="usuariosBtn" style="margin-right:4px; display:none;">👥 Usuarios</button>
+      <button class="logout" id="notificadoresBtn" style="margin-right:4px; display:none;">📣 Notificadores</button>
       <button class="logout" id="cambiarPassBtn" style="margin-right:4px;">🔑 Contraseña</button>
       <button class="logout" id="toggleSidebarBtn" title="Mostrar/ocultar panel">☰ Panel</button>
       <button class="logout" id="toggleModoDispositivoBtn" title="Cambiar entre modo Escritorio y modo Móvil" style="margin-left:4px;">🖥️ Escritorio</button>
@@ -583,6 +584,39 @@
         </thead>
         <tbody id="usuariosTbody">
           <tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="notificadoresModal" class="modal-overlay">
+  <div class="modal-card modal-card-wide">
+    <button class="close-x" id="closeNotificadoresBtn">×</button>
+    <h2>Notificadores externos</h2>
+    <div class="hint" style="margin-bottom:12px;">Personas sin cuenta que informan fallas. Con el modo activado, ITO, ITO2 y Admin pueden elegir (o escribir) a quién informó cada falla en "Agregar falla". Los nombres escritos a mano quedan "sin validar" hasta que los apruebes o los fusiones con uno existente.</div>
+    <div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; margin-bottom:12px;">
+      <label style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; cursor:pointer;">
+        <input type="checkbox" id="notifModoChk" disabled> Modo notificador externo activado
+      </label>
+      <span class="hint" id="notifModoEstado" style="margin:0;">Cargando...</span>
+    </div>
+    <div style="display:flex; gap:6px; margin-bottom:12px;">
+      <input type="text" id="notifNuevoInput" class="popup-input" maxlength="60" autocomplete="off" placeholder="Agregar notificador frecuente (nombre y apellido)" style="flex:1; margin:0;">
+      <button class="popup-btn" id="notifAgregarBtn" style="width:auto; margin:0; padding:7px 16px;">Agregar</button>
+    </div>
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+        <thead>
+          <tr style="text-align:left; border-bottom:2px solid var(--line);">
+            <th style="padding:8px 10px;">Nombre</th>
+            <th style="padding:8px 10px;">Estado</th>
+            <th style="padding:8px 10px;">Fallas</th>
+            <th style="padding:8px 10px;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="notificadoresTbody">
+          <tr><td colspan="4" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -877,6 +911,7 @@ function actualizarVisibilidadPorRol(){
   // El botón de gestión de usuarios sí sigue la simulación (un ITO/Contratista/Observador
   // real no vería este botón, así que tampoco debe verse al simular esos roles)
   document.getElementById('usuariosBtn').style.display = (rol === 'admin') ? 'inline-block' : 'none';
+  document.getElementById('notificadoresBtn').style.display = (rol === 'admin') ? 'inline-block' : 'none';
   document.getElementById('reportSection').style.display = (rol === 'ito' || rol === 'ito2' || rol === 'admin' || rol === 'contratista2') ? 'block' : 'none';
   // Contratista2 solo puede ingresar fallas individuales ("Agregar falla"), no inspecciones
   document.getElementById('btnInformarInspeccion').style.display = (rol === 'contratista2') ? 'none' : '';
@@ -4737,6 +4772,147 @@ async function enviarResetPassword(email){
     alert(`Se envió un correo de recuperación a ${email}.`);
   }catch(e){ alert('No se pudo enviar el reseteo: ' + e.message); }
 }
+
+// ---------- NOTIFICADORES EXTERNOS (solo admin) ----------
+// Personas sin cuenta que informan fallas. La base de datos exige las reglas (rol, modo activado,
+// fechas); aquí solo se administra la lista y el interruptor del modo.
+document.getElementById('notificadoresBtn').onclick = () => mostrarModalNotificadores();
+document.getElementById('closeNotificadoresBtn').onclick = () => document.getElementById('notificadoresModal').classList.remove('visible');
+document.getElementById('notificadoresModal').addEventListener('click', (e) => {
+  if(e.target.id === 'notificadoresModal') document.getElementById('notificadoresModal').classList.remove('visible');
+});
+
+function mostrarModalNotificadores(){
+  document.getElementById('notificadoresModal').classList.add('visible');
+  cargarModoNotificador();
+  cargarNotificadoresAdmin();
+}
+
+function mensajeErrorNotificador(e){
+  const m = String((e && e.message) || e);
+  if(/duplicate key|notificadores_nombre_norm_uq/i.test(m)) return 'Ya existe un notificador con ese nombre (se ignoran tildes, mayúsculas y espacios). Si es la misma persona, usa "Fusionar".';
+  if(/foreign key|fallas_notificador_id_fkey/i.test(m)) return 'No se puede eliminar: tiene fallas asociadas. Desactívalo o fusiónalo con otro.';
+  if(/notificadores_nombre_largo/i.test(m)) return 'El nombre debe tener entre 2 y 60 caracteres.';
+  return m;
+}
+
+async function cargarModoNotificador(){
+  const chk = document.getElementById('notifModoChk');
+  const est = document.getElementById('notifModoEstado');
+  chk.disabled = true;
+  est.textContent = 'Cargando...';
+  try{
+    const r = await db.select('app_config', 'select=valor,actualizado_en,usuarios(nombre)&clave=eq.modo_notificador_externo');
+    const fila = r[0];
+    if(!fila){ est.textContent = 'No se encontró la configuración (¿ejecutaste el paso 1 en Supabase?).'; return; }
+    chk.checked = (fila.valor === 'on');
+    est.textContent = fila.actualizado_en
+      ? `Último cambio: ${fmtFechaHoraChile(fila.actualizado_en)}${fila.usuarios && fila.usuarios.nombre ? ' por ' + fila.usuarios.nombre : ''}`
+      : '';
+    chk.disabled = false;
+  }catch(e){ est.textContent = 'Error: ' + mensajeErrorNotificador(e); }
+}
+
+document.getElementById('notifModoChk').addEventListener('change', async (e) => {
+  const chk = e.target;
+  const quiere = chk.checked;
+  chk.disabled = true;
+  try{
+    const filas = await db.update('app_config', 'clave=eq.modo_notificador_externo', { valor: quiere ? 'on' : 'off' });
+    if(!Array.isArray(filas) || !filas.length) throw new Error('No se pudo cambiar el modo (sin permiso).');
+  }catch(err){
+    chk.checked = !quiere;
+    alert('No se pudo cambiar el modo: ' + mensajeErrorNotificador(err));
+  }
+  await cargarModoNotificador();
+});
+
+async function cargarNotificadoresAdmin(){
+  const tbody = document.getElementById('notificadoresTbody');
+  tbody.innerHTML = '<tr><td colspan="4" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  try{
+    const lista = await db.select('notificadores', 'select=id,nombre,validado,activo,fallas(count)&order=nombre.asc');
+    const filas = lista.map(n => ({ ...n, nFallas: (n.fallas && n.fallas[0] && n.fallas[0].count) || 0 }));
+    // Primero los "sin validar" (hay que revisarlos); luego los demás por nombre
+    filas.sort((a, b) => (a.validado - b.validado) || a.nombre.localeCompare(b.nombre, 'es'));
+    if(!filas.length){
+      tbody.innerHTML = '<tr><td colspan="4" style="padding:20px; text-align:center; color:var(--ink-soft);">Aún no hay notificadores. Agrega el primero arriba.</td></tr>';
+      return;
+    }
+    const btnEstilo = (color) => `font-size:11px; border:1px solid ${color}; color:${color}; background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer; margin:2px 4px 2px 0;`;
+    tbody.innerHTML = filas.map(n => {
+      const otros = filas.filter(o => o.id !== n.id)
+        .map(o => `<option value="${o.id}">${escHtml(o.nombre)}</option>`).join('');
+      const estado = [
+        n.validado ? '<span style="color:var(--green,#2e7d32);">Validado</span>' : '<b style="color:var(--amber);">Sin validar</b>',
+        n.activo ? '' : '<span style="color:var(--red);">Desactivado</span>'
+      ].filter(Boolean).join(' · ');
+      return `<tr data-id="${n.id}" data-fallas="${n.nFallas}" style="border-bottom:1px solid var(--line);">
+        <td style="padding:6px 10px;"><input type="text" class="popup-input notif-nombre" maxlength="60" value="${escHtml(n.nombre)}" style="margin:0; padding:6px 8px; min-width:130px;"></td>
+        <td style="padding:6px 10px;">${estado}</td>
+        <td style="padding:6px 10px;">${n.nFallas}</td>
+        <td style="padding:6px 10px; min-width:230px;">
+          <button class="notif-guardar" style="${btnEstilo('var(--primary)')}">Guardar nombre</button>
+          ${n.validado ? '' : `<button class="notif-validar" style="${btnEstilo('var(--green,#2e7d32)')}">Validar</button>`}
+          <button class="notif-activo" style="${btnEstilo('var(--amber)')}">${n.activo ? 'Desactivar' : 'Reactivar'}</button>
+          ${otros ? `<select class="notif-fusionar" style="padding:5px 6px; border:1px solid var(--line); border-radius:6px; font-size:11px; margin:2px 4px 2px 0;"><option value="">Fusionar con…</option>${otros}</select>` : ''}
+          <button class="notif-eliminar" style="${btnEstilo('var(--red)')}" ${n.nFallas ? 'disabled title="Tiene fallas asociadas: desactívalo o fusiónalo"' : ''}>Eliminar</button>
+        </td>
+      </tr>`;
+    }).join('');
+
+    tbody.querySelectorAll('tr[data-id]').forEach(tr => {
+      const id = tr.dataset.id;
+      const nombreOriginal = filas.find(f => f.id === id).nombre;
+      tr.querySelector('.notif-guardar').onclick = () => accionNotificador(
+        () => db.update('notificadores', `id=eq.${id}`, { nombre: tr.querySelector('.notif-nombre').value.trim() }));
+      const btnValidar = tr.querySelector('.notif-validar');
+      if(btnValidar) btnValidar.onclick = () => accionNotificador(
+        () => db.update('notificadores', `id=eq.${id}`, { validado: true }));
+      tr.querySelector('.notif-activo').onclick = () => accionNotificador(
+        () => db.update('notificadores', `id=eq.${id}`, { activo: !filas.find(f => f.id === id).activo }));
+      const sel = tr.querySelector('.notif-fusionar');
+      if(sel) sel.onchange = async () => {
+        const destinoId = sel.value;
+        if(!destinoId) return;
+        const destino = filas.find(f => f.id === destinoId);
+        const n = filas.find(f => f.id === id);
+        if(!confirm(`¿Fusionar "${n.nombre}" en "${destino.nombre}"?\n\nLas ${n.nFallas} falla(s) de "${n.nombre}" pasarán a "${destino.nombre}" y "${n.nombre}" se eliminará.`)){
+          sel.value = ''; return;
+        }
+        await accionNotificador(() => db.rpc('fusionar_notificadores', { p_origen: id, p_destino: destinoId }));
+      };
+      tr.querySelector('.notif-eliminar').onclick = async () => {
+        if(!confirm(`¿Eliminar al notificador "${nombreOriginal}"?`)) return;
+        await accionNotificador(() => db.delete('notificadores', `id=eq.${id}`));
+      };
+    });
+  }catch(e){
+    tbody.innerHTML = `<tr><td colspan="4" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${escHtml(mensajeErrorNotificador(e))}</td></tr>`;
+  }
+}
+
+// Ejecuta una acción sobre la lista, avisa si falla y recarga la tabla.
+async function accionNotificador(fn){
+  try{ await fn(); }
+  catch(e){ alert('No se pudo completar: ' + mensajeErrorNotificador(e)); }
+  await cargarNotificadoresAdmin();
+}
+
+document.getElementById('notifAgregarBtn').onclick = async () => {
+  const input = document.getElementById('notifNuevoInput');
+  const nombre = input.value.trim().replace(/\s+/g, ' ');
+  if(nombre.length < 2){ alert('Escribe el nombre del notificador (mínimo 2 letras).'); return; }
+  try{
+    // El admin agrega a la lista de frecuentes: queda validado de inmediato
+    await db.insert('notificadores', { nombre, validado: true, creado_por: currentUser.id });
+    input.value = '';
+  }catch(e){ alert('No se pudo agregar: ' + mensajeErrorNotificador(e)); }
+  await cargarNotificadoresAdmin();
+};
+document.getElementById('notifNuevoInput').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter'){ e.preventDefault(); document.getElementById('notifAgregarBtn').click(); }
+});
 
 // ---------- CAMBIAR MI CONTRASEÑA (todos los roles) ----------
 document.getElementById('cambiarPassBtn').onclick = () => {
