@@ -502,11 +502,11 @@
       <div class="section" style="padding:6px 12px; flex-shrink:0;">
         <div style="display:flex; align-items:center; gap:8px;">
           <h3 style="margin:0; white-space:nowrap;">Últimas fallas</h3>
-          <div style="position:relative; flex:1; min-width:0;">
+          <form id="buscarFallasForm" role="search" autocomplete="off" onsubmit="return false;" style="position:relative; flex:1; min-width:0; margin:0;">
             <span style="position:absolute; left:9px; top:50%; transform:translateY(-50%); font-size:11px; pointer-events:none;">🔍</span>
-            <input type="text" id="buscarFallasLateral" name="buscar_fallas_lateral" autocomplete="off" spellcheck="false" placeholder="Buscar OS, OE, reportó, llave" style="width:100%; box-sizing:border-box; padding:7px 26px 7px 28px; border:1.5px solid var(--line); border-radius:8px; font-size:12px; outline:none; background:#fff;">
+            <input type="search" id="buscarFallasLateral" name="busqueda_fallas_lateral_x7" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" data-lpignore="true" data-1p-ignore="true" data-form-type="other" placeholder="Buscar OS, OE, reportó, llave" style="width:100%; box-sizing:border-box; padding:7px 26px 7px 28px; border:1.5px solid var(--line); border-radius:8px; font-size:12px; outline:none; background:#fff; -webkit-appearance:none; appearance:none;">
             <button type="button" id="buscarFallasLimpiar" title="Borrar búsqueda" style="display:none; position:absolute; right:6px; top:50%; transform:translateY(-50%); border:none; background:none; cursor:pointer; color:var(--ink-soft); font-size:13px; padding:0;">✕</button>
-          </div>
+          </form>
         </div>
       </div>
       <div id="fallasListaEstado" class="hint" style="display:none; margin:0; padding:0 12px 4px; flex-shrink:0;"></div>
@@ -2785,6 +2785,19 @@ function programarBusquedaLateral(){
   renderFallasList();
   temporizadorBusquedaLateral = setTimeout(() => ejecutarBusquedaLateral(texto), 350);
 }
+// Defensa extra contra el autollenado del navegador (correo/contraseña del login): se vacía el campo si
+// aparece solo un correo, y se limpia un momento después de cargar la página y de iniciar sesión.
+function vaciarAutollenadoBusqueda(){
+  const input = document.getElementById('buscarFallasLateral');
+  if(document.activeElement === input) return;           // si la persona está escribiendo, no se toca
+  const emailLogin = (document.getElementById('loginEmail') || {}).value || '';
+  if(input.value && (input.value === emailLogin || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value.trim()))){
+    input.value = ''; programarBusquedaLateral();
+  }
+}
+setTimeout(vaciarAutollenadoBusqueda, 300);
+setTimeout(vaciarAutollenadoBusqueda, 1200);
+setTimeout(vaciarAutollenadoBusqueda, 3000);
 document.getElementById('buscarFallasLateral').addEventListener('input', programarBusquedaLateral);
 document.getElementById('buscarFallasLimpiar').onclick = () => {
   const input = document.getElementById('buscarFallasLateral');
