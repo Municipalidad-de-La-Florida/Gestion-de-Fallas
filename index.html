@@ -2498,7 +2498,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
 // ---------- LISTA Y REPARACIÓN (contratista) ----------
 async function cargarFallasDelArea(){
   try{
-    const query = 'select=id,ot,tipo,tipo_falla,estado,cascada,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),puntos_luminarios(llave,nro_mun)'
+    const query = 'select=id,ot,tipo,tipo_falla,estado,cascada,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
       + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=20';
     fallasEnArea = await db.select('fallas', query);
     renderFallasList();
@@ -2514,7 +2514,7 @@ function renderFallasList(){
   list.innerHTML = fallasEnArea.map(f => {
     const tipoLabel = f.tipo === 'punto' ? (f.cascada ? 'Punto (circuito)' : 'Punto') : 'Circuito';
     const fecha = new Date(f.fecha_creacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-    const nombreCreador = f.usuarios ? f.usuarios.nombre : '—';
+    const nombreCreador = f.notificadores ? f.notificadores.nombre : (f.usuarios ? f.usuarios.nombre : '—');
     let botonReparar = '';
     let botonEliminar = '';
     if(['contratista','contratista2','camion'].includes(rolEfectivo()) && !f.cascada){
