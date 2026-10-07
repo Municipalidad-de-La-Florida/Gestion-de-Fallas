@@ -194,6 +194,25 @@
   .mode-btn.active{border-color:var(--primary);background:#eef5f1;color:var(--primary);}
   .mode-btn-blue{background:#2563a8; color:#fff; border:1.5px solid #000; text-align:center; justify-content:center;}
   .mode-btn-blue:hover{background:#1e4f87;}
+  .btn-inf{justify-content:center;text-align:center;background:var(--primary);color:#fff;border:1.5px solid var(--primary);border-radius:8px;font-weight:700;margin-bottom:0;padding:9px 16px;transition:background .15s;}
+  .btn-inf:hover{background:var(--primary-light);border-color:var(--primary-light);}
+  .btn-inf.abierto,.btn-inf.sel{background:var(--amber);border-color:var(--amber);color:#2a1c05;}
+  .btn-inf .chev{font-size:10px;transition:transform .2s;}
+  .btn-inf.abierto .chev{transform:rotate(180deg);}
+  .fi{padding:8px 12px;border-bottom:1px solid var(--line);font-size:12.5px;cursor:pointer;}
+  .fi:hover{background:#f7faf8;}
+  .fi-1{display:flex;align-items:center;gap:7px;min-height:22px;}
+  .fi-cod{font-weight:800;font-size:15px;color:var(--ink);padding-left:8px;border-left:4px solid #c9a227;letter-spacing:.02em;}
+  .fi-os{font-weight:500;font-size:11.5px;color:var(--ink-soft);white-space:nowrap;}
+  .fi-sp{flex:1;}
+  .fi-acc{border:1px solid var(--line);background:#fff;border-radius:6px;font-size:11px;padding:1px 5px;line-height:1.4;cursor:pointer;margin:0 !important;}
+  .fi-acc.fi-del{border-color:var(--red);background:#fbe7e5;}
+  .fi-nom{margin:1px 0 2px 12px;font-size:11px;font-weight:400;color:var(--ink-soft);}
+  .fi-2{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-soft);}
+  .fi-q{flex:1;min-width:0;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .fi-oe{color:#2563a8;font-weight:600;white-space:nowrap;}
+  .fi-oe.vacio{color:#b3beb7;font-weight:400;}
+  .fi-fh{white-space:nowrap;}
   .mode-btn .swatch{width:12px;height:12px;border-radius:50%;flex-shrink:0;background:var(--red);}
   .mode-btn.line .swatch{border-radius:2px;width:16px;height:4px;}
   .hint{font-size:11.5px;color:var(--ink-soft);line-height:1.5;margin-top:4px;}
@@ -446,12 +465,12 @@
   <div id="sidebar">
     <div id="sidebarResizeHandle" class="sidebar-resize-handle"></div>
     <div id="sidebarNormal" style="display:flex; flex-direction:column; flex:1; min-height:0;">
-      <div class="section" id="reportSection" style="display:none; flex-shrink:0;">
-        <div id="menuInformarInicial" style="text-align:center;">
-          <button class="mode-btn mode-btn-blue" id="btnInformarFalla" style="display:inline-flex; margin:0 auto 8px;">📋 Informar falla</button>
-          <div id="submenuInformar" style="display:none; margin-top:6px; gap:8px; justify-content:center;">
-            <button class="mode-btn mode-btn-blue" id="btnAgregarFalla" style="flex:0 1 auto;">Agregar falla</button>
-            <button class="mode-btn mode-btn-blue" id="btnInformarInspeccion" style="flex:0 1 auto;">Informar inspección</button>
+      <div class="section" id="reportSection" style="display:none; flex-shrink:0; padding:8px 12px 6px;">
+        <div id="menuInformarInicial">
+          <button class="mode-btn btn-inf" id="btnInformarFalla" style="width:100%;">📋 Informar falla <span class="chev">▼</span></button>
+          <div id="submenuInformar" style="display:none; margin-top:6px; gap:8px;">
+            <button class="mode-btn btn-inf" id="btnAgregarFalla" style="flex:1; font-size:12.5px; padding:8px 6px;">Agregar falla</button>
+            <button class="mode-btn btn-inf" id="btnInformarInspeccion" style="flex:1; font-size:12.5px; padding:8px 6px; white-space:nowrap;">Informar inspección</button>
           </div>
         </div>
         <div id="modoActivoBox" style="display:none;">
@@ -480,7 +499,17 @@
         <div class="hint">Haz clic en una falla del mapa o de la lista de abajo para registrar su reparación.</div>
       </div>
 
-      <div class="section" style="padding-bottom:8px;"><h3>Últimas fallas registradas</h3></div>
+      <div class="section" style="padding:6px 12px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <h3 style="margin:0; white-space:nowrap;">Últimas fallas</h3>
+          <div style="position:relative; flex:1; min-width:0;">
+            <span style="position:absolute; left:9px; top:50%; transform:translateY(-50%); font-size:11px; pointer-events:none;">🔍</span>
+            <input type="text" id="buscarFallasLateral" name="buscar_fallas_lateral" autocomplete="off" spellcheck="false" placeholder="Buscar OS, OE, reportó, llave" style="width:100%; box-sizing:border-box; padding:7px 26px 7px 28px; border:1.5px solid var(--line); border-radius:8px; font-size:12px; outline:none; background:#fff;">
+            <button type="button" id="buscarFallasLimpiar" title="Borrar búsqueda" style="display:none; position:absolute; right:6px; top:50%; transform:translateY(-50%); border:none; background:none; cursor:pointer; color:var(--ink-soft); font-size:13px; padding:0;">✕</button>
+          </div>
+        </div>
+      </div>
+      <div id="fallasListaEstado" class="hint" style="display:none; margin:0; padding:0 12px 4px; flex-shrink:0;"></div>
       <div id="fallasList" style="flex:1; overflow-y:auto; min-height:80px;"><div class="empty-state">Navega el mapa para ver fallas del sector.</div></div>
 
       <div class="section" style="flex-shrink:0;">
@@ -929,7 +958,9 @@ function actualizarVisibilidadPorRol(){
 // ---------- MENÚ "INFORMAR FALLA" (Admin e ITO) ----------
 document.getElementById('btnInformarFalla').onclick = () => {
   const sub = document.getElementById('submenuInformar');
-  sub.style.display = sub.style.display === 'none' ? 'flex' : 'none';
+  const abrir = sub.style.display === 'none';
+  sub.style.display = abrir ? 'flex' : 'none';
+  document.getElementById('btnInformarFalla').classList.toggle('abierto', abrir);
 };
 
 document.getElementById('btnAgregarFalla').onclick = async () => {
@@ -1153,6 +1184,7 @@ function salirModoInformar(limpiarGuardado = false){
   document.getElementById('informarPorOtroBox').style.display = 'none';
   const submenu = document.getElementById('submenuInformar');
   if(submenu) submenu.style.display = 'none';
+  document.getElementById('btnInformarFalla').classList.remove('abierto');
   const menuInicial = document.getElementById('menuInformarInicial');
   const modoActivo = document.getElementById('modoActivoBox');
   if(menuInicial) menuInicial.style.display = 'block';
@@ -2551,7 +2583,7 @@ function dibujarFallaHistorica(feat){
   capaFallaHistorica = L.layerGroup([capa]).addTo(map);
 }
 
-async function enfocarFalla(fallaId){
+async function enfocarFalla(fallaId, abrirPopup){
   let feat = ultimoFallasGeoJSON ? ultimoFallasGeoJSON.features.find(f => f.properties.id === fallaId) : null;
   if(!feat){
     try{
@@ -2572,7 +2604,7 @@ async function enfocarFalla(fallaId){
     const bounds = L.geoJSON(feat).getBounds();
     map.fitBounds(bounds, {padding:[50,50]});
   }
-  if(feat.properties._vistaHistorica) abrirPopupFalla(feat);
+  if(feat.properties._vistaHistorica || abrirPopup) abrirPopupFalla(feat);
 }
 window.enfocarFalla = enfocarFalla;
 // extra (opcional): {fechaISO, notificadorId} elegidos en la ventana de "Agregar falla" (usuarios con el permiso)
@@ -2641,44 +2673,123 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
 // ---------- LISTA Y REPARACIÓN (contratista) ----------
 async function cargarFallasDelArea(){
   try{
-    const query = 'select=id,ot,tipo,tipo_falla,estado,cascada,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
+    const query = 'select=id,ot,orden_externa,tipo,tipo_falla,estado,cascada,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
       + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=20';
     fallasEnArea = await db.select('fallas', query);
     renderFallasList();
+    if(busquedaLateral.texto) ejecutarBusquedaLateral(busquedaLateral.texto);
   }catch(e){ console.error(e); }
 }
 
+// ---------- LISTA LATERAL: últimas fallas + buscador (OS, orden externa, quién reportó, llave) ----------
+let busquedaLateral = {texto: '', filas: null, cargando: false, error: null};
+let temporizadorBusquedaLateral = null;
+let filasLateralPorId = {};
+
+function resaltarTexto(texto, terminos){
+  const seguro = escHtml(String(texto ?? ''));
+  if(!terminos || !terminos.length) return seguro;
+  const patron = terminos.map(t => escHtml(t).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  return seguro.replace(new RegExp('(' + patron + ')', 'ig'), '<mark style="background:#fff3b0; padding:0 1px; border-radius:2px;">$1</mark>');
+}
+
+// Unifica la fila de la lista normal (consulta a la tabla) y la de la búsqueda (función resumen_todas_fallas)
+function normalizarFilaLateral(f){
+  const esBusqueda = 'nombre_creador' in f;
+  return {
+    id: f.id, ot: f.ot, orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
+    fecha: f.fecha_creacion, creado_en: f.creado_en, creado_por: f.creado_por,
+    quien: esBusqueda ? (f.nombre_creador || '—') : (f.notificadores ? f.notificadores.nombre : (f.usuarios ? f.usuarios.nombre : '—')),
+    llave: esBusqueda ? f.llave : (f.puntos_luminarios ? f.puntos_luminarios.llave : null)
+  };
+}
+
+function puedeGestionarFallaLateral(f){
+  if(f.cascada) return false;
+  if(rolEfectivo() === 'admin') return true;
+  if(f.estado === 'reparada' || f.creado_por !== currentUser.id) return false;
+  if(!['ito','ito2','contratista2'].includes(currentUser.rol)) return false;
+  return (Date.now() - new Date(f.creado_en).getTime()) / 60000 <= 15;
+}
+
+function editarFallaLateral(id){
+  const f = filasLateralPorId[id];
+  if(f) abrirEditorFalla({id: f.id, ot: f.ot});
+}
+window.editarFallaLateral = editarFallaLateral;
+
 function renderFallasList(){
   const list = document.getElementById('fallasList');
-  if(!fallasEnArea.length){
-    list.innerHTML = '<div class="empty-state">No hay fallas activas registradas.</div>';
+  const estado = document.getElementById('fallasListaEstado');
+  const buscando = !!busquedaLateral.texto;
+  let filas;
+  if(buscando){
+    if(busquedaLateral.cargando){ list.innerHTML = '<div class="empty-state">Buscando…</div>'; estado.style.display = 'none'; return; }
+    if(busquedaLateral.error){ list.innerHTML = `<div class="empty-state">No se pudo buscar: ${escHtml(busquedaLateral.error)}</div>`; estado.style.display = 'none'; return; }
+    filas = (busquedaLateral.filas || []).map(normalizarFilaLateral);
+  } else {
+    filas = fallasEnArea.map(normalizarFilaLateral);
+  }
+  estado.style.display = filas.length ? 'block' : 'none';
+  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `Mostrando las últimas ${filas.length} fallas activas`;
+  if(!filas.length){
+    list.innerHTML = buscando
+      ? `<div class="empty-state">Sin resultados para «${escHtml(busquedaLateral.texto)}».</div>`
+      : '<div class="empty-state">No hay fallas activas registradas.</div>';
     return;
   }
-  list.innerHTML = fallasEnArea.map(f => {
-    const tipoLabel = f.tipo === 'punto' ? (f.cascada ? 'Punto (circuito)' : 'Punto') : 'Circuito';
-    const fecha = new Date(f.fecha_creacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-    const nombreCreador = f.notificadores ? f.notificadores.nombre : (f.usuarios ? f.usuarios.nombre : '—');
-    let botonReparar = '';
-    let botonEliminar = '';
-    if(['contratista','contratista2','camion'].includes(rolEfectivo()) && !f.cascada){
-      botonReparar = `<button onclick="event.stopPropagation(); abrirFormularioReparacion('${f.id}')">Registrar reparación</button>`;
-    }
-    if(rolEfectivo() === 'admin'){
-      botonEliminar = `<button onclick="event.stopPropagation(); eliminarFallaPropia('${f.id}')" style="color:var(--red); border-color:var(--red); margin-top:0;">Eliminar</button>`;
-    } else if(f.creado_por === currentUser.id){
-      const minutosTranscurridos = (Date.now() - new Date(f.creado_en).getTime()) / 60000;
-      if(minutosTranscurridos <= 15){
-        botonEliminar = `<button onclick="event.stopPropagation(); eliminarFallaPropia('${f.id}')" style="color:var(--red); border-color:var(--red); margin-top:0;">Eliminar (error)</button>`;
-      }
-    }
-    return `<div class="falla-item" style="cursor:pointer;" onclick="enfocarFalla('${f.id}')">
-      <div class="row1"><span><b>${tipoLabel}</b> · ${f.tipo_falla} <span class="hint">(OS ${f.ot || '—'})</span></span><span style="display:flex; align-items:center; gap:6px;"><span class="badge ${f.estado}">${f.estado.replace('_',' ')}</span>${botonEliminar}</span></div>
-      ${f.tipo === 'punto' && f.puntos_luminarios ? `<div class="meta">Llave <b>${escHtml(f.puntos_luminarios.llave ?? '—')}</b> · N.° Mun. <b>${escHtml(f.puntos_luminarios.nro_mun ?? '—')}</b></div>` : ''}
-      <div class="meta">Reportado por ${nombreCreador} · ${fecha}</div>
-      ${botonReparar}
+  const terminos = buscando ? busquedaLateral.texto.split(/\s+/).filter(Boolean) : [];
+  filasLateralPorId = {};
+  list.innerHTML = filas.map(f => {
+    filasLateralPorId[f.id] = f;
+    const gestionable = puedeGestionarFallaLateral(f);
+    const botones = gestionable
+      ? `<button type="button" class="fi-acc" title="Editar falla" onclick="event.stopPropagation(); editarFallaLateral('${f.id}')">✏️</button><button type="button" class="fi-acc fi-del" title="Eliminar falla" onclick="event.stopPropagation(); eliminarFallaPropia('${f.id}')">🗑️</button>`
+      : '';
+    let fechaTxt = '';
+    if(f.fecha){ const pc = partesChile(f.fecha); fechaTxt = `${pc.fecha.slice(8)}/${pc.fecha.slice(5, 7)} · ${pc.hora}`; }
+    const nombreFalla = descripcionCodigoAnalisis(f.tipo, f.tipo_falla) || '';
+    const lineaLlave = (buscando && f.llave != null && terminos.some(t => String(f.llave).toLowerCase().includes(t.toLowerCase())))
+      ? `<div class="fi-nom" style="margin-top:1px;">Llave ${resaltarTexto(f.llave, terminos)}</div>` : '';
+    return `<div class="fi" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
+      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
+      <div class="fi-nom">${escHtml(nombreFalla)}</div>
+      <div class="fi-2"><span class="fi-q">${resaltarTexto(f.quien, terminos)}</span><span class="fi-oe${f.orden_externa ? '' : ' vacio'}">OE: ${f.orden_externa ? resaltarTexto(f.orden_externa, terminos) : '—'}</span><span class="fi-fh">${fechaTxt}</span></div>
+      ${lineaLlave}
     </div>`;
   }).join('');
 }
+
+async function ejecutarBusquedaLateral(texto){
+  try{
+    const filas = (await db.rpc('resumen_todas_fallas', {limite: 50, desplazamiento: 0, busqueda: texto})) || [];
+    if(document.getElementById('buscarFallasLateral').value.trim() !== texto) return;
+    busquedaLateral = {texto, filas, cargando: false, error: null};
+  }catch(e){
+    busquedaLateral = {texto, filas: [], cargando: false, error: e.message};
+  }
+  renderFallasList();
+}
+
+function programarBusquedaLateral(){
+  clearTimeout(temporizadorBusquedaLateral);
+  const input = document.getElementById('buscarFallasLateral');
+  const texto = input.value.trim();
+  document.getElementById('buscarFallasLimpiar').style.display = input.value ? 'block' : 'none';
+  if(!texto){
+    busquedaLateral = {texto: '', filas: null, cargando: false, error: null};
+    renderFallasList();
+    return;
+  }
+  busquedaLateral = {texto, filas: null, cargando: true, error: null};
+  renderFallasList();
+  temporizadorBusquedaLateral = setTimeout(() => ejecutarBusquedaLateral(texto), 350);
+}
+document.getElementById('buscarFallasLateral').addEventListener('input', programarBusquedaLateral);
+document.getElementById('buscarFallasLimpiar').onclick = () => {
+  const input = document.getElementById('buscarFallasLateral');
+  input.value = ''; programarBusquedaLateral(); input.focus();
+};
 
 async function eliminarFallaPropia(fallaId){
   if(!confirm('¿Eliminar esta falla? Esta acción no se puede deshacer.')) return;
