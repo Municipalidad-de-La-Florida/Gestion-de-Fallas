@@ -571,7 +571,8 @@
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeUsuariosBtn">×</button>
     <h2>Gestión de usuarios</h2>
-    <div class="hint" style="margin-bottom:12px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). Recuerda pulsar Guardar en la fila.</div>
+    <div class="hint" style="margin-bottom:12px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div>
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><button id="guardarUsuariosBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;" disabled>Guardar cambios</button><span id="usuariosEstado" class="hint" style="margin:0;">Sin cambios</span></div>
     <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
         <thead>
@@ -581,11 +582,10 @@
             <th style="padding:8px 10px;">Rol</th>
             <th style="padding:8px 10px;">Notificadores</th>
             <th style="padding:8px 10px;"></th>
-            <th style="padding:8px 10px;"></th>
           </tr>
         </thead>
         <tbody id="usuariosTbody">
-          <tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+          <tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -4924,6 +4924,14 @@ function puntoEnCirculo(cx, cy, r, anguloGrados){
   return [cx + r * Math.cos(rad), cy + r * Math.sin(rad)];
 }
 
+// Evita que un modal se cierre al soltar el mouse fuera de la tarjeta tras empezar a seleccionar/arrastrar adentro:
+// solo cuenta como "clic en el fondo" si el botón se presionó Y se soltó sobre el fondo.
+let _mousedownTarget = null;
+document.addEventListener('mousedown', e => { _mousedownTarget = e.target; }, true);
+document.addEventListener('click', e => {
+  if(e.target.classList && e.target.classList.contains('modal-overlay') && _mousedownTarget !== e.target) e.stopPropagation();
+}, true);
+
 // ---------- GESTIÓN DE USUARIOS (admin) ----------
 document.getElementById('usuariosBtn').onclick = () => mostrarModalUsuarios();
 document.getElementById('closeUsuariosBtn').onclick = () => document.getElementById('usuariosModal').classList.remove('visible');
@@ -4948,11 +4956,11 @@ function htmlCeldaNotificador(rol, habilitado){
 
 async function cargarUsuarios(){
   const tbody = document.getElementById('usuariosTbody');
-  tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
     const usuarios = await db.select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado&order=nombre.asc');
     if(!usuarios.length){
-      tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
       return;
     }
     tbody.innerHTML = usuarios.map(u => {
@@ -4962,7 +4970,6 @@ async function cargarUsuarios(){
         <td>${u.email || '—'}</td>
         <td><select class="rol-select" style="padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; font-size:12px;">${opciones}</select></td>
         <td class="notif-celda" style="white-space:nowrap;">${htmlCeldaNotificador(u.rol, u.notificador_externo_habilitado)}</td>
-        <td><button class="guardar-usuario-btn" style="font-size:11px; border:1px solid var(--primary); color:var(--primary); background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer;">Guardar</button></td>
         <td><button class="reset-pass-btn" style="font-size:11px; border:1px solid var(--amber); color:var(--amber); background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer;" ${!u.email?'disabled':''}>Enviar reset</button></td>
       </tr>`;
     }).join('');
@@ -4981,32 +4988,66 @@ async function cargarUsuarios(){
         celdaNotif.innerHTML = htmlCeldaNotificador(rolSelect.value, tr.dataset.notif === '1');
         enlazarCasilla();
       };
-      tr.querySelector('.guardar-usuario-btn').onclick = () => guardarUsuario(
-        id, tr.querySelector('.nombre-input').value.trim(), rolSelect.value,
-        ROLES_CON_NOTIFICADOR.includes(rolSelect.value) && tr.dataset.notif === '1'
-      );
+      tr.dataset.orig = JSON.stringify(estadoFilaUsuario(tr));
+      tr.addEventListener('input', refrescarCambiosUsuarios);
+      tr.addEventListener('change', refrescarCambiosUsuarios);
       const email = tr.children[1].textContent.trim();
       tr.querySelector('.reset-pass-btn').onclick = () => enviarResetPassword(email);
     });
+    refrescarCambiosUsuarios();
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
   }
 }
 
-async function guardarUsuario(id, nombre, rol, notificadorHabilitado){
-  if(!nombre){ alert('El nombre no puede estar vacío.'); return; }
-  try{
-    const filas = await db.update('usuarios', `id=eq.${id}`, {nombre, rol, notificador_externo_habilitado: !!notificadorHabilitado});
-    if(!Array.isArray(filas) || !filas.length) throw new Error('No se guardó ningún cambio (¿sin permiso?).');
-    alert('Usuario actualizado.');
-    if(id === currentUser.id){
-      currentUser.nombre = nombre; currentUser.rol = rol;
-      currentUser.notificador_externo_habilitado = !!filas[0].notificador_externo_habilitado;
-      document.getElementById('userNombre').textContent = nombre;
-      document.getElementById('userRol').textContent = rolVisible(rol);
-    }
-  }catch(e){ alert('No se pudo guardar: ' + e.message); }
+// Estado actual de una fila (para detectar qué cambió y guardar todo junto)
+function estadoFilaUsuario(tr){
+  const rol = tr.querySelector('.rol-select').value;
+  return {
+    nombre: tr.querySelector('.nombre-input').value.trim(),
+    rol,
+    notif: ROLES_CON_NOTIFICADOR.includes(rol) && tr.dataset.notif === '1'
+  };
 }
+function filasUsuariosModificadas(){
+  return [...document.querySelectorAll('#usuariosTbody tr[data-id]')]
+    .filter(tr => tr.dataset.orig && JSON.stringify(estadoFilaUsuario(tr)) !== tr.dataset.orig);
+}
+function refrescarCambiosUsuarios(){
+  document.querySelectorAll('#usuariosTbody tr[data-id]').forEach(tr => {
+    tr.style.background = (tr.dataset.orig && JSON.stringify(estadoFilaUsuario(tr)) !== tr.dataset.orig) ? '#fff8e1' : '';
+  });
+  const n = filasUsuariosModificadas().length;
+  document.getElementById('guardarUsuariosBtn').disabled = n === 0;
+  document.getElementById('usuariosEstado').textContent = n ? `${n} usuario${n>1?'s':''} con cambios sin guardar` : 'Sin cambios';
+}
+
+async function guardarUsuariosCambiados(){
+  const filas = filasUsuariosModificadas();
+  if(!filas.length) return;
+  if(filas.some(tr => !estadoFilaUsuario(tr).nombre)){ alert('Hay un usuario con el nombre vacío; complétalo antes de guardar.'); return; }
+  document.getElementById('guardarUsuariosBtn').disabled = true;
+  const errores = []; let ok = 0;
+  for(const tr of filas){
+    const id = tr.dataset.id, e = estadoFilaUsuario(tr);
+    try{
+      const r = await db.update('usuarios', `id=eq.${id}`, {nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif});
+      if(!Array.isArray(r) || !r.length) throw new Error('no se guardó (¿sin permiso?)');
+      ok++;
+      tr.dataset.orig = JSON.stringify({nombre: e.nombre, rol: e.rol, notif: !!r[0].notificador_externo_habilitado});
+      if(id === currentUser.id){
+        currentUser.nombre = e.nombre; currentUser.rol = e.rol;
+        currentUser.notificador_externo_habilitado = !!r[0].notificador_externo_habilitado;
+        document.getElementById('userNombre').textContent = e.nombre;
+        document.getElementById('userRol').textContent = rolVisible(e.rol);
+      }
+    }catch(err){ errores.push(`${e.nombre}: ${err.message}`); }
+  }
+  refrescarCambiosUsuarios();
+  if(errores.length) alert(`Guardados: ${ok}. Con error:\n- ` + errores.join('\n- '));
+  else document.getElementById('usuariosEstado').textContent = `✓ ${ok} usuario${ok>1?'s':''} guardado${ok>1?'s':''}`;
+}
+document.getElementById('guardarUsuariosBtn').onclick = guardarUsuariosCambiados;
 
 async function enviarResetPassword(email){
   if(!email || email === '—'){ alert('Este usuario no tiene email registrado.'); return; }
