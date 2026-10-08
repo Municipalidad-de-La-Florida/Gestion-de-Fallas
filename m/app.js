@@ -824,8 +824,8 @@ function b64aBytes(b64) {
 }
 async function suscripcionActual() {
   if (!pushSoportado()) return null;
-  const reg = await navigator.serviceWorker.ready;
-  return reg.pushManager.getSubscription();
+  const reg = await Promise.race([navigator.serviceWorker.ready, new Promise((r) => setTimeout(() => r(null), 3000))]);
+  return reg ? reg.pushManager.getSubscription() : null;
 }
 async function registrarSuscripcion(sub) {
   const j = sub.toJSON();
