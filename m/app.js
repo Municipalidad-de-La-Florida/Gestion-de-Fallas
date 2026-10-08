@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.5.0';
+const VERSION_APP = '1.6.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -671,6 +671,8 @@ async function abrirFalla(p, geom) {
     ['Informó', p.nombre_creador || p.nombre_real_creador || '—'],
     ['Fecha de la falla', fmtFecha(p.fecha_falla)],
     p.asignado_camion_nombre ? ['Camión asignado', p.asignado_camion_nombre] : null,
+    p.estado === 'reparada' ? ['Reparada por', p.reparado_por_nombre || '—'] : null,
+    p.estado === 'reparada' ? ['Fecha de reparación', fmtFecha(p.fecha_reparacion)] : null,
   ].filter(Boolean);
   const puedeCerrarEsta = puedeCerrar() && !p.cascada && p.estado !== 'reparada';
   const puedeAsignarEsta = puedeAsignar() && !p.cascada && p.estado !== 'reparada';
@@ -678,6 +680,7 @@ async function abrirFalla(p, geom) {
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
     <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+    ${p.estado === 'reparada' && p.descripcion_reparacion ? `<h3>Trabajo realizado</h3><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
     ${p.estado === 'pendiente' ? `<div class="aviso"><b>Pendiente</b> por ${esc(p.pendiente_por_nombre || '—')} · ${esc(fmtFecha(p.fecha_pendiente))}<br><pre class="texto">${esc(p.motivo_pendiente || '')}</pre></div>` : ''}
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
@@ -1021,6 +1024,31 @@ function abrirInspeccion() {
 $('#navInsp').addEventListener('click', abrirInspeccion);
 $('#chipModo').addEventListener('click', abrirInspeccion);
 
+/* ------------------------- abrir una falla desde un aviso ------------------------- */
+async function abrirFallaPorId(id) {
+  let f = S.features.find((x) => x.properties.id === id);
+  if (!f) {
+    const geo = await rpc('fallas_geojson', { p_id: id });
+    f = geo && geo.features && geo.features[0];
+    if (f) f._c = centroGeom(f.geometry);
+  }
+  if (!f) { toast('No se encontró la falla del aviso (puede haber sido eliminada).', 'error'); return; }
+  cambiarVista('mapa');
+  if (map && f._c) map.setView(f._c, Math.max(map.getZoom(), 18));
+  abrirFalla(f.properties, f.geometry);
+}
+function fallaDeUrl() {
+  try {
+    const u = new URL(location.href), id = u.searchParams.get('falla');
+    if (id) { u.searchParams.delete('falla'); history.replaceState(history.state, '', u.pathname + (u.search || '') + u.hash); }
+    return id && /^[\w-]{1,64}$/.test(id) ? id : null;
+  } catch (e) { return null; }
+}
+async function abrirPendienteDeAviso() {
+  const id = S.fallaPendiente; S.fallaPendiente = null;
+  if (id) { try { await abrirFallaPorId(id); } catch (e) { toast('No se pudo abrir la falla del aviso.', 'error'); } }
+}
+
 /* ------------------------- actualización de la app ------------------------- */
 // Borra copias guardadas y service worker, y recarga: deja la app idéntica a la publicada.
 async function forzarActualizacion() {
@@ -1098,6 +1126,7 @@ async function entrarApp() {
   setTimeout(() => map.invalidateSize(), 80);
   cacheBbox = null;
   await cargarFallas();
+  abrirPendienteDeAviso();
   cargarArea(true);
   S.centrarAlFijar = true;
   iniciarGPS();
@@ -1119,6 +1148,15 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && S.
     });
   }
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { /* sin SW: la app funciona igual */ });
+  S.fallaPendiente = fallaDeUrl();
+  if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
+    navigator.serviceWorker.addEventListener('message', (ev) => {
+      const id = ev.data && ev.data.tipo === 'abrir-falla' && ev.data.id;
+      if (!id || !/^[\w-]{1,64}$/.test(id)) return;
+      S.fallaPendiente = id;
+      if (S.perfil) { cerrarHoja(); abrirPendienteDeAviso(); }
+    });
+  }
   cargarSesion();
   if (!sesion) { mostrarLogin(); return; }
   try { await entrarApp(); } catch (e) {
