@@ -1378,6 +1378,22 @@ function iconoParaPunto(simbPoste, colorRelleno, colorBorde){
   return L.divIcon({ html, className: '', iconSize: [12,12], iconAnchor: [6,6] });
 }
 
+// Icono de una falla en un punto: conserva la forma del poste (igual que los puntos), en el color del estado.
+function iconoFalla(simbPoste, color, radio){
+  const tipo = (simbPoste || '').toUpperCase().trim();
+  const r = radio, S = Math.ceil(r * 2.4 + 6), c = S / 2;
+  const poli = (pts) => `<polygon points="${pts.map(([a, b]) => `${(c + a * r).toFixed(1)},${(c + b * r).toFixed(1)}`).join(' ')}"`;
+  let f;
+  if(tipo === 'HORMIGON') f = poli([[-.9,-.9],[.9,-.9],[.9,.9],[-.9,.9]]);
+  else if(tipo === 'ACERO') f = poli([[0,-1.05],[1.05,.85],[-1.05,.85]]);
+  else if(tipo === 'MONOPOSTE') f = poli([[0,-1.1],[.95,-.55],[.95,.55],[0,1.1],[-.95,.55],[-.95,-.55]]);
+  else if(tipo === 'ORNAMENTAL') f = poli([[0,-1.05],[1,-.32],[.62,.85],[-.62,.85],[-1,-.32]]);
+  else if(tipo === 'FACHADA') f = `<path d="M${(c - r * 1.05).toFixed(1)},${(c + r * .45).toFixed(1)} A${(r * 1.05).toFixed(1)},${(r * 1.05).toFixed(1)} 0 0 1 ${(c + r * 1.05).toFixed(1)},${(c + r * .45).toFixed(1)} Z"`;
+  else f = `<circle cx="${c}" cy="${c}" r="${r}"`;
+  const svg = `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg">${f} fill="${color}" fill-opacity="0.95" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>`;
+  return L.divIcon({ html: svg, className: '', iconSize: [S, S], iconAnchor: [c, c] });
+}
+
 // ---------- MAPA ----------
 function initMap(){
   map = L.map('map', {minZoom:12, maxZoom:19, zoomControl:false}).setView([-33.5384, -70.5973], 14);
@@ -2121,9 +2137,9 @@ function renderFallasDesdeCache(){
         if(feat.properties.cascada && map.getZoom() < 17) return;
         const [lon, lat] = feat.geometry.coordinates;
         const radioFalla = map.getZoom() <= 16 ? 4 : 8;
-        const marker = L.circleMarker([lat, lon], {
-          radius: radioFalla, color:'#fff', weight:2, fillColor:color, fillOpacity:0.95, pane:'fallasPane',
-          interactive: !dejarPasarClick
+        const marker = L.marker([lat, lon], {
+          icon: iconoFalla(feat.properties.simb_poste, color, radioFalla), pane:'fallasPane',
+          interactive: !dejarPasarClick, keyboard: false
         }).addTo(fallasLayerGroup);
         if(!dejarPasarClick){
           marker.on('click', (e) => {
@@ -2636,9 +2652,7 @@ function dibujarFallaHistorica(feat){
   let capa;
   if(feat.geometry.type === 'Point'){
     const [lon, lat] = feat.geometry.coordinates;
-    capa = L.circleMarker([lat, lon], {
-      radius: 9, color:'#fff', weight:2, fillColor:color, fillOpacity:0.95, pane:'fallasPane'
-    });
+    capa = L.marker([lat, lon], { icon: iconoFalla(feat.properties.simb_poste, color, 9), pane:'fallasPane', keyboard: false });
   } else {
     capa = L.geoJSON(feat, { style:{ color, weight:6, opacity:0.9, dashArray:'6,4' }, pane:'fallasPane' });
   }
