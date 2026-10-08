@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.8.1';
+const VERSION_APP = '1.9.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -444,7 +444,7 @@ function dibujarFallas() {
     if (f.geometry.type === 'Point') {
       const [lng, lat] = f.geometry.coordinates;
       const r = p.cascada ? (z >= 18 ? 7 : 5) : (z >= 18 ? 13 : z >= 16 ? 11 : 8);
-      capa = new MarcadorForma([lat, lng], { renderer: rend, forma: formaPoste(p.simb_poste), radius: r, weight: 3, color: '#fff', fillColor: color, fillOpacity: reparada ? 0.55 : 0.95, interactive: !reparada });
+      capa = new MarcadorForma([lat, lng], { renderer: rend, forma: formaPoste(p.simb_poste), radius: r, weight: 3, color: '#fff', fillColor: color, fillOpacity: reparada ? 0.55 : 0.95, interactive: true });
     } else {
       if (p.estado === 'reportada') {
         // Circuito recién reportado: parpadea (como en el escritorio). El parpadeo es CSS sobre SVG;
@@ -453,10 +453,10 @@ function dibujarFallas() {
         capaFallas.addLayer(base);
         capa = L.geoJSON(f.geometry, { renderer: rendSvg, style: { color: '#000', weight: 20, opacity: 0, className: 'falla-toque' }, interactive: true });
       } else {
-        capa = L.geoJSON(f.geometry, { renderer: rend, style: { color, weight: 7, opacity: reparada ? 0.45 : 0.9 }, interactive: !reparada });
+        capa = L.geoJSON(f.geometry, { renderer: rend, style: { color, weight: 7, opacity: reparada ? 0.45 : 0.9 }, interactive: true });
       }
     }
-    if (!reparada) capa.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirFalla(p, f.geometry); });
+    capa.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirFalla(p, f.geometry); });
     capaFallas.addLayer(capa);
   });
 }
@@ -701,6 +701,21 @@ function formReporteCircuito(p) {
 function tipoLabel(p) { return p.tipo === 'punto' ? (p.cascada ? 'Punto (por circuito)' : 'Punto lumínico') : 'Circuito'; }
 function urlComoLlegar(c) { return `https://www.google.com/maps/dir/?api=1&destination=${c[0]},${c[1]}&travelmode=driving`; }
 
+// Desde la ventana de una falla ya reparada: ofrecer reportar una falla nueva en el mismo punto o circuito.
+async function reportarNuevaSobre(p) {
+  if (p.tipo === 'linea') {
+    const gid = p.ref_circuito_gid;
+    const dup = await hayFallaActiva('ref_circuito_gid', gid);
+    if (dup) return avisoDuplicado(dup);
+    const capa = capaCircuitos.getLayers().find((l) => l.feature && l.feature.properties.gid === gid);
+    return formReporteCircuito(capa ? capa.feature.properties : { gid, id: '', cantidad_luminarias_cliente: '—' });
+  }
+  const gid = p.ref_punto_gid;
+  const dup = await hayFallaActiva('ref_punto_gid', gid);
+  if (dup) return avisoDuplicado(dup);
+  formReportePunto({ gid, llave: p.llave, nro_mun: p.nro_mun, simb_poste: p.simb_poste });
+}
+
 async function abrirFalla(p, geom) {
   const c = centroGeom(geom);
   const desc = DESC_CODIGO[p.tipo_falla];
@@ -717,6 +732,7 @@ async function abrirFalla(p, geom) {
     p.estado === 'reparada' ? ['Fecha de reparación', fmtFecha(p.fecha_reparacion)] : null,
   ].filter(Boolean);
   const puedeCerrarEsta = puedeCerrar() && !p.cascada && p.estado !== 'reparada';
+  const puedeNuevaAqui = puedeReportar() && p.estado === 'reparada';
   const puedeAsignarEsta = puedeAsignar() && !p.cascada && p.estado !== 'reparada';
   const h = abrirHoja(`
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
@@ -727,6 +743,7 @@ async function abrirFalla(p, geom) {
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
       ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario">Registrar reparación</button>` : ''}
+      ${puedeNuevaAqui ? `<button id="bNueva" class="btn btn-secundario">Reportar falla nueva en ${p.tipo === 'linea' ? 'este circuito' : 'este punto'}</button>` : ''}
       ${puedeAsignarEsta ? `<button id="bAsignar" class="btn btn-secundario">${p.asignado_camion_id ? 'Cambiar camión asignado' : 'Asignar a camión'}</button>` : ''}
       <a class="btn btn-secundario" style="display:flex;align-items:center;justify-content:center;text-decoration:none" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">Cómo llegar</a>
     </div>
@@ -734,6 +751,8 @@ async function abrirFalla(p, geom) {
     <ul class="linea-tiempo" id="histFalla"><li class="hint">Cargando…</li></ul>`);
   const bc = $('#bCerrar', h);
   if (bc) bc.addEventListener('click', () => formCierre(p));
+  const bn = $('#bNueva', h);
+  if (bn) bn.addEventListener('click', ocupar(bn, () => reportarNuevaSobre(p)));
   const ba = $('#bAsignar', h);
   if (ba) ba.addEventListener('click', () => formAsignar(p));
   // Historial de comentarios
