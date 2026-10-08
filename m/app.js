@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.8.0';
+const VERSION_APP = '1.8.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -933,8 +933,14 @@ async function iniciarPush() {
   if (!pushSoportado() || !S.perfil) return;
   try {
     if (Notification.permission === 'granted') {
-      const sub = await suscripcionActual();
-      if (sub) await registrarSuscripcion(sub);
+      let sub = await suscripcionActual();
+      if (!sub) {
+        // El permiso sigue dado pero el teléfono perdió la suscripción: se vuelve a crear sin molestar al usuario.
+        const reg = await navigator.serviceWorker.ready;
+        const clave = await rpc('clave_publica_push', {});
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64aBytes(clave) });
+      }
+      await registrarSuscripcion(sub);
       return;
     }
     if (Notification.permission !== 'default') return;
@@ -1094,9 +1100,17 @@ async function abrirPendienteDeAviso() {
 /* ------------------------- actualización de la app ------------------------- */
 // Borra copias guardadas y service worker, y recarga: deja la app idéntica a la publicada.
 async function forzarActualizacion() {
+  // Importante: NO se desinstala el service worker, porque eso borraría la suscripción a los avisos.
   try {
-    if ('serviceWorker' in navigator) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map((r) => r.unregister())); }
     if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); }
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.update();
+        const nuevo = reg.installing || reg.waiting;
+        if (nuevo && nuevo.state !== 'activated') await new Promise((res) => { nuevo.addEventListener('statechange', () => { if (nuevo.state === 'activated') res(); }); setTimeout(res, 8000); });
+      }
+    }
   } catch (e) { /* */ }
   location.reload();
 }
