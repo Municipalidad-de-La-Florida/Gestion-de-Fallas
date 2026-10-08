@@ -3953,6 +3953,7 @@ function renderDetalleInspeccion(det){
       <div><div class="hint" style="margin:0;">Fallas</div><b>${fallas.length}</b> <span class="hint">· ${puntos} punto${puntos===1?'':'s'} afectado${puntos===1?'':'s'}</span></div>
       <div style="align-self:flex-end;"><div class="insp-pills" style="margin:0;">${pillsEstadoHtml({reparadas:cuenta.reparada, pendientes:cuenta.pendiente, reiteradas:cuenta.reiterada, reportadas:cuenta.reportada})}</div></div>
       <div style="margin-left:auto; align-self:flex-end; display:flex; gap:8px;">
+        ${rolEfectivo()==='admin' ? '<button class="popup-btn" id="inspEditarBtn" style="width:auto; margin:0; padding:7px 14px; background:#7a4b00; border:1.5px solid #000;">✏️ Editar inspección</button>' : ''}
         ${puedeContinuarInspeccion(insp) ? '<button class="popup-btn" id="inspContinuarBtn" style="width:auto; margin:0; padding:7px 14px; background:#2563a8; border:1.5px solid #000;">✏️ Continuar esta inspección</button>' : ''}
         <button class="popup-btn" id="inspPdfBtn" style="width:auto; margin:0; padding:7px 14px;">📄 Exportar PDF</button>
       </div>
@@ -3962,6 +3963,7 @@ function renderDetalleInspeccion(det){
     cont.innerHTML = encabezado + '<div class="empty-state">Esta inspección se registró sin fallas.</div>';
     enlazarPdfInspeccion();
     enlazarContinuarInspeccion(insp);
+    enlazarEditarInspeccion(det);
     return;
   }
   cont.innerHTML = encabezado + `
@@ -3993,6 +3995,83 @@ function renderDetalleInspeccion(det){
   });
   enlazarPdfInspeccion();
   enlazarContinuarInspeccion(insp);
+  enlazarEditarInspeccion(det);
+}
+
+
+// ===== Editar inspección (solo admin; la base de datos lo exige también) =====
+function enlazarEditarInspeccion(det){
+  const btn = document.getElementById('inspEditarBtn');
+  if(btn) btn.onclick = () => abrirModalEditarInspeccion(det);
+}
+function cerrarModalEditarInspeccion(){
+  const m = document.getElementById('editarInspModal');
+  if(m) m.remove();
+}
+function abrirModalEditarInspeccion(det){
+  cerrarModalEditarInspeccion();
+  const insp = det.inspeccion, fallas = det.fallas || [];
+  const cuenta = {reparada:0, pendiente:0, reiterada:0, reportada:0};
+  fallas.forEach(f => { if(cuenta[f.estado] !== undefined) cuenta[f.estado]++; });
+  const puntos = fallas.reduce((s, f) => s + (f.puntos_afectados || 0), 0);
+  const m = document.createElement('div');
+  m.id = 'editarInspModal';
+  m.className = 'modal-overlay visible';
+  m.innerHTML = `
+    <div class="modal-card" style="max-width:520px;">
+      <button class="close-x" id="editInspCerrar" aria-label="Cerrar">×</button>
+      <h3 style="margin-top:0;">✏️ Editar inspección</h3>
+      <div style="margin-bottom:12px;">
+        <b>${escHtml(insp.ito_nombre)}</b> · ${escHtml(fmtDiaInspeccion(insp.fecha))}
+        <div class="insp-pills" style="margin:6px 0 0;">${pillsEstadoHtml({reparadas:cuenta.reparada, pendientes:cuenta.pendiente, reiteradas:cuenta.reiterada, reportadas:cuenta.reportada})}</div>
+      </div>
+      <div style="border:1.5px solid #1f8a4c; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <b>Quitar la inspección y dejar las fallas sueltas</b>
+        <div class="hint">Se borra solo el registro de la inspección. Las ${fallas.length} falla${fallas.length===1?'':'s'} se conservan con su OS, fecha y hora, como si se hubieran ingresado una a una.</div>
+        <button class="popup-btn" id="editInspSueltas" style="margin-top:8px; background:#1f8a4c;">Quitar inspección</button>
+      </div>
+      <div style="border:1.5px solid #c0392b; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <b style="color:#c0392b;">Eliminar la inspección completa</b>
+        <div class="hint">Se borran la inspección y sus <b>${fallas.length}</b> falla${fallas.length===1?'':'s'} (${cuenta.reparada} reparada${cuenta.reparada===1?'':'s'}, ${puntos} punto${puntos===1?'':'s'}), con sus cierres y comentarios. No se puede deshacer.</div>
+        <input id="editInspConfirma" type="text" autocomplete="off" placeholder="Escribe ELIMINAR para confirmar" style="width:100%; margin-top:8px; padding:8px; box-sizing:border-box;">
+        <button class="popup-btn" id="editInspCompleta" disabled style="margin-top:8px; background:#c0392b; opacity:.5;">Eliminar todo</button>
+      </div>
+      <div id="editInspError" class="hint" style="color:#c0392b; display:none;"></div>
+      <button class="popup-btn" id="editInspCancelar" style="background:#666;">Cancelar</button>
+    </div>`;
+  document.body.appendChild(m);
+  const $ = id => m.querySelector('#' + id);
+  const inp = $('editInspConfirma'), bComp = $('editInspCompleta'), bSue = $('editInspSueltas');
+  $('editInspCerrar').onclick = $('editInspCancelar').onclick = cerrarModalEditarInspeccion;
+  inp.oninput = () => {
+    const ok = inp.value.trim() === 'ELIMINAR';
+    bComp.disabled = !ok; bComp.style.opacity = ok ? '1' : '.5';
+  };
+  const ejecutar = async (modo) => {
+    bComp.disabled = true; bSue.disabled = true;
+    const err = $('editInspError'); err.style.display = 'none';
+    const {error} = await db.rpc('admin_eliminar_inspeccion', {p_id: insp.id, p_modo: modo});
+    if(error){
+      err.textContent = 'No se pudo: ' + error.message; err.style.display = 'block';
+      bSue.disabled = false; inp.oninput();
+      return;
+    }
+    cerrarModalEditarInspeccion();
+    await tras_editar_inspeccion(insp.id);
+  };
+  bSue.onclick = () => ejecutar('sueltas');
+  bComp.onclick = () => { if(inp.value.trim() === 'ELIMINAR') ejecutar('completa'); };
+}
+async function tras_editar_inspeccion(id){
+  if(inspeccionSeleccionadaId === id) inspeccionSeleccionadaId = null;
+  if(inspeccionCache && inspeccionCache.id === id) inspeccionCache = {clave:null, id:null};
+  limpiarCapaInspeccion();
+  const cont = document.getElementById('inspeccionContenido');
+  if(cont) cont.innerHTML = '<div class="empty-state">Inspección actualizada. Selecciona otra del listado.</div>';
+  invalidarCacheTodasFallas();
+  await cargarListadoInspecciones();
+  await cargarFallasDelArea();
+  renderFallasOnMap();
 }
 
 // "Continuar esta inspección": solo el ITO dueño (o admin / ito2 para cualquiera), de los últimos
