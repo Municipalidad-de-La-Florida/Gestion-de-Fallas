@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.6.0';
+const VERSION_APP = '1.7.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -332,7 +332,7 @@ async function cargarPerfil() {
 }
 
 /* ------------------------------ mapa ------------------------------ */
-let map, rend, capaCircuitos, capaPuntos, capaFallas, marcadorPos, circuloPos;
+let map, rend, rendSvg, capaCircuitos, capaPuntos, capaFallas, marcadorPos, circuloPos;
 let cacheBbox = null;
 
 function iniciarMapa() {
@@ -340,6 +340,7 @@ function iniciarMapa() {
   map = L.map('map', { zoomControl: false, attributionControl: true, maxZoom: 20 }).setView([-33.52, -70.58], 14);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, maxNativeZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   rend = L.canvas({ padding: 0.5, tolerance: 12 });
+  rendSvg = L.svg({ padding: 0.5 });
   capaCircuitos = L.geoJSON(null, { renderer: rend });
   capaPuntos = L.geoJSON(null, { renderer: rend });
   capaFallas = L.geoJSON(null, { renderer: rend });
@@ -412,7 +413,15 @@ function dibujarFallas() {
       const r = p.cascada ? (z >= 18 ? 7 : 5) : (z >= 18 ? 13 : z >= 16 ? 11 : 8);
       capa = L.circleMarker([lat, lng], { renderer: rend, radius: r, weight: 3, color: '#fff', fillColor: color, fillOpacity: reparada ? 0.55 : 0.95, interactive: !reparada });
     } else {
-      capa = L.geoJSON(f.geometry, { renderer: rend, style: { color, weight: 7, opacity: reparada ? 0.45 : 0.9 }, interactive: !reparada });
+      if (p.estado === 'reportada') {
+        // Circuito recién reportado: parpadea (como en el escritorio). El parpadeo es CSS sobre SVG;
+        // debajo va una línea ancha invisible para que sea fácil tocarla con el dedo.
+        const base = L.geoJSON(f.geometry, { renderer: rendSvg, style: { color, weight: 7, opacity: 0.9, className: 'falla-reportada' }, interactive: false });
+        capaFallas.addLayer(base);
+        capa = L.geoJSON(f.geometry, { renderer: rendSvg, style: { color: '#000', weight: 20, opacity: 0, className: 'falla-toque' }, interactive: true });
+      } else {
+        capa = L.geoJSON(f.geometry, { renderer: rend, style: { color, weight: 7, opacity: reparada ? 0.45 : 0.9 }, interactive: !reparada });
+      }
     }
     if (!reparada) capa.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirFalla(p, f.geometry); });
     capaFallas.addLayer(capa);
