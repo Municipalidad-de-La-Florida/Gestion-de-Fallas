@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Fallas Alumbrado</title>
+<meta name="theme-color" content="#1f4d3d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fallas">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<section id="pantallaLogin" class="pantalla" hidden>
+  <form id="formLogin" class="login-caja" autocomplete="on">
+    <img src="icon-192.png" alt="" class="login-logo" width="84" height="84">
+    <h1>Fallas Alumbrado</h1>
+    <p class="login-sub">La Florida</p>
+    <label for="loginEmail">Correo</label>
+    <input id="loginEmail" name="email" type="email" inputmode="email" autocomplete="username" autocapitalize="none" required>
+    <label for="loginPass">Contraseña</label>
+    <input id="loginPass" name="password" type="password" autocomplete="current-password" required>
+    <button id="loginBtn" class="btn btn-primario" type="submit">Entrar</button>
+    <button id="loginOlvido" class="btn-link" type="button">Olvidé mi contraseña</button>
+    <p id="loginError" class="error" role="alert" hidden></p>
+  </form>
+</section>
+
+<!-- ============ APP ============ -->
+<section id="pantallaApp" class="pantalla" hidden>
+  <header id="barra">
+    <div class="barra-titulo">
+      <b id="barraNombre">—</b>
+      <span id="barraRol" class="rol-chip"></span>
+    </div>
+    <button id="btnActualizar" class="icon-btn" aria-label="Actualizar">⟳</button>
+    <button id="btnMenu" class="icon-btn" aria-label="Menú">☰</button>
+  </header>
+
+
+  <main id="vistaMapa">
+    <div id="map"></div>
+    <div id="zoomAviso" class="zoom-aviso" hidden>Acércate más para ver y tocar los puntos</div>
+    <button id="btnUbicacion" class="fab" aria-label="Mi ubicación">◎</button>
+  </main>
+
+  <main id="vistaLista" hidden>
+    <div class="lista-filtros">
+      <input id="listaBuscar" type="search" placeholder="Buscar OS, llave, código…" autocomplete="off">
+      <div class="chips" id="listaChips">
+        <button class="chip sel" data-f="todas">Todas</button>
+        <button class="chip" data-f="reportada">Reportadas</button>
+        <button class="chip" data-f="pendiente">Pendientes</button>
+      </div>
+      <div id="listaResumen" class="hint"></div>
+    </div>
+    <div id="listaItems"></div>
+  </main>
+
+  <nav id="navInferior">
+    <button class="nav-btn sel" data-vista="mapa"><span>🗺️</span>Mapa</button>
+    <button class="nav-btn" data-vista="lista"><span>📋</span>Fallas activas <i id="navCuenta" class="cuenta" hidden>0</i></button>
+  </nav>
+</section>
+
+<!-- ============ HOJA INFERIOR ============ -->
+<div id="velo" hidden></div>
+<aside id="hoja" hidden role="dialog" aria-modal="true">
+  <div class="hoja-asa"></div>
+  <button id="hojaCerrar" class="hoja-x" aria-label="Cerrar">✕</button>
+  <div id="hojaContenido"></div>
+</aside>
+
+<div id="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
