@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.0.0';
+const VERSION_APP = '1.4.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -19,6 +19,8 @@ const DIAS_MAX_INSPECCION = 3;  // misma regla que la base (admin sin límite)
 
 const PUEDE_REPORTAR = ['ito', 'ito2', 'admin', 'contratista2'];
 const PUEDE_CERRAR = ['contratista', 'contratista2', 'camion', 'admin'];
+const LS_MODO = 'fm_modo_v1';
+const PUEDE_MODO_INSPECCION = ['ito', 'ito2', 'admin'];
 const PUEDE_ASIGNAR = ['contratista', 'contratista2', 'admin'];
 
 const CAT_PUNTO = [
@@ -104,6 +106,9 @@ function fechaChileLocal(fechaStr, hh = 0, mm = 0, ss = 0) {
 function hoyChileStr() {
   const p = Object.fromEntries(FMT_PARTES_CHILE.formatToParts(new Date()).map((x) => [x.type, x.value]));
   return `${p.year}-${p.month}-${p.day}`;
+}
+function horaChileStr() {
+  return new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date());
 }
 function sumarDiasStr(fechaStr, dias) {
   const [y, m, d] = fechaStr.split('-').map(Number);
@@ -221,6 +226,7 @@ const rpc = (fn, args) => api(`/rest/v1/rpc/${fn}`, { method: 'POST', body: args
 
 /* ------------------------------ estado ------------------------------ */
 const S = {
+  modo: { tipo: 'agregar', fecha: null, inspId: null },
   perfil: null,
   features: [],       // fallas_geojson (todas las que devuelve la base)
   activas: [],        // no reparadas
@@ -301,7 +307,8 @@ $('#loginOlvido').addEventListener('click', async () => {
 });
 function salir(msg) {
   guardarSesion(null);
-  try { localStorage.removeItem(LS_PERFIL); } catch (e) { /* */ }
+  try { localStorage.removeItem(LS_PERFIL); localStorage.removeItem(LS_MODO); } catch (e) { /* */ }
+  S.modo = { tipo: 'agregar', fecha: null, inspId: null };
   detenerGPS();
   clearInterval(S.timer);
   cerrarHoja();
@@ -416,6 +423,18 @@ function dibujarFallas() {
 function iniciarGPS() {
   if (!navigator.geolocation) { toast('Este dispositivo no tiene GPS disponible.', 'error'); return; }
   if (S.watchId != null) return;
+  // Si el permiso ya fue bloqueado no se insiste: se avisa una vez con instrucciones.
+  if (navigator.permissions && navigator.permissions.query) {
+    navigator.permissions.query({ name: 'geolocation' }).then((st) => {
+      if (st.state === 'denied') { toast('La ubicación está bloqueada. Actívala en los permisos del sitio (candado junto a la dirección) y recarga.', 'error'); return; }
+      comenzarGPS();
+    }).catch(() => comenzarGPS());
+    return;
+  }
+  comenzarGPS();
+}
+function comenzarGPS() {
+  if (S.watchId != null) return;
   S.watchId = navigator.geolocation.watchPosition(onPos, onPosError, { enableHighAccuracy: true, maximumAge: 5000, timeout: 25000 });
 }
 function detenerGPS() {
@@ -470,7 +489,10 @@ async function cargarFallas(manual) {
     if (manual) toast(e.message, 'error');
   } finally { btn.classList.remove('girando'); }
 }
-$('#btnActualizar').addEventListener('click', () => { cargarFallas(true); cargarArea(true); });
+$('#btnActualizar').addEventListener('click', () => {
+  cargarFallas(true); cargarArea(true);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration().then((r) => r && r.update()).catch(() => {});
+});
 
 /* ----------------------- hojas: punto y circuito ----------------------- */
 function infoSoloLectura() {
@@ -478,7 +500,18 @@ function infoSoloLectura() {
   return `<div class="aviso">Con tu perfil (${esc(rolVisible())}) puedes ver el mapa${puedeCerrar() ? ' y registrar reparaciones desde las fallas activas' : ''}. Reportar fallas lo hacen los ITO.</div>`;
 }
 function modoTexto() {
-  return 'Se guardará como falla informada <b>ahora</b>.';
+  if (S.modo.tipo !== 'inspeccion') return 'Se guardará como falla informada <b>ahora</b>.';
+  return `Se guardará dentro de tu <b>inspección del ${esc(fmtFechaCorta(S.modo.fecha))}</b>, con la fecha y hora exactas de este momento.`;
+}
+// Datos extra del reporte según el modo. En inspección la falla lleva la hora real del reporte
+// (no se envía fecha: la base usa "ahora"); la inspección conserva la fecha en que se inició.
+async function contextoReporte() {
+  if (S.modo.tipo !== 'inspeccion' || !S.modo.fecha) return {};
+  if (!S.modo.inspId || S.modo.inspFecha !== S.modo.fecha) {
+    S.modo.inspId = await rpc('obtener_o_crear_inspeccion', { p_fecha: S.modo.fecha, p_ito: null });
+    S.modo.inspFecha = S.modo.fecha;
+  }
+  return { p_inspeccion_id: S.modo.inspId };
 }
 
 function abrirPunto(p) {
@@ -548,7 +581,6 @@ function leerOrdenExterna(h) {
   if (num.length > 38) return { error: 'El número de la orden externa es demasiado largo.' };
   return { valor: `${emp}-${num}` };
 }
-async function contextoReporte() { return {}; }
 
 function formReportePunto(p) {
   const mono = String(p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
@@ -566,7 +598,7 @@ function formReportePunto(p) {
     <h3>Comentario</h3>
     <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
-    <p class="hint" style="margin-top:12px">${modoTexto()}</p>
+    <div style="margin-top:12px">${modoTexto()}</div>
     <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>`);
   $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
@@ -602,7 +634,7 @@ function formReporteCircuito(p) {
     <h3>Comentario</h3>
     <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
-    <p class="hint" style="margin-top:12px">${modoTexto()}</p>
+    <div style="margin-top:12px">${modoTexto()}</div>
     <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>`);
   $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
@@ -807,12 +839,12 @@ function cambiarVista(v) {
   S.vista = v;
   $('#vistaMapa').hidden = v !== 'mapa';
   $('#vistaLista').hidden = v !== 'lista';
-  $$('.nav-btn').forEach((b) => b.classList.toggle('sel', b.dataset.vista === v));
+  $$('.nav-btn[data-vista]').forEach((b) => b.classList.toggle('sel', b.dataset.vista === v));
   if (v === 'mapa' && map) { setTimeout(() => { map.invalidateSize(); cargarArea(); }, 50); }
   if (v === 'lista') renderLista();
   $('#zoomAviso').hidden = v !== 'mapa' || (map && map.getZoom() >= ZOOM_DATOS);
 }
-$$('.nav-btn').forEach((b) => b.addEventListener('click', () => cambiarVista(b.dataset.vista)));
+$$('.nav-btn[data-vista]').forEach((b) => b.addEventListener('click', () => cambiarVista(b.dataset.vista)));
 
 /* ------------------------- notificaciones push ------------------------- */
 const LS_PUSH_NO = 'fm_push_no_v1';
@@ -937,6 +969,58 @@ async function formUsuarios() {
   }));
 }
 
+/* ------------------------- inspección (ITO, ITO2, admin) ------------------------- */
+function pintarModo() {
+  const puede = PUEDE_MODO_INSPECCION.includes(rol());
+  const c = $('#chipModo'), n = $('#navInsp');
+  n.hidden = !puede;
+  if (!puede) { c.hidden = true; return; }
+  const on = S.modo.tipo === 'inspeccion';
+  n.classList.toggle('sel', on);
+  c.hidden = !on;
+  c.textContent = on ? `📋 Inspección del ${fmtFechaCorta(S.modo.fecha)} activa · toca para terminar` : '';
+}
+function guardarModo() {
+  try {
+    if (S.modo.tipo === 'inspeccion') localStorage.setItem(LS_MODO, JSON.stringify({ uid: S.perfil.id, fecha: S.modo.fecha, guardado: Date.now() }));
+    else localStorage.removeItem(LS_MODO);
+  } catch (e) { /* */ }
+}
+function restaurarModo() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS_MODO) || 'null');
+    if (!s || s.uid !== S.perfil.id || !PUEDE_MODO_INSPECCION.includes(rol())) return;
+    const dias = Math.round((fechaChileLocal(hoyChileStr(), 12) - fechaChileLocal(s.fecha, 12)) / 86400000);
+    const vencida = Date.now() - (s.guardado || 0) > 36 * 3600 * 1000 || s.fecha > hoyChileStr() || (rol() !== 'admin' && dias > DIAS_MAX_INSPECCION);
+    if (vencida) { localStorage.removeItem(LS_MODO); return; }
+    S.modo = { tipo: 'inspeccion', fecha: s.fecha, inspId: null };
+  } catch (e) { /* */ }
+}
+function abrirInspeccion() {
+  const on = S.modo.tipo === 'inspeccion';
+  const h = abrirHoja(`
+    <h2>Inspección</h2>
+    <p class="hint" style="font-size:14px;margin-top:6px">Con la inspección activa, todas las fallas que reportes quedan dentro de ella (para la estadística), cada una con la fecha y hora exactas en que la registras. Si la inspección es nocturna y pasa de medianoche, conserva la fecha en que la iniciaste. Cualquier otro ajuste se hace en la página de escritorio.</p>
+    ${on ? `<div class="aviso"><b>Inspección activa</b> iniciada el ${esc(fmtFechaCorta(S.modo.fecha))}</div>` : ''}
+    <div class="acciones">
+      ${on ? '<button id="mTerminar" class="btn btn-primario">Terminar inspección</button>' : '<button id="mInsp" class="btn btn-primario">Comenzar inspección</button>'}
+    </div>`);
+  const mi = $('#mInsp', h);
+  if (mi) mi.addEventListener('click', ocupar(mi, async () => {
+    const f = hoyChileStr();
+    S.modo = { tipo: 'inspeccion', fecha: f, inspId: null };
+    guardarModo(); pintarModo(); cerrarHoja();
+    cambiarVista('mapa');
+    toast(`Inspección del ${fmtFechaCorta(f)} activa. Toca un punto o circuito para reportar.`, 'ok');
+  }));
+  const mt = $('#mTerminar', h);
+  if (mt) mt.addEventListener('click', () => {
+    S.modo = { tipo: 'agregar', fecha: null, inspId: null }; guardarModo(); pintarModo(); cerrarHoja(); toast('Inspección terminada');
+  });
+}
+$('#navInsp').addEventListener('click', abrirInspeccion);
+$('#chipModo').addEventListener('click', abrirInspeccion);
+
 /* ------------------------------ menú ------------------------------ */
 const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const esStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -971,7 +1055,15 @@ $('#btnMenu').addEventListener('click', () => {
   const mu = $('#mUsuarios', h);
   if (mu) mu.addEventListener('click', () => formUsuarios());
   $('#mActualizar', h).addEventListener('click', async () => {
-    try { const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) { /* */ }
+    $('#mActualizar', h).textContent = 'Buscando…';
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (reg) {
+        await reg.update();
+        const nuevo = reg.installing || reg.waiting;
+        if (nuevo && nuevo.state !== 'activated') await new Promise((res) => { nuevo.addEventListener('statechange', () => { if (nuevo.state === 'activated') res(); }); setTimeout(res, 8000); });
+      }
+    } catch (e) { /* */ }
     location.reload();
   });
   $('#mSalir', h).addEventListener('click', async () => { try { await desactivarPush(); } catch (e) { /* */ } salir(); });
@@ -986,6 +1078,8 @@ async function entrarApp() {
   $('#pantallaApp').hidden = false;
   $('#barraNombre').textContent = S.perfil.nombre;
   $('#barraRol').textContent = rolVisible();
+  restaurarModo();
+  pintarModo();
   S.vista = 'mapa';
   cambiarVista('mapa');
   iniciarMapa();
@@ -1002,6 +1096,15 @@ async function entrarApp() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil) cargarFallas(); });
 
 (async function iniciar() {
+  if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
+    const habiaControlador = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!habiaControlador || S.recargando) return;
+      S.recargando = true;
+      const recargar = () => { if (!hojaAbierta) location.reload(); else setTimeout(recargar, 3000); };
+      toast('Nueva versión instalada. Actualizando…', 'ok'); setTimeout(recargar, 1200);
+    });
+  }
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { /* sin SW: la app funciona igual */ });
   cargarSesion();
   if (!sesion) { mostrarLogin(); return; }
