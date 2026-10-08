@@ -12,7 +12,6 @@ const VERSION_APP = '1.0.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
-const LS_MODO = 'fm_modo_v1';
 
 const ZOOM_DATOS = 17;          // desde este zoom se cargan y se pueden tocar puntos y circuitos
 const REFRESCO_MS = 60000;      // actualización automática de fallas
@@ -20,7 +19,7 @@ const DIAS_MAX_INSPECCION = 3;  // misma regla que la base (admin sin límite)
 
 const PUEDE_REPORTAR = ['ito', 'ito2', 'admin', 'contratista2'];
 const PUEDE_CERRAR = ['contratista', 'contratista2', 'camion', 'admin'];
-const PUEDE_MODO_INSPECCION = ['ito', 'ito2', 'admin'];
+const PUEDE_ASIGNAR = ['contratista', 'contratista2', 'admin'];
 
 const CAT_PUNTO = [
   { c: 'F01', d: 'Luminaria vial apagada' },
@@ -231,12 +230,12 @@ const S = {
   vista: 'mapa',
   filtro: 'todas',
   busqueda: '',
-  modo: { tipo: 'agregar', fecha: null, inspId: null },
   instalar: null,
 };
 const rol = () => (S.perfil ? S.perfil.rol : null);
 const rolVisible = () => (rol() === 'contratista2' ? 'contratista' : rol());
 const puedeReportar = () => PUEDE_REPORTAR.includes(rol());
+const puedeAsignar = () => PUEDE_ASIGNAR.includes(rol());
 const puedeCerrar = () => PUEDE_CERRAR.includes(rol());
 
 function ocupar(btn, fn) {
@@ -302,12 +301,11 @@ $('#loginOlvido').addEventListener('click', async () => {
 });
 function salir(msg) {
   guardarSesion(null);
-  try { localStorage.removeItem(LS_PERFIL); localStorage.removeItem(LS_MODO); } catch (e) { /* */ }
+  try { localStorage.removeItem(LS_PERFIL); } catch (e) { /* */ }
   detenerGPS();
   clearInterval(S.timer);
   cerrarHoja();
   S.perfil = null; S.features = []; S.activas = [];
-  S.modo = { tipo: 'agregar', fecha: null, inspId: null };
   mostrarLogin(msg);
 }
 
@@ -480,9 +478,7 @@ function infoSoloLectura() {
   return `<div class="aviso">Con tu perfil (${esc(rolVisible())}) puedes ver el mapa${puedeCerrar() ? ' y registrar reparaciones desde las fallas activas' : ''}. Reportar fallas lo hacen los ITO.</div>`;
 }
 function modoTexto() {
-  return S.modo.tipo === 'inspeccion'
-    ? `Se guardará dentro de tu <b>inspección del ${esc(fmtFechaCorta(S.modo.fecha))}</b>.`
-    : 'Se guardará como falla informada <b>ahora</b>.';
+  return 'Se guardará como falla informada <b>ahora</b>.';
 }
 
 function abrirPunto(p) {
@@ -552,14 +548,7 @@ function leerOrdenExterna(h) {
   if (num.length > 38) return { error: 'El número de la orden externa es demasiado largo.' };
   return { valor: `${emp}-${num}` };
 }
-async function contextoReporte() {
-  if (S.modo.tipo !== 'inspeccion' || !S.modo.fecha) return {};
-  if (!S.modo.inspId || S.modo.inspFecha !== S.modo.fecha) {
-    S.modo.inspId = await rpc('obtener_o_crear_inspeccion', { p_fecha: S.modo.fecha, p_ito: null });
-    S.modo.inspFecha = S.modo.fecha;
-  }
-  return { p_inspeccion_id: S.modo.inspId, p_fecha_falla: fechaChileLocal(S.modo.fecha, 23, 50, 0).toISOString() };
-}
+async function contextoReporte() { return {}; }
 
 function formReportePunto(p) {
   const mono = String(p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
@@ -652,6 +641,7 @@ async function abrirFalla(p, geom) {
     p.asignado_camion_nombre ? ['Camión asignado', p.asignado_camion_nombre] : null,
   ].filter(Boolean);
   const puedeCerrarEsta = puedeCerrar() && !p.cascada && p.estado !== 'reparada';
+  const puedeAsignarEsta = puedeAsignar() && !p.cascada && p.estado !== 'reparada';
   const h = abrirHoja(`
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
@@ -660,12 +650,15 @@ async function abrirFalla(p, geom) {
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
       ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario">Registrar reparación</button>` : ''}
+      ${puedeAsignarEsta ? `<button id="bAsignar" class="btn btn-secundario">${p.asignado_camion_id ? 'Cambiar camión asignado' : 'Asignar a camión'}</button>` : ''}
       <a class="btn btn-secundario" style="display:flex;align-items:center;justify-content:center;text-decoration:none" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">Cómo llegar</a>
     </div>
     <h3>Historial</h3>
     <ul class="linea-tiempo" id="histFalla"><li class="hint">Cargando…</li></ul>`);
   const bc = $('#bCerrar', h);
   if (bc) bc.addEventListener('click', () => formCierre(p));
+  const ba = $('#bAsignar', h);
+  if (ba) ba.addEventListener('click', () => formAsignar(p));
   // Historial de comentarios
   select('fallas_comentarios', `falla_id=eq.${p.id}&select=tipo,comentario,autor_nombre,creado_en&order=creado_en.asc`).then((rows) => {
     const ul = $('#histFalla');
@@ -686,6 +679,44 @@ async function abrirFalla(p, geom) {
       }
     }).catch(() => {});
   }
+}
+
+async function formAsignar(p) {
+  const h = abrirHoja(`
+    <h2>Asignar a camión</h2>
+    <div class="hint">${esc(p.tipo_falla)} · OS ${esc(p.ot || '—')} · ${esc(tipoLabel(p))}${p.tipo === 'linea' ? ' · se asignarán también sus puntos' : ''}</div>
+    <h3>Camión</h3>
+    <select id="aCam" class="campo"><option value="">Cargando camiones…</option></select>
+    <h3>Comentario (opcional)</h3>
+    <textarea id="aCom" class="campo" placeholder="Lo verá el camión."></textarea>
+    <div class="acciones fija"><button id="aOk" class="btn btn-primario">Guardar asignación</button></div>`);
+  const sel = $('#aCam', h), ok = $('#aOk', h);
+  ok.disabled = true;
+  try {
+    const cams = await rpc('listar_camiones', {});
+    if (!document.body.contains(sel)) return;
+    sel.innerHTML = '<option value="">Sin asignar</option>' + (cams || []).map((c) => `<option value="${esc(c.id)}" ${c.id === p.asignado_camion_id ? 'selected' : ''}>${esc(c.nombre)}</option>`).join('');
+    ok.disabled = false;
+  } catch (e) { sel.innerHTML = '<option value="">No se pudo cargar</option>'; toast('No se pudo cargar la lista de camiones.', 'error'); return; }
+  ok.addEventListener('click', ocupar(ok, async () => {
+    const camionId = sel.value || null;
+    const com = $('#aCom', h).value.trim();
+    ok.textContent = 'Guardando…';
+    const filas = await api(`/rest/v1/fallas?id=eq.${p.id}`, {
+      method: 'PATCH', prefer: 'return=representation',
+      body: { asignado_camion_id: camionId, asignado_por_id: camionId ? S.perfil.id : null },
+    });
+    if (!filas || !filas.length) throw new Error('No tienes permiso para asignar esta falla.');
+    if (com) {
+      await api('/rest/v1/fallas_comentarios', {
+        method: 'POST',
+        body: { falla_id: p.id, tipo: 'asignacion', comentario: com, autor_id: S.perfil.id, autor_nombre: S.perfil.nombre },
+      }).catch(() => {});
+    }
+    cerrarHoja();
+    toast(camionId ? 'Camión asignado' : 'Asignación quitada', 'ok');
+    cargarFallas();
+  }));
 }
 
 function formCierre(p) {
@@ -783,77 +814,6 @@ function cambiarVista(v) {
 }
 $$('.nav-btn').forEach((b) => b.addEventListener('click', () => cambiarVista(b.dataset.vista)));
 
-/* ------------------------- modo: agregar / inspección ------------------------- */
-function pintarChipModo() {
-  const c = $('#chipModo');
-  if (!PUEDE_MODO_INSPECCION.includes(rol())) { c.hidden = true; return; }
-  c.hidden = false;
-  if (S.modo.tipo === 'inspeccion') {
-    c.className = 'chip-modo insp';
-    c.textContent = `📋 Inspección del ${fmtFechaCorta(S.modo.fecha)} · toca para cambiar`;
-  } else {
-    c.className = 'chip-modo';
-    c.textContent = '➕ Modo: agregar falla (ahora) · toca para cambiar';
-  }
-  if (map) setTimeout(() => map.invalidateSize(), 50);
-}
-function guardarModo() {
-  try {
-    if (S.modo.tipo === 'inspeccion') localStorage.setItem(LS_MODO, JSON.stringify({ uid: S.perfil.id, fecha: S.modo.fecha, guardado: Date.now() }));
-    else localStorage.removeItem(LS_MODO);
-  } catch (e) { /* */ }
-}
-function restaurarModo() {
-  try {
-    const s = JSON.parse(localStorage.getItem(LS_MODO) || 'null');
-    if (!s || s.uid !== S.perfil.id || !PUEDE_MODO_INSPECCION.includes(rol())) return;
-    const dias = Math.round((fechaChileLocal(hoyChileStr(), 12) - fechaChileLocal(s.fecha, 12)) / 86400000);
-    const vencida = Date.now() - (s.guardado || 0) > 24 * 3600 * 1000 || s.fecha > hoyChileStr() || (rol() !== 'admin' && dias > DIAS_MAX_INSPECCION);
-    if (vencida) { localStorage.removeItem(LS_MODO); return; }
-    S.modo = { tipo: 'inspeccion', fecha: s.fecha, inspId: null };
-  } catch (e) { /* */ }
-}
-function abrirSelectorModo() {
-  const hoy = hoyChileStr();
-  const min = rol() === 'admin' ? '' : `min="${sumarDiasStr(hoy, -DIAS_MAX_INSPECCION)}"`;
-  const h = abrirHoja(`
-    <h2>¿Cómo vas a informar?</h2>
-    <div class="acciones" style="margin-top:12px">
-      <button id="mAgregar" class="btn ${S.modo.tipo === 'agregar' ? 'btn-primario' : 'btn-secundario'}">➕ Agregar falla (hora actual)</button>
-    </div>
-    <h3>Informar una inspección</h3>
-    <input id="mFecha" class="campo" type="date" value="${esc(S.modo.fecha || hoy)}" max="${esc(hoy)}" ${min}>
-    <div id="mAviso" class="hint" style="margin:8px 0"></div>
-    <div class="acciones"><button id="mInsp" class="btn ${S.modo.tipo === 'inspeccion' ? 'btn-primario' : 'btn-secundario'}">📋 ${S.modo.tipo === 'inspeccion' ? 'Cambiar fecha de inspección' : 'Comenzar inspección'}</button></div>`);
-  const aviso = async () => {
-    const f = $('#mFecha', h).value;
-    $('#mAviso', h).textContent = '';
-    if (!f) return;
-    try {
-      const r = await rpc('inspeccion_existente', { p_fecha: f, p_ito: null });
-      if (r && r.existe) $('#mAviso', h).textContent = r.permitido === false
-        ? 'Ya existe una inspección de ese día, pero es muy antigua para continuarla.'
-        : `Ya tienes una inspección de ese día con ${r.fallas} falla(s): se continuará esa.`;
-    } catch (e) { /* sin aviso */ }
-  };
-  $('#mFecha', h).addEventListener('change', aviso);
-  aviso();
-  $('#mAgregar', h).addEventListener('click', () => {
-    S.modo = { tipo: 'agregar', fecha: null, inspId: null }; guardarModo(); pintarChipModo(); cerrarHoja(); toast('Modo: agregar falla');
-  });
-  const mi = $('#mInsp', h);
-  mi.addEventListener('click', ocupar(mi, async () => {
-    const f = $('#mFecha', h).value;
-    if (!f) { toast('Elige la fecha de la inspección.', 'error'); return; }
-    if (f > hoyChileStr()) { toast('La fecha no puede ser futura.', 'error'); return; }
-    if (rol() !== 'admin' && f < sumarDiasStr(hoyChileStr(), -DIAS_MAX_INSPECCION)) { toast(`Solo se puede informar hasta ${DIAS_MAX_INSPECCION} días atrás.`, 'error'); return; }
-    S.modo = { tipo: 'inspeccion', fecha: f, inspId: null };
-    guardarModo(); pintarChipModo(); cerrarHoja();
-    toast(`Inspección del ${fmtFechaCorta(f)}. Toca un punto o circuito para reportar.`, 'ok');
-  }));
-}
-$('#chipModo').addEventListener('click', abrirSelectorModo);
-
 /* ------------------------------ menú ------------------------------ */
 const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const esStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -885,8 +845,6 @@ async function entrarApp() {
   $('#pantallaApp').hidden = false;
   $('#barraNombre').textContent = S.perfil.nombre;
   $('#barraRol').textContent = rolVisible();
-  restaurarModo();
-  pintarChipModo();
   S.vista = 'mapa';
   cambiarVista('mapa');
   iniciarMapa();
