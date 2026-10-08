@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.4.0';
+const VERSION_APP = '1.5.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1021,6 +1021,29 @@ function abrirInspeccion() {
 $('#navInsp').addEventListener('click', abrirInspeccion);
 $('#chipModo').addEventListener('click', abrirInspeccion);
 
+/* ------------------------- actualización de la app ------------------------- */
+// Borra copias guardadas y service worker, y recarga: deja la app idéntica a la publicada.
+async function forzarActualizacion() {
+  try {
+    if ('serviceWorker' in navigator) { const rs = await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map((r) => r.unregister())); }
+    if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); }
+  } catch (e) { /* */ }
+  location.reload();
+}
+// Compara la versión que corre con la publicada (sin usar copias guardadas) y avisa si hay una nueva.
+async function revisarVersion() {
+  try {
+    const r = await fetch('app.js?v=' + Date.now(), { cache: 'no-store' });
+    const m = (await r.text()).match(/const VERSION_APP = '([^']+)'/);
+    if (!m || m[1] === VERSION_APP || S.avisoVersion) return;
+    S.avisoVersion = true;
+    const b = $('#avisoVersion');
+    b.hidden = false;
+    b.textContent = `Hay una versión nueva (${m[1]}). Toca aquí para actualizar.`;
+    b.onclick = () => { b.textContent = 'Actualizando…'; forzarActualizacion(); };
+  } catch (e) { /* sin conexión: se revisa después */ }
+}
+
 /* ------------------------------ menú ------------------------------ */
 const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const esStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -1033,7 +1056,7 @@ $('#btnMenu').addEventListener('click', () => {
       ${!S.instalar && esIOS() && !esStandalone() ? '<div class="aviso">Para instalarla en iPhone: toca el botón <b>Compartir</b> de Safari y luego <b>Añadir a pantalla de inicio</b>.</div>' : ''}
       <button id="mPush" class="btn btn-secundario" hidden>Avisos</button>
       ${rol() === 'admin' ? '<button id="mUsuarios" class="btn btn-secundario">Gestionar usuarios</button>' : ''}
-      <button id="mActualizar" class="btn btn-secundario">Buscar actualización de la app</button>
+      <button id="mActualizar" class="btn btn-secundario">Actualizar la app ahora</button>
       <button id="mSalir" class="btn btn-peligro">Cerrar sesión</button>
     </div>`);
   const i = $('#mInstalar', h);
@@ -1054,18 +1077,7 @@ $('#btnMenu').addEventListener('click', () => {
   }
   const mu = $('#mUsuarios', h);
   if (mu) mu.addEventListener('click', () => formUsuarios());
-  $('#mActualizar', h).addEventListener('click', async () => {
-    $('#mActualizar', h).textContent = 'Buscando…';
-    try {
-      const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) {
-        await reg.update();
-        const nuevo = reg.installing || reg.waiting;
-        if (nuevo && nuevo.state !== 'activated') await new Promise((res) => { nuevo.addEventListener('statechange', () => { if (nuevo.state === 'activated') res(); }); setTimeout(res, 8000); });
-      }
-    } catch (e) { /* */ }
-    location.reload();
-  });
+  $('#mActualizar', h).addEventListener('click', () => { $('#mActualizar', h).textContent = 'Actualizando…'; forzarActualizacion(); });
   $('#mSalir', h).addEventListener('click', async () => { try { await desactivarPush(); } catch (e) { /* */ } salir(); });
 });
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.instalar = e; });
@@ -1090,10 +1102,11 @@ async function entrarApp() {
   S.centrarAlFijar = true;
   iniciarGPS();
   iniciarPush();
+  revisarVersion();
   clearInterval(S.timer);
   S.timer = setInterval(() => { if (!document.hidden && !hojaAbierta) cargarFallas(); }, REFRESCO_MS);
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil) cargarFallas(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil) { cargarFallas(); revisarVersion(); } });
 
 (async function iniciar() {
   if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
