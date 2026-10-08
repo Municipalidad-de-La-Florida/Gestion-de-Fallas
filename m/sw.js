@@ -2,7 +2,7 @@
 // - Archivos propios de la app: red primero (así las actualizaciones llegan de inmediato) y copia guardada de respaldo.
 // - Leaflet (CDN): copia guardada tras la primera carga.
 // - Supabase y mapas: siempre por red, nunca se guardan (datos siempre al día).
-const VERSION = 'fm-v3';
+const VERSION = 'fm-v4';
 const APP = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -49,4 +49,21 @@ self.addEventListener('fetch', (e) => {
       }))
     );
   }
+});
+
+// Notificaciones push
+self.addEventListener('push', (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch (err) { d = { cuerpo: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.titulo || 'Fallas Alumbrado', {
+    body: d.cuerpo || '', icon: 'icon-192.png', badge: 'icon-192.png', tag: d.tag || undefined, data: { url: d.url || './' },
+  }));
+});
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const destino = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope).href;
+  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
+    for (const c of cs) { if (c.url.startsWith(self.registration.scope) && 'focus' in c) return c.focus(); }
+    return self.clients.openWindow(destino);
+  }));
 });

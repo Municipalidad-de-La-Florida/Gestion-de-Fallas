@@ -814,6 +814,65 @@ function cambiarVista(v) {
 }
 $$('.nav-btn').forEach((b) => b.addEventListener('click', () => cambiarVista(b.dataset.vista)));
 
+/* ------------------------- notificaciones push ------------------------- */
+const LS_PUSH_NO = 'fm_push_no_v1';
+const pushSoportado = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+function b64aBytes(b64) {
+  const p = '='.repeat((4 - (b64.length % 4)) % 4);
+  const raw = atob((b64 + p).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+async function suscripcionActual() {
+  if (!pushSoportado()) return null;
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+async function registrarSuscripcion(sub) {
+  const j = sub.toJSON();
+  await rpc('registrar_push', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_user_agent: navigator.userAgent });
+}
+async function activarPush() {
+  if (!pushSoportado()) throw new Error('Este navegador no permite notificaciones.');
+  const permiso = await Notification.requestPermission();
+  if (permiso !== 'granted') throw new Error('No diste permiso. Puedes activarlo en los ajustes del navegador (permisos del sitio).');
+  const reg = await navigator.serviceWorker.ready;
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    const clave = await rpc('clave_publica_push', {});
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64aBytes(clave) });
+  }
+  await registrarSuscripcion(sub);
+  try { localStorage.removeItem(LS_PUSH_NO); } catch (e) { /* */ }
+}
+async function desactivarPush() {
+  const sub = await suscripcionActual();
+  if (!sub) return;
+  const ep = sub.endpoint;
+  await rpc('quitar_push', { p_endpoint: ep }).catch(() => {});
+  await sub.unsubscribe().catch(() => {});
+}
+// Al entrar: si ya hay permiso, se vuelve a registrar el teléfono para este usuario; si no, se ofrece activarlo una vez.
+async function iniciarPush() {
+  if (!pushSoportado() || !S.perfil) return;
+  try {
+    if (Notification.permission === 'granted') {
+      const sub = await suscripcionActual();
+      if (sub) await registrarSuscripcion(sub);
+      return;
+    }
+    if (Notification.permission !== 'default') return;
+    if (localStorage.getItem(LS_PUSH_NO)) return;
+    setTimeout(() => {
+      if (hojaAbierta || !S.perfil) return;
+      const h = abrirHoja(`<h2>¿Activar avisos?</h2>
+        <p class="hint" style="font-size:15px;margin-top:8px">Te avisaremos en este teléfono cuando corresponda a tu perfil (fallas nuevas, asignaciones o reparaciones), incluso con la app cerrada.</p>
+        <div class="acciones"><button id="pOk" class="btn btn-primario">Activar avisos</button><button id="pNo" class="btn btn-secundario">Ahora no</button></div>`);
+      $('#pOk', h).addEventListener('click', ocupar($('#pOk', h), async () => { await activarPush(); cerrarHoja(); toast('Avisos activados', 'ok'); }));
+      $('#pNo', h).addEventListener('click', () => { try { localStorage.setItem(LS_PUSH_NO, '1'); } catch (e) { /* */ } cerrarHoja(); });
+    }, 1500);
+  } catch (e) { /* los avisos son opcionales */ }
+}
+
 /* ------------------------- gestión de usuarios (solo admin) ------------------------- */
 const ROLES_LISTA = ['admin', 'ito', 'ito2', 'contratista', 'contratista2', 'camion', 'observador'];
 const ROLES_CON_NOTIF = ['admin', 'ito', 'ito2', 'contratista2'];
@@ -888,19 +947,34 @@ $('#btnMenu').addEventListener('click', () => {
     <div class="acciones" style="margin-top:14px">
       ${S.instalar ? '<button id="mInstalar" class="btn btn-primario">Instalar la app en este teléfono</button>' : ''}
       ${!S.instalar && esIOS() && !esStandalone() ? '<div class="aviso">Para instalarla en iPhone: toca el botón <b>Compartir</b> de Safari y luego <b>Añadir a pantalla de inicio</b>.</div>' : ''}
+      <button id="mPush" class="btn btn-secundario" hidden>Avisos</button>
       ${rol() === 'admin' ? '<button id="mUsuarios" class="btn btn-secundario">Gestionar usuarios</button>' : ''}
       <button id="mActualizar" class="btn btn-secundario">Buscar actualización de la app</button>
       <button id="mSalir" class="btn btn-peligro">Cerrar sesión</button>
     </div>`);
   const i = $('#mInstalar', h);
   if (i) i.addEventListener('click', async () => { S.instalar.prompt(); await S.instalar.userChoice; S.instalar = null; cerrarHoja(); });
+  const mp = $('#mPush', h);
+  if (pushSoportado()) {
+    suscripcionActual().then((sub) => {
+      if (!document.body.contains(mp)) return;
+      const on = Notification.permission === 'granted' && !!sub;
+      mp.hidden = false; mp.textContent = on ? 'Desactivar avisos en este teléfono' : 'Activar avisos en este teléfono';
+      mp.addEventListener('click', ocupar(mp, async () => {
+        if (on) { await desactivarPush(); toast('Avisos desactivados', 'ok'); } else { await activarPush(); toast('Avisos activados', 'ok'); }
+        cerrarHoja();
+      }));
+    }).catch(() => {});
+  } else if (esIOS() && !esStandalone()) {
+    mp.insertAdjacentHTML('afterend', '<div class="aviso">Para recibir avisos en iPhone, primero instala la app con <b>Añadir a pantalla de inicio</b>.</div>');
+  }
   const mu = $('#mUsuarios', h);
   if (mu) mu.addEventListener('click', () => formUsuarios());
   $('#mActualizar', h).addEventListener('click', async () => {
     try { const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) { /* */ }
     location.reload();
   });
-  $('#mSalir', h).addEventListener('click', () => salir());
+  $('#mSalir', h).addEventListener('click', async () => { try { await desactivarPush(); } catch (e) { /* */ } salir(); });
 });
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.instalar = e; });
 
@@ -921,6 +995,7 @@ async function entrarApp() {
   cargarArea(true);
   S.centrarAlFijar = true;
   iniciarGPS();
+  iniciarPush();
   clearInterval(S.timer);
   S.timer = setInterval(() => { if (!document.hidden && !hojaAbierta) cargarFallas(); }, REFRESCO_MS);
 }
