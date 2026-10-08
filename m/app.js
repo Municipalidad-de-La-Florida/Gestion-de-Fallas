@@ -8,11 +8,12 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.9.0';
+const VERSION_APP = '1.10.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
 
+const ZOOM_EMPALMES = 19;     // desde este zoom se dibujan los empalmes (igual que en el escritorio)
 const ZOOM_DATOS = 17;          // desde este zoom se cargan y se pueden tocar puntos y circuitos
 const REFRESCO_MS = 60000;      // actualización automática de fallas
 const DIAS_MAX_INSPECCION = 3;  // misma regla que la base (admin sin límite)
@@ -332,8 +333,8 @@ async function cargarPerfil() {
 }
 
 /* ------------------------------ mapa ------------------------------ */
-let map, rend, rendSvg, capaCircuitos, capaPuntos, capaFallas, marcadorPos, circuloPos;
-let cacheBbox = null;
+let map, rend, rendSvg, capaCircuitos, capaPuntos, capaFallas, capaEmpalmes, marcadorPos, circuloPos;
+let cacheBbox = null, cacheEmp = null;
 
 /* ---------------- símbolo del punto según el tipo de poste (igual que en el escritorio) ---------------- */
 // Dibuja la forma centrada en (x,y) con "radio" r en un canvas 2D.
@@ -345,6 +346,7 @@ function trazarForma(ctx, forma, x, y, r) {
     case 'ACERO': poli([[0, -1.05], [1.05, .85], [-1.05, .85]]); break;                                            // triángulo
     case 'MONOPOSTE': poli([[0, -1.1], [.95, -.55], [.95, .55], [0, 1.1], [-.95, .55], [-.95, -.55]]); break;      // hexágono
     case 'ORNAMENTAL': poli([[0, -1.05], [1, -.32], [.62, .85], [-.62, .85], [-1, -.32]]); break;                 // pentágono
+    case 'EMPALME': poli([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => { const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? .48 : 1.2; return [Math.cos(a) * k, Math.sin(a) * k]; })); break; // estrella
     case 'FACHADA': ctx.arc(x, y + r * .45, r * 1.05, Math.PI, 0); ctx.closePath(); break;                        // semicírculo
     default: ctx.arc(x, y, r, 0, Math.PI * 2);                                                                     // círculo
   }
@@ -377,6 +379,7 @@ function iniciarMapa() {
   capaCircuitos = L.geoJSON(null, { renderer: rend });
   capaPuntos = L.geoJSON(null, { renderer: rend });
   capaFallas = L.geoJSON(null, { renderer: rend });
+  capaEmpalmes = L.geoJSON(null, { renderer: rend });
   map.on('moveend', cargarArea);
   map.on('zoomend', () => { ajustarRadios(); dibujarFallas(); });
   map.on('click', () => { /* un toque en el vacío no hace nada */ });
@@ -404,6 +407,8 @@ async function cargarArea(forzar) {
   if (!visible) return;
   const b = map.getBounds();
   const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+  if (z >= ZOOM_EMPALMES) cargarEmpalmes(bbox, forzar === true);
+  else if (map.hasLayer(capaEmpalmes)) map.removeLayer(capaEmpalmes);
   if (forzar !== true && contenido(cacheBbox, bbox)) return;
   const grande = expandir(bbox, 0.4);
   try {
@@ -429,6 +434,36 @@ async function cargarArea(forzar) {
   } catch (e) {
     if (e.name === 'SesionExpirada') salir(e.message); else toast(e.message, 'error');
   }
+}
+
+// Empalmes (medidores): estrella roja bajo los puntos, solo con mucho zoom; al tocarla muestra medidor y cliente.
+async function cargarEmpalmes(bbox, forzar) {
+  if (!map.hasLayer(capaEmpalmes)) capaEmpalmes.addTo(map);
+  if (!forzar && contenido(cacheEmp, bbox)) return;
+  const grande = expandir(bbox, 0.4);
+  try {
+    const emp = await rpc('empalmes_en_area', { min_lon: grande[0], min_lat: grande[1], max_lon: grande[2], max_lat: grande[3] });
+    capaEmpalmes.clearLayers();
+    if (emp) {
+      L.geoJSON(emp, {
+        pointToLayer: (f, ll) => new MarcadorForma(ll, { renderer: rend, forma: 'EMPALME', radius: 9, weight: 1, color: '#7a232f', fillColor: '#b23a48', fillOpacity: 1 }),
+        onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirEmpalme(f.properties); }),
+      }).eachLayer((l) => capaEmpalmes.addLayer(l));
+    }
+    capaEmpalmes.eachLayer((l) => l.bringToBack && l.bringToBack());
+    cacheEmp = grande;
+  } catch (e) {
+    if (e.name === 'SesionExpirada') salir(e.message); else toast(e.message, 'error');
+  }
+}
+function abrirEmpalme(p) {
+  abrirHoja(`
+    <h2>Empalme</h2>
+    <dl class="kv">
+      <dt>N.° de medidor</dt><dd>${esc(p.n_empalmes ?? '—')}</dd>
+      <dt>Cliente</dt><dd>${esc(p.cliente_1 ?? '—')}</dd>
+    </dl>
+    ${infoSoloLectura()}`);
 }
 
 function dibujarFallas() {
@@ -532,7 +567,7 @@ async function cargarFallas(manual) {
   } finally { btn.classList.remove('girando'); }
 }
 $('#btnActualizar').addEventListener('click', () => {
-  cargarFallas(true); cargarArea(true);
+  cargarFallas(true); cacheEmp = null; cargarArea(true);
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration().then((r) => r && r.update()).catch(() => {});
 });
 
