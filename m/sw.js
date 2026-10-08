@@ -2,7 +2,7 @@
 // - Archivos propios de la app: red primero (así las actualizaciones llegan de inmediato) y copia guardada de respaldo.
 // - Leaflet (CDN): copia guardada tras la primera carga.
 // - Supabase y mapas: siempre por red, nunca se guardan (datos siempre al día).
-const VERSION = 'fm-v6';
+const VERSION = 'fm-v7';
 const APP = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -64,9 +64,15 @@ self.addEventListener('push', (e) => {
 });
 self.addEventListener('notificationclick', (e) => {
   e.notification.close();
-  const destino = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope).href;
+  const destino = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope);
+  const id = destino.searchParams.get('falla');
   e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
-    for (const c of cs) { if (c.url.startsWith(self.registration.scope) && 'focus' in c) return c.focus(); }
-    return self.clients.openWindow(destino);
+    for (const c of cs) {
+      if (c.url.startsWith(self.registration.scope) && 'focus' in c) {
+        if (id) c.postMessage({ tipo: 'abrir-falla', id });
+        return c.focus();
+      }
+    }
+    return self.clients.openWindow(destino.href);
   }));
 });

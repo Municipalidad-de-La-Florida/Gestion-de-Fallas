@@ -136,3 +136,9 @@ pre.texto{ white-space:pre-wrap; font:inherit; margin:0; }
 .punto-ubicacion{ filter:drop-shadow(0 0 3px rgba(0,0,0,.5)); }
 .leaflet-container{ font:inherit; }
 .leaflet-control-attribution{ font-size:10px !important; }
+
+/* Circuito recién reportado: parpadea igual que en el escritorio */
+@keyframes pulseFalla{ 0%,100%{ opacity:1; } 50%{ opacity:.25; } }
+path.falla-reportada{ animation: pulseFalla 1.1s ease-in-out infinite; }
+path.falla-toque{ cursor:pointer; }
+@media (prefers-reduced-motion: reduce){ path.falla-reportada{ animation:none; } }
