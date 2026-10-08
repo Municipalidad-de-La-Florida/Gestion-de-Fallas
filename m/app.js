@@ -501,24 +501,17 @@ function infoSoloLectura() {
 }
 function modoTexto() {
   if (S.modo.tipo !== 'inspeccion') return 'Se guardará como falla informada <b>ahora</b>.';
-  const hoy = S.modo.fecha === hoyChileStr();
-  return `<h3>Hora de la falla</h3>
-    <input id="fHora" class="campo" type="time" value="${hoy ? esc(horaChileStr()) : ''}" ${hoy ? `max="${esc(horaChileStr())}"` : ''}>
-    <p class="hint" style="margin-top:8px">Se guardará dentro de tu <b>inspección del ${esc(fmtFechaCorta(S.modo.fecha))}</b> con la hora indicada.</p>`;
+  return `Se guardará dentro de tu <b>inspección del ${esc(fmtFechaCorta(S.modo.fecha))}</b>, con la fecha y hora exactas de este momento.`;
 }
-// Devuelve los datos extra del reporte según el modo (agregar / inspección). Lanza error si falta algo.
-async function contextoReporte(h) {
+// Datos extra del reporte según el modo. En inspección la falla lleva la hora real del reporte
+// (no se envía fecha: la base usa "ahora"); la inspección conserva la fecha en que se inició.
+async function contextoReporte() {
   if (S.modo.tipo !== 'inspeccion' || !S.modo.fecha) return {};
-  const hora = ($('#fHora', h) || {}).value;
-  if (!hora) throw new Error('Indica la hora de la falla.');
-  const [hh, mm] = hora.split(':').map(Number);
-  const fecha = fechaChileLocal(S.modo.fecha, hh, mm, 0);
-  if (fecha.getTime() > Date.now() + 60000) throw new Error('La hora de la falla no puede ser futura.');
   if (!S.modo.inspId || S.modo.inspFecha !== S.modo.fecha) {
     S.modo.inspId = await rpc('obtener_o_crear_inspeccion', { p_fecha: S.modo.fecha, p_ito: null });
     S.modo.inspFecha = S.modo.fecha;
   }
-  return { p_inspeccion_id: S.modo.inspId, p_fecha_falla: fecha.toISOString() };
+  return { p_inspeccion_id: S.modo.inspId };
 }
 
 function abrirPunto(p) {
@@ -623,7 +616,7 @@ function formReportePunto(p) {
     const oe = leerOrdenExterna(h);
     if (oe.error) { toast(oe.error, 'error'); return; }
     env.textContent = 'Enviando…';
-    const ctx = await contextoReporte(h);
+    const ctx = await contextoReporte();
     const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot}${r.estado === 'reiterada' ? ' (reiterada)' : ''}`, 'ok');
@@ -654,7 +647,7 @@ function formReporteCircuito(p) {
     const oe = leerOrdenExterna(h);
     if (oe.error) { toast(oe.error, 'error'); return; }
     env.textContent = 'Enviando…';
-    const ctx = await contextoReporte(h);
+    const ctx = await contextoReporte();
     const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot} · ${r.puntos_afectados} puntos afectados`, 'ok');
@@ -985,7 +978,7 @@ function pintarModo() {
   const on = S.modo.tipo === 'inspeccion';
   n.classList.toggle('sel', on);
   c.hidden = !on;
-  c.textContent = on ? `📋 Inspección del ${fmtFechaCorta(S.modo.fecha)} activa · toca para terminar o cambiar` : '';
+  c.textContent = on ? `📋 Inspección del ${fmtFechaCorta(S.modo.fecha)} activa · toca para terminar` : '';
 }
 function guardarModo() {
   try {
@@ -998,45 +991,23 @@ function restaurarModo() {
     const s = JSON.parse(localStorage.getItem(LS_MODO) || 'null');
     if (!s || s.uid !== S.perfil.id || !PUEDE_MODO_INSPECCION.includes(rol())) return;
     const dias = Math.round((fechaChileLocal(hoyChileStr(), 12) - fechaChileLocal(s.fecha, 12)) / 86400000);
-    const vencida = Date.now() - (s.guardado || 0) > 24 * 3600 * 1000 || s.fecha > hoyChileStr() || (rol() !== 'admin' && dias > DIAS_MAX_INSPECCION);
+    const vencida = Date.now() - (s.guardado || 0) > 36 * 3600 * 1000 || s.fecha > hoyChileStr() || (rol() !== 'admin' && dias > DIAS_MAX_INSPECCION);
     if (vencida) { localStorage.removeItem(LS_MODO); return; }
     S.modo = { tipo: 'inspeccion', fecha: s.fecha, inspId: null };
   } catch (e) { /* */ }
 }
 function abrirInspeccion() {
-  const hoy = hoyChileStr();
   const on = S.modo.tipo === 'inspeccion';
-  const min = rol() === 'admin' ? '' : `min="${sumarDiasStr(hoy, -DIAS_MAX_INSPECCION)}"`;
   const h = abrirHoja(`
     <h2>Inspección</h2>
-    <p class="hint" style="font-size:14px;margin-top:6px">Con la inspección activa, todas las fallas que reportes quedan dentro de ella (para la estadística) y tú indicas la <b>hora</b> de cada una.</p>
-    ${on ? `<div class="aviso"><b>Inspección activa:</b> ${esc(fmtFechaCorta(S.modo.fecha))}</div>` : ''}
-    <h3>Fecha de la inspección</h3>
-    <input id="mFecha" class="campo" type="date" value="${esc(S.modo.fecha || hoy)}" max="${esc(hoy)}" ${min}>
-    <div id="mAviso" class="hint" style="margin:8px 0"></div>
+    <p class="hint" style="font-size:14px;margin-top:6px">Con la inspección activa, todas las fallas que reportes quedan dentro de ella (para la estadística), cada una con la fecha y hora exactas en que la registras. Si la inspección es nocturna y pasa de medianoche, conserva la fecha en que la iniciaste. Cualquier otro ajuste se hace en la página de escritorio.</p>
+    ${on ? `<div class="aviso"><b>Inspección activa</b> iniciada el ${esc(fmtFechaCorta(S.modo.fecha))}</div>` : ''}
     <div class="acciones">
-      <button id="mInsp" class="btn btn-primario">${on ? 'Cambiar fecha de la inspección' : 'Comenzar inspección'}</button>
-      ${on ? '<button id="mTerminar" class="btn btn-secundario">Terminar inspección</button>' : ''}
+      ${on ? '<button id="mTerminar" class="btn btn-primario">Terminar inspección</button>' : '<button id="mInsp" class="btn btn-primario">Comenzar inspección</button>'}
     </div>`);
-  const aviso = async () => {
-    const f = $('#mFecha', h).value;
-    $('#mAviso', h).textContent = '';
-    if (!f) return;
-    try {
-      const r = await rpc('inspeccion_existente', { p_fecha: f, p_ito: null });
-      if (r && r.existe && document.body.contains($('#mAviso'))) $('#mAviso').textContent = r.permitido === false
-        ? 'Ya existe una inspección de ese día, pero es muy antigua para continuarla.'
-        : `Ya tienes una inspección de ese día con ${r.fallas} falla(s): se continuará esa.`;
-    } catch (e) { /* sin aviso */ }
-  };
-  $('#mFecha', h).addEventListener('change', aviso);
-  aviso();
   const mi = $('#mInsp', h);
-  mi.addEventListener('click', ocupar(mi, async () => {
-    const f = $('#mFecha', h).value;
-    if (!f) { toast('Elige la fecha de la inspección.', 'error'); return; }
-    if (f > hoyChileStr()) { toast('La fecha no puede ser futura.', 'error'); return; }
-    if (rol() !== 'admin' && f < sumarDiasStr(hoyChileStr(), -DIAS_MAX_INSPECCION)) { toast(`Solo se puede informar hasta ${DIAS_MAX_INSPECCION} días atrás.`, 'error'); return; }
+  if (mi) mi.addEventListener('click', ocupar(mi, async () => {
+    const f = hoyChileStr();
     S.modo = { tipo: 'inspeccion', fecha: f, inspId: null };
     guardarModo(); pintarModo(); cerrarHoja();
     cambiarVista('mapa');
