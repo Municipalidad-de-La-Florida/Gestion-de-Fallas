@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.7.0';
+const VERSION_APP = '1.8.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -335,7 +335,40 @@ async function cargarPerfil() {
 let map, rend, rendSvg, capaCircuitos, capaPuntos, capaFallas, marcadorPos, circuloPos;
 let cacheBbox = null;
 
+/* ---------------- símbolo del punto según el tipo de poste (igual que en el escritorio) ---------------- */
+// Dibuja la forma centrada en (x,y) con "radio" r en un canvas 2D.
+function trazarForma(ctx, forma, x, y, r) {
+  ctx.beginPath();
+  const poli = (pts) => { pts.forEach(([a, b], i) => (i ? ctx.lineTo(x + a * r, y + b * r) : ctx.moveTo(x + a * r, y + b * r))); ctx.closePath(); };
+  switch (forma) {
+    case 'HORMIGON': poli([[-.9, -.9], [.9, -.9], [.9, .9], [-.9, .9]]); break;                                  // cuadrado
+    case 'ACERO': poli([[0, -1.05], [1.05, .85], [-1.05, .85]]); break;                                            // triángulo
+    case 'MONOPOSTE': poli([[0, -1.1], [.95, -.55], [.95, .55], [0, 1.1], [-.95, .55], [-.95, -.55]]); break;      // hexágono
+    case 'ORNAMENTAL': poli([[0, -1.05], [1, -.32], [.62, .85], [-.62, .85], [-1, -.32]]); break;                 // pentágono
+    case 'FACHADA': ctx.arc(x, y + r * .45, r * 1.05, Math.PI, 0); ctx.closePath(); break;                        // semicírculo
+    default: ctx.arc(x, y, r, 0, Math.PI * 2);                                                                     // círculo
+  }
+}
+const formaPoste = (simb) => String(simb || '').toUpperCase().trim();
+let MarcadorForma = null;
+function definirMarcadorForma() {
+  if (MarcadorForma) return;
+  MarcadorForma = L.CircleMarker.extend({
+    options: { forma: '' },
+    _updatePath() { this._renderer._updateForma(this); },
+  });
+  L.Canvas.include({
+    _updateForma(layer) {
+      if (!this._drawing || layer._empty()) return;
+      const p = layer._point, r = Math.max(Math.round(layer._radius), 1);
+      trazarForma(this._ctx, layer.options.forma, p.x, p.y, r);
+      this._fillStroke(this._ctx, layer);
+    },
+  });
+}
+
 function iniciarMapa() {
+  definirMarcadorForma();
   if (map) { map.invalidateSize(); return; }
   map = L.map('map', { zoomControl: false, attributionControl: true, maxZoom: 20 }).setView([-33.52, -70.58], 14);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, maxNativeZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
@@ -387,7 +420,7 @@ async function cargarArea(forzar) {
     }
     if (pts) {
       L.geoJSON(pts, {
-        pointToLayer: (f, ll) => L.circleMarker(ll, { renderer: rend, radius: radioPunto(), weight: 2, color: '#1f4d3d', fillColor: '#ffd54a', fillOpacity: 0.9 }),
+        pointToLayer: (f, ll) => new MarcadorForma(ll, { renderer: rend, forma: formaPoste(f.properties.simb_poste), radius: radioPunto(), weight: 2, color: '#1f4d3d', fillColor: '#ffd54a', fillOpacity: 0.9 }),
         onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirPunto(f.properties, f.geometry); }),
       }).eachLayer((l) => capaPuntos.addLayer(l));
     }
@@ -411,7 +444,7 @@ function dibujarFallas() {
     if (f.geometry.type === 'Point') {
       const [lng, lat] = f.geometry.coordinates;
       const r = p.cascada ? (z >= 18 ? 7 : 5) : (z >= 18 ? 13 : z >= 16 ? 11 : 8);
-      capa = L.circleMarker([lat, lng], { renderer: rend, radius: r, weight: 3, color: '#fff', fillColor: color, fillOpacity: reparada ? 0.55 : 0.95, interactive: !reparada });
+      capa = new MarcadorForma([lat, lng], { renderer: rend, forma: formaPoste(p.simb_poste), radius: r, weight: 3, color: '#fff', fillColor: color, fillOpacity: reparada ? 0.55 : 0.95, interactive: !reparada });
     } else {
       if (p.estado === 'reportada') {
         // Circuito recién reportado: parpadea (como en el escritorio). El parpadeo es CSS sobre SVG;
