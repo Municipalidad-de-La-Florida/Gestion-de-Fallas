@@ -814,6 +814,70 @@ function cambiarVista(v) {
 }
 $$('.nav-btn').forEach((b) => b.addEventListener('click', () => cambiarVista(b.dataset.vista)));
 
+/* ------------------------- gestión de usuarios (solo admin) ------------------------- */
+const ROLES_LISTA = ['admin', 'ito', 'ito2', 'contratista', 'contratista2', 'camion', 'observador'];
+const ROLES_CON_NOTIF = ['admin', 'ito', 'ito2', 'contratista2'];
+async function formUsuarios() {
+  if (rol() !== 'admin') return;
+  const h = abrirHoja(`<h2>Gestión de usuarios</h2>
+    <div class="hint">Para crear un usuario nuevo hazlo desde Supabase (Authentication → Add user); aquí le asignas nombre y rol. Los cambios se guardan todos juntos.</div>
+    <div id="uLista"><div class="hint">Cargando…</div></div>
+    <div class="acciones fija"><button id="uOk" class="btn btn-primario" disabled>Sin cambios</button></div>`);
+  let us;
+  try { us = await select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado&order=nombre.asc'); }
+  catch (e) { $('#uLista', h).innerHTML = '<div class="aviso">No se pudo cargar la lista de usuarios.</div>'; return; }
+  if (!document.body.contains($('#uLista'))) return;
+  const estado = (d) => ({
+    nombre: $('.u-nom', d).value.trim(), rol: $('.u-rol', d).value,
+    notif: ROLES_CON_NOTIF.includes($('.u-rol', d).value) && $('.u-notif', d).checked,
+  });
+  $('#uLista', h).innerHTML = us.map((u) => `<div class="tarjeta-u" data-id="${esc(u.id)}" style="border:1px solid #d6ddd9;border-radius:12px;padding:10px;margin:10px 0">
+      <input class="campo u-nom" value="${esc(u.nombre || '')}" aria-label="Nombre">
+      <div class="hint" style="margin:4px 0">${esc(u.email || '—')}</div>
+      <select class="campo u-rol" aria-label="Rol">${ROLES_LISTA.map((r) => `<option value="${r}" ${r === u.rol ? 'selected' : ''}>${r}</option>`).join('')}</select>
+      <label class="u-notifl" style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" class="u-notif" ${u.notificador_externo_habilitado ? 'checked' : ''}> Notificadores</label>
+      <button class="btn btn-secundario u-reset" style="height:40px" ${u.email ? '' : 'disabled'}>Enviar reseteo de clave</button>
+    </div>`).join('') || '<div class="vacio">No hay usuarios.</div>';
+  const ok = $('#uOk', h);
+  const filas = $$('.tarjeta-u', h);
+  filas.forEach((d, i) => {
+    d._orig = JSON.stringify(estado(d));
+    const refrescar = () => {
+      const habil = ROLES_CON_NOTIF.includes($('.u-rol', d).value);
+      $('.u-notifl', d).style.display = habil ? 'flex' : 'none';
+      const n = filas.filter((x) => JSON.stringify(estado(x)) !== x._orig).length;
+      filas.forEach((x) => { x.style.background = JSON.stringify(estado(x)) !== x._orig ? '#fff8e1' : ''; });
+      ok.disabled = n === 0;
+      ok.textContent = n ? `Guardar cambios (${n})` : 'Sin cambios';
+    };
+    d.addEventListener('input', refrescar); d.addEventListener('change', refrescar); refrescar();
+    $('.u-reset', d).addEventListener('click', ocupar($('.u-reset', d), async () => {
+      const email = us[i].email;
+      if (!confirm(`¿Enviar un correo de recuperación de clave a ${email}?`)) return;
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/recover`, { method: 'POST', headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+      if (!r.ok) throw new Error('No se pudo enviar el reseteo.');
+      toast('Correo de recuperación enviado', 'ok');
+    }));
+  });
+  ok.addEventListener('click', ocupar(ok, async () => {
+    const mod = filas.filter((x) => JSON.stringify(estado(x)) !== x._orig);
+    if (mod.some((x) => !estado(x).nombre)) { toast('Hay un usuario con el nombre vacío.', 'error'); return; }
+    ok.textContent = 'Guardando…';
+    const errores = []; let n = 0;
+    for (const d of mod) {
+      const e = estado(d);
+      try {
+        const r = await api(`/rest/v1/usuarios?id=eq.${d.dataset.id}`, { method: 'PATCH', prefer: 'return=representation', body: { nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif } });
+        if (!r || !r.length) throw new Error('sin permiso');
+        n++; d._orig = JSON.stringify(e);
+        if (d.dataset.id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = e.rol; $('#barraNombre').textContent = e.nombre; $('#barraRol').textContent = rolVisible(); }
+      } catch (err) { errores.push(`${e.nombre}: ${err.message}`); }
+    }
+    if (errores.length) toast(`Guardados ${n}. Error: ${errores.join('; ')}`, 'error');
+    else { cerrarHoja(); toast(`${n} usuario(s) guardado(s)`, 'ok'); }
+  }));
+}
+
 /* ------------------------------ menú ------------------------------ */
 const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const esStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
@@ -824,11 +888,14 @@ $('#btnMenu').addEventListener('click', () => {
     <div class="acciones" style="margin-top:14px">
       ${S.instalar ? '<button id="mInstalar" class="btn btn-primario">Instalar la app en este teléfono</button>' : ''}
       ${!S.instalar && esIOS() && !esStandalone() ? '<div class="aviso">Para instalarla en iPhone: toca el botón <b>Compartir</b> de Safari y luego <b>Añadir a pantalla de inicio</b>.</div>' : ''}
+      ${rol() === 'admin' ? '<button id="mUsuarios" class="btn btn-secundario">Gestionar usuarios</button>' : ''}
       <button id="mActualizar" class="btn btn-secundario">Buscar actualización de la app</button>
       <button id="mSalir" class="btn btn-peligro">Cerrar sesión</button>
     </div>`);
   const i = $('#mInstalar', h);
   if (i) i.addEventListener('click', async () => { S.instalar.prompt(); await S.instalar.userChoice; S.instalar = null; cerrarHoja(); });
+  const mu = $('#mUsuarios', h);
+  if (mu) mu.addEventListener('click', () => formUsuarios());
   $('#mActualizar', h).addEventListener('click', async () => {
     try { const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) { /* */ }
     location.reload();
