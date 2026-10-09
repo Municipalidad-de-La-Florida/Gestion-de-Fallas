@@ -50,6 +50,7 @@
   <main id="vistaMapa">
     <div id="map"></div>
     <div id="zoomAviso" class="zoom-aviso" hidden>Acércate más para ver y tocar los puntos</div>
+    <button id="badgeSinAsignar" class="badge-filtro" hidden>Solo sin asignar ✕</button>
     <button id="btnUbicacion" class="fab" aria-label="Mi ubicación">◎</button>
   </main>
 
@@ -61,6 +62,7 @@
         <button class="chip" data-f="reportada">Reportadas</button>
         <button class="chip" data-f="pendiente">Pendientes</button>
       </div>
+      <label id="listaSinAsignarBox" class="chk-sin-asignar" hidden><input type="checkbox" id="listaSinAsignar"> <span>Sin asignar <b id="listaSinAsignarN"></b></span></label>
       <div id="listaResumen" class="hint"></div>
     </div>
     <div id="listaItems"></div>

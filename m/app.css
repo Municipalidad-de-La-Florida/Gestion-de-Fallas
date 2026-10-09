@@ -178,3 +178,9 @@ textarea.campo{ min-height:70px; }
 #camOv .cam-barra{display:flex;align-items:center;justify-content:space-between;padding:18px 24px calc(18px + env(safe-area-inset-bottom));background:#000}
 #camOv .cam-barra button{color:#fff;background:none;border:0;font-size:16px;min-width:80px;height:48px}
 #camOv #camShot{width:72px;height:72px;min-width:72px;border-radius:50%;background:#fff;border:5px solid #9aa;box-sizing:border-box}
+
+.chk-sin-asignar{ display:flex; align-items:center; gap:8px; margin:4px 0 2px; font-size:14px; font-weight:600; }
+.chk-sin-asignar[hidden]{ display:none; }
+.chk-sin-asignar input{ width:20px; height:20px; accent-color:var(--verde); margin:0; }
+.badge-filtro{ position:absolute; z-index:500; top:10px; right:12px; border:0; background:var(--verde); color:#fff; padding:8px 14px; border-radius:20px; font-size:13px; font-weight:600; box-shadow:var(--sombra); }
+.badge-filtro[hidden]{ display:none; }

@@ -78,6 +78,21 @@
   #indicadorFallas .t-md,#indicadorFallas .t-sm{display:none;}
   #indicadorFallas.ind-md{padding:8px 11px; font-size:12px;} #indicadorFallas.ind-md .t-lg{display:none;} #indicadorFallas.ind-md .t-md{display:inline;} #indicadorFallas.ind-md .sp{margin:0 6px;}
   #indicadorFallas.ind-sm{left:12px; top:12px; transform:none; padding:8px 10px; font-size:11.5px;} #indicadorFallas.ind-sm .t-lg,#indicadorFallas.ind-sm .t-md{display:none;} #indicadorFallas.ind-sm .t-sm{display:none;} #indicadorFallas.ind-sm .sp{margin:0 5px;}
+  /* Botón refrescar (junto al indicador): anillo = tiempo hasta el próximo refresco automático */
+  #btnRefrescar{
+    position:absolute; top:11px; z-index:800; display:none; width:44px; height:44px; padding:0; border:none; border-radius:50%;
+    background:#fff; color:var(--primary); cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.18); align-items:center; justify-content:center;
+  }
+  #btnRefrescar:hover{box-shadow:0 4px 14px rgba(0,0,0,0.28);}
+  #btnRefrescar:active{transform:scale(.92);}
+  #btnRefrescar svg.ic{width:19px; height:19px; stroke:currentColor; fill:none; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;}
+  #btnRefrescar svg.ring{position:absolute; inset:-3px; width:50px; height:50px; transform:rotate(-90deg); pointer-events:none;}
+  #btnRefrescar svg.ring circle{fill:none; stroke-width:3.5;}
+  #btnRefrescar .anillo-bg{stroke:#d3dad5;} #btnRefrescar .anillo{stroke:#7BD300; stroke-linecap:round; stroke-dasharray:138.2; stroke-dashoffset:138.2; transition:stroke-dashoffset .9s linear;}
+  #btnRefrescar.girando svg.ic{animation:giroRef .8s linear infinite;} #btnRefrescar.girando .anillo{stroke:var(--primary); stroke-dashoffset:40; transition:none;}
+  @keyframes giroRef{to{transform:rotate(360deg);}}
+  #toastRefrescar{position:absolute; top:64px; left:50%; transform:translateX(-50%); z-index:801; background:var(--primary); color:#fff; font-size:12px; font-weight:600; padding:6px 14px; border-radius:14px; box-shadow:0 4px 14px rgba(0,0,0,.2); opacity:0; pointer-events:none; transition:opacity .25s; white-space:nowrap;}
+  #toastRefrescar.on{opacity:1;}
   /* Botón cuadrado de zonas de inspección, al lado del botón de fondo del mapa */
   .leaflet-control-zonas{clear:none !important; background:#fff; border:2px solid rgba(0,0,0,0.2); border-radius:5px; width:36px; height:36px; box-sizing:content-box; display:flex; align-items:center; justify-content:center; font-size:17px; cursor:pointer; text-decoration:none; color:var(--ink); margin-right:8px !important;}
   .leaflet-touch .leaflet-control-zonas{width:44px; height:44px;}
@@ -398,6 +413,11 @@
         </select>
       </div>
       <div id="indicadorFallas" title=""></div>
+      <button id="btnRefrescar" type="button" title="Actualizar ahora (se actualiza solo cada 2 min)" aria-label="Actualizar fallas">
+        <svg class="ring" viewBox="0 0 50 50"><circle class="anillo-bg" cx="25" cy="25" r="22"/><circle class="anillo" id="btnRefrescarAnillo" cx="25" cy="25" r="22"/></svg>
+        <svg class="ic" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+      </button>
+      <div id="toastRefrescar">✓ Actualizado</div>
       <div id="searchBox" class="search-box" style="display:none;">
         <div style="position:relative;">
           <input type="text" id="searchCalle" placeholder="Calle" autocomplete="off">
@@ -528,7 +548,7 @@
 
       <div class="section" style="padding:6px 12px; flex-shrink:0;">
         <div style="display:flex; align-items:center; gap:8px;">
-          <h3 style="margin:0; white-space:nowrap;">Últimas fallas</h3>
+          <h3 style="margin:0; white-space:nowrap;">Fallas activas</h3>
           <form id="buscarFallasForm" role="search" autocomplete="off" onsubmit="return false;" style="position:relative; flex:1; min-width:0; margin:0;">
             <span style="position:absolute; left:9px; top:50%; transform:translateY(-50%); font-size:11px; pointer-events:none;">🔍</span>
             <input type="search" id="buscarFallasLateral" name="busqueda_fallas_lateral_x7" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" data-lpignore="true" data-1p-ignore="true" data-form-type="other" placeholder="Buscar OS, OE, reportó, llave" style="width:100%; box-sizing:border-box; padding:7px 26px 7px 28px; border:1.5px solid var(--line); border-radius:8px; font-size:12px; outline:none; background:#fff; -webkit-appearance:none; appearance:none;">
@@ -536,6 +556,10 @@
           </form>
         </div>
       </div>
+      <label id="filtroSinAsignarBox" style="display:none; align-items:center; gap:7px; padding:2px 12px 5px; font-size:12px; font-weight:600; cursor:pointer; flex-shrink:0;">
+        <input type="checkbox" id="filtroSinAsignar" style="margin:0; width:15px; height:15px; accent-color:var(--primary);">
+        <span>Sin asignar <span id="sinAsignarN" style="color:var(--ink-soft); font-weight:700;"></span></span>
+      </label>
       <div id="fallasListaEstado" class="hint" style="display:none; margin:0; padding:0 12px 4px; flex-shrink:0;"></div>
       <div id="fallasList" style="flex:1; overflow-y:auto; min-height:80px;"><div class="empty-state">Navega el mapa para ver fallas del sector.</div></div>
 
@@ -1527,16 +1551,57 @@ function initMap(){
   cargarDatosDelArea();
   renderFallasOnMap();
 
-  // refresco periódico de fallas (mientras llega Realtime real en Fase 4)
-  // Se pausa si la pestaña no está visible (usuario minimizado / en otra pestaña) para no gastar datos al pedo.
-  setInterval(async () => {
-    if(document.hidden) return;
-    cargarFallasDelArea();
-    await renderFallasOnMap();
+  // Refresco de fallas: automático cada 2 min (si la pestaña está visible) y manual con el botón redondo.
+  // El anillo del botón se llena hasta el próximo refresco automático.
+  iniciarRefrescoFallas();
+}
+
+const INTERVALO_REFRESCO_MS = 120000;
+let ultimoRefrescoFallas = Date.now(), refrescandoFallas = false, temporizadorRefresco = null;
+async function refrescarFallas(manual){
+  if(refrescandoFallas) return;
+  refrescandoFallas = true;
+  const btn = document.getElementById('btnRefrescar');
+  btn.classList.add('girando');
+  const t0 = Date.now();
+  try{
+    invalidarCacheTodasFallas();
+    await Promise.all([cargarFallasDelArea(), renderFallasOnMap()]);
     if(document.getElementById('sidebarStats').style.display === 'flex'){
       fallasPeriodoLayerGroup.eachLayer(l => l.bringToFront());
     }
-  }, 120000);
+    ultimoRefrescoFallas = Date.now();
+  }catch(e){ console.error(e); }
+  // que el giro se alcance a ver aunque la respuesta sea muy rápida
+  const resto = 700 - (Date.now() - t0);
+  if(resto > 0) await new Promise(r => setTimeout(r, resto));
+  btn.classList.remove('girando');
+  refrescandoFallas = false;
+  actualizarAnilloRefresco();
+  if(manual){
+    const t = document.getElementById('toastRefrescar');
+    t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 1600);
+  }
+}
+function actualizarAnilloRefresco(){
+  const a = document.getElementById('btnRefrescarAnillo');
+  if(!a) return;
+  const frac = Math.min(1, (Date.now() - ultimoRefrescoFallas) / INTERVALO_REFRESCO_MS);
+  a.style.strokeDashoffset = String(138.2 * (1 - frac));
+}
+function iniciarRefrescoFallas(){
+  if(temporizadorRefresco) return;
+  document.getElementById('btnRefrescar').addEventListener('click', () => refrescarFallas(true));
+  ultimoRefrescoFallas = Date.now();
+  temporizadorRefresco = setInterval(() => {
+    if(document.hidden || refrescandoFallas) return;
+    if(Date.now() - ultimoRefrescoFallas >= INTERVALO_REFRESCO_MS) refrescarFallas(false);
+    else actualizarAnilloRefresco();
+  }, 1000);
+  // al volver a la pestaña, si ya pasó el tiempo, se actualiza enseguida
+  document.addEventListener('visibilitychange', () => {
+    if(!document.hidden && Date.now() - ultimoRefrescoFallas >= INTERVALO_REFRESCO_MS) refrescarFallas(false);
+  });
 }
 
 // ---------- Cache simple por zona (bbox) para las capas de área ----------
@@ -2120,6 +2185,13 @@ function ajustarIndicadorFallas(){
   const w = mapaEl.clientWidth;
   el.classList.toggle('ind-md', w < 1000 && w >= 700);
   el.classList.toggle('ind-sm', w < 700);
+  const b = document.getElementById('btnRefrescar');
+  if(b){
+    b.style.display = el.style.display === 'block' ? 'flex' : 'none';
+    const r = el.getBoundingClientRect(), m = mapaEl.getBoundingClientRect();
+    b.style.left = Math.round(r.right - m.left + 10) + 'px';
+    b.style.top = Math.round(r.top - m.top + (r.height - 44) / 2) + 'px';
+  }
 }
 window.addEventListener('resize', ajustarIndicadorFallas);
 if(window.ResizeObserver) new ResizeObserver(ajustarIndicadorFallas).observe(document.getElementById('map'));
@@ -2129,9 +2201,12 @@ function renderFallasDesdeCache(){
     const geojson = ultimoFallasGeoJSON;
     fallasLayerGroup.clearLayers();
     if(!geojson || !geojson.features) return;
+    const sinAsignar = filtroSinAsignarActivo();
     geojson.features.forEach(feat => {
       const estado = feat.properties.estado;
       if(filtrosEstadoVisible[estado] === false) return;
+      // Filtro "Sin asignar": solo fallas activas sin camión (los puntos de cascada se ocultan; manda el circuito)
+      if(sinAsignar && (estado === 'reparada' || feat.properties.cascada || feat.properties.asignado_camion_id)) return;
       const color = colorEstado[estado] || '#999';
       const fallaId = feat.properties.id;
       // Si la falla ya está reparada y el usuario está en modo "agregar/informar falla" (y no viendo
@@ -2161,8 +2236,8 @@ function renderFallasDesdeCache(){
           });
         }
       } else {
-        // Circuito: la línea parpadea mientras está "reportada"
-        const claseCss = estado === 'reportada' ? 'falla-reportada' : '';
+        // Circuito: la línea parpadea mientras está "reportada" o "reiterada"
+        const claseCss = (estado === 'reportada' || estado === 'reiterada') ? 'falla-reportada' : '';
         const lineLayer = L.geoJSON(feat, {
           pane:'fallasPane',
           style:{color:color, weight:6, opacity:0.9, className: claseCss},
@@ -2763,8 +2838,8 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
 // ---------- LISTA Y REPARACIÓN (contratista) ----------
 async function cargarFallasDelArea(){
   try{
-    const query = 'select=id,ot,orden_externa,tipo,tipo_falla,estado,cascada,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
-      + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=20';
+    const query = 'select=id,ot,orden_externa,tipo,tipo_falla,estado,cascada,asignado_camion_id,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
+      + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=1000';
     fallasEnArea = await db.select('fallas', query);
     renderFallasList();
     if(busquedaLateral.texto) ejecutarBusquedaLateral(busquedaLateral.texto);
@@ -2787,7 +2862,7 @@ function resaltarTexto(texto, terminos){
 function normalizarFilaLateral(f){
   const esBusqueda = 'nombre_creador' in f;
   return {
-    id: f.id, ot: f.ot, orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
+    id: f.id, ot: f.ot, asignado: f.asignado_camion_id || null, orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
     fecha: f.fecha_creacion, creado_en: f.creado_en, creado_por: f.creado_por,
     quien: esBusqueda ? (f.nombre_creador || '—') : (f.notificadores ? f.notificadores.nombre : (f.usuarios ? f.usuarios.nombre : '—')),
     llave: esBusqueda ? f.llave : (f.puntos_luminarios ? f.puntos_luminarios.llave : null)
@@ -2808,6 +2883,29 @@ function editarFallaLateral(id){
 }
 window.editarFallaLateral = editarFallaLateral;
 
+// ---- Filtro "Sin asignar" (admin, contratista, contratista2): afecta a la lista y al mapa ----
+const ROLES_FILTRO_ASIGNAR = ['admin','contratista','contratista2'];
+function puedeFiltrarSinAsignar(){ return ROLES_FILTRO_ASIGNAR.includes(rolEfectivo()); }
+function filtroSinAsignarActivo(){
+  if(!puedeFiltrarSinAsignar()) return false;
+  try{ return localStorage.getItem('fa_sin_asignar') === '1'; }catch(e){ return false; }
+}
+function actualizarCasillaSinAsignar(){
+  const box = document.getElementById('filtroSinAsignarBox');
+  if(!box) return;
+  const ok = puedeFiltrarSinAsignar();
+  box.style.display = ok ? 'flex' : 'none';
+  if(!ok) return;
+  document.getElementById('filtroSinAsignar').checked = filtroSinAsignarActivo();
+  const n = (fallasEnArea || []).filter(f => !f.asignado_camion_id).length;
+  document.getElementById('sinAsignarN').textContent = '(' + n + ')';
+}
+document.getElementById('filtroSinAsignar').addEventListener('change', (e) => {
+  try{ localStorage.setItem('fa_sin_asignar', e.target.checked ? '1' : '0'); }catch(_){}
+  renderFallasList();
+  renderFallasDesdeCache();
+});
+
 function renderFallasList(){
   const list = document.getElementById('fallasList');
   const estado = document.getElementById('fallasListaEstado');
@@ -2819,9 +2917,11 @@ function renderFallasList(){
     filas = (busquedaLateral.filas || []).map(normalizarFilaLateral);
   } else {
     filas = fallasEnArea.map(normalizarFilaLateral);
+    if(filtroSinAsignarActivo()) filas = filas.filter(f => !f.asignado);
   }
+  actualizarCasillaSinAsignar();
   estado.style.display = filas.length ? 'block' : 'none';
-  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `Mostrando las últimas ${filas.length} fallas activas`;
+  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${filtroSinAsignarActivo() ? ' sin asignar' : ''}`;
   if(!filas.length){
     list.innerHTML = buscando
       ? `<div class="empty-state">Sin resultados para «${escHtml(busquedaLateral.texto)}».</div>`
