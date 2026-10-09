@@ -78,6 +78,21 @@
   #indicadorFallas .t-md,#indicadorFallas .t-sm{display:none;}
   #indicadorFallas.ind-md{padding:8px 11px; font-size:12px;} #indicadorFallas.ind-md .t-lg{display:none;} #indicadorFallas.ind-md .t-md{display:inline;} #indicadorFallas.ind-md .sp{margin:0 6px;}
   #indicadorFallas.ind-sm{left:12px; top:12px; transform:none; padding:8px 10px; font-size:11.5px;} #indicadorFallas.ind-sm .t-lg,#indicadorFallas.ind-sm .t-md{display:none;} #indicadorFallas.ind-sm .t-sm{display:none;} #indicadorFallas.ind-sm .sp{margin:0 5px;}
+  /* Botón refrescar (junto al indicador): anillo = tiempo hasta el próximo refresco automático */
+  #btnRefrescar{
+    position:absolute; top:11px; z-index:800; display:none; width:44px; height:44px; padding:0; border:none; border-radius:50%;
+    background:#fff; color:var(--primary); cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.18); align-items:center; justify-content:center;
+  }
+  #btnRefrescar:hover{box-shadow:0 4px 14px rgba(0,0,0,0.28);}
+  #btnRefrescar:active{transform:scale(.92);}
+  #btnRefrescar svg.ic{width:19px; height:19px; stroke:currentColor; fill:none; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round;}
+  #btnRefrescar svg.ring{position:absolute; inset:-3px; width:50px; height:50px; transform:rotate(-90deg); pointer-events:none;}
+  #btnRefrescar svg.ring circle{fill:none; stroke-width:3.5;}
+  #btnRefrescar .anillo-bg{stroke:#d3dad5;} #btnRefrescar .anillo{stroke:#7BD300; stroke-linecap:round; stroke-dasharray:138.2; stroke-dashoffset:138.2; transition:stroke-dashoffset .9s linear;}
+  #btnRefrescar.girando svg.ic{animation:giroRef .8s linear infinite;} #btnRefrescar.girando .anillo{stroke:var(--primary); stroke-dashoffset:40; transition:none;}
+  @keyframes giroRef{to{transform:rotate(360deg);}}
+  #toastRefrescar{position:absolute; top:64px; left:50%; transform:translateX(-50%); z-index:801; background:var(--primary); color:#fff; font-size:12px; font-weight:600; padding:6px 14px; border-radius:14px; box-shadow:0 4px 14px rgba(0,0,0,.2); opacity:0; pointer-events:none; transition:opacity .25s; white-space:nowrap;}
+  #toastRefrescar.on{opacity:1;}
   /* Botón cuadrado de zonas de inspección, al lado del botón de fondo del mapa */
   .leaflet-control-zonas{clear:none !important; background:#fff; border:2px solid rgba(0,0,0,0.2); border-radius:5px; width:36px; height:36px; box-sizing:content-box; display:flex; align-items:center; justify-content:center; font-size:17px; cursor:pointer; text-decoration:none; color:var(--ink); margin-right:8px !important;}
   .leaflet-touch .leaflet-control-zonas{width:44px; height:44px;}
@@ -398,6 +413,11 @@
         </select>
       </div>
       <div id="indicadorFallas" title=""></div>
+      <button id="btnRefrescar" type="button" title="Actualizar ahora (se actualiza solo cada 2 min)" aria-label="Actualizar fallas">
+        <svg class="ring" viewBox="0 0 50 50"><circle class="anillo-bg" cx="25" cy="25" r="22"/><circle class="anillo" id="btnRefrescarAnillo" cx="25" cy="25" r="22"/></svg>
+        <svg class="ic" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
+      </button>
+      <div id="toastRefrescar">✓ Actualizado</div>
       <div id="searchBox" class="search-box" style="display:none;">
         <div style="position:relative;">
           <input type="text" id="searchCalle" placeholder="Calle" autocomplete="off">
@@ -1531,16 +1551,57 @@ function initMap(){
   cargarDatosDelArea();
   renderFallasOnMap();
 
-  // refresco periódico de fallas (mientras llega Realtime real en Fase 4)
-  // Se pausa si la pestaña no está visible (usuario minimizado / en otra pestaña) para no gastar datos al pedo.
-  setInterval(async () => {
-    if(document.hidden) return;
-    cargarFallasDelArea();
-    await renderFallasOnMap();
+  // Refresco de fallas: automático cada 2 min (si la pestaña está visible) y manual con el botón redondo.
+  // El anillo del botón se llena hasta el próximo refresco automático.
+  iniciarRefrescoFallas();
+}
+
+const INTERVALO_REFRESCO_MS = 120000;
+let ultimoRefrescoFallas = Date.now(), refrescandoFallas = false, temporizadorRefresco = null;
+async function refrescarFallas(manual){
+  if(refrescandoFallas) return;
+  refrescandoFallas = true;
+  const btn = document.getElementById('btnRefrescar');
+  btn.classList.add('girando');
+  const t0 = Date.now();
+  try{
+    invalidarCacheTodasFallas();
+    await Promise.all([cargarFallasDelArea(), renderFallasOnMap()]);
     if(document.getElementById('sidebarStats').style.display === 'flex'){
       fallasPeriodoLayerGroup.eachLayer(l => l.bringToFront());
     }
-  }, 120000);
+    ultimoRefrescoFallas = Date.now();
+  }catch(e){ console.error(e); }
+  // que el giro se alcance a ver aunque la respuesta sea muy rápida
+  const resto = 700 - (Date.now() - t0);
+  if(resto > 0) await new Promise(r => setTimeout(r, resto));
+  btn.classList.remove('girando');
+  refrescandoFallas = false;
+  actualizarAnilloRefresco();
+  if(manual){
+    const t = document.getElementById('toastRefrescar');
+    t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 1600);
+  }
+}
+function actualizarAnilloRefresco(){
+  const a = document.getElementById('btnRefrescarAnillo');
+  if(!a) return;
+  const frac = Math.min(1, (Date.now() - ultimoRefrescoFallas) / INTERVALO_REFRESCO_MS);
+  a.style.strokeDashoffset = String(138.2 * (1 - frac));
+}
+function iniciarRefrescoFallas(){
+  if(temporizadorRefresco) return;
+  document.getElementById('btnRefrescar').addEventListener('click', () => refrescarFallas(true));
+  ultimoRefrescoFallas = Date.now();
+  temporizadorRefresco = setInterval(() => {
+    if(document.hidden || refrescandoFallas) return;
+    if(Date.now() - ultimoRefrescoFallas >= INTERVALO_REFRESCO_MS) refrescarFallas(false);
+    else actualizarAnilloRefresco();
+  }, 1000);
+  // al volver a la pestaña, si ya pasó el tiempo, se actualiza enseguida
+  document.addEventListener('visibilitychange', () => {
+    if(!document.hidden && Date.now() - ultimoRefrescoFallas >= INTERVALO_REFRESCO_MS) refrescarFallas(false);
+  });
 }
 
 // ---------- Cache simple por zona (bbox) para las capas de área ----------
@@ -2124,6 +2185,13 @@ function ajustarIndicadorFallas(){
   const w = mapaEl.clientWidth;
   el.classList.toggle('ind-md', w < 1000 && w >= 700);
   el.classList.toggle('ind-sm', w < 700);
+  const b = document.getElementById('btnRefrescar');
+  if(b){
+    b.style.display = el.style.display === 'block' ? 'flex' : 'none';
+    const r = el.getBoundingClientRect(), m = mapaEl.getBoundingClientRect();
+    b.style.left = Math.round(r.right - m.left + 10) + 'px';
+    b.style.top = Math.round(r.top - m.top + (r.height - 44) / 2) + 'px';
+  }
 }
 window.addEventListener('resize', ajustarIndicadorFallas);
 if(window.ResizeObserver) new ResizeObserver(ajustarIndicadorFallas).observe(document.getElementById('map'));
