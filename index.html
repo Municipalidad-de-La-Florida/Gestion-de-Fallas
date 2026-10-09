@@ -4560,7 +4560,7 @@ function renderAnalisis(d){
     ${critCircuitos || '<div class="hint">Ningún circuito se repite en este rango.</div>'}
   `;
 
-  document.getElementById('anaPdfBtn').onclick = () => generarPdfAnalisis();
+  document.getElementById('anaPdfBtn').onclick = () => generarPdfAnalisis(false);
 
   // Marcadores de críticos en el mapa
   if(!analisisLayerGroup) analisisLayerGroup = L.layerGroup().addTo(map);
@@ -5034,7 +5034,7 @@ async function generarPdfInspeccion(){
 // PDF con texto real (varias páginas, tablas), no una foto de la pantalla.
 let ultimoAnalisis = null;   // datos de la última consulta de Análisis
 
-async function generarPdfAnalisis(){
+async function generarPdfAnalisis(soloResumen){
   const d = ultimoAnalisis;
   if(!d){ alert('Primero carga el análisis.'); return; }
   if(!window.jspdf || !window.jspdf.jsPDF){ alert('No se pudo cargar la librería de PDF. Revisa tu conexión y recarga la página.'); return; }
@@ -5280,6 +5280,8 @@ async function generarPdfAnalisis(){
     pdf.text('Verde: mejora respecto del mes anterior; rojo: empeora. Mes anterior = el mismo rango de fechas, un mes antes. pp = puntos porcentuales.', margen, yc + hc + 4);
     pdf.setFontSize(8); pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
 
+    // Las hojas de detalle (tablas y mapa de críticos) son solo del informe de la pestaña "Análisis"
+    if(!soloResumen){
     pdf.addPage();
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...VERDE);
     pdf.text('Detalle del análisis', margen, 16);
@@ -5434,13 +5436,15 @@ async function generarPdfAnalisis(){
       }
     }catch(e){ console.warn('No se pudo incluir el mapa en el PDF:', e); }
 
+    }
+
     // Pie de página
     const paginas = pdf.internal.getNumberOfPages();
     for(let p = 1; p <= paginas; p++){
       pdf.setPage(p); pdf.setFontSize(8); pdf.setTextColor(...gris);
       pdf.text(`Página ${p} de ${paginas}`, ancho - margen, alto - 7, {align: 'right'});
     }
-    pdf.save(`analisis_fallas_${ini}_a_${fin}.pdf`);
+    pdf.save(`${soloResumen ? 'informe_fallas' : 'analisis_fallas'}_${ini}_a_${fin}.pdf`);
   }catch(e){
     alert('Error generando el PDF: ' + e.message);
   }finally{
@@ -5532,7 +5536,7 @@ async function generarPdfPeriodo(){
   btn.textContent = textoOriginal; btn.disabled = false;
   if(!d){ return generarPdfEstadisticas(); }
   ultimoAnalisis = d;
-  await generarPdfAnalisis();
+  await generarPdfAnalisis(true);   // solo las dos primeras hojas; el detalle completo queda en la pestaña "Análisis"
 }
 
 async function generarPdfEstadisticas(){
