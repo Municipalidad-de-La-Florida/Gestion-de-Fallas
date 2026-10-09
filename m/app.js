@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.13.1';
+const VERSION_APP = '1.13.2';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1401,6 +1401,23 @@ async function abrirFallaPorId(id) {
   if (map && f._c) map.setView(f._c, Math.max(map.getZoom(), 18));
   abrirFalla(f.properties, f.geometry);
 }
+async function avisoPendienteSW(consumir) {
+  try {
+    if (!window.caches) return null;
+    const c = await caches.open('fm-aviso');
+    const r = await c.match('pendiente');
+    if (!r) return null;
+    if (consumir) await c.delete('pendiente');
+    const d = await r.json();
+    return d && d.id && /^[\w-]{1,64}$/.test(d.id) && Date.now() - (d.t || 0) < 120000 ? d.id : null;
+  } catch (e) { return null; }
+}
+async function recogerAvisoPendiente() {
+  if (!S.perfil) return;
+  const id = await avisoPendienteSW(true);
+  if (!id) return;
+  S.fallaPendiente = id; cerrarHoja(); abrirPendienteDeAviso();
+}
 function fallaDeUrl() {
   try {
     const u = new URL(location.href), id = u.searchParams.get('falla');
@@ -1509,7 +1526,8 @@ async function entrarApp() {
   clearInterval(S.timer);
   S.timer = setInterval(() => { if (!document.hidden && !hojaAbierta) cargarFallas(); }, REFRESCO_MS);
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil) { cargarFallas(); revisarVersion(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil) { cargarFallas(); revisarVersion(); setTimeout(recogerAvisoPendiente, 400); } });
+window.addEventListener('focus', () => setTimeout(recogerAvisoPendiente, 400));
 
 (async function iniciar() {
   if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
@@ -1528,6 +1546,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden && S.
       const id = ev.data && ev.data.tipo === 'abrir-falla' && ev.data.id;
       if (!id || !/^[\w-]{1,64}$/.test(id)) return;
       S.fallaPendiente = id;
+      avisoPendienteSW(true); // ya llegó el mensaje directo: se descarta la copia anotada
       if (S.perfil) { cerrarHoja(); abrirPendienteDeAviso(); }
     });
   }
