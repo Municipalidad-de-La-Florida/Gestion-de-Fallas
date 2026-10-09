@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.11.1';
+const VERSION_APP = '1.12.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -266,6 +266,59 @@ async function urlFoto(ruta) {
   return r && r.signedURL ? SUPABASE_URL + '/storage/v1' + r.signedURL : null;
 }
 
+/* Borrador de la reparación: si Android cierra la app mientras se usa la cámara, el formulario se recupera solo */
+function idbAbrir() {
+  return new Promise((ok, mal) => {
+    const r = indexedDB.open('fm_borrador', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('b');
+    r.onsuccess = () => ok(r.result); r.onerror = () => mal(r.error);
+  });
+}
+async function bdGet(k) {
+  try { const d = await idbAbrir(); return await new Promise((ok, mal) => { const q = d.transaction('b').objectStore('b').get(k); q.onsuccess = () => ok(q.result); q.onerror = () => mal(q.error); }); }
+  catch (e) { return null; }
+}
+async function bdSet(k, v) {
+  try { const d = await idbAbrir(); await new Promise((ok, mal) => { const t = d.transaction('b', 'readwrite'); t.objectStore('b').put(v, k); t.oncomplete = ok; t.onerror = () => mal(t.error); }); }
+  catch (e) { /* sin borrador */ }
+}
+async function bdDel(k) {
+  try { const d = await idbAbrir(); await new Promise((ok, mal) => { const t = d.transaction('b', 'readwrite'); t.objectStore('b').delete(k); t.oncomplete = ok; t.onerror = () => mal(t.error); }); }
+  catch (e) { /* */ }
+}
+async function restaurarBorrador() {
+  const b = await bdGet('cierre');
+  if (!b) return;
+  const f = S.features.find((x) => x.properties.id === b.id);
+  if (Date.now() - b.ts > 2 * 3600e3 || !f || f.properties.estado === 'reparada' || !puedeCerrar()) { bdDel('cierre'); return; }
+  formCierre(f.properties, b);
+  toast('Recuperamos la reparación que estabas haciendo', 'ok');
+}
+
+// Cámara dentro de la app (así Android no la deja en segundo plano). Devuelve la foto, null si se cancela
+// o undefined si la cámara no está disponible (entonces se usa la cámara del sistema).
+async function abrirCamara() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return undefined;
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }); }
+  catch (e) { return undefined; }
+  return new Promise((ok) => {
+    const ov = document.createElement('div');
+    ov.id = 'camOv';
+    ov.innerHTML = '<video playsinline muted autoplay></video><div class="cam-barra"><button type="button" id="camCancel">Cancelar</button><button type="button" id="camShot" aria-label="Capturar"></button><span></span></div>';
+    document.body.appendChild(ov);
+    const v = ov.querySelector('video'); v.srcObject = stream;
+    const fin = (r) => { stream.getTracks().forEach((t) => t.stop()); ov.remove(); ok(r); };
+    ov.querySelector('#camCancel').onclick = () => fin(null);
+    ov.querySelector('#camShot').onclick = () => {
+      if (!v.videoWidth) return;
+      const cv = document.createElement('canvas'); cv.width = v.videoWidth; cv.height = v.videoHeight;
+      cv.getContext('2d').drawImage(v, 0, 0);
+      cv.toBlob((b) => fin(b || null), 'image/jpeg', 0.92);
+    };
+  });
+}
+
 // Visor a pantalla completa: se abre al tocar una miniatura
 function abrirFotoGrande(urls, i) {
   cerrarFotoGrande();
@@ -334,6 +387,7 @@ function cerrarHoja(desdePop) {
   $('#hoja').hidden = true;
   $('#velo').hidden = true;
   $('#hojaContenido').innerHTML = '';
+  if (S.borradorId) { S.borradorId = null; bdDel('cierre'); }
   if (!desdePop && history.state && history.state.hoja) { try { history.back(); } catch (e) { /* */ } }
 }
 window.addEventListener('popstate', () => { if (hojaAbierta) cerrarHoja(true); });
@@ -925,10 +979,11 @@ async function formAsignar(p) {
   }));
 }
 
-function formCierre(p) {
+function formCierre(p, borr) {
   let sel = [];
   const exigeFoto = !!(S.perfil && S.perfil.foto_obligatoria);
   const fotos = [];   // { blob, url, subida }
+  if (borr) { sel = (borr.sel || []).slice(); (borr.fotos || []).forEach((b) => fotos.push({ blob: b, url: URL.createObjectURL(b), subida: false })); }
   const h = abrirHoja(`
     <h2>Registrar reparación</h2>
     <div class="hint">${esc(p.tipo_falla)} · OS ${esc(p.ot || '—')} · ${esc(tipoLabel(p))}${p.tipo === 'linea' ? ' · se cerrarán también sus ' + esc(p.puntos_afectados ?? '') + ' puntos' : ''}</div>
@@ -953,6 +1008,14 @@ function formCierre(p) {
     const t = b.dataset.t, i = sel.indexOf(t);
     if (i >= 0) { sel.splice(i, 1); b.classList.remove('sel'); } else { sel.push(t); b.classList.add('sel'); }
   }));
+  S.borradorId = p.id;
+  const guardarBorrador = () => bdSet('cierre', { id: p.id, ts: Date.now(), sel: sel.slice(), desc: $('#cDesc', h).value, fotos: fotos.map((f) => f.blob) });
+  if (borr) {
+    $('#cDesc', h).value = borr.desc || '';
+    $$('.codigo', h).forEach((b) => { if (sel.includes(b.dataset.t)) b.classList.add('sel'); });
+  }
+  $$('.codigo', h).forEach((b) => b.addEventListener('click', guardarBorrador));
+  $('#cDesc', h).addEventListener('input', guardarBorrador);
   const texto = () => { const libre = $('#cDesc', h).value.trim(); return [...sel, ...(libre ? [libre] : [])].join('\n'); };
   const ok = $('#cOk', h), pend = $('#cPend', h);
   const pintarFotos = () => {
@@ -961,6 +1024,7 @@ function formCierre(p) {
     $$('img', c).forEach((im) => im.addEventListener('click', () => abrirFotoGrande(fotos.map((x) => x.url), +im.dataset.v)));
     $$('button', c).forEach((b) => b.addEventListener('click', () => { const f = fotos.splice(+b.dataset.i, 1)[0]; URL.revokeObjectURL(f.url); pintarFotos(); }));
     $('#cBtnCam', h).disabled = $('#cBtnGal', h).disabled = fotos.length >= MAX_FOTOS;
+    if (S.borradorId === p.id) guardarBorrador();
   };
   if (exigeFoto) {
     const agregar = async (files) => {
@@ -973,7 +1037,12 @@ function formCierre(p) {
       }
       pintarFotos();
     };
-    $('#cBtnCam', h).addEventListener('click', () => $('#cInCam', h).click());
+    $('#cBtnCam', h).addEventListener('click', async () => {
+      guardarBorrador();
+      const r = await abrirCamara();
+      if (r === undefined) $('#cInCam', h).click();
+      else if (r) agregar([r]);
+    });
     $('#cBtnGal', h).addEventListener('click', () => $('#cInGal', h).click());
     ['cInCam', 'cInGal'].forEach((id) => $('#' + id, h).addEventListener('change', (e) => { agregar(e.target.files); e.target.value = ''; }));
     pintarFotos();
@@ -1357,7 +1426,9 @@ async function entrarApp() {
   setTimeout(() => map.invalidateSize(), 80);
   cacheBbox = null;
   await cargarFallas();
+  const habiaAviso = !!S.fallaPendiente;
   abrirPendienteDeAviso();
+  if (!habiaAviso) restaurarBorrador();
   cargarArea(true);
   S.centrarAlFijar = true;
   iniciarGPS();
