@@ -422,14 +422,11 @@
       <div id="toastRefrescar">✓ Actualizado</div>
       <div id="searchBox" class="search-box" style="display:none;">
         <div style="position:relative;">
-          <input type="text" id="searchCalle" placeholder="Calle" autocomplete="off">
-          <div id="calleSuggestions" class="suggestions"></div>
+          <input type="text" id="searchDir" placeholder="Dirección o esquina (ej: Las Nalcas 7905)" autocomplete="off">
+          <div id="dirSuggestions" class="suggestions"></div>
         </div>
-        <div style="position:relative;">
-          <input type="text" id="searchNumero" placeholder="Número" autocomplete="off" disabled>
-          <div id="numeroSuggestions" class="suggestions"></div>
-        </div>
-        <button id="searchGoBtn">🔍 Buscar dirección</button>
+        <button id="searchGoBtn">🔍 Buscar</button>
+        <div id="searchMsg" style="display:none;font-size:12px;margin-top:6px;line-height:1.35;"></div>
       </div>
     </div>
     <div id="todasPanel" class="bottom-panel">
@@ -848,87 +845,80 @@ const db = {
 };
 
 function inicializarBuscadorDirecciones(){
-  const inputCalle = document.getElementById('searchCalle');
-  const inputNumero = document.getElementById('searchNumero');
-  const sugCalle = document.getElementById('calleSuggestions');
-  const sugNumero = document.getElementById('numeroSuggestions');
-  let calleSeleccionada = null;
-  let timerCalle, timerNumero;
+  const input = document.getElementById('searchDir');
+  const sug = document.getElementById('dirSuggestions');
+  const msg = document.getElementById('searchMsg');
+  let timer, seq = 0;
+  const esc = (v) => String(v).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-  function mostrarSugerencias(container, items, onSelect){
-    if(!items.length){ container.classList.remove('visible'); container.innerHTML = ''; return; }
-    container.innerHTML = items.map((v,i) => `<div class="suggestion-item" data-i="${i}">${v}</div>`).join('');
-    container.classList.add('visible');
-    Array.from(container.children).forEach((el) => {
-      el.onclick = () => onSelect(items[parseInt(el.dataset.i)]);
-    });
+  function ocultarSug(){ sug.classList.remove('visible'); sug.innerHTML = ''; }
+  function mostrarMsg(html, color){
+    msg.style.display = html ? 'block' : 'none';
+    msg.style.color = color || 'var(--ink-soft)';
+    msg.innerHTML = html || '';
   }
 
-  inputCalle.addEventListener('input', () => {
-    calleSeleccionada = null;
-    inputNumero.value = '';
-    inputNumero.disabled = true;
-    sugNumero.classList.remove('visible');
-    clearTimeout(timerCalle);
-    const texto = inputCalle.value.trim();
-    if(texto.length < 2){ sugCalle.classList.remove('visible'); return; }
-    timerCalle = setTimeout(async () => {
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    const texto = input.value.trim();
+    mostrarMsg('');
+    if(texto.length < 2){ ocultarSug(); return; }
+    const mi = ++seq;
+    timer = setTimeout(async () => {
       try{
-        const resultados = await db.rpc('buscar_calles_loteos', {texto});
-        mostrarSugerencias(sugCalle, resultados.map(r => r.calle), (calle) => {
-          inputCalle.value = calle;
-          calleSeleccionada = calle;
-          sugCalle.classList.remove('visible');
-          inputNumero.disabled = false;
-          inputNumero.focus();
+        const items = await db.rpc('sugerir_direcciones', {p_texto: texto});
+        if(mi !== seq || !Array.isArray(items) || !items.length){ if(mi === seq) ocultarSug(); return; }
+        sug.innerHTML = items.map((it,i) => `<div class="suggestion-item" data-i="${i}">${esc(it.texto)}${it.tipo==='calle'?' …':''}</div>`).join('');
+        sug.classList.add('visible');
+        Array.from(sug.children).forEach(el => {
+          el.onclick = () => {
+            const it = items[parseInt(el.dataset.i)];
+            ocultarSug();
+            if(it.tipo === 'calle'){ input.value = it.texto + ' '; input.focus(); }
+            else { input.value = it.texto; buscar(); }
+          };
         });
-      }catch(e){ console.error('Error buscando calles:', e); }
-    }, 250);
-  });
-
-  inputNumero.addEventListener('input', () => {
-    clearTimeout(timerNumero);
-    if(!calleSeleccionada) return;
-    const texto = inputNumero.value.trim();
-    timerNumero = setTimeout(async () => {
-      try{
-        const resultados = await db.rpc('buscar_numeros_loteos', {calle_input: calleSeleccionada, texto});
-        mostrarSugerencias(sugNumero, resultados.map(r => r.numero), (numero) => {
-          inputNumero.value = numero;
-          sugNumero.classList.remove('visible');
-        });
-      }catch(e){ console.error('Error buscando números:', e); }
+      }catch(e){ console.error('Error en sugerencias:', e); }
     }, 200);
   });
 
-  document.getElementById('searchGoBtn').onclick = async () => {
-    const calle = calleSeleccionada || inputCalle.value.trim();
-    const numero = inputNumero.value.trim();
-    if(!calle || !numero){ alert('Elige una calle (de la lista) y escribe un número.'); return; }
+  async function buscar(){
+    clearTimeout(timer); seq++;
+    ocultarSug();
+    const texto = input.value.trim();
+    if(!texto){ mostrarMsg('Escribe una dirección, ej: <b>Las Nalcas 7905</b> o <b>Calle A con Calle B</b>.', '#b45309'); return; }
+    mostrarMsg('Buscando…');
     try{
-      const geojson = await db.rpc('buscar_loteo', {calle_input: calle, numero_input: numero});
+      const r = await db.rpc('buscar_direccion', {p_texto: texto});
       searchResultLayerGroup.clearLayers();
-      if(!geojson || !geojson.features.length){
-        alert(`No se encontró "${calle} ${numero}" en Loteos.`);
+      if(!r || r.tipo === 'sin_resultado' || !r.geojson){
+        let h = esc((r && r.mensaje) || 'No encontré esa dirección.');
+        const alt = (r && r.alternativas) || [];
+        if(alt.length) h += '<br>¿Quisiste decir? ' + alt.map((a,i) => `<a href="#" data-alt="${i}" style="color:var(--primary);font-weight:600;">${esc(a)}</a>`).join(' · ');
+        mostrarMsg(h, '#b91c1c');
+        msg.querySelectorAll('a[data-alt]').forEach(a => a.onclick = (ev) => {
+          ev.preventDefault();
+          const num = (texto.match(/\d+\s*$/) || [''])[0].trim();
+          input.value = alt[parseInt(a.dataset.alt)] + (num ? ' ' + num : '');
+          buscar();
+        });
         return;
       }
-      const layer = L.geoJSON(geojson, {
-        style:{color:'#2563a8', weight:3, fillColor:'#2563a8', fillOpacity:0.35}
+      const layer = L.geoJSON(r.geojson, {
+        style:{color:'#2563a8', weight:4, fillColor:'#2563a8', fillOpacity:0.35},
+        pointToLayer:(f, ll) => L.circleMarker(ll, {radius:9, color:'#fff', weight:3, fillColor:'#2563a8', fillOpacity:1})
       }).addTo(searchResultLayerGroup);
       map.fitBounds(layer.getBounds(), {padding:[60,60], maxZoom:19});
-      sugCalle.classList.remove('visible');
-      sugNumero.classList.remove('visible');
+      mostrarMsg(esc(r.mensaje || ''), r.tipo === 'cercana' ? '#b45309' : '#166534');
     }catch(e){
-      alert('Error buscando la dirección: ' + e.message);
+      mostrarMsg('Error buscando la dirección: ' + esc(e.message), '#b91c1c');
     }
-  };
+  }
 
-  // cerrar sugerencias al hacer clic fuera de ellas
+  document.getElementById('searchGoBtn').onclick = buscar;
+  input.addEventListener('keydown', (e) => { if(e.key === 'Enter'){ e.preventDefault(); buscar(); } });
   document.addEventListener('click', (e) => {
-    if(!document.getElementById('searchBox').contains(e.target)){
-      sugCalle.classList.remove('visible');
-      sugNumero.classList.remove('visible');
-    }
+    if(!document.getElementById('searchBox').contains(e.target)) ocultarSug();
   });
 }
 
