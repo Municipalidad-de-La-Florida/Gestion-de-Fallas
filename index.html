@@ -5237,16 +5237,24 @@ async function generarPdfAnalisis(soloResumen){
       else { pdf.setFontSize(10); pdf.setTextColor(...gris); pdf.text('No hay fallas con ubicación en este período.', ancho / 2, alto / 2, {align: 'center'}); }
     }catch(e){ console.warn('No se pudo incluir el mapa del período:', e); }
 
+    const fmtLarga = (f) => {
+      const [y, m, dd] = String(f).slice(0, 10).split('-').map(Number);
+      const dias = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+      const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+      return `${dias[new Date(Date.UTC(y, m - 1, dd)).getUTCDay()]} ${String(dd).padStart(2, '0')} de ${meses[m - 1]} de ${y}`;
+    };
+    const rangoLargo = `${fmtLarga(ini)} al ${fmtLarga(fin)}`;
     // Encabezado
     conOpacidad(0.93, () => { pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F'); });
     pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
     pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text('Informe del período', margen + 2, 22);
-    pdf.setFontSize(11.5); pdf.setTextColor(...LIMA);
-    pdf.text(`${fmtF(ini)} al ${fmtF(fin)} · ${plural(nDiasRango, 'día', 'días')}`, margen + 2, 31);
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(255, 255, 255);
-    pdf.text(`Generado el ${new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE})}`, ancho - margen - 2, 19, {align: 'right'});
-    pdf.text(`por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 23.5, {align: 'right'});
+    pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
+    pdf.text(rangoLargo, margen + 2, 31);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
+    pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
+    pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 20, {align: 'right'});
+    pdf.text(`extraído por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 25, {align: 'right'});
 
     // Panel de indicadores
     const py = alto - 56, ph = 44;
@@ -5257,12 +5265,16 @@ async function generarPdfAnalisis(soloResumen){
       if(sub){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(sub, x, py + 26.5); }
     };
     kpi(margen + 6, num(rr.fallas || 0), 'Fallas', '');
-    kpi(margen + 46, rr.puntos_afectados === undefined ? '-' : fmtMiles(rr.puntos_afectados), 'Puntos afectados',
-        (rr.puntos_afectados !== undefined && rr.total_puntos) ? `${fmtPctPuntos(rr.puntos_afectados, rr.total_puntos)} de ${fmtMiles(rr.total_puntos)} puntos` : '');
+    kpi(margen + 46, rr.puntos_afectados === undefined ? '-' : fmtMiles(rr.puntos_afectados), 'Puntos afectados', '');
+    if(rr.puntos_afectados !== undefined && rr.total_puntos){
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
+      pdf.text(`${fmtPctPuntos(rr.puntos_afectados, rr.total_puntos)} del parque lumínico`, margen + 46, py + 26.5);
+      pdf.text('de la comuna', margen + 46, py + 30);
+    }
     pdf.addImage(anilloPng(pctRep, 300), 'PNG', margen + 92, py + 4, 22, 22);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text('Reparadas', margen + 117, py + 14);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(`${num(rr.reparadas || 0)} de ${num(rr.fallas || 0)}`, margen + 117, py + 18.5);
-    kpi(margen + 146, num(rr.abiertas || 0), 'Siguen abiertas', '', [211, 58, 44]);
+    kpi(margen + 146, num(rr.abiertas || 0), 'Fallas sin atención', '', [211, 58, 44]);
     // Leyenda
     pdf.setDrawColor(219, 226, 220); pdf.line(margen + 4, py + 32, ancho - margen - 4, py + 32);
     [['Reportada', 'reportada'], ['Pendiente', 'pendiente'], ['Reiterada', 'reiterada'], ['Reparada', 'reparada']].forEach(([t, k], i) => {
@@ -5280,7 +5292,7 @@ async function generarPdfAnalisis(soloResumen){
     pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
     pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text('Estadísticas del período', margen + 2, 22);
-    pdf.setFontSize(11.5); pdf.setTextColor(...LIMA); pdf.text(`${fmtF(ini)} al ${fmtF(fin)} · ${plural(nDiasRango, 'día', 'días')}`, margen + 2, 31);
+    pdf.setFontSize(10.5); pdf.setTextColor(...LIMA); pdf.text(rangoLargo, margen + 2, 31);
     const tarjeta = (x, y, w, h, titulo) => {
       pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x, y, w, h, 3, 3, 'FD');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...VERDE); pdf.text(titulo, x + 5, y + 8);
@@ -5310,7 +5322,6 @@ async function generarPdfAnalisis(soloResumen){
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(28); pdf.setTextColor(...VERDE); pdf.text(fmtHoras(rr.media_recortada_dias_ing, '-'), margen + mitad + 11, 70);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
     pdf.text('promedio desde el ingreso al sistema', margen + mitad + 11, 77);
-    pdf.setFontSize(7); pdf.text('sin el 5% más rápido ni el 5% más lento', margen + mitad + 11, 82);
 
     // Fallas por día
     tarjeta(margen, 97, ancho - margen * 2, 44, 'Fallas informadas por día');
@@ -5368,21 +5379,17 @@ async function generarPdfAnalisis(soloResumen){
       pdf.setFont('helvetica', 'bold'); pdf.text(String(it.fallas), margen + wIzq + wDer - 4, yy, {align: 'right'});
     });
 
-    // Comparación con el mes anterior: mismo rango de fechas, un mes antes
-    const restarMes = (f) => {
-      const [y, m, dd] = f.split('-').map(Number);
-      const ult = new Date(Date.UTC(y, m - 1, 0)).getUTCDate();
-      return new Date(Date.UTC(y, m - 2, Math.min(dd, ult))).toISOString().slice(0, 10);
-    };
-    const prevIni = restarMes(ini), prevFin = restarMes(fin);
+    // Comparación con el período inmediatamente anterior, de la misma cantidad de días
+    const sumarDias = (f, n) => new Date(Date.UTC(...f.split('-').map((v, i) => i === 1 ? v - 1 : +v)) + n * 86400000).toISOString().slice(0, 10);
+    const prevFin = sumarDias(ini, -1), prevIni = sumarDias(prevFin, -(nDiasRango - 1));
     let prev = null;
-    try{ prev = await rpcAnalisisFallas(prevIni, prevFin); }catch(e){ console.warn('No se pudo obtener el mes anterior:', e); }
+    try{ prev = await rpcAnalisisFallas(prevIni, prevFin); }catch(e){ console.warn('No se pudo obtener el período anterior:', e); }
     const yc = 147 + hIzq + 6, hc = 40;
-    tarjeta(margen, yc, ancho - margen * 2, hc, 'Comparación con el mes anterior');
+    tarjeta(margen, yc, ancho - margen * 2, hc, 'Comparación con el período anterior');
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
     pdf.text(`${fmtF(prevIni)} al ${fmtF(prevFin)}  vs.  ${fmtF(ini)} al ${fmtF(fin)}`, margen + 62, yc + 8);
     if(!prev || !prev.resumen){
-      pdf.setFontSize(8.5); pdf.text('No se pudo obtener el mes anterior para comparar.', margen + 5, yc + 22);
+      pdf.setFontSize(8.5); pdf.text('No se pudo obtener el período anterior para comparar.', margen + 5, yc + 22);
     } else {
       const pr = prev.resumen || {};
       const pctDe = (r) => r.fallas ? Math.round((r.reparadas || 0) / r.fallas * 100) : null;
@@ -5399,7 +5406,7 @@ async function generarPdfAnalisis(soloResumen){
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(30, 40, 35); pdf.text(f.l, tx + 4, yc + 18);
         const fmtV = (v) => v === null || v === undefined ? '-' : (f.t === 'pp' ? v + '%' : (f.t === 'h' ? fmtHoras(v) : fmtMiles(v)));
         pdf.setFontSize(15); pdf.setTextColor(...VERDE); pdf.text(fmtV(f.a), tx + 4, yc + 26);
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(`mes anterior: ${fmtV(f.b)}`, tx + 4, yc + 30.5);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(`período anterior: ${fmtV(f.b)}`, tx + 4, yc + 30.5);
         if(f.a !== null && f.a !== undefined && f.b !== null && f.b !== undefined){
           const dif = f.a - f.b;
           let txt = 'sin cambio', col = gris;
@@ -5416,7 +5423,7 @@ async function generarPdfAnalisis(soloResumen){
       });
     }
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris);
-    pdf.text('Verde: mejora respecto del mes anterior; rojo: empeora. Mes anterior = el mismo rango de fechas, un mes antes. pp = puntos porcentuales.', margen, yc + hc + 4);
+    pdf.text('Verde: mejora respecto del período anterior; rojo: empeora. Período anterior = la misma cantidad de días inmediatamente anteriores. pp = puntos porcentuales.', margen, yc + hc + 4);
     pdf.setFontSize(8); pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
 
     // Las hojas de detalle (tablas y mapa de críticos) son solo del informe de la pestaña "Análisis"
