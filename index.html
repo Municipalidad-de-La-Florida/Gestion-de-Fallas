@@ -779,6 +779,12 @@ const db = {
     return data.user;
   },
   signOut(){ accessToken = null; },
+  // Lee el cuerpo de la respuesta; las funciones que devuelven "void" responden vacío (sin JSON).
+  async cuerpo(res){
+    const txt = await res.text();
+    if(!txt) return null;
+    try{ return JSON.parse(txt); }catch(e){ return {message: txt}; }
+  },
   headers(){
     return {
       'apikey': SUPABASE_KEY,
@@ -788,8 +794,8 @@ const db = {
   },
   async select(tabla, query){
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabla}?${query}`, { headers: this.headers() });
-    const data = await res.json();
-    if(!res.ok) throw new Error(data.message || 'Error consultando ' + tabla);
+    const data = await this.cuerpo(res);
+    if(!res.ok) throw new Error((data && data.message) || 'Error consultando ' + tabla);
     return data;
   },
   async insert(tabla, filas){
@@ -798,8 +804,8 @@ const db = {
       headers: { ...this.headers(), 'Prefer': 'return=representation' },
       body: JSON.stringify(filas)
     });
-    const data = await res.json();
-    if(!res.ok) throw new Error(data.message || 'Error insertando en ' + tabla);
+    const data = await this.cuerpo(res);
+    if(!res.ok) throw new Error((data && data.message) || 'Error insertando en ' + tabla);
     return data;
   },
   async delete(tabla, query){
@@ -822,8 +828,8 @@ const db = {
       headers: { ...this.headers(), 'Prefer': 'return=representation' },
       body: JSON.stringify(cambios)
     });
-    const data = await res.json();
-    if(!res.ok) throw new Error(data.message || 'Error actualizando ' + tabla);
+    const data = await this.cuerpo(res);
+    if(!res.ok) throw new Error((data && data.message) || 'Error actualizando ' + tabla);
     return data;
   },
   async rpc(funcion, params){
@@ -832,8 +838,8 @@ const db = {
       headers: this.headers(),
       body: JSON.stringify(params)
     });
-    const data = await res.json();
-    if(!res.ok) throw new Error(data.message || 'Error ejecutando ' + funcion);
+    const data = await this.cuerpo(res);
+    if(!res.ok) throw new Error((data && data.message) || 'Error ejecutando ' + funcion);
     return data;
   }
 };
