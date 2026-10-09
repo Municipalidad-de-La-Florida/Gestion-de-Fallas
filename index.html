@@ -5140,7 +5140,7 @@ async function generarPdfAnalisis(soloResumen){
     pdf.setFillColor(238, 242, 238); pdf.rect(0, 0, ancho, alto, 'F');
     try{
       const items = feats.map(f => ({geom: f.geometry, color: colorEstado[f.properties.estado] || '#2563a8', label: ''}));
-      const cv = await renderMapaCanvas(items, {w: 1588, h: 2246, padding: 90, padTop: 330, padBottom: 430, zMax: 17, simple: true});
+      const cv = await renderMapaCanvas(items, {w: 1588, h: 2246, padding: 190, padTop: 460, padBottom: 570, zMax: 17, simple: true});
       if(cv) pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
       else { pdf.setFontSize(10); pdf.setTextColor(...gris); pdf.text('No hay fallas con ubicación en este período.', ancho / 2, alto / 2, {align: 'center'}); }
     }catch(e){ console.warn('No se pudo incluir el mapa del período:', e); }
