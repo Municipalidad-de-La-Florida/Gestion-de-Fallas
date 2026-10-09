@@ -5337,7 +5337,7 @@ async function generarPdfAnalisis(soloResumen){
     const wPie = 62, wDia = ancho - margen * 2 - wPie - 6;
     tarjeta(margen, 97, wDia, 44, 'Fallas informadas por día');
     {
-      const serie = diasP.map(x => x.fallas || 0), mx = Math.max(1, ...serie);
+      const serie = diasP.map(x => (x.informadas !== undefined ? x.informadas : x.fallas) || 0), mx = Math.max(1, ...serie);
       const x0 = margen + 6, wTot = wDia - 12, n = Math.max(1, serie.length), paso = wTot / n, bw = Math.min(6, paso * 0.78), base = 130, hMax = 22;
       serie.forEach((v, i) => {
         if(!v) return;
