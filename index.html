@@ -5262,7 +5262,7 @@ async function generarPdfAnalisis(soloResumen){
     });
     const hIzq = 12 + top.length * 10.5 + 2;
     const itos = [...(d.por_ito || [])].sort((a, b) => b.fallas - a.fallas).slice(0, 5);
-    tarjeta(margen + wIzq + 6, 147, wDer, Math.max(30, 12 + itos.length * 8 + 4), 'Por ITO que informa');
+    tarjeta(margen + wIzq + 6, 147, wDer, Math.max(30, 12 + itos.length * 8 + 4), 'Quién informa');
     const maxIto = Math.max(1, ...itos.map(i => i.fallas));
     itos.forEach((it, i) => {
       const yy = 160 + i * 8;
