@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.12.3';
+const VERSION_APP = '1.12.4';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -326,7 +326,8 @@ function abrirFotoGrande(urls, i) {
   const lb = document.createElement('div');
   lb.id = 'lbFoto';
   lb.innerHTML = `<button class="lb-x" aria-label="Cerrar">✕</button><img alt="Foto de la reparación">
-    <div class="lb-barra"><button id="lbAnt" aria-label="Anterior">‹</button><span id="lbPos"></span><button id="lbSig" aria-label="Siguiente">›</button></div>`;
+    <div class="lb-barra"><button id="lbAnt" aria-label="Anterior">‹</button><span id="lbPos"></span><button id="lbSig" aria-label="Siguiente">›</button></div>
+    <button class="lb-cerrar" aria-label="Cerrar">Cerrar</button>`;
   document.body.appendChild(lb);
   const pintar = () => {
     lb.querySelector('img').src = urls[k];
@@ -336,10 +337,26 @@ function abrirFotoGrande(urls, i) {
   lb.querySelector('#lbAnt').onclick = (e) => { e.stopPropagation(); k = (k - 1 + urls.length) % urls.length; pintar(); };
   lb.querySelector('#lbSig').onclick = (e) => { e.stopPropagation(); k = (k + 1) % urls.length; pintar(); };
   lb.querySelector('.lb-x').onclick = cerrarFotoGrande;
+  lb.querySelector('.lb-cerrar').onclick = cerrarFotoGrande;
   lb.onclick = (e) => { if (e.target === lb) cerrarFotoGrande(); };
+  // El botón "atrás" del teléfono también cierra el visor
+  try { history.pushState({ lbFoto: 1 }, ''); lb._hist = true; } catch (e) { /* */ }
   pintar();
 }
-function cerrarFotoGrande() { const lb = document.getElementById('lbFoto'); if (lb) lb.remove(); }
+function cerrarFotoGrande() {
+  const lb = document.getElementById('lbFoto');
+  if (!lb) return;
+  lb.remove();
+  if (lb._hist && history.state && history.state.lbFoto) { lbVolviendo = true; try { history.back(); } catch (e) { lbVolviendo = false; } }
+}
+// El "atrás" del visor no debe cerrar también la ficha que hay debajo (esa también usa el historial)
+let lbVolviendo = false;
+window.addEventListener('popstate', (e) => {
+  const lb = document.getElementById('lbFoto');
+  if (lbVolviendo) { lbVolviendo = false; e.stopImmediatePropagation(); return; }
+  if (lb) { lb._hist = false; lb.remove(); e.stopImmediatePropagation(); }
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarFotoGrande(); });
 
 /* ------------------------------ estado ------------------------------ */
 const S = {
