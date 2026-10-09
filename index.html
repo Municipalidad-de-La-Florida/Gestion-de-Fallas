@@ -576,8 +576,8 @@
         <input type="checkbox" id="filtroSinAsignar" style="margin:0; width:15px; height:15px; accent-color:var(--primary);">
         <span>Sin asignar <span id="sinAsignarN" style="color:var(--ink-soft); font-weight:700;"></span></span>
       </label>
-      <label id="filtroMasivoBox" style="display:flex; align-items:center; gap:7px; padding:2px 12px 5px; font-size:12px; font-weight:600; cursor:pointer; flex-shrink:0;" title="Mostrar u ocultar las fallas marcadas como masivas">
-        <input type="checkbox" id="filtroMasivo" checked style="margin:0; width:15px; height:15px; accent-color:#7c3aed;">
+      <label id="filtroMasivoBox" style="display:flex; align-items:center; gap:7px; padding:2px 12px 5px; font-size:12px; font-weight:600; cursor:pointer; flex-shrink:0;" title="Marcada: se ven solo las fallas masivas. Desmarcada: se ven todas">
+        <input type="checkbox" id="filtroMasivo" style="margin:0; width:15px; height:15px; accent-color:#7c3aed;">
         <span class="tag-masivo" style="margin:0;">Masivo</span><span id="masivoN" style="color:var(--ink-soft); font-weight:700;"></span>
       </label>
       </div>
@@ -2257,7 +2257,7 @@ function renderFallasDesdeCache(){
     geojson.features.forEach(feat => {
       const estado = feat.properties.estado;
       if(filtrosEstadoVisible[estado] === false) return;
-      if(ocultarMasivoActivo() && feat.properties.masivo) return;
+      if(soloMasivoActivo() && (!feat.properties.masivo || feat.properties.cascada)) return;
       // Filtro "Sin asignar": solo fallas activas sin camión (los puntos de cascada se ocultan; manda el circuito)
       if(sinAsignar && (estado === 'reparada' || feat.properties.cascada || feat.properties.asignado_camion_id)) return;
       const color = colorEstado[estado] || '#999';
@@ -2954,19 +2954,19 @@ function filtroSinAsignarActivo(){
   if(!puedeFiltrarSinAsignar()) return false;
   try{ return localStorage.getItem('fa_sin_asignar') === '1'; }catch(e){ return false; }
 }
-function ocultarMasivoActivo(){
-  try{ return localStorage.getItem('fa_ocultar_masivo') === '1'; }catch(e){ return false; }
+function soloMasivoActivo(){
+  try{ return localStorage.getItem('fa_solo_masivo') === '1'; }catch(e){ return false; }
 }
 function actualizarCasillaMasivo(){
   const cb = document.getElementById('filtroMasivo');
   if(!cb) return;
-  cb.checked = !ocultarMasivoActivo();
+  cb.checked = soloMasivoActivo();
   const n = (fallasEnArea || []).filter(f => f.masivo).length;
   document.getElementById('masivoN').textContent = '(' + n + ')';
-  document.getElementById('filtroMasivoBox').style.display = (n || ocultarMasivoActivo()) ? 'flex' : 'none';
+  document.getElementById('filtroMasivoBox').style.display = (n || soloMasivoActivo()) ? 'flex' : 'none';
 }
 document.getElementById('filtroMasivo').addEventListener('change', (e) => {
-  try{ localStorage.setItem('fa_ocultar_masivo', e.target.checked ? '0' : '1'); }catch(_){}
+  try{ localStorage.setItem('fa_solo_masivo', e.target.checked ? '1' : '0'); }catch(_){}
   renderFallasList();
   renderFallasDesdeCache();
 });
@@ -2998,12 +2998,12 @@ function renderFallasList(){
   } else {
     filas = fallasEnArea.map(normalizarFilaLateral);
     if(filtroSinAsignarActivo()) filas = filas.filter(f => !f.asignado);
-    if(ocultarMasivoActivo()) filas = filas.filter(f => !f.masivo);
+    if(soloMasivoActivo()) filas = filas.filter(f => f.masivo);
   }
   actualizarCasillaSinAsignar();
   actualizarCasillaMasivo();
   estado.style.display = filas.length ? 'block' : 'none';
-  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${filtroSinAsignarActivo() ? ' sin asignar' : ''}`;
+  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${filtroSinAsignarActivo() ? ' sin asignar' : ''}${soloMasivoActivo() ? ' masivas' : ''}`;
   if(!filas.length){
     list.innerHTML = buscando
       ? `<div class="empty-state">Sin resultados para «${escHtml(busquedaLateral.texto)}».</div>`
