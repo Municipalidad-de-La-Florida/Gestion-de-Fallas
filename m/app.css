@@ -165,3 +165,10 @@ textarea.campo{ min-height:70px; }
 .fila-btns{display:flex;gap:8px;margin:8px 0}
 .fila-btns .btn{flex:1;height:44px}
 .req{font-size:11px;font-weight:600;color:#b3261e;margin-left:6px;text-transform:uppercase}
+
+.foto{padding:0;cursor:zoom-in}
+#lbFoto{position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.94);display:flex;flex-direction:column;align-items:center;justify-content:center}
+#lbFoto img{max-width:100vw;max-height:82vh;object-fit:contain}
+#lbFoto .lb-x{position:absolute;top:12px;right:14px;width:44px;height:44px;border:0;background:none;color:#fff;font-size:26px}
+#lbFoto .lb-barra{display:flex;gap:18px;align-items:center;color:#fff;margin-top:14px;font-size:15px}
+#lbFoto .lb-barra button{width:48px;height:44px;border:0;border-radius:10px;background:rgba(255,255,255,.18);color:#fff;font-size:24px}

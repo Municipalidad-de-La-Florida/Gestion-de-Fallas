@@ -168,6 +168,13 @@
   #inspeccionTabla tbody tr.sel{background:#eef5f1;}
   #inspeccionTabla td.mono{font-variant-numeric:tabular-nums; color:var(--ink-soft); font-size:11px; white-space:nowrap;}
   .insp-txt{white-space:pre-line;}
+  .fotos-fila{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;}
+  .foto-mini{width:84px; height:84px; object-fit:cover; border-radius:8px; border:1px solid var(--line); cursor:zoom-in; background:#eef2ef;}
+  #lbFoto{position:fixed; inset:0; z-index:100000; background:rgba(0,0,0,.92); display:flex; align-items:center; justify-content:center; flex-direction:column;}
+  #lbFoto img{max-width:94vw; max-height:84vh; object-fit:contain; border-radius:6px;}
+  #lbFoto .lb-barra{color:#fff; font-size:13px; margin-top:10px; display:flex; gap:14px; align-items:center;}
+  #lbFoto .lb-barra a, #lbFoto .lb-barra button{color:#fff; background:rgba(255,255,255,.15); border:0; border-radius:8px; padding:6px 12px; font-size:13px; cursor:pointer; text-decoration:none;}
+  #lbFoto .lb-x{position:absolute; top:14px; right:18px; font-size:26px; background:none; border:0; color:#fff; cursor:pointer;}
 
   .modal-card.modal-card-wide{width:min(920px, 92vw);}
   #todasFallasTabla tbody tr{border-bottom:1px solid var(--line); cursor:pointer;}
@@ -2395,6 +2402,7 @@ async function abrirPopupFalla(feat){
       <div class="hint">Fecha respuesta: <b>${fechaResp}</b></div>
       <div class="hint" style="margin-top:2px;">Cierre:</div>
       <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.descripcion_reparacion || '—'}</div>
+      <div class="fotos-falla" data-falla="${escHtml(p.id)}"></div>
     `;
   } else if(p.estado === 'pendiente' && p.pendiente_por_nombre){
     const fechaResp = p.fecha_pendiente ? new Date(p.fecha_pendiente).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
@@ -2499,6 +2507,7 @@ async function abrirPopupFalla(feat){
   }
 
   const panel = mostrarPanel(contenidoPanel);
+  llenarFotos(panel);
 
   if(puedeAsignarCamion){
     (async () => {
@@ -3881,11 +3890,76 @@ function htmlNotificadoFalla(f){
   return partes.join('');
 }
 
+// ===== FOTOS DE REPARACIÓN (inicio) =====
+async function urlFotoFirmada(ruta){
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/fotos-reparacion/${ruta}`, {
+    method: 'POST', headers: db.headers(), body: JSON.stringify({expiresIn: 3600})
+  });
+  const d = await res.json().catch(() => null);
+  return res.ok && d && d.signedURL ? SUPABASE_URL + '/storage/v1' + d.signedURL : null;
+}
+function cerrarFotoGrande(){
+  const lb = document.getElementById('lbFoto');
+  if(lb) lb.remove();
+  document.removeEventListener('keydown', teclaFotoGrande);
+}
+function teclaFotoGrande(e){
+  if(e.key === 'Escape') cerrarFotoGrande();
+  else if(e.key === 'ArrowRight') document.getElementById('lbSig')?.click();
+  else if(e.key === 'ArrowLeft') document.getElementById('lbAnt')?.click();
+}
+// Visor a pantalla completa de las fotos de una reparación
+function abrirFotoGrande(urls, i){
+  cerrarFotoGrande();
+  let k = i || 0;
+  const lb = document.createElement('div');
+  lb.id = 'lbFoto';
+  lb.innerHTML = `<button class="lb-x" aria-label="Cerrar">✕</button><img alt="Foto de la reparación">
+    <div class="lb-barra"><button id="lbAnt">‹</button><span id="lbPos"></span><button id="lbSig">›</button><a id="lbAbrir" target="_blank" rel="noopener">Abrir en pestaña nueva</a></div>`;
+  document.body.appendChild(lb);
+  const pintar = () => {
+    lb.querySelector('img').src = urls[k];
+    lb.querySelector('#lbPos').textContent = `${k + 1} / ${urls.length}`;
+    lb.querySelector('#lbAbrir').href = urls[k];
+    lb.querySelector('#lbAnt').style.visibility = lb.querySelector('#lbSig').style.visibility = urls.length > 1 ? 'visible' : 'hidden';
+  };
+  lb.querySelector('#lbAnt').onclick = (e) => { e.stopPropagation(); k = (k - 1 + urls.length) % urls.length; pintar(); };
+  lb.querySelector('#lbSig').onclick = (e) => { e.stopPropagation(); k = (k + 1) % urls.length; pintar(); };
+  lb.querySelector('.lb-x').onclick = cerrarFotoGrande;
+  lb.onclick = (e) => { if(e.target === lb) cerrarFotoGrande(); };
+  document.addEventListener('keydown', teclaFotoGrande);
+  pintar();
+}
+// Rellena las cajas .fotos-falla[data-falla] que haya dentro de `raiz` con las miniaturas de cada falla
+async function llenarFotos(raiz){
+  if(!raiz) return;
+  const cajas = Array.from(raiz.querySelectorAll('.fotos-falla[data-falla]:not([data-ok])'));
+  if(!cajas.length) return;
+  cajas.forEach(c => { c.dataset.ok = '1'; });
+  const ids = [...new Set(cajas.map(c => c.dataset.falla))];
+  let filas = [];
+  try{ filas = await db.select('fallas_fotos', `falla_id=in.(${ids.join(',')})&select=falla_id,ruta,archivada_en,respaldo&order=creado_en.asc`); }
+  catch(e){ console.error('No se pudieron cargar las fotos:', e); return; }
+  for(const caja of cajas){
+    const propias = filas.filter(f => f.falla_id === caja.dataset.falla);
+    if(!propias.length) continue;
+    const vivas = propias.filter(f => !f.archivada_en), arch = propias.filter(f => f.archivada_en);
+    const urls = (await Promise.all(vivas.map(f => urlFotoFirmada(f.ruta).catch(() => null)))).filter(Boolean);
+    caja.innerHTML = (urls.length ? `<div class="fotos-fila">${urls.map((u, i) => `<img class="foto-mini" src="${escHtml(u)}" data-i="${i}" alt="Foto ${i + 1} de la reparación" title="Pincha para ampliar">`).join('')}</div>` : '')
+      + (arch.length ? `<div class="hint">${arch.length} foto(s) archivada(s) en el respaldo ${escHtml(arch[0].respaldo || '')}</div>` : '');
+    caja.querySelectorAll('.foto-mini').forEach(img => {
+      img.addEventListener('click', (e) => { e.stopPropagation(); abrirFotoGrande(urls, +img.dataset.i); });
+    });
+  }
+}
+// ===== FOTOS DE REPARACIÓN (fin) =====
+
 function htmlCierreFalla(f){
   const bloques = [];
   const rep = f.reparacion, pen = f.pendiente;
   const bloqueRep = () => `<div><b style="color:var(--green);">Reparada</b> por ${escHtml(rep.por || '—')} · ${escHtml(fmtFechaHoraChile(rep.fecha))}</div>
-      <div class="insp-txt">${escHtml(rep.descripcion || '—')}</div>`;
+      <div class="insp-txt">${escHtml(rep.descripcion || '—')}</div>
+      <div class="fotos-falla" data-falla="${escHtml(f.id)}"></div>`;
   const bloquePen = (atenuado) => `<div${atenuado ? ' class="hint"' : ''}><b style="color:var(--amber);">Dejada pendiente</b> por ${escHtml(pen.por || '—')} · ${escHtml(fmtFechaHoraChile(pen.fecha))}</div>
       <div class="insp-txt${atenuado ? ' hint' : ''}">${escHtml(pen.motivo || '—')}</div>`;
   if(f.estado === 'reparada'){
@@ -3996,6 +4070,7 @@ function renderDetalleInspeccion(det){
   enlazarPdfInspeccion();
   enlazarContinuarInspeccion(insp);
   enlazarEditarInspeccion(det);
+  llenarFotos(cont);
 }
 
 
@@ -4098,6 +4173,7 @@ function enlazarContinuarInspeccion(insp){
 }
 
 function dibujarFallasInspeccionEnMapa(fallas){
+  if(!window._popupFotosOk){ window._popupFotosOk = true; map.on('popupopen', (e) => llenarFotos(e.popup.getElement())); }
   if(!fallasInspeccionLayerGroup) fallasInspeccionLayerGroup = L.layerGroup().addTo(map);
   fallasInspeccionLayerGroup.clearLayers();
   capasInspeccionPorFalla = {};

@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.11.0';
+const VERSION_APP = '1.11.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -265,6 +265,28 @@ async function urlFoto(ruta) {
   const r = await api(`/storage/v1/object/sign/fotos-reparacion/${ruta}`, { method: 'POST', body: { expiresIn: 3600 } });
   return r && r.signedURL ? SUPABASE_URL + '/storage/v1' + r.signedURL : null;
 }
+
+// Visor a pantalla completa: se abre al tocar una miniatura
+function abrirFotoGrande(urls, i) {
+  cerrarFotoGrande();
+  let k = i || 0;
+  const lb = document.createElement('div');
+  lb.id = 'lbFoto';
+  lb.innerHTML = `<button class="lb-x" aria-label="Cerrar">✕</button><img alt="Foto de la reparación">
+    <div class="lb-barra"><button id="lbAnt" aria-label="Anterior">‹</button><span id="lbPos"></span><button id="lbSig" aria-label="Siguiente">›</button></div>`;
+  document.body.appendChild(lb);
+  const pintar = () => {
+    lb.querySelector('img').src = urls[k];
+    lb.querySelector('#lbPos').textContent = `${k + 1} / ${urls.length}`;
+    lb.querySelector('#lbAnt').style.visibility = lb.querySelector('#lbSig').style.visibility = urls.length > 1 ? 'visible' : 'hidden';
+  };
+  lb.querySelector('#lbAnt').onclick = (e) => { e.stopPropagation(); k = (k - 1 + urls.length) % urls.length; pintar(); };
+  lb.querySelector('#lbSig').onclick = (e) => { e.stopPropagation(); k = (k + 1) % urls.length; pintar(); };
+  lb.querySelector('.lb-x').onclick = cerrarFotoGrande;
+  lb.onclick = (e) => { if (e.target === lb) cerrarFotoGrande(); };
+  pintar();
+}
+function cerrarFotoGrande() { const lb = document.getElementById('lbFoto'); if (lb) lb.remove(); }
 
 /* ------------------------------ estado ------------------------------ */
 const S = {
@@ -838,7 +860,9 @@ async function abrirFalla(p, geom) {
       const vivas = fs.filter((f) => !f.archivada_en), arch = fs.filter((f) => f.archivada_en);
       const urls = await Promise.all(vivas.map((f) => urlFoto(f.ruta).catch(() => null)));
       if (!document.body.contains(box)) return;
-      box.innerHTML = `<h3>Fotografías</h3>${vivas.length ? `<div class="fotos">${urls.map((u, i) => u ? `<a class="foto" href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" alt="Foto ${i + 1}"></a>` : '').join('')}</div>` : ''}${arch.length ? `<div class="hint">${arch.length} foto(s) archivada(s) en el respaldo ${esc(arch[0].respaldo || '')}.</div>` : ''}`;
+      const ok = urls.filter(Boolean);
+      box.innerHTML = `<h3>Fotografías</h3>${ok.length ? `<div class="fotos">${ok.map((u, i) => `<button type="button" class="foto" data-i="${i}" aria-label="Ampliar foto ${i + 1}"><img src="${esc(u)}" alt="Foto ${i + 1}"></button>`).join('')}</div><div class="hint">Toca una foto para verla en grande.</div>` : ''}${arch.length ? `<div class="hint">${arch.length} foto(s) archivada(s) en el respaldo ${esc(arch[0].respaldo || '')}.</div>` : ''}`;
+      $$('.foto', box).forEach((b) => b.addEventListener('click', () => abrirFotoGrande(ok, +b.dataset.i)));
     }).catch(() => {});
   }
   // Historial de comentarios
@@ -933,7 +957,8 @@ function formCierre(p) {
   const ok = $('#cOk', h), pend = $('#cPend', h);
   const pintarFotos = () => {
     const c = $('#cFotos', h); if (!c) return;
-    c.innerHTML = fotos.map((f, i) => `<div class="foto"><img src="${f.url}" alt="Foto ${i + 1}"><button type="button" data-i="${i}" aria-label="Quitar foto">✕</button></div>`).join('');
+    c.innerHTML = fotos.map((f, i) => `<div class="foto"><img src="${f.url}" alt="Foto ${i + 1}" data-v="${i}"><button type="button" data-i="${i}" aria-label="Quitar foto">✕</button></div>`).join('');
+    $$('img', c).forEach((im) => im.addEventListener('click', () => abrirFotoGrande(fotos.map((x) => x.url), +im.dataset.v)));
     $$('button', c).forEach((b) => b.addEventListener('click', () => { const f = fotos.splice(+b.dataset.i, 1)[0]; URL.revokeObjectURL(f.url); pintarFotos(); }));
     $('#cBtnCam', h).disabled = $('#cBtnGal', h).disabled = fotos.length >= MAX_FOTOS;
   };
