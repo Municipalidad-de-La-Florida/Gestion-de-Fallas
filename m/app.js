@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.12.0';
+const VERSION_APP = '1.12.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -598,8 +598,8 @@ function dibujarFallas() {
       const r = p.cascada ? (z >= 18 ? 7 : 5) : (z >= 18 ? 13 : z >= 16 ? 11 : 8);
       capa = new MarcadorForma([lat, lng], { renderer: rend, forma: formaPoste(p.simb_poste), radius: r, weight: 3, color: '#fff', fillColor: color, fillOpacity: reparada ? 0.55 : 0.95, interactive: true });
     } else {
-      if (p.estado === 'reportada') {
-        // Circuito recién reportado: parpadea (como en el escritorio). El parpadeo es CSS sobre SVG;
+      if (p.estado === 'reportada' || p.estado === 'reiterada') {
+        // Circuito reportado o reiterado: parpadea (como en el escritorio). El parpadeo es CSS sobre SVG;
         // debajo va una línea ancha invisible para que sea fácil tocarla con el dedo.
         const base = L.geoJSON(f.geometry, { renderer: rendSvg, style: { color, weight: 7, opacity: 0.9, className: 'falla-reportada' }, interactive: false });
         capaFallas.addLayer(base);
