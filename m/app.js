@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.10.0';
+const VERSION_APP = '1.11.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -225,6 +225,69 @@ async function api(path, { method = 'GET', body, prefer } = {}, reintento = fals
 const select = (tabla, q) => api(`/rest/v1/${tabla}?${q}`);
 const rpc = (fn, args) => api(`/rest/v1/rpc/${fn}`, { method: 'POST', body: args || {} });
 
+/* ------------------------------ fotos de reparación ------------------------------ */
+// Cada foto se reduce en el teléfono antes de subirla: lado mayor 1280 px, JPEG ~70 % (unos 150–250 KB en vez de 3–6 MB).
+const MAX_FOTOS = 3, FOTO_LADO = 1280, FOTO_CALIDAD = 0.7, FOTO_MAX_BYTES = 400 * 1024;
+async function comprimirFoto(file) {
+  let img;
+  try { img = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch (e) {
+    img = await new Promise((ok, mal) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => mal(new Error('No se pudo leer la foto.')); im.src = URL.createObjectURL(file); });
+  }
+  const w0 = img.width || img.naturalWidth, h0 = img.height || img.naturalHeight;
+  const k = Math.min(1, FOTO_LADO / Math.max(w0, h0));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(w0 * k)); cv.height = Math.max(1, Math.round(h0 * k));
+  cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+  if (img.close) img.close();
+  let q = FOTO_CALIDAD, blob;
+  for (;;) {
+    blob = await new Promise((ok) => cv.toBlob(ok, 'image/jpeg', q));
+    if (!blob) throw new Error('No se pudo procesar la foto.');
+    if (blob.size <= FOTO_MAX_BYTES || q <= 0.4) break;
+    q = Math.round((q - 0.1) * 10) / 10;
+  }
+  return blob;
+}
+async function subirFoto(fallaId, blob) {
+  const ruta = `${fallaId}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2))}.jpg`;
+  const token = await tokenVigente();
+  let res;
+  try {
+    res = await fetch(`${SUPABASE_URL}/storage/v1/object/fotos-reparacion/${ruta}`, {
+      method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'image/jpeg', 'x-upsert': 'false' }, body: blob,
+    });
+  } catch (e) { throw new Error('Sin conexión al subir la foto. Intenta de nuevo.'); }
+  if (!res.ok) throw new Error('No se pudo subir la foto (' + res.status + ').');
+  await rpc('registrar_foto_falla', { p_falla_id: fallaId, p_ruta: ruta, p_bytes: blob.size });
+}
+async function urlFoto(ruta) {
+  const r = await api(`/storage/v1/object/sign/fotos-reparacion/${ruta}`, { method: 'POST', body: { expiresIn: 3600 } });
+  return r && r.signedURL ? SUPABASE_URL + '/storage/v1' + r.signedURL : null;
+}
+
+// Visor a pantalla completa: se abre al tocar una miniatura
+function abrirFotoGrande(urls, i) {
+  cerrarFotoGrande();
+  let k = i || 0;
+  const lb = document.createElement('div');
+  lb.id = 'lbFoto';
+  lb.innerHTML = `<button class="lb-x" aria-label="Cerrar">✕</button><img alt="Foto de la reparación">
+    <div class="lb-barra"><button id="lbAnt" aria-label="Anterior">‹</button><span id="lbPos"></span><button id="lbSig" aria-label="Siguiente">›</button></div>`;
+  document.body.appendChild(lb);
+  const pintar = () => {
+    lb.querySelector('img').src = urls[k];
+    lb.querySelector('#lbPos').textContent = `${k + 1} / ${urls.length}`;
+    lb.querySelector('#lbAnt').style.visibility = lb.querySelector('#lbSig').style.visibility = urls.length > 1 ? 'visible' : 'hidden';
+  };
+  lb.querySelector('#lbAnt').onclick = (e) => { e.stopPropagation(); k = (k - 1 + urls.length) % urls.length; pintar(); };
+  lb.querySelector('#lbSig').onclick = (e) => { e.stopPropagation(); k = (k + 1) % urls.length; pintar(); };
+  lb.querySelector('.lb-x').onclick = cerrarFotoGrande;
+  lb.onclick = (e) => { if (e.target === lb) cerrarFotoGrande(); };
+  pintar();
+}
+function cerrarFotoGrande() { const lb = document.getElementById('lbFoto'); if (lb) lb.remove(); }
+
 /* ------------------------------ estado ------------------------------ */
 const S = {
   modo: { tipo: 'agregar', fecha: null, inspId: null },
@@ -319,7 +382,7 @@ function salir(msg) {
 
 async function cargarPerfil() {
   try {
-    const f = await select('usuarios', `id=eq.${sesion.user_id}&select=id,nombre,rol`);
+    const f = await select('usuarios', `id=eq.${sesion.user_id}&select=id,nombre,rol,foto_obligatoria`);
     if (!f || !f.length) { guardarSesion(null); throw new Error('Tu cuenta no tiene un perfil asignado en el sistema. Consulta con el administrador.'); }
     S.perfil = f[0];
     try { localStorage.setItem(LS_PERFIL, JSON.stringify(S.perfil)); } catch (e) { /* */ }
@@ -774,6 +837,7 @@ async function abrirFalla(p, geom) {
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
     <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
     ${p.estado === 'reparada' && p.descripcion_reparacion ? `<h3>Trabajo realizado</h3><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
+    ${p.estado === 'reparada' ? '<div id="fotosFalla"></div>' : ''}
     ${p.estado === 'pendiente' ? `<div class="aviso"><b>Pendiente</b> por ${esc(p.pendiente_por_nombre || '—')} · ${esc(fmtFecha(p.fecha_pendiente))}<br><pre class="texto">${esc(p.motivo_pendiente || '')}</pre></div>` : ''}
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
@@ -790,6 +854,17 @@ async function abrirFalla(p, geom) {
   if (bn) bn.addEventListener('click', ocupar(bn, () => reportarNuevaSobre(p)));
   const ba = $('#bAsignar', h);
   if (ba) ba.addEventListener('click', () => formAsignar(p));
+  if (p.estado === 'reparada') {
+    select('fallas_fotos', `falla_id=eq.${p.id}&select=ruta,archivada_en,respaldo&order=creado_en.asc`).then(async (fs) => {
+      const box = $('#fotosFalla'); if (!box || !document.body.contains(box) || !fs || !fs.length) return;
+      const vivas = fs.filter((f) => !f.archivada_en), arch = fs.filter((f) => f.archivada_en);
+      const urls = await Promise.all(vivas.map((f) => urlFoto(f.ruta).catch(() => null)));
+      if (!document.body.contains(box)) return;
+      const ok = urls.filter(Boolean);
+      box.innerHTML = `<h3>Fotografías</h3>${ok.length ? `<div class="fotos">${ok.map((u, i) => `<button type="button" class="foto" data-i="${i}" aria-label="Ampliar foto ${i + 1}"><img src="${esc(u)}" alt="Foto ${i + 1}"></button>`).join('')}</div><div class="hint">Toca una foto para verla en grande.</div>` : ''}${arch.length ? `<div class="hint">${arch.length} foto(s) archivada(s) en el respaldo ${esc(arch[0].respaldo || '')}.</div>` : ''}`;
+      $$('.foto', box).forEach((b) => b.addEventListener('click', () => abrirFotoGrande(ok, +b.dataset.i)));
+    }).catch(() => {});
+  }
   // Historial de comentarios
   select('fallas_comentarios', `falla_id=eq.${p.id}&select=tipo,comentario,autor_nombre,creado_en&order=creado_en.asc`).then((rows) => {
     const ul = $('#histFalla');
@@ -852,6 +927,8 @@ async function formAsignar(p) {
 
 function formCierre(p) {
   let sel = [];
+  const exigeFoto = !!(S.perfil && S.perfil.foto_obligatoria);
+  const fotos = [];   // { blob, url, subida }
   const h = abrirHoja(`
     <h2>Registrar reparación</h2>
     <div class="hint">${esc(p.tipo_falla)} · OS ${esc(p.ot || '—')} · ${esc(tipoLabel(p))}${p.tipo === 'linea' ? ' · se cerrarán también sus ' + esc(p.puntos_afectados ?? '') + ' puntos' : ''}</div>
@@ -859,6 +936,15 @@ function formCierre(p) {
     <div class="codigos">${CAT_CIERRES.map((x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>
     <h3>Información adicional</h3>
     <textarea id="cDesc" class="campo" placeholder="Ej: detalle de lo realizado. Obligatorio si dejas la falla pendiente."></textarea>
+    ${exigeFoto ? `<h3>Fotografías <span class="req">obligatoria</span></h3>
+    <div class="hint">Sube al menos 1 foto de la reparación (máximo ${MAX_FOTOS}). Se reducen solas para ocupar poco espacio.</div>
+    <div id="cFotos" class="fotos"></div>
+    <div class="fila-btns">
+      <button type="button" id="cBtnCam" class="btn btn-secundario">📷 Tomar foto</button>
+      <button type="button" id="cBtnGal" class="btn btn-secundario">🖼 Galería</button>
+    </div>
+    <input id="cInCam" type="file" accept="image/*" capture="environment" hidden>
+    <input id="cInGal" type="file" accept="image/*" multiple hidden>` : ''}
     <div class="acciones fija">
       <button id="cOk" class="btn btn-primario">Registrar reparación y cerrar falla</button>
       <button id="cPend" class="btn btn-ambar">Dejar pendiente</button>
@@ -869,9 +955,41 @@ function formCierre(p) {
   }));
   const texto = () => { const libre = $('#cDesc', h).value.trim(); return [...sel, ...(libre ? [libre] : [])].join('\n'); };
   const ok = $('#cOk', h), pend = $('#cPend', h);
+  const pintarFotos = () => {
+    const c = $('#cFotos', h); if (!c) return;
+    c.innerHTML = fotos.map((f, i) => `<div class="foto"><img src="${f.url}" alt="Foto ${i + 1}" data-v="${i}"><button type="button" data-i="${i}" aria-label="Quitar foto">✕</button></div>`).join('');
+    $$('img', c).forEach((im) => im.addEventListener('click', () => abrirFotoGrande(fotos.map((x) => x.url), +im.dataset.v)));
+    $$('button', c).forEach((b) => b.addEventListener('click', () => { const f = fotos.splice(+b.dataset.i, 1)[0]; URL.revokeObjectURL(f.url); pintarFotos(); }));
+    $('#cBtnCam', h).disabled = $('#cBtnGal', h).disabled = fotos.length >= MAX_FOTOS;
+  };
+  if (exigeFoto) {
+    const agregar = async (files) => {
+      const libres = MAX_FOTOS - fotos.length;
+      const lista = Array.from(files || []).slice(0, libres);
+      if (files && files.length > libres) toast(`Máximo ${MAX_FOTOS} fotos.`, 'error');
+      for (const f of lista) {
+        try { const blob = await comprimirFoto(f); fotos.push({ blob, url: URL.createObjectURL(blob), subida: false }); }
+        catch (e) { toast(e.message, 'error'); }
+      }
+      pintarFotos();
+    };
+    $('#cBtnCam', h).addEventListener('click', () => $('#cInCam', h).click());
+    $('#cBtnGal', h).addEventListener('click', () => $('#cInGal', h).click());
+    ['cInCam', 'cInGal'].forEach((id) => $('#' + id, h).addEventListener('change', (e) => { agregar(e.target.files); e.target.value = ''; }));
+    pintarFotos();
+  }
   ok.addEventListener('click', ocupar(ok, async () => {
     const d = texto();
     if (!d) { toast('Elige el trabajo realizado o describe la reparación.', 'error'); return; }
+    if (exigeFoto && !fotos.length) { toast('Esta reparación exige al menos una fotografía.', 'error'); return; }
+    if (exigeFoto) {
+      const pend_ = fotos.filter((f) => !f.subida);
+      for (let i = 0; i < pend_.length; i++) {
+        ok.textContent = `Subiendo foto ${i + 1} de ${pend_.length}…`;
+        await subirFoto(p.id, pend_[i].blob);
+        pend_[i].subida = true;
+      }
+    }
     ok.textContent = 'Guardando…';
     const r = await rpc('registrar_reparacion', { p_falla_id: p.id, p_descripcion: d });
     cerrarHoja();
@@ -1020,18 +1138,20 @@ async function formUsuarios() {
     <div id="uLista"><div class="hint">Cargando…</div></div>
     <div class="acciones fija"><button id="uOk" class="btn btn-primario" disabled>Sin cambios</button></div>`);
   let us;
-  try { us = await select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado&order=nombre.asc'); }
+  try { us = await select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc'); }
   catch (e) { $('#uLista', h).innerHTML = '<div class="aviso">No se pudo cargar la lista de usuarios.</div>'; return; }
   if (!document.body.contains($('#uLista'))) return;
   const estado = (d) => ({
     nombre: $('.u-nom', d).value.trim(), rol: $('.u-rol', d).value,
     notif: ROLES_CON_NOTIF.includes($('.u-rol', d).value) && $('.u-notif', d).checked,
+    foto: ['contratista', 'contratista2'].includes($('.u-rol', d).value) && $('.u-foto', d).checked,
   });
   $('#uLista', h).innerHTML = us.map((u) => `<div class="tarjeta-u" data-id="${esc(u.id)}" style="border:1px solid #d6ddd9;border-radius:12px;padding:10px;margin:10px 0">
       <input class="campo u-nom" value="${esc(u.nombre || '')}" aria-label="Nombre">
       <div class="hint" style="margin:4px 0">${esc(u.email || '—')}</div>
       <select class="campo u-rol" aria-label="Rol">${ROLES_LISTA.map((r) => `<option value="${r}" ${r === u.rol ? 'selected' : ''}>${r}</option>`).join('')}</select>
       <label class="u-notifl" style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" class="u-notif" ${u.notificador_externo_habilitado ? 'checked' : ''}> Notificadores</label>
+      <label class="u-fotol" style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" class="u-foto" ${u.foto_obligatoria ? 'checked' : ''}> Foto obligatoria al reparar</label>
       <button class="btn btn-secundario u-reset" style="height:40px" ${u.email ? '' : 'disabled'}>Enviar reseteo de clave</button>
     </div>`).join('') || '<div class="vacio">No hay usuarios.</div>';
   const ok = $('#uOk', h);
@@ -1041,6 +1161,7 @@ async function formUsuarios() {
     const refrescar = () => {
       const habil = ROLES_CON_NOTIF.includes($('.u-rol', d).value);
       $('.u-notifl', d).style.display = habil ? 'flex' : 'none';
+      $('.u-fotol', d).style.display = ['contratista', 'contratista2'].includes($('.u-rol', d).value) ? 'flex' : 'none';
       const n = filas.filter((x) => JSON.stringify(estado(x)) !== x._orig).length;
       filas.forEach((x) => { x.style.background = JSON.stringify(estado(x)) !== x._orig ? '#fff8e1' : ''; });
       ok.disabled = n === 0;
@@ -1063,10 +1184,10 @@ async function formUsuarios() {
     for (const d of mod) {
       const e = estado(d);
       try {
-        const r = await api(`/rest/v1/usuarios?id=eq.${d.dataset.id}`, { method: 'PATCH', prefer: 'return=representation', body: { nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif } });
+        const r = await api(`/rest/v1/usuarios?id=eq.${d.dataset.id}`, { method: 'PATCH', prefer: 'return=representation', body: { nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto } });
         if (!r || !r.length) throw new Error('sin permiso');
         n++; d._orig = JSON.stringify(e);
-        if (d.dataset.id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = e.rol; $('#barraNombre').textContent = e.nombre; $('#barraRol').textContent = rolVisible(); }
+        if (d.dataset.id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = e.rol; S.perfil.foto_obligatoria = e.foto; $('#barraNombre').textContent = e.nombre; $('#barraRol').textContent = rolVisible(); }
       } catch (err) { errores.push(`${e.nombre}: ${err.message}`); }
     }
     if (errores.length) toast(`Guardados ${n}. Error: ${errores.join('; ')}`, 'error');
