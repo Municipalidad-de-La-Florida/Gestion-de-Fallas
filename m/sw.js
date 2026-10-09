@@ -2,7 +2,7 @@
 // - Archivos propios de la app: red primero (así las actualizaciones llegan de inmediato) y copia guardada de respaldo.
 // - Leaflet (CDN): copia guardada tras la primera carga.
 // - Supabase y mapas: siempre por red, nunca se guardan (datos siempre al día).
-const VERSION = 'fm-v17';
+const VERSION = 'fm-v18';
 const APP = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -12,7 +12,7 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((ks) => Promise.all(ks.filter((k) => k !== VERSION).map((k) => caches.delete(k))))
+      .then((ks) => Promise.all(ks.filter((k) => k !== VERSION && k !== 'fm-aviso').map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -66,13 +66,20 @@ self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const destino = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope);
   const id = destino.searchParams.get('falla');
-  e.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((cs) => {
+  e.waitUntil((async () => {
+    // Se deja anotada la falla del aviso: si el mensaje directo se pierde (app congelada o en segundo plano),
+    // la app la recoge sola al volver a primer plano.
+    if (id) {
+      try { const c = await caches.open('fm-aviso'); await c.put('pendiente', new Response(JSON.stringify({ id, t: Date.now() }))); } catch (err) { /* */ }
+    }
+    const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const c of cs) {
       if (c.url.startsWith(self.registration.scope) && 'focus' in c) {
+        try { await c.focus(); } catch (err) { /* */ }
         if (id) c.postMessage({ tipo: 'abrir-falla', id });
-        return c.focus();
+        return;
       }
     }
     return self.clients.openWindow(destino.href);
-  }));
+  })());
 });
