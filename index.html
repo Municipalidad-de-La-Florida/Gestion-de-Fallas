@@ -627,7 +627,7 @@
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeUsuariosBtn">×</button>
     <h2>Gestión de usuarios</h2>
-    <div class="hint" style="margin-bottom:12px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div>
+    <div class="hint" style="margin-bottom:12px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Foto obligatoria</b> (solo contratistas) exige adjuntar al menos una fotografía al registrar una reparación, y esas reparaciones se hacen desde la app del teléfono. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div>
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><button id="guardarUsuariosBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;" disabled>Guardar cambios</button><span id="usuariosEstado" class="hint" style="margin:0;">Sin cambios</span></div>
     <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
@@ -637,11 +637,12 @@
             <th style="padding:8px 10px;">Email</th>
             <th style="padding:8px 10px;">Rol</th>
             <th style="padding:8px 10px;">Notificadores</th>
+            <th style="padding:8px 10px;">Foto obligatoria</th>
             <th style="padding:8px 10px;"></th>
           </tr>
         </thead>
         <tbody id="usuariosTbody">
-          <tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+          <tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -929,7 +930,7 @@ async function cargarPerfilYIniciar(userId){
   try{
     let data;
     try{
-      data = await db.select('usuarios', `id=eq.${userId}&select=id,nombre,rol,notificador_externo_habilitado`);
+      data = await db.select('usuarios', `id=eq.${userId}&select=id,nombre,rol,notificador_externo_habilitado,foto_obligatoria`);
     }catch(e){
       // Respaldo: si la columna aún no existe en la base, se entra igual (sin la opción de notificador)
       data = await db.select('usuarios', `id=eq.${userId}&select=id,nombre,rol`);
@@ -2591,7 +2592,10 @@ async function abrirPopupFalla(feat){
   }
 
   const btn = panel.querySelector('#confirmarCierreBtn');
-  if(btn){
+  if(btn && currentUser.foto_obligatoria){
+    btn.disabled = true;
+    btn.textContent = '📷 Este usuario repara desde la app (exige foto)';
+  } else if(btn){
     btn.onclick = async () => {
       const desc = obtenerDescripcionCompleta();
       if(!desc){ alert('Describe la reparación realizada.'); return; }
@@ -5447,6 +5451,12 @@ const ROLES_DISPONIBLES = ['admin','ito','ito2','contratista','contratista2','ca
 // Roles que pueden ingresar fallas: solo ellos pueden tener habilitado el notificador externo
 // (la base de datos también lo exige y lo apaga si el rol cambia a otro).
 const ROLES_CON_NOTIFICADOR = ['admin','ito','ito2','contratista2'];
+const ROLES_CON_FOTO = ['contratista','contratista2'];
+function htmlCeldaFoto(rol, marcado){
+  return ROLES_CON_FOTO.includes(rol)
+    ? `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" class="foto-obligatoria" ${marcado ? 'checked' : ''}> Exigir foto</label>`
+    : '<span style="color:var(--ink-soft);" title="Solo para contratistas">—</span>';
+}
 function htmlCeldaNotificador(rol, habilitado){
   return ROLES_CON_NOTIFICADOR.includes(rol)
     ? `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" class="notif-habilitado" ${habilitado ? 'checked' : ''}> Habilitado</label>`
@@ -5455,20 +5465,21 @@ function htmlCeldaNotificador(rol, habilitado){
 
 async function cargarUsuarios(){
   const tbody = document.getElementById('usuariosTbody');
-  tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
-    const usuarios = await db.select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado&order=nombre.asc');
+    const usuarios = await db.select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc');
     if(!usuarios.length){
-      tbody.innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
       return;
     }
     tbody.innerHTML = usuarios.map(u => {
       const opciones = ROLES_DISPONIBLES.map(r => `<option value="${r}" ${r===u.rol?'selected':''}>${r}</option>`).join('');
-      return `<tr data-id="${u.id}" data-notif="${u.notificador_externo_habilitado ? '1' : '0'}">
+      return `<tr data-id="${u.id}" data-notif="${u.notificador_externo_habilitado ? '1' : '0'}" data-foto="${u.foto_obligatoria ? '1' : '0'}">
         <td><input type="text" class="popup-input nombre-input" value="${u.nombre||''}" style="margin:0; padding:6px 8px;"></td>
         <td>${u.email || '—'}</td>
         <td><select class="rol-select" style="padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; font-size:12px;">${opciones}</select></td>
         <td class="notif-celda" style="white-space:nowrap;">${htmlCeldaNotificador(u.rol, u.notificador_externo_habilitado)}</td>
+        <td class="foto-celda" style="white-space:nowrap;">${htmlCeldaFoto(u.rol, u.foto_obligatoria)}</td>
         <td><button class="reset-pass-btn" style="font-size:11px; border:1px solid var(--amber); color:var(--amber); background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer;" ${!u.email?'disabled':''}>Enviar reset</button></td>
       </tr>`;
     }).join('');
@@ -5483,9 +5494,17 @@ async function cargarUsuarios(){
         if(chk) chk.onchange = () => { tr.dataset.notif = chk.checked ? '1' : '0'; };
       };
       enlazarCasilla();
+      const celdaFoto = tr.querySelector('.foto-celda');
+      const enlazarFoto = () => {
+        const chk = celdaFoto.querySelector('.foto-obligatoria');
+        if(chk) chk.onchange = () => { tr.dataset.foto = chk.checked ? '1' : '0'; };
+      };
+      enlazarFoto();
       rolSelect.onchange = () => {
         celdaNotif.innerHTML = htmlCeldaNotificador(rolSelect.value, tr.dataset.notif === '1');
         enlazarCasilla();
+        celdaFoto.innerHTML = htmlCeldaFoto(rolSelect.value, tr.dataset.foto === '1');
+        enlazarFoto();
       };
       tr.dataset.orig = JSON.stringify(estadoFilaUsuario(tr));
       tr.addEventListener('input', refrescarCambiosUsuarios);
@@ -5495,7 +5514,7 @@ async function cargarUsuarios(){
     });
     refrescarCambiosUsuarios();
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
   }
 }
 
@@ -5505,7 +5524,8 @@ function estadoFilaUsuario(tr){
   return {
     nombre: tr.querySelector('.nombre-input').value.trim(),
     rol,
-    notif: ROLES_CON_NOTIFICADOR.includes(rol) && tr.dataset.notif === '1'
+    notif: ROLES_CON_NOTIFICADOR.includes(rol) && tr.dataset.notif === '1',
+    foto: ROLES_CON_FOTO.includes(rol) && tr.dataset.foto === '1'
   };
 }
 function filasUsuariosModificadas(){
@@ -5530,13 +5550,14 @@ async function guardarUsuariosCambiados(){
   for(const tr of filas){
     const id = tr.dataset.id, e = estadoFilaUsuario(tr);
     try{
-      const r = await db.update('usuarios', `id=eq.${id}`, {nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif});
+      const r = await db.update('usuarios', `id=eq.${id}`, {nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto});
       if(!Array.isArray(r) || !r.length) throw new Error('no se guardó (¿sin permiso?)');
       ok++;
-      tr.dataset.orig = JSON.stringify({nombre: e.nombre, rol: e.rol, notif: !!r[0].notificador_externo_habilitado});
+      tr.dataset.orig = JSON.stringify({nombre: e.nombre, rol: e.rol, notif: !!r[0].notificador_externo_habilitado, foto: !!r[0].foto_obligatoria});
       if(id === currentUser.id){
         currentUser.nombre = e.nombre; currentUser.rol = e.rol;
         currentUser.notificador_externo_habilitado = !!r[0].notificador_externo_habilitado;
+        currentUser.foto_obligatoria = !!r[0].foto_obligatoria;
         document.getElementById('userNombre').textContent = e.nombre;
         document.getElementById('userRol').textContent = rolVisible(e.rol);
       }
