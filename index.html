@@ -4614,6 +4614,7 @@ function cargarImagenTile(url){
 async function renderMapaCanvas(items, opciones = {}){
   const W = opciones.w || 1700, H = opciones.h || 1058;
   const padding = opciones.padding || 90;      // margen alrededor de las fallas (px del canvas)
+  const padTop = opciones.padTop ?? padding, padBot = opciones.padBottom ?? padding;   // zonas que tapa el encabezado/panel del informe
   const zMax = opciones.zMax || 19, zMin = 12;
   const validos = (items || []).filter(it => it.geom);
   const lineas = (g) => g.type === 'LineString' ? [g.coordinates] : (g.type === 'MultiLineString' ? g.coordinates : []);
@@ -4634,14 +4635,14 @@ async function renderMapaCanvas(items, opciones = {}){
   const ps0 = coords.map(c => mundo(c[0], c[1], zMax));
   const sx = Math.max(...ps0.map(p => p[0])) - Math.min(...ps0.map(p => p[0]));
   const sy = Math.max(...ps0.map(p => p[1])) - Math.min(...ps0.map(p => p[1]));
-  const factor = Math.max(sx / Math.max(1, W - 2 * padding), sy / Math.max(1, H - 2 * padding), 1e-9);
+  const factor = Math.max(sx / Math.max(1, W - 2 * padding), sy / Math.max(1, H - padTop - padBot), 1e-9);
   const z = Math.min(zMax, Math.max(zMin, zMax - Math.log2(factor)));
   const zt = Math.min(19, Math.max(0, Math.floor(z)));   // nivel de mosaicos a descargar
   const ts = 256 * Math.pow(2, z - zt);                  // tamaño en pantalla de cada mosaico
   const ps = coords.map(c => mundo(c[0], c[1], z));
   const xs = ps.map(p => p[0]), ys = ps.map(p => p[1]);
   const cx = (Math.max(...xs) + Math.min(...xs)) / 2, cy = (Math.max(...ys) + Math.min(...ys)) / 2;
-  const ox = cx - W / 2, oy = cy - H / 2;     // esquina superior izquierda del lienzo, en px de mundo
+  const ox = cx - W / 2, oy = cy - (padTop + (H - padTop - padBot) / 2);     // esquina superior izquierda del lienzo, en px de mundo
 
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
@@ -4677,11 +4678,24 @@ async function renderMapaCanvas(items, opciones = {}){
   validos.forEach(it => {
     const ls = lineas(it.geom);
     if(!ls.length) return;
-    [{w: 13, c: '#ffffff'}, {w: 8, c: it.color}].forEach(est => {
+    (opciones.simple ? [{w: 10, c: '#ffffff'}, {w: 6, c: it.color}] : [{w: 13, c: '#ffffff'}, {w: 8, c: it.color}]).forEach(est => {
       ctx.lineWidth = est.w; ctx.strokeStyle = est.c;
       ls.forEach(l => { ctx.beginPath(); l.forEach((c, i) => { const [x, y] = P(c[0], c[1]); if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.stroke(); });
     });
   });
+  if(opciones.simple){
+    // Mapa sin números: cada punto es un círculo del color de su estado (los circuitos ya se dibujaron como líneas)
+    validos.filter(it => it.geom.type === 'Point').forEach(it => {
+      const [x, y] = P(it.geom.coordinates[0], it.geom.coordinates[1]);
+      ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = it.color; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+    });
+    ctx.font = '15px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    const atr = '© OpenStreetMap contributors', tw0 = ctx.measureText(atr).width;
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(W - tw0 - 16, H - 26, tw0 + 16, 26);
+    ctx.fillStyle = '#333333'; ctx.fillText(atr, W - 8, H - 5);
+    return canvas;
+  }
   const R = 17;   // radio del círculo numerado
   const circulo = (x, y, color, label) => {
     ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2);
@@ -5033,14 +5047,14 @@ async function generarPdfAnalisis(){
     const ancho = pdf.internal.pageSize.getWidth();
     const alto = pdf.internal.pageSize.getHeight();
     const margen = 12;
-    const VERDE = [31, 77, 61];
+    const VERDE = [0, 49, 0];
     const gris = [85, 102, 92];
     const num = (x) => (x === null || x === undefined) ? '-' : String(x).replace('.', ',');
     const dias = (x) => fmtHoras(x, '-');
     const ini = d.rango ? d.rango.inicio : '', fin = d.rango ? d.rango.fin : '';
     const fmtF = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7) + '-' + String(s).slice(0, 4);
 
-    // ---------- PORTADA: lo más importante antes del detalle ----------
+    // ---------- HOJA 1: mapa del período + indicadores ----------
     const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
     const rr = d.resumen || {};
     const codigos = d.por_codigo || [];
@@ -5050,122 +5064,221 @@ async function generarPdfAnalisis(){
     const nInspecciones = (cobP.por_ito || []).reduce((s, i) => s + (i.inspecciones || 0), 0);
     const nDiasRango = Math.round((new Date(fin + 'T00:00:00Z') - new Date(ini + 'T00:00:00Z')) / 86400000) + 1;
     const pctRep = rr.fallas ? Math.round((rr.reparadas || 0) / rr.fallas * 100) : 0;
-    const pctReit = rr.fallas ? Math.round((rr.reiteradas || 0) / rr.fallas * 100) : 0;
+    const LIMA = [123, 211, 0];
+    const COLOR_EST_PDF = {reportada: [211, 58, 44], pendiente: [240, 140, 0], reiterada: [123, 63, 228], reparada: [46, 158, 87]};
+    const hexAPdf = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const conOpacidad = (op, fn) => { pdf.saveGraphicsState(); pdf.setGState(new pdf.GState({opacity: op})); fn(); pdf.restoreGraphicsState(); };
 
-    // Banda superior
-    pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 52, 'F');
-    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5);
-    pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 14);
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(27);
-    pdf.text('Análisis de fallas', margen, 29);
-    pdf.setFontSize(14);
-    pdf.text(`${fmtF(ini)}  al  ${fmtF(fin)}`, margen, 40);
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9);
-    pdf.text(`${plural(nDiasRango, 'día', 'días')} · ${plural(nInspecciones, 'inspección', 'inspecciones')}`, margen, 47);
-    pdf.text(`Generado el ${new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE})}`, ancho - margen, 40, {align: 'right'});
-    pdf.text(`por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen, 45, {align: 'right'});
+    // Fallas del período con su geometría (sin los puntos de cascada, que ya van dentro de su circuito)
+    let feats = [];
+    try{
+      const g = await db.rpc('fallas_geojson_periodo', {
+        fecha_inicio: fechaChileLocal(ini, 0, 0, 0).toISOString(),
+        fecha_fin: fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString()
+      });
+      feats = ((g && g.features) || []).filter(f => !(f.properties && f.properties.cascada));
+    }catch(e){ console.warn('No se pudieron obtener las fallas del período para el mapa:', e); }
+    const porEstado = {reportada: 0, pendiente: 0, reiterada: 0, reparada: 0};
+    feats.forEach(f => { if(porEstado[f.properties.estado] !== undefined) porEstado[f.properties.estado]++; });
 
-    // Tarjetas de indicadores (2 filas de 3)
-    const tarjetasP = [
-      {v: num(rr.fallas || 0), l: 'Fallas del período', s: 'un circuito cuenta como una'},
-      {v: `${pctRep}%`, l: 'Reparadas', s: `${num(rr.reparadas || 0)} de ${num(rr.fallas || 0)}`},
-      {v: num(rr.abiertas || 0), l: 'Siguen abiertas', s: (rr.abiertas ? 'antigüedad mediana ' + fmtHoras(rr.antiguedad_mediana_abiertas, '-') : 'ninguna')},
-      {v: num(rr.reiteradas || 0), l: 'Reiteradas', s: `${pctReit}% de las fallas`},
-      {v: fmtHoras(rr.mediana_dias_ing, '-'), l: 'Mediana de reparación', s: 'desde el ingreso al sistema'},
-      {v: rr.puntos_afectados === undefined ? '-' : fmtMiles(rr.puntos_afectados), l: 'Puntos lumínicos afectados', s: (rr.puntos_afectados !== undefined && rr.total_puntos) ? `${fmtPctPuntos(rr.puntos_afectados, rr.total_puntos)} de ${fmtMiles(rr.total_puntos)} puntos` : ''}
-    ];
-    const cw = (ancho - margen * 2 - 8) / 3, chh = 24;
-    tarjetasP.forEach((t, i) => {
-      const cx = margen + (i % 3) * (cw + 4), cy = 60 + Math.floor(i / 3) * (chh + 4);
-      pdf.setFillColor(247, 248, 247); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(cx, cy, cw, chh, 2, 2, 'FD');
-      pdf.setTextColor(...VERDE); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(20); pdf.text(String(t.v), cx + 4, cy + 10.5);
-      pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text(t.l, cx + 4, cy + 16);
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(t.s, cx + 4, cy + 20.5);
+    const anilloPng = (pct, px) => {
+      const c = document.createElement('canvas'); c.width = c.height = px;
+      const x = c.getContext('2d'), w = px * 0.115, r = (px - w) / 2;
+      x.lineWidth = w; x.lineCap = 'round';
+      x.strokeStyle = '#dfe7e1'; x.beginPath(); x.arc(px / 2, px / 2, r, 0, Math.PI * 2); x.stroke();
+      if(pct > 0){ x.strokeStyle = '#7BD300'; x.beginPath(); x.arc(px / 2, px / 2, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, pct / 100)); x.stroke(); }
+      x.fillStyle = '#003100'; x.font = `800 ${Math.round(px * 0.27)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillText(pct + '%', px / 2, px / 2 + px * 0.02);
+      return c.toDataURL('image/png');
+    };
+
+    // Mapa a página completa (si no se puede dibujar, queda un fondo liso)
+    pdf.setFillColor(238, 242, 238); pdf.rect(0, 0, ancho, alto, 'F');
+    try{
+      const items = feats.map(f => ({geom: f.geometry, color: colorEstado[f.properties.estado] || '#2563a8', label: ''}));
+      const cv = await renderMapaCanvas(items, {w: 1588, h: 2246, padding: 90, padTop: 330, padBottom: 430, zMax: 17, simple: true});
+      if(cv) pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
+      else { pdf.setFontSize(10); pdf.setTextColor(...gris); pdf.text('No hay fallas con ubicación en este período.', ancho / 2, alto / 2, {align: 'center'}); }
+    }catch(e){ console.warn('No se pudo incluir el mapa del período:', e); }
+
+    // Encabezado
+    conOpacidad(0.93, () => { pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F'); });
+    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
+    pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text('Informe del período', margen + 2, 22);
+    pdf.setFontSize(11.5); pdf.setTextColor(...LIMA);
+    pdf.text(`${fmtF(ini)} al ${fmtF(fin)} · ${plural(nDiasRango, 'día', 'días')}`, margen + 2, 31);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(255, 255, 255);
+    pdf.text(`Generado el ${new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE})}`, ancho - margen - 2, 19, {align: 'right'});
+    pdf.text(`por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 23.5, {align: 'right'});
+
+    // Panel de indicadores
+    const py = alto - 56, ph = 44;
+    conOpacidad(0.96, () => { pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(margen - 2, py, ancho - (margen - 2) * 2, ph, 4, 4, 'FD'); });
+    const kpi = (x, valor, etiqueta, sub, color) => {
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.setTextColor(...(color || VERDE)); pdf.text(String(valor), x, py + 16);
+      pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text(etiqueta, x, py + 22);
+      if(sub){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(sub, x, py + 26.5); }
+    };
+    kpi(margen + 6, num(rr.fallas || 0), 'Fallas', '');
+    kpi(margen + 46, rr.puntos_afectados === undefined ? '-' : fmtMiles(rr.puntos_afectados), 'Puntos afectados',
+        (rr.puntos_afectados !== undefined && rr.total_puntos) ? `${fmtPctPuntos(rr.puntos_afectados, rr.total_puntos)} de ${fmtMiles(rr.total_puntos)} puntos` : '');
+    pdf.addImage(anilloPng(pctRep, 300), 'PNG', margen + 92, py + 4, 22, 22);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text('Reparadas', margen + 117, py + 14);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(`${num(rr.reparadas || 0)} de ${num(rr.fallas || 0)}`, margen + 117, py + 18.5);
+    kpi(margen + 146, num(rr.abiertas || 0), 'Siguen abiertas', '', [211, 58, 44]);
+    // Leyenda
+    pdf.setDrawColor(219, 226, 220); pdf.line(margen + 4, py + 32, ancho - margen - 4, py + 32);
+    [['Reportada', 'reportada'], ['Pendiente', 'pendiente'], ['Reiterada', 'reiterada'], ['Reparada', 'reparada']].forEach(([t, k], i) => {
+      const lx = margen + 8 + i * 42;
+      pdf.setFillColor(...COLOR_EST_PDF[k]); pdf.circle(lx, py + 38, 1.6, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(30, 40, 35); pdf.text(`${t} (${porEstado[k]})`, lx + 3.5, py + 39);
     });
+    conOpacidad(0.85, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
+    pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 3.2);
 
-    const cP0 = d.criticos_puntos || [], cC0 = d.criticos_circuitos || [];
-    // Comparación con el período anterior (misma cantidad de días, justo antes)
-    const prevFin = sumarDiasStr(ini, -1), prevIni = sumarDiasStr(prevFin, -(nDiasRango - 1));
-    let prev = null;
-    try{ prev = await rpcAnalisisFallas(prevIni, prevFin); }catch(e){ console.warn('No se pudo obtener el período anterior:', e); }
+    // ---------- HOJA 2: estadísticas ----------
+    pdf.addPage();
+    pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F');
+    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
+    pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text('Estadísticas del período', margen + 2, 22);
+    pdf.setFontSize(11.5); pdf.setTextColor(...LIMA); pdf.text(`${fmtF(ini)} al ${fmtF(fin)} · ${plural(nDiasRango, 'día', 'días')}`, margen + 2, 31);
+    const tarjeta = (x, y, w, h, titulo) => {
+      pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x, y, w, h, 3, 3, 'FD');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...VERDE); pdf.text(titulo, x + 5, y + 8);
+    };
+    const mitad = (ancho - margen * 2 - 6) / 2;
 
-    let yy = 60 + 2 * (chh + 4) + 6;
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(...VERDE);
-    pdf.text('Comparación con el período anterior', margen, yy); yy += 3;
-    pdf.setDrawColor(219, 226, 220); pdf.line(margen, yy, ancho - margen, yy); yy += 5;
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...gris);
-
-    if(!prev || !prev.resumen){
-      pdf.text('No se pudo obtener el período anterior para comparar.', margen, yy + 2);
-    } else {
-      pdf.text(`Este período: ${fmtF(ini)} al ${fmtF(fin)} (${plural(nDiasRango, 'día', 'días')})   ·   Anterior: ${fmtF(prevIni)} al ${fmtF(prevFin)} (${plural(nDiasRango, 'día', 'días')})`, margen, yy + 2);
-      yy += 6;
-      const pr = prev.resumen || {};
-      const cobPrev = prev.cobertura || {};
-      const insPrev = (cobPrev.por_ito || []).reduce((s, i) => s + (i.inspecciones || 0), 0);
-      const sinPrev = (cobPrev.por_dia || []).filter(x => x.dow >= 1 && x.dow <= 5 && !x.inspecciones).length;
-      const pctDe = (r) => r.fallas ? Math.round((r.reparadas || 0) / r.fallas * 100) : null;
-      const pctPrev = pctDe(pr);
-      // mejor: 'menos' (bajar es bueno), 'mas' (subir es bueno) o null (sin juicio: depende de cuánto se inspeccione)
-      const filas = [
-        {l: 'Fallas del período', a: rr.fallas || 0, b: pr.fallas || 0, t: 'n', mejor: null},
-        {l: 'Inspecciones realizadas', a: nInspecciones, b: insPrev, t: 'n', mejor: 'mas'},
-        {l: 'Días hábiles sin inspección', a: habilesSinP, b: sinPrev, t: 'n', mejor: 'menos'},
-        {l: 'Fallas reparadas (%)', a: pctDe(rr), b: pctPrev, t: 'pp', mejor: 'mas'},
-        {l: 'Fallas abiertas hoy', a: rr.abiertas || 0, b: pr.abiertas || 0, t: 'n', mejor: 'menos'},
-        {l: 'Fallas reiteradas', a: rr.reiteradas || 0, b: pr.reiteradas || 0, t: 'n', mejor: 'menos'},
-        {l: 'Mediana de reparación desde el ingreso', a: rr.mediana_dias_ing, b: pr.mediana_dias_ing, t: 'h', mejor: 'menos'},
-        {l: 'Puntos lumínicos afectados', a: rr.puntos_afectados, b: pr.puntos_afectados, t: 'n', mejor: 'menos'},
-        {l: 'Puntos críticos', a: cP0.length, b: (prev.criticos_puntos || []).length, t: 'n', mejor: 'menos'},
-        {l: 'Circuitos críticos', a: cC0.length, b: (prev.criticos_circuitos || []).length, t: 'n', mejor: 'menos'}
-      ];
-      const signo = (x) => x > 0 ? '+' : (x < 0 ? '-' : '');
-      const valor = (f, v) => v === null || v === undefined ? '-' : (f.t === 'h' ? fmtHoras(v) : (f.t === 'pp' ? v + '%' : String(v)));
-      const cuerpo = filas.map(f => {
-        let varTxt = '-', dir = 0;
-        if(f.a !== null && f.a !== undefined && f.b !== null && f.b !== undefined){
-          const dif = f.a - f.b;
-          if(f.t === 'h'){
-            const dh = Math.round(dif * 24 * 10) / 10;
-            dir = dh === 0 ? 0 : Math.sign(dh);
-            varTxt = dh === 0 ? 'Sin cambio' : `${signo(dh)}${Math.abs(dh) < 10 ? String(Math.abs(dh)).replace('.', ',') : Math.round(Math.abs(dh))} h` + (f.b > 0 ? ` (${signo(dif)}${Math.abs(Math.round(dif / f.b * 100))}%)` : '');
-          } else if(f.t === 'pp'){
-            dir = dif === 0 ? 0 : Math.sign(dif);
-            varTxt = dif === 0 ? 'Sin cambio' : `${signo(dif)}${Math.abs(dif)} pp`;
-          } else {
-            dir = dif === 0 ? 0 : Math.sign(dif);
-            varTxt = dif === 0 ? 'Sin cambio' : `${signo(dif)}${Math.abs(dif)}` + (f.b > 0 ? ` (${signo(dif)}${Math.abs(Math.round(dif / f.b * 100))}%)` : '');
-          }
-        }
-        return {fila: [f.l, valor(f, f.a), valor(f, f.b), varTxt], dir, mejor: f.mejor};
+    // Estado de las fallas (anillo) y tiempo de reparación
+    tarjeta(margen, 45, mitad, 46, 'Estado de las fallas');
+    {
+      const px = 360, c = document.createElement('canvas'); c.width = c.height = px;
+      const x = c.getContext('2d'), tot = Object.values(porEstado).reduce((a, b) => a + b, 0) || 1;
+      let ang = -Math.PI / 2;
+      ['reparada', 'reportada', 'pendiente', 'reiterada'].forEach(k => {
+        if(!porEstado[k]) return;
+        const a2 = ang + Math.PI * 2 * porEstado[k] / tot;
+        x.strokeStyle = colorEstado[k]; x.lineWidth = px * 0.17; x.beginPath(); x.arc(px / 2, px / 2, px * 0.385, ang, a2); x.stroke(); ang = a2;
       });
-      pdf.autoTable({
-        startY: yy, margin: {left: margen, right: margen},
-        styles: {fontSize: 9, cellPadding: 2.2, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1},
-        headStyles: {fillColor: VERDE, textColor: 255, fontSize: 8.5, fontStyle: 'bold'},
-        alternateRowStyles: {fillColor: [247, 248, 247]},
-        head: [['Indicador', 'Este período', 'Anterior', 'Variación']],
-        body: cuerpo.map(c => c.fila),
-        columnStyles: {1: {halign: 'right', fontStyle: 'bold'}, 2: {halign: 'right'}, 3: {halign: 'right', fontStyle: 'bold'}},
-        didParseCell: (hk) => {
-          if(hk.section === 'head' && hk.column.index >= 1) hk.cell.styles.halign = 'right';
-          if(hk.section !== 'body' || hk.column.index !== 3) return;
-          const c = cuerpo[hk.row.index];
-          if(!c || !c.mejor || !c.dir) return;
-          const bueno = (c.mejor === 'mas') === (c.dir > 0);
-          hk.cell.styles.textColor = bueno ? [46, 125, 79] : [192, 57, 43];
-        }
+      x.fillStyle = '#003100'; x.font = `800 ${Math.round(px * 0.2)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(String(tot), px / 2, px / 2 + 4);
+      pdf.addImage(c.toDataURL('image/png'), 'PNG', margen + 5, 56, 30, 30);
+    }
+    [['Reparadas', 'reparada'], ['Reportadas', 'reportada'], ['Pendientes', 'pendiente'], ['Reiteradas', 'reiterada']].forEach(([t, k], i) => {
+      pdf.setFillColor(...COLOR_EST_PDF[k]); pdf.circle(margen + 42, 62 + i * 6.5, 1.5, 'F');
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text(t, margen + 46, 63 + i * 6.5);
+      pdf.setFont('helvetica', 'bold'); pdf.text(String(porEstado[k]), margen + mitad - 6, 63 + i * 6.5, {align: 'right'});
+    });
+    tarjeta(margen + mitad + 6, 45, mitad, 46, 'Tiempo de reparación');
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(28); pdf.setTextColor(...VERDE); pdf.text(fmtHoras(rr.mediana_dias_ing, '-'), margen + mitad + 11, 70);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris); pdf.text('mediana desde el ingreso al sistema', margen + mitad + 11, 77);
+
+    // Fallas por día
+    tarjeta(margen, 97, ancho - margen * 2, 44, 'Fallas informadas por día');
+    {
+      const serie = diasP.map(x => x.fallas || 0), mx = Math.max(1, ...serie);
+      const x0 = margen + 6, wTot = ancho - margen * 2 - 12, n = Math.max(1, serie.length), paso = wTot / n, bw = Math.min(6, paso * 0.78), base = 130, hMax = 22;
+      serie.forEach((v, i) => {
+        if(!v) return;
+        const hb = Math.max(0.6, v / mx * hMax);
+        pdf.setFillColor(...(v === mx ? VERDE : LIMA)); pdf.roundedRect(x0 + i * paso + (paso - bw) / 2, base - hb, bw, hb, 0.8, 0.8, 'F');
       });
-      yy = pdf.lastAutoTable.finalY + 4;
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris);
-      const notaComp = pdf.splitTextToSize('Verde: mejora respecto del período anterior; rojo: empeora. Las fallas del período y las inspecciones no se colorean porque dependen de cuánto se inspeccionó. "Fallas abiertas hoy" y "reparadas" se miden al día de generación del informe. pp = puntos porcentuales.', ancho - margen * 2);
-      pdf.text(notaComp, margen, yy);
+      pdf.setDrawColor(219, 226, 220); pdf.line(x0, base + 0.5, x0 + wTot, base + 0.5);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
+      if(diasP.length){
+        const f2 = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7);
+        pdf.text(f2(diasP[0].fecha), x0, base + 5);
+        pdf.text(f2(diasP[diasP.length - 1].fecha), x0 + wTot, base + 5, {align: 'right'});
+        const iMax = serie.indexOf(mx);
+        pdf.text(`punta: ${mx} falla${mx === 1 ? '' : 's'} el ${f2(diasP[iMax].fecha)}`, x0 + wTot / 2, base + 5, {align: 'center'});
+      }
     }
 
-    // Guía de lectura
-    pdf.setFontSize(8); pdf.setTextColor(...gris);
-    const guia = pdf.splitTextToSize('Cómo leer los tiempos: "desde la inspección" cuenta desde el día en que el ITO vio la falla; "desde el ingreso" cuenta desde que se registró en el sistema. Todos los tiempos se muestran en horas. Detalle en las páginas siguientes: resumen, tiempos por código, por ITO y por quien repara, pendientes, cobertura, y al final los puntos y circuitos críticos con su mapa.', ancho - margen * 2);
-    pdf.text(guia, margen, alto - 14 - guia.length * 3.4);
+    // Fallas más frecuentes (definición completa) y por ITO
+    const wIzq = 118, wDer = ancho - margen * 2 - wIzq - 6;
+    const top = [...codigos].sort((a, b) => b.fallas - a.fallas).slice(0, 7);
+    tarjeta(margen, 147, wIzq, 12 + top.length * 10.5 + 2, 'Fallas más frecuentes');
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris);
+    pdf.setFillColor(...LIMA); pdf.rect(margen + wIzq - 47, 143.8 + 7, 2.2, 2.2, 'F'); pdf.text('punto', margen + wIzq - 44, 145.8 + 7.2);
+    pdf.setFillColor(...VERDE); pdf.rect(margen + wIzq - 31, 143.8 + 7, 2.2, 2.2, 'F'); pdf.text('circuito', margen + wIzq - 28, 145.8 + 7.2);
+    const maxCod = Math.max(1, ...top.map(c => c.fallas));
+    top.forEach((c, i) => {
+      const yy = 163 + i * 10.5, esC = c.tipo === 'linea';
+      const desc = descripcionCodigoAnalisis(c.tipo, c.tipo_falla) || '';
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(...VERDE); pdf.text(String(c.tipo_falla), margen + 5, yy);
+      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(30, 40, 35);
+      const lineas = pdf.splitTextToSize(desc, 56).slice(0, 2);
+      pdf.text(lineas, margen + 14, yy);
+      pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text(esC ? 'circuito' : 'punto', margen + 14, yy + lineas.length * 3.3 + 0.3);
+      const bx = margen + 74, bwMax = wIzq - 74 - 14;
+      pdf.setFillColor(238, 242, 238); pdf.roundedRect(bx, yy - 3, bwMax, 3.6, 1.2, 1.2, 'F');
+      pdf.setFillColor(...(esC ? VERDE : LIMA)); pdf.roundedRect(bx, yy - 3, Math.max(1.5, c.fallas / maxCod * bwMax), 3.6, 1.2, 1.2, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(30, 40, 35); pdf.text(String(c.fallas), margen + wIzq - 5, yy, {align: 'right'});
+    });
+    const hIzq = 12 + top.length * 10.5 + 2;
+    const itos = [...(d.por_ito || [])].sort((a, b) => b.fallas - a.fallas).slice(0, 5);
+    tarjeta(margen + wIzq + 6, 147, wDer, Math.max(30, 12 + itos.length * 8 + 4), 'Por ITO que informa');
+    const maxIto = Math.max(1, ...itos.map(i => i.fallas));
+    itos.forEach((it, i) => {
+      const yy = 160 + i * 8;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35);
+      pdf.text(pdf.splitTextToSize(String(it.nombre || '-'), 30)[0], margen + wIzq + 11, yy);
+      const bx = margen + wIzq + 42, bwMax = wDer - 36 - 18;
+      pdf.setFillColor(238, 242, 238); pdf.roundedRect(bx, yy - 2.8, bwMax, 3.2, 1.2, 1.2, 'F');
+      pdf.setFillColor(...VERDE); pdf.roundedRect(bx, yy - 2.8, Math.max(1.2, it.fallas / maxIto * bwMax), 3.2, 1.2, 1.2, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.text(String(it.fallas), margen + wIzq + wDer - 4, yy, {align: 'right'});
+    });
+
+    // Comparación con el mes anterior: mismo rango de fechas, un mes antes
+    const restarMes = (f) => {
+      const [y, m, dd] = f.split('-').map(Number);
+      const ult = new Date(Date.UTC(y, m - 1, 0)).getUTCDate();
+      return new Date(Date.UTC(y, m - 2, Math.min(dd, ult))).toISOString().slice(0, 10);
+    };
+    const prevIni = restarMes(ini), prevFin = restarMes(fin);
+    let prev = null;
+    try{ prev = await rpcAnalisisFallas(prevIni, prevFin); }catch(e){ console.warn('No se pudo obtener el mes anterior:', e); }
+    const yc = 147 + hIzq + 6, hc = 40;
+    tarjeta(margen, yc, ancho - margen * 2, hc, 'Comparación con el mes anterior');
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
+    pdf.text(`${fmtF(prevIni)} al ${fmtF(prevFin)}  vs.  ${fmtF(ini)} al ${fmtF(fin)}`, margen + 62, yc + 8);
+    if(!prev || !prev.resumen){
+      pdf.setFontSize(8.5); pdf.text('No se pudo obtener el mes anterior para comparar.', margen + 5, yc + 22);
+    } else {
+      const pr = prev.resumen || {};
+      const pctDe = (r) => r.fallas ? Math.round((r.reparadas || 0) / r.fallas * 100) : null;
+      const filasC = [
+        {l: 'Fallas', a: rr.fallas || 0, b: pr.fallas || 0, t: 'n', bueno: 'menos'},
+        {l: 'Puntos afectados', a: rr.puntos_afectados, b: pr.puntos_afectados, t: 'n', bueno: 'menos'},
+        {l: 'Fallas reparadas', a: pctDe(rr), b: pctDe(pr), t: 'pp', bueno: 'mas'}
+      ];
+      const wt = (ancho - margen * 2 - 10 - 8) / 3;
+      filasC.forEach((f, i) => {
+        const tx = margen + 5 + i * (wt + 4);
+        pdf.setFillColor(245, 248, 245); pdf.roundedRect(tx, yc + 12, wt, 24, 2.5, 2.5, 'F');
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(30, 40, 35); pdf.text(f.l, tx + 4, yc + 18);
+        const fmtV = (v) => v === null || v === undefined ? '-' : (f.t === 'pp' ? v + '%' : fmtMiles(v));
+        pdf.setFontSize(15); pdf.setTextColor(...VERDE); pdf.text(fmtV(f.a), tx + 4, yc + 26);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(`mes anterior: ${fmtV(f.b)}`, tx + 4, yc + 30.5);
+        if(f.a !== null && f.a !== undefined && f.b !== null && f.b !== undefined){
+          const dif = f.a - f.b;
+          let txt = 'sin cambio', col = gris;
+          if(dif !== 0){
+            const mejora = (f.bueno === 'mas') === (dif > 0);
+            col = mejora ? [46, 125, 79] : [192, 57, 43];
+            const sg = dif > 0 ? '+' : '-';
+            txt = f.t === 'pp' ? `${sg}${Math.abs(dif)} pp` : `${sg}${fmtMiles(Math.abs(dif))}` + (f.b > 0 ? ` (${sg}${Math.abs(Math.round(dif / f.b * 100))}%)` : '');
+            pdf.setFillColor(...col);
+            if(dif > 0) pdf.triangle(tx + 4, yc + 34.4, tx + 7.2, yc + 34.4, tx + 5.6, yc + 31.8, 'F'); else pdf.triangle(tx + 4, yc + 31.8, tx + 7.2, yc + 31.8, tx + 5.6, yc + 34.4, 'F');
+          }
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(...col); pdf.text(txt, tx + (dif !== 0 ? 9 : 4), yc + 34.4);
+        }
+      });
+    }
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris);
+    pdf.text('Verde: mejora respecto del mes anterior; rojo: empeora. Mes anterior = el mismo rango de fechas, un mes antes. pp = puntos porcentuales.', margen, yc + hc + 4);
+    pdf.setFontSize(8); pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
 
     pdf.addPage();
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...VERDE);
