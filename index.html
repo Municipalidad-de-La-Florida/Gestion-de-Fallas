@@ -5248,9 +5248,17 @@ async function generarPdfAnalisis(soloResumen){
     conOpacidad(0.93, () => { pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F'); });
     pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
     pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text('Informe del período', margen + 2, 22);
+    pdf.setFont('helvetica', 'bold'); {
+      pdf.setFontSize(9);
+      const anchoGen = pdf.getTextWidth('Generado por el Sistema de Gestión de Fallas');
+      const maxT = ancho - margen - 2 - anchoGen - 6 - (margen + 2);
+      let fs = 24; pdf.setFontSize(fs);
+      while(fs > 12 && pdf.getTextWidth('Informe de fallas de Alumbrado Público') > maxT){ fs -= 0.5; pdf.setFontSize(fs); }
+      pdf.text('Informe de fallas de Alumbrado Público', margen + 2, 22);
+    }
     pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
-    pdf.text(rangoLargo, margen + 2, 31);
+    pdf.text(`Periodo: ${fmtLarga(ini)} al`, margen + 2, 29.5);
+    pdf.text(fmtLarga(fin), margen + 2, 35);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
     pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
     pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 20, {align: 'right'});
@@ -5292,7 +5300,9 @@ async function generarPdfAnalisis(soloResumen){
     pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
     pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text('Estadísticas del período', margen + 2, 22);
-    pdf.setFontSize(10.5); pdf.setTextColor(...LIMA); pdf.text(rangoLargo, margen + 2, 31);
+    pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
+    pdf.text(`Periodo: ${fmtLarga(ini)} al`, margen + 2, 29.5);
+    pdf.text(fmtLarga(fin), margen + 2, 35);
     const tarjeta = (x, y, w, h, titulo) => {
       pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x, y, w, h, 3, 3, 'FD');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...VERDE); pdf.text(titulo, x + 5, y + 8);
@@ -5387,7 +5397,7 @@ async function generarPdfAnalisis(soloResumen){
     const yc = 147 + hIzq + 6, hc = 40;
     tarjeta(margen, yc, ancho - margen * 2, hc, 'Comparación con el período anterior');
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
-    pdf.text(`${fmtF(prevIni)} al ${fmtF(prevFin)}  vs.  ${fmtF(ini)} al ${fmtF(fin)}`, margen + 62, yc + 8);
+    pdf.text(`Anterior: ${fmtF(prevIni)} al ${fmtF(prevFin)}  ·  Actual: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen - 5, yc + 8, {align: 'right'});
     if(!prev || !prev.resumen){
       pdf.setFontSize(8.5); pdf.text('No se pudo obtener el período anterior para comparar.', margen + 5, yc + 22);
     } else {
