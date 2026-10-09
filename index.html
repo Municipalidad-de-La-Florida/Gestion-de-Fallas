@@ -5248,9 +5248,17 @@ async function generarPdfAnalisis(soloResumen){
     conOpacidad(0.93, () => { pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F'); });
     pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
     pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text('Informe del período', margen + 2, 22);
+    pdf.setFont('helvetica', 'bold'); {
+      pdf.setFontSize(9);
+      const anchoGen = pdf.getTextWidth('Generado por el Sistema de Gestión de Fallas');
+      const maxT = ancho - margen - 2 - anchoGen - 6 - (margen + 2);
+      let fs = 24; pdf.setFontSize(fs);
+      while(fs > 12 && pdf.getTextWidth('Informe de fallas de Alumbrado Público') > maxT){ fs -= 0.5; pdf.setFontSize(fs); }
+      pdf.text('Informe de fallas de Alumbrado Público', margen + 2, 22);
+    }
     pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
-    pdf.text(rangoLargo, margen + 2, 31);
+    pdf.text(`Periodo: ${fmtLarga(ini)} al`, margen + 2, 29.5);
+    pdf.text(fmtLarga(fin), margen + 2, 35);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
     pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
     pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 20, {align: 'right'});
@@ -5292,7 +5300,9 @@ async function generarPdfAnalisis(soloResumen){
     pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
     pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text('Estadísticas del período', margen + 2, 22);
-    pdf.setFontSize(10.5); pdf.setTextColor(...LIMA); pdf.text(rangoLargo, margen + 2, 31);
+    pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
+    pdf.text(`Periodo: ${fmtLarga(ini)} al`, margen + 2, 29.5);
+    pdf.text(fmtLarga(fin), margen + 2, 35);
     const tarjeta = (x, y, w, h, titulo) => {
       pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x, y, w, h, 3, 3, 'FD');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...VERDE); pdf.text(titulo, x + 5, y + 8);
@@ -5324,10 +5334,11 @@ async function generarPdfAnalisis(soloResumen){
     pdf.text('promedio desde el ingreso al sistema', margen + mitad + 11, 77);
 
     // Fallas por día
-    tarjeta(margen, 97, ancho - margen * 2, 44, 'Fallas informadas por día');
+    const wPie = 62, wDia = ancho - margen * 2 - wPie - 6;
+    tarjeta(margen, 97, wDia, 44, 'Fallas informadas por día');
     {
-      const serie = diasP.map(x => x.fallas || 0), mx = Math.max(1, ...serie);
-      const x0 = margen + 6, wTot = ancho - margen * 2 - 12, n = Math.max(1, serie.length), paso = wTot / n, bw = Math.min(6, paso * 0.78), base = 130, hMax = 22;
+      const serie = diasP.map(x => (x.informadas !== undefined ? x.informadas : x.fallas) || 0), mx = Math.max(1, ...serie);
+      const x0 = margen + 6, wTot = wDia - 12, n = Math.max(1, serie.length), paso = wTot / n, bw = Math.min(6, paso * 0.78), base = 126.5, hMax = 19;
       serie.forEach((v, i) => {
         if(!v) return;
         const hb = Math.max(0.6, v / mx * hMax);
@@ -5342,6 +5353,34 @@ async function generarPdfAnalisis(soloResumen){
         const iMax = serie.indexOf(mx);
         pdf.text(`punta: ${mx} falla${mx === 1 ? '' : 's'} el ${f2(diasP[iMax].fecha)}`, x0 + wTot / 2, base + 5, {align: 'center'});
       }
+      pdf.setFontSize(5.5);
+      pdf.text(pdf.splitTextToSize('Nota: toda diferencia entre las fallas informadas por día y el estado de las fallas se debe a fallas ingresadas con anterioridad al período que aún no han sido reparadas, o que fueron reparadas dentro del período seleccionado.', wTot), x0, base + 9);
+    }
+
+    // Circuito vs. individuales (mismos colores que "Fallas más frecuentes")
+    {
+      const nCir = codigos.filter(c => c.tipo === 'linea').reduce((a, c) => a + (c.fallas || 0), 0);
+      const nPun = codigos.filter(c => c.tipo !== 'linea').reduce((a, c) => a + (c.fallas || 0), 0);
+      const tot = nCir + nPun, xp = margen + wDia + 6;
+      tarjeta(xp, 97, wPie, 44, 'Circuito / individuales');
+      const px = 300, c = document.createElement('canvas'); c.width = c.height = px;
+      const g = c.getContext('2d');
+      if(tot){
+        let ang = -Math.PI / 2;
+        [[nPun, LIMA], [nCir, VERDE]].forEach(([v, col]) => {
+          if(!v) return;
+          const a2 = ang + Math.PI * 2 * v / tot;
+          g.strokeStyle = `rgb(${col.join(',')})`; g.lineWidth = px * 0.2; g.beginPath(); g.arc(px / 2, px / 2, px * 0.37, ang, a2); g.stroke(); ang = a2;
+        });
+      } else { g.strokeStyle = '#dfe7e1'; g.lineWidth = px * 0.2; g.beginPath(); g.arc(px / 2, px / 2, px * 0.37, 0, Math.PI * 2); g.stroke(); }
+      g.fillStyle = '#003100'; g.font = `800 ${Math.round(px * 0.22)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(tot), px / 2, px / 2 + 3);
+      pdf.addImage(c.toDataURL('image/png'), 'PNG', xp + 4, 108, 30, 30);
+      [['Individuales', nPun, LIMA], ['Circuitos', nCir, VERDE]].forEach(([t, v, col], i) => {
+        const yy = 118 + i * 10;
+        pdf.setFillColor(...col); pdf.circle(xp + 38, yy - 1, 1.5, 'F');
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(t, xp + 41, yy);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.text(`${v}${tot ? ' (' + Math.round(v / tot * 100) + '%)' : ''}`, xp + 41, yy + 4);
+      });
     }
 
     // Fallas más frecuentes (definición completa) y por ITO
@@ -5387,7 +5426,7 @@ async function generarPdfAnalisis(soloResumen){
     const yc = 147 + hIzq + 6, hc = 40;
     tarjeta(margen, yc, ancho - margen * 2, hc, 'Comparación con el período anterior');
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
-    pdf.text(`${fmtF(prevIni)} al ${fmtF(prevFin)}  vs.  ${fmtF(ini)} al ${fmtF(fin)}`, margen + 62, yc + 8);
+    pdf.text(`Anterior: ${fmtF(prevIni)} al ${fmtF(prevFin)}  ·  Actual: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen - 5, yc + 8, {align: 'right'});
     if(!prev || !prev.resumen){
       pdf.setFontSize(8.5); pdf.text('No se pudo obtener el período anterior para comparar.', margen + 5, yc + 22);
     } else {
