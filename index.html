@@ -1865,13 +1865,47 @@ function actualizarChipNotificador(){
   box.querySelector('#notifChipLimpiar').onclick = borrarSesionNotificador;
 }
 
+let listaUsuariosNotificables = [];
 async function cargarListaNotificadores(){
-  try{ listaNotificadores = await db.select('notificadores', 'select=id,nombre,validado&activo=eq.true&order=nombre.asc'); }
-  catch(e){ console.error('Error cargando notificadores:', e); }
+  try{ listaNotificadores = await db.select('notificadores', 'select=id,nombre,validado,usuario_id&activo=eq.true&order=nombre.asc'); }
+  catch(e){
+    console.error('Error cargando notificadores:', e);
+    // Respaldo: si la columna usuario_id aún no existe en la base
+    try{ listaNotificadores = await db.select('notificadores', 'select=id,nombre,validado&activo=eq.true&order=nombre.asc'); }catch(e2){}
+  }
+  try{ listaUsuariosNotificables = await db.rpc('usuarios_notificables', {}) || []; }
+  catch(e){ listaUsuariosNotificables = []; }
   return listaNotificadores;
 }
 
 // Dentro de su propio <form> para que el navegador no autocomplete el correo del login en el campo de nombre.
+// Opciones del selector: 1) sin registrar, línea, 2) notificadores validados, 3) ITO / contratistas / admin.
+function opcionesNotificadorHtml(lista, textoVacio, previo){
+  const usuarios = listaUsuariosNotificables || [];
+  const idsUsuarios = new Set(usuarios.map(u => u.id));
+  const porUsuario = {};
+  lista.forEach(n => { if(n.usuario_id) porUsuario[n.usuario_id] = n; });
+  const opcion = (n) => `<option value="${n.id}" data-nombre="${escHtml(n.nombre)}">${escHtml(n.nombre)}</option>`;
+  const sinReg = lista.filter(n => !n.validado && !n.usuario_id).map(opcion).join('');
+  const validados = lista.filter(n => n.validado && !(n.usuario_id && idsUsuarios.has(n.usuario_id))).map(opcion).join('');
+  const rolTxt = { ito:'ITO', contratista:'Contratista', contratista2:'Contratista', admin:'Admin' };
+  const usrs = usuarios.map(u => `<option value="u:${u.id}" data-nombre="${escHtml(u.nombre)}">${escHtml(u.nombre)} (${rolTxt[u.rol] || u.rol})</option>`).join('');
+  let seleccion = previo || '';
+  const enlazado = lista.find(n => n.id === previo && n.usuario_id && idsUsuarios.has(n.usuario_id));
+  if(enlazado) seleccion = 'u:' + enlazado.usuario_id;
+  const html = `<option value="">${textoVacio}</option>`
+    + (sinReg ? `<optgroup label="Sin registrar">${sinReg}</optgroup><option disabled>──────────────────────</option>` : '')
+    + (validados ? `<optgroup label="Notificadores validados">${validados}</optgroup>` : '')
+    + (usrs ? `<optgroup label="ITO y contratistas">${usrs}</optgroup>` : '')
+    + `<option value="__otro__">➕ Otro (escribir nombre)…</option>`;
+  return { html, seleccion };
+}
+// "u:<usuario>" → id de notificador (lo crea/vincula si hace falta)
+async function resolverNotificadorId(valor){
+  if(valor && valor.startsWith('u:')) return await db.rpc('notificador_de_usuario', { p_usuario: valor.slice(2) });
+  return valor || null;
+}
+
 function htmlNotificador(){
   if(!puedeNotificadorExterno()) return '';
   return `
@@ -1917,14 +1951,9 @@ function activarNotificador(panel){
   const poblar = (lista) => {
     if(!bloque.isConnected) return;
     const previo = sel.value || (s && s.notificadorId) || '';
-    const opcion = (n) => `<option value="${n.id}" data-nombre="${escHtml(n.nombre)}">${escHtml(n.nombre)}</option>`;
-    const validados = lista.filter(n => n.validado).map(opcion).join('');
-    const sinValidar = lista.filter(n => !n.validado).map(opcion).join('');
-    sel.innerHTML = `<option value="">Yo mismo</option>`
-      + (validados ? `<optgroup label="Notificadores frecuentes">${validados}</optgroup>` : '')
-      + (sinValidar ? `<optgroup label="Escritos por otros (sin validar)">${sinValidar}</optgroup>` : '')
-      + `<option value="__otro__">➕ Otro (escribir nombre)…</option>`;
-    sel.value = [...sel.options].some(o => o.value === previo) ? previo : '';
+    const o = opcionesNotificadorHtml(lista, 'Yo mismo', previo);
+    sel.innerHTML = o.html;
+    sel.value = [...sel.options].some(x => x.value === o.seleccion) ? o.seleccion : '';
     otro.style.display = sel.value === '__otro__' ? 'block' : 'none';
   };
   poblar(listaNotificadores);
@@ -1960,8 +1989,9 @@ async function leerNotificador(panel){
     nombre = otro.value.trim().replace(/\s+/g, ' ');
     if(nombre.length < 2) return {error: 'Escribe el nombre del notificador (mínimo 2 letras).'};
   } else if(sel.value){
-    notificadorId = sel.value;
     nombre = sel.selectedOptions[0].dataset.nombre || sel.selectedOptions[0].textContent;
+    try{ notificadorId = await resolverNotificadorId(sel.value); }
+    catch(e){ return {error: 'No se pudo registrar al notificador: ' + e.message}; }
   }
 
   const hoy = hoyChileStr();
@@ -2342,14 +2372,9 @@ async function abrirEditorFalla(p){
     const poblar = (lista) => {
       if(!panel.isConnected) return;
       const previo = sel.value || fila.notificador_id || '';
-      const opcion = (n) => `<option value="${n.id}">${escHtml(n.nombre)}</option>`;
-      const validados = lista.filter(n => n.validado).map(opcion).join('');
-      const sinValidar = lista.filter(n => !n.validado).map(opcion).join('');
-      sel.innerHTML = `<option value="">Sin notificador externo</option>`
-        + (validados ? `<optgroup label="Notificadores frecuentes">${validados}</optgroup>` : '')
-        + (sinValidar ? `<optgroup label="Escritos por otros (sin validar)">${sinValidar}</optgroup>` : '')
-        + `<option value="__otro__">➕ Otro (escribir nombre)…</option>`;
-      sel.value = [...sel.options].some(o => o.value === previo) ? previo : '';
+      const o = opcionesNotificadorHtml(lista, 'Sin notificador externo', previo);
+      sel.innerHTML = o.html;
+      sel.value = [...sel.options].some(x => x.value === o.seleccion) ? o.seleccion : '';
     };
     poblar(listaNotificadores);
     cargarListaNotificadores().then(poblar);
@@ -2384,6 +2409,9 @@ async function abrirEditorFalla(p){
         const nombre = panel.querySelector('#edNotifOtro').value.trim().replace(/\s+/g, ' ');
         if(nombre.length < 2){ alert('Escribe el nombre del notificador (mínimo 2 letras).'); return; }
         try{ nuevoNotif = await db.rpc('obtener_o_crear_notificador', {p_nombre: nombre}); }
+        catch(e){ alert('No se pudo registrar al notificador: ' + e.message); return; }
+      } else if(nuevoNotif && nuevoNotif.startsWith('u:')){
+        try{ nuevoNotif = await resolverNotificadorId(nuevoNotif); }
         catch(e){ alert('No se pudo registrar al notificador: ' + e.message); return; }
       }
       if((nuevoNotif || null) !== (fila.notificador_id || null)) cambios.notificador_id = nuevoNotif || null;
@@ -5907,7 +5935,10 @@ async function cargarNotificadoresAdmin(){
   const tbody = document.getElementById('notificadoresTbody');
   tbody.innerHTML = '<tr><td colspan="4" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
-    const lista = await db.select('notificadores', 'select=id,nombre,validado,activo,fallas(count)&order=nombre.asc');
+    const lista = await db.select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc');
+    let usuarios = [];
+    try{ usuarios = await db.select('usuarios', 'select=id,nombre,rol&rol=in.(ito,contratista,contratista2,admin)&order=nombre.asc'); }catch(e){}
+    const nomUsuario = Object.fromEntries(usuarios.map(u => [u.id, u.nombre]));
     const filas = lista.map(n => ({ ...n, nFallas: (n.fallas && n.fallas[0] && n.fallas[0].count) || 0 }));
     // Primero los "sin validar" (hay que revisarlos); luego los demás por nombre
     filas.sort((a, b) => (a.validado - b.validado) || a.nombre.localeCompare(b.nombre, 'es'));
@@ -5920,7 +5951,7 @@ async function cargarNotificadoresAdmin(){
       const otros = filas.filter(o => o.id !== n.id)
         .map(o => `<option value="${o.id}">${escHtml(o.nombre)}</option>`).join('');
       const estado = [
-        n.validado ? '<span style="color:var(--green,#2e7d32);">Validado</span>' : '<b style="color:var(--amber);">Sin validar</b>',
+        n.usuario_id ? `<span style="color:var(--green,#2e7d32);">Vinculado a ${escHtml(nomUsuario[n.usuario_id] || 'usuario')}</span>` : n.validado ? '<span style="color:var(--green,#2e7d32);">Validado</span>' : '<b style="color:var(--amber);">Sin validar</b>',
         n.activo ? '' : '<span style="color:var(--red);">Desactivado</span>'
       ].filter(Boolean).join(' · ');
       return `<tr data-id="${n.id}" data-fallas="${n.nFallas}" style="border-bottom:1px solid var(--line);">
@@ -5930,6 +5961,7 @@ async function cargarNotificadoresAdmin(){
         <td style="padding:6px 10px; min-width:230px;">
           <button class="notif-guardar" style="${btnEstilo('var(--primary)')}">Guardar nombre</button>
           ${n.validado ? '' : `<button class="notif-validar" style="${btnEstilo('var(--green,#2e7d32)')}">Validar</button>`}
+          ${(!n.usuario_id && usuarios.length) ? `<select class="notif-vincular" style="padding:5px 6px; border:1px solid var(--line); border-radius:6px; font-size:11px; margin:2px 4px 2px 0;"><option value="">Vincular a usuario…</option>${usuarios.map(u => `<option value="${u.id}">${escHtml(u.nombre)}</option>`).join('')}</select>` : ''}
           <button class="notif-activo" style="${btnEstilo('var(--amber)')}">${n.activo ? 'Desactivar' : 'Reactivar'}</button>
           ${otros ? `<select class="notif-fusionar" style="padding:5px 6px; border:1px solid var(--line); border-radius:6px; font-size:11px; margin:2px 4px 2px 0;"><option value="">Fusionar con…</option>${otros}</select>` : ''}
           <button class="notif-eliminar" style="${btnEstilo('var(--red)')}" ${n.nFallas ? 'disabled title="Tiene fallas asociadas: desactívalo o fusiónalo"' : ''}>Eliminar</button>
@@ -5945,6 +5977,13 @@ async function cargarNotificadoresAdmin(){
       const btnValidar = tr.querySelector('.notif-validar');
       if(btnValidar) btnValidar.onclick = () => accionNotificador(
         () => db.update('notificadores', `id=eq.${id}`, { validado: true }));
+      const selV = tr.querySelector('.notif-vincular');
+      if(selV) selV.onchange = async () => {
+        if(!selV.value) return;
+        const nu = selV.selectedOptions[0].textContent;
+        if(!confirm(`¿Vincular "${nombreOriginal}" con el usuario "${nu}"?\n\nSus fallas quedarán a nombre de ese usuario y pasará a figurar como validado.`)){ selV.value = ''; return; }
+        await accionNotificador(() => db.rpc('vincular_notificador_usuario', { p_notif: id, p_usuario: selV.value }));
+      };
       tr.querySelector('.notif-activo').onclick = () => accionNotificador(
         () => db.update('notificadores', `id=eq.${id}`, { activo: !filas.find(f => f.id === id).activo }));
       const sel = tr.querySelector('.notif-fusionar');
