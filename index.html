@@ -5260,8 +5260,8 @@ async function generarPdfAnalisis(soloResumen){
     pdf.text(`Periodo: ${fmtLarga(ini)} al`, margen + 2, 29.5);
     pdf.text(fmtLarga(fin), margen + 2, 35);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(255, 255, 255);
-    pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 24, {align: 'right'});
-    pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 29.5, {align: 'right'});
+    pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 27, {align: 'right'});
+    pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 31, {align: 'right'});
     pdf.text(`extraído por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 35, {align: 'right'});
 
     // Panel de indicadores
