@@ -5338,7 +5338,7 @@ async function generarPdfAnalisis(soloResumen){
     tarjeta(margen, 97, wDia, 44, 'Fallas informadas por día');
     {
       const serie = diasP.map(x => (x.informadas !== undefined ? x.informadas : x.fallas) || 0), mx = Math.max(1, ...serie);
-      const x0 = margen + 6, wTot = wDia - 12, n = Math.max(1, serie.length), paso = wTot / n, bw = Math.min(6, paso * 0.78), base = 130, hMax = 22;
+      const x0 = margen + 6, wTot = wDia - 12, n = Math.max(1, serie.length), paso = wTot / n, bw = Math.min(6, paso * 0.78), base = 126.5, hMax = 19;
       serie.forEach((v, i) => {
         if(!v) return;
         const hb = Math.max(0.6, v / mx * hMax);
@@ -5353,6 +5353,8 @@ async function generarPdfAnalisis(soloResumen){
         const iMax = serie.indexOf(mx);
         pdf.text(`punta: ${mx} falla${mx === 1 ? '' : 's'} el ${f2(diasP[iMax].fecha)}`, x0 + wTot / 2, base + 5, {align: 'center'});
       }
+      pdf.setFontSize(5.5);
+      pdf.text(pdf.splitTextToSize('Nota: toda diferencia entre las fallas informadas por día y el estado de las fallas se debe a fallas ingresadas con anterioridad al período que aún no han sido reparadas, o que fueron reparadas dentro del período seleccionado.', wTot), x0, base + 9);
     }
 
     // Circuito vs. individuales (mismos colores que "Fallas más frecuentes")
