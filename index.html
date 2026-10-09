@@ -5215,8 +5215,10 @@ async function generarPdfAnalisis(soloResumen){
       pdf.setFont('helvetica', 'bold'); pdf.text(String(porEstado[k]), margen + mitad - 6, 63 + i * 6.5, {align: 'right'});
     });
     tarjeta(margen + mitad + 6, 45, mitad, 46, 'Tiempo de reparación');
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(28); pdf.setTextColor(...VERDE); pdf.text(fmtHoras(rr.mediana_dias_ing, '-'), margen + mitad + 11, 70);
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris); pdf.text('mediana desde el ingreso al sistema', margen + mitad + 11, 77);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(28); pdf.setTextColor(...VERDE); pdf.text(fmtHoras(rr.media_recortada_dias_ing, '-'), margen + mitad + 11, 70);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
+    pdf.text('promedio desde el ingreso al sistema', margen + mitad + 11, 77);
+    pdf.setFontSize(7); pdf.text('sin el 5% más rápido ni el 5% más lento', margen + mitad + 11, 82);
 
     // Fallas por día
     tarjeta(margen, 97, ancho - margen * 2, 44, 'Fallas informadas por día');
