@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.12.4';
+const VERSION_APP = '1.13.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -606,6 +606,25 @@ function filtroSinAsignar() {
   if (!puedeFiltrarSinAsignar()) return false;
   try { return localStorage.getItem('fa_sin_asignar') === '1'; } catch (e) { return false; }
 }
+/* Filtro "Masivo": casilla marcada = se muestran; desmarcada = se ocultan las fallas masivas (lista y mapa) */
+function ocultarMasivo() { try { return localStorage.getItem('fa_ocultar_masivo') === '1'; } catch (e) { return false; } }
+function actualizarMasivoUI() {
+  const caja = $('#listaMasivoBox'); if (!caja) return;
+  const n = S.activas.filter((f) => !f.properties.cascada && f.properties.masivo).length;
+  caja.hidden = !(n || ocultarMasivo());
+  $('#listaMasivo').checked = !ocultarMasivo();
+  $('#listaMasivoN').textContent = '(' + n + ')';
+}
+function fijarMasivo(mostrar) {
+  try { localStorage.setItem('fa_ocultar_masivo', mostrar ? '0' : '1'); } catch (e) { /* */ }
+  actualizarMasivoUI(); dibujarFallas(); if (S.vista === 'lista') renderLista();
+}
+const htmlBotonMasivo = () => '<button type="button" class="btn-masivo" id="fMasivo" aria-pressed="false">Masivo</button>';
+function activarBotonMasivo(h) {
+  const b = $('#fMasivo', h);
+  b.addEventListener('click', () => { b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on') ? 'true' : 'false'); });
+}
+const leerMasivo = (h) => !!$('#fMasivo.on', h);
 function actualizarSinAsignarUI() {
   const ok = puedeFiltrarSinAsignar(), on = filtroSinAsignar();
   const caja = $('#listaSinAsignarBox'); if (!caja) return;
@@ -613,6 +632,7 @@ function actualizarSinAsignarUI() {
   $('#listaSinAsignar').checked = on;
   $('#listaSinAsignarN').textContent = '(' + S.activas.filter((f) => !f.properties.cascada && !f.properties.asignado_camion_id).length + ')';
   $('#badgeSinAsignar').hidden = !on;
+  actualizarMasivoUI();
 }
 function fijarSinAsignar(v) {
   try { localStorage.setItem('fa_sin_asignar', v ? '1' : '0'); } catch (e) { /* */ }
@@ -627,6 +647,7 @@ function dibujarFallas() {
   S.features.forEach((f) => {
     const p = f.properties;
     if (soloSin && (p.estado === 'reparada' || p.cascada || p.asignado_camion_id)) return;
+    if (ocultarMasivo() && p.masivo) return;
     const reparada = p.estado === 'reparada';
     if (p.cascada && z < ZOOM_DATOS) return;
     const color = COLOR_ESTADO[p.estado] || '#d33a2c';
@@ -820,6 +841,7 @@ function formReportePunto(p) {
   const cat = mono ? CAT_MONOPOSTE : CAT_PUNTO;
   let codigo = null, card = null;
   const h = abrirHoja(`
+    ${htmlBotonMasivo()}
     <h2>Reportar falla</h2>
     <div class="hint">Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}${mono ? ' · monoposte' : ''}</div>
     <h3>Código de falla</h3>${htmlCodigos(cat)}
@@ -841,6 +863,7 @@ function formReportePunto(p) {
     $$('#fCard button', h).forEach((x) => x.classList.remove('sel'));
     if (!ya) { b.classList.add('sel'); card = b.dataset.r; } else card = null;
   }));
+  activarBotonMasivo(h);
   const env = $('#fEnviar', h);
   env.addEventListener('click', ocupar(env, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -850,6 +873,7 @@ function formReportePunto(p) {
     if (oe.error) { toast(oe.error, 'error'); return; }
     env.textContent = 'Enviando…';
     const ctx = await contextoReporte();
+    if (leerMasivo(h)) ctx.p_masivo = true;
     const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot}${r.estado === 'reiterada' ? ' (reiterada)' : ''}`, 'ok');
@@ -860,6 +884,7 @@ function formReportePunto(p) {
 function formReporteCircuito(p) {
   let codigo = null;
   const h = abrirHoja(`
+    ${htmlBotonMasivo()}
     <h2>Reportar falla de circuito</h2>
     <div class="hint">Circuito ${esc(p.id ?? '')} · ${esc(p.cantidad_luminarias_cliente ?? '—')} luminarias</div>
     <div class="aviso">Se crea una falla por cada punto del circuito. Al reparar el circuito se cierran todas juntas.</div>
@@ -872,6 +897,7 @@ function formReporteCircuito(p) {
   $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
   }));
+  activarBotonMasivo(h);
   const env = $('#fEnviar', h);
   env.addEventListener('click', ocupar(env, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -881,6 +907,7 @@ function formReporteCircuito(p) {
     if (oe.error) { toast(oe.error, 'error'); return; }
     env.textContent = 'Enviando…';
     const ctx = await contextoReporte();
+    if (leerMasivo(h)) ctx.p_masivo = true;
     const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot} · ${r.puntos_afectados} puntos afectados`, 'ok');
@@ -1130,6 +1157,7 @@ function renderLista() {
   actualizarSinAsignarUI();
   let items = S.activas.filter((f) => !f.properties.cascada);
   if (filtroSinAsignar()) items = items.filter((f) => !f.properties.asignado_camion_id);
+  if (ocultarMasivo()) items = items.filter((f) => !f.properties.masivo);
   const total = items.length;
   if (S.filtro !== 'todas') items = items.filter((f) => f.properties.estado === S.filtro || (S.filtro === 'reportada' && f.properties.estado === 'reiterada'));
   if (q) {
@@ -1158,6 +1186,7 @@ function renderLista() {
   }));
 }
 $('#listaSinAsignar').addEventListener('change', (e) => fijarSinAsignar(e.target.checked));
+$('#listaMasivo').addEventListener('change', (e) => fijarMasivo(e.target.checked));
 $('#badgeSinAsignar').addEventListener('click', () => fijarSinAsignar(false));
 $('#listaBuscar').addEventListener('input', (e) => { S.busqueda = e.target.value; renderLista(); });
 $$('#listaChips .chip').forEach((b) => b.addEventListener('click', () => {

@@ -51,6 +51,15 @@
     color:var(--ink-soft); background:none; border:none; font-size:16px; line-height:1;
   }
   .report-panel .close-x:hover{color:var(--ink);}
+  .btn-masivo{
+    position:absolute; top:6px; right:34px; cursor:pointer; font-weight:700; font-size:11.5px; line-height:1.3;
+    color:#7c3aed; background:#fff; border:2px solid #7c3aed; border-radius:8px; padding:1px 10px;
+  }
+  .btn-masivo.on{background:#7c3aed; color:#fff; box-shadow:0 0 0 3px rgba(124,58,237,.25);}
+  .report-panel:has(.btn-masivo) > b:first-of-type{display:block; padding-right:105px;}
+  .tag-masivo{display:inline-block; background:#7c3aed; color:#fff; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:middle;}
+  .chip-estado.morado:hover{border-color:#7c3aed;}
+  .chip-estado.morado.activo{border-color:#7c3aed; background:#f3edff; color:#7c3aed;}
 
   #controlesMapaSuperiores{
     position:absolute; top:16px; right:16px; z-index:800;
@@ -452,6 +461,12 @@
           <button type="button" class="chip-estado" data-estado="reparada" onclick="filtrarTodasFallasPorEstado('reparada')"><span class="dot" style="background:#3a8a5c"></span>Reparada <span class="n" id="cntEstadoReparada"></span></button>
           <button type="button" class="chip-estado" data-estado="reiterada" onclick="filtrarTodasFallasPorEstado('reiterada')"><span class="dot" style="background:#8e44ad"></span>Reiterada <span class="n" id="cntEstadoReiterada"></span></button>
         </div>
+        <div id="todasFiltroMasivo" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
+          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Masivo:</span>
+          <button type="button" class="chip-estado morado activo" data-masivo="todas" onclick="filtrarTodasFallasPorMasivo('todas')">Todas</button>
+          <button type="button" class="chip-estado morado" data-masivo="si" onclick="filtrarTodasFallasPorMasivo('si')">Sí</button>
+          <button type="button" class="chip-estado morado" data-masivo="no" onclick="filtrarTodasFallasPorMasivo('no')">No</button>
+        </div>
 
         <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:220px;">
           <input type="search" id="buscadorTodasFallas" name="buscar-fallas-tabla" autocomplete="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" placeholder="🔍 Buscar por OS, orden externa, código, cliente, llave, nombre, estado, fecha..." style="flex:1; min-width:0; box-sizing:border-box; padding:4px 9px; font-size:12px; border:1.5px solid var(--line); border-radius:8px; background:#fff; color:var(--ink);">
@@ -556,10 +571,16 @@
           </form>
         </div>
       </div>
+      <div style="display:flex; flex-wrap:wrap; align-items:center; column-gap:14px; flex-shrink:0;">
       <label id="filtroSinAsignarBox" style="display:none; align-items:center; gap:7px; padding:2px 12px 5px; font-size:12px; font-weight:600; cursor:pointer; flex-shrink:0;">
         <input type="checkbox" id="filtroSinAsignar" style="margin:0; width:15px; height:15px; accent-color:var(--primary);">
         <span>Sin asignar <span id="sinAsignarN" style="color:var(--ink-soft); font-weight:700;"></span></span>
       </label>
+      <label id="filtroMasivoBox" style="display:flex; align-items:center; gap:7px; padding:2px 12px 5px; font-size:12px; font-weight:600; cursor:pointer; flex-shrink:0;" title="Mostrar u ocultar las fallas marcadas como masivas">
+        <input type="checkbox" id="filtroMasivo" checked style="margin:0; width:15px; height:15px; accent-color:#7c3aed;">
+        <span class="tag-masivo" style="margin:0;">Masivo</span><span id="masivoN" style="color:var(--ink-soft); font-weight:700;"></span>
+      </label>
+      </div>
       <div id="fallasListaEstado" class="hint" style="display:none; margin:0; padding:0 12px 4px; flex-shrink:0;"></div>
       <div id="fallasList" style="flex:1; overflow-y:auto; min-height:80px;"><div class="empty-state">Navega el mapa para ver fallas del sector.</div></div>
 
@@ -2030,6 +2051,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     </div>
   `).join('');
   const panel = mostrarPanel(`
+    ${htmlBotonMasivo(false)}
     <b>Falla individual - Pto. Lumínico Llave N.° ${llave}</b>
     <div class="hint" style="margin-top:2px;">N.° Municipal: <b>${nroMun ?? '—'}</b></div>
     ${htmlNotificador()}
@@ -2072,7 +2094,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     const ordenExterna = oe.valor;
     const notif = puedeNotificadorExterno() ? await leerNotificador(panel) : null;
     if(notif && notif.error){ alert(notif.error); return; }
-    const ok = await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna, notif && notif.extra);
+    const ok = await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna, notif && notif.extra, leerMasivo(panel));
     if(ok) recordarNotificador(notif);
     cerrarPanel();
   };
@@ -2100,6 +2122,7 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
     </div>
   `).join('');
   const panel = mostrarPanel(`
+    ${htmlBotonMasivo(false)}
     <b>Falla de circuito ${idOriginal||''}</b>
     ${htmlNotificador()}
     <div style="margin-top:10px;">
@@ -2123,7 +2146,7 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
     const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
     const notif = puedeNotificadorExterno() ? await leerNotificador(panel) : null;
     if(notif && notif.error){ alert(notif.error); return; }
-    const ok = await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna, notif && notif.extra);
+    const ok = await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna, notif && notif.extra, leerMasivo(panel));
     if(ok) recordarNotificador(notif);
     cerrarPanel();
   };
@@ -2234,6 +2257,7 @@ function renderFallasDesdeCache(){
     geojson.features.forEach(feat => {
       const estado = feat.properties.estado;
       if(filtrosEstadoVisible[estado] === false) return;
+      if(ocultarMasivoActivo() && feat.properties.masivo) return;
       // Filtro "Sin asignar": solo fallas activas sin camión (los puntos de cascada se ocultan; manda el circuito)
       if(sinAsignar && (estado === 'reparada' || feat.properties.cascada || feat.properties.asignado_camion_id)) return;
       const color = colorEstado[estado] || '#999';
@@ -2302,7 +2326,7 @@ function partesChile(iso){
 async function abrirEditorFalla(p){
   let fila;
   try{
-    const filas = await db.select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,fecha_falla,notificador_id,inspeccion_id`);
+    const filas = await db.select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,fecha_falla,notificador_id,inspeccion_id,masivo`);
     fila = filas && filas[0];
   }catch(e){ alert('No se pudo cargar la falla: ' + e.message); return; }
   if(!fila){ alert('No se encontró la falla.'); return; }
@@ -2334,6 +2358,7 @@ async function abrirEditorFalla(p){
 
   let codigoSel = fila.tipo_falla;
   const panel = mostrarPanel(`
+    ${htmlBotonMasivo(!!fila.masivo)}
     <b>✏️ Editar falla · OS ${escHtml(p.ot || '—')}</b>
     <div class="hint" style="margin-top:2px;">${esCircuito ? 'Circuito' : 'Punto lumínico'} · la ubicación no se puede cambiar (si está mal, elimina la falla y créala de nuevo).${esCircuito ? ' Los cambios también se aplican a sus puntos afectados.' : ''}</div>
     ${bloqueNotif}
@@ -2381,6 +2406,7 @@ async function abrirEditorFalla(p){
     if(codigoSel !== fila.tipo_falla) cambios.tipo_falla = codigoSel;
     if(desc !== (fila.descripcion_otro || '')) cambios.descripcion_otro = desc;
     if((oe.valor || null) !== (fila.orden_externa || null)) cambios.orden_externa = oe.valor;
+    if(leerMasivo(panel) !== !!fila.masivo) cambios.masivo = leerMasivo(panel);
 
     if(permisoNotif){
       const sel = panel.querySelector('#edNotifSelect');
@@ -2799,8 +2825,13 @@ async function enfocarFalla(fallaId, abrirPopup){
   if(feat.properties._vistaHistorica || abrirPopup) abrirPopupFalla(feat);
 }
 window.enfocarFalla = enfocarFalla;
+function htmlBotonMasivo(on){
+  return `<button type="button" class="btn-masivo${on ? ' on' : ''}" title="Marcar como falla masiva" aria-pressed="${on ? 'true' : 'false'}" onclick="this.classList.toggle('on'); this.setAttribute('aria-pressed', this.classList.contains('on'))">Masivo</button>`;
+}
+function leerMasivo(panel){ return !!panel.querySelector('.btn-masivo.on'); }
+
 // extra (opcional): {fechaISO, notificadorId} elegidos en la ventana de "Agregar falla" (usuarios con el permiso)
-async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna, extra){
+async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna, extra, masivo){
   try{
     const fila = {
       tipo:'punto', ref_punto_gid:puntoGid, tipo_falla:tipoFalla,
@@ -2808,6 +2839,7 @@ async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtr
       cascada:false, creado_por: currentUser.id
     };
     if(ordenExterna) fila.orden_externa = ordenExterna;
+    if(masivo) fila.masivo = true;
     if(fechaCustom) fila.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
     if(extra && extra.fechaISO) fila.fecha_falla = extra.fechaISO;
     if(extra && extra.notificadorId) fila.notificador_id = extra.notificadorId;
@@ -2815,13 +2847,14 @@ async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtr
     const inspeccionId = await obtenerInspeccionIdSesion();
     if(inspeccionId) fila.inspeccion_id = inspeccionId;
     const filaCreada = await db.insert('fallas', fila);
+    if(filaCreada && filaCreada[0] && masivo) await guardarComentarioFalla(filaCreada[0].id, 'masivo', 'Masivo');
     if(filaCreada && filaCreada[0]) await guardarComentarioFalla(filaCreada[0].id, 'reporte', descripcionOtro);
     cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
     return true;
   }catch(e){ alert('Error al crear la falla: ' + e.message); return false; }
 }
 
-async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripcionOtro, ordenExterna, extra){
+async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripcionOtro, ordenExterna, extra, masivo){
   try{
     const filaLineaObj = {
       tipo:'linea', ref_circuito_gid:circuitoGid, tipo_falla:tipoFalla,
@@ -2829,6 +2862,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
       cascada:false, creado_por: currentUser.id
     };
     if(ordenExterna) filaLineaObj.orden_externa = ordenExterna;
+    if(masivo) filaLineaObj.masivo = true;
     if(fechaCustom) filaLineaObj.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
     if(extra && extra.fechaISO) filaLineaObj.fecha_falla = extra.fechaISO;
     if(extra && extra.notificadorId) filaLineaObj.notificador_id = extra.notificadorId;
@@ -2837,6 +2871,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
     if(inspeccionId) filaLineaObj.inspeccion_id = inspeccionId;
     const filaLinea = await db.insert('fallas', filaLineaObj);
     const fallaLinea = filaLinea[0];
+    if(fallaLinea && masivo) await guardarComentarioFalla(fallaLinea.id, 'masivo', 'Masivo');
     if(fallaLinea) await guardarComentarioFalla(fallaLinea.id, 'reporte', descripcionOtro);
 
     const puntos = await db.rpc('puntos_de_circuito', {circuito_gid: circuitoGid});
@@ -2848,6 +2883,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
           cascada:true, circuito_origen_id: fallaLinea.id, creado_por: currentUser.id
         };
         if(ordenExterna) f.orden_externa = ordenExterna;
+        if(masivo) f.masivo = true;
         if(fechaCustom) f.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
         if(extra && extra.fechaISO) f.fecha_falla = extra.fechaISO;
         if(extra && extra.notificadorId) f.notificador_id = extra.notificadorId;
@@ -2866,6 +2902,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
 async function cargarFallasDelArea(){
   try{
     const query = 'select=id,ot,orden_externa,tipo,tipo_falla,estado,cascada,asignado_camion_id,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
+      + ',masivo'
       + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=1000';
     fallasEnArea = await db.select('fallas', query);
     renderFallasList();
@@ -2889,7 +2926,7 @@ function resaltarTexto(texto, terminos){
 function normalizarFilaLateral(f){
   const esBusqueda = 'nombre_creador' in f;
   return {
-    id: f.id, ot: f.ot, asignado: f.asignado_camion_id || null, orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
+    id: f.id, ot: f.ot, masivo: !!f.masivo, asignado: f.asignado_camion_id || null, orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
     fecha: f.fecha_creacion, creado_en: f.creado_en, creado_por: f.creado_por,
     quien: esBusqueda ? (f.nombre_creador || '—') : (f.notificadores ? f.notificadores.nombre : (f.usuarios ? f.usuarios.nombre : '—')),
     llave: esBusqueda ? f.llave : (f.puntos_luminarios ? f.puntos_luminarios.llave : null)
@@ -2917,6 +2954,22 @@ function filtroSinAsignarActivo(){
   if(!puedeFiltrarSinAsignar()) return false;
   try{ return localStorage.getItem('fa_sin_asignar') === '1'; }catch(e){ return false; }
 }
+function ocultarMasivoActivo(){
+  try{ return localStorage.getItem('fa_ocultar_masivo') === '1'; }catch(e){ return false; }
+}
+function actualizarCasillaMasivo(){
+  const cb = document.getElementById('filtroMasivo');
+  if(!cb) return;
+  cb.checked = !ocultarMasivoActivo();
+  const n = (fallasEnArea || []).filter(f => f.masivo).length;
+  document.getElementById('masivoN').textContent = '(' + n + ')';
+  document.getElementById('filtroMasivoBox').style.display = (n || ocultarMasivoActivo()) ? 'flex' : 'none';
+}
+document.getElementById('filtroMasivo').addEventListener('change', (e) => {
+  try{ localStorage.setItem('fa_ocultar_masivo', e.target.checked ? '0' : '1'); }catch(_){}
+  renderFallasList();
+  renderFallasDesdeCache();
+});
 function actualizarCasillaSinAsignar(){
   const box = document.getElementById('filtroSinAsignarBox');
   if(!box) return;
@@ -2945,8 +2998,10 @@ function renderFallasList(){
   } else {
     filas = fallasEnArea.map(normalizarFilaLateral);
     if(filtroSinAsignarActivo()) filas = filas.filter(f => !f.asignado);
+    if(ocultarMasivoActivo()) filas = filas.filter(f => !f.masivo);
   }
   actualizarCasillaSinAsignar();
+  actualizarCasillaMasivo();
   estado.style.display = filas.length ? 'block' : 'none';
   estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${filtroSinAsignarActivo() ? ' sin asignar' : ''}`;
   if(!filas.length){
@@ -2969,7 +3024,7 @@ function renderFallasList(){
     const lineaLlave = (buscando && f.llave != null && terminos.some(t => String(f.llave).toLowerCase().includes(t.toLowerCase())))
       ? `<div class="fi-nom" style="margin-top:1px;">Llave ${resaltarTexto(f.llave, terminos)}</div>` : '';
     return `<div class="fi" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
-      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
+      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
       <div class="fi-nom">${escHtml(nombreFalla)}</div>
       <div class="fi-2"><span class="fi-q">${resaltarTexto(f.quien, terminos)}</span><span class="fi-oe${f.orden_externa ? '' : ' vacio'}">OE: ${f.orden_externa ? resaltarTexto(f.orden_externa, terminos) : '—'}</span><span class="fi-fh">${fechaTxt}</span></div>
       ${lineaLlave}
@@ -3379,6 +3434,14 @@ function filtrarTodasFallasPorEstado(estado){
 }
 window.filtrarTodasFallasPorEstado = filtrarTodasFallasPorEstado;
 
+let filtroMasivoTodasFallas = 'todas';
+function filtrarTodasFallasPorMasivo(v){
+  filtroMasivoTodasFallas = v;
+  document.querySelectorAll('#todasFiltroMasivo .chip-estado').forEach(c => c.classList.toggle('activo', c.dataset.masivo === v));
+  renderTodasFallasTabla();
+}
+window.filtrarTodasFallasPorMasivo = filtrarTodasFallasPorMasivo;
+
 function actualizarChipsEstadoTodas(){
   const cont = document.getElementById('todasFiltroEstado');
   if(!cont) return;
@@ -3586,9 +3649,11 @@ function renderTodasFallasTabla(){
     return ordenTodasFallas.asc ? fa - fb : fb - fa;
   });
 
-  const porEstado = filtroEstadoTodasFallas.size
+  let porEstado = filtroEstadoTodasFallas.size
     ? datosOrdenados.filter(f => filtroEstadoTodasFallas.has(f.estado))
     : datosOrdenados;
+  if(filtroMasivoTodasFallas === 'si') porEstado = porEstado.filter(f => f.masivo);
+  else if(filtroMasivoTodasFallas === 'no') porEstado = porEstado.filter(f => !f.masivo);
 
   // Buscador: todas las palabras escritas deben aparecer en alguna columna de la fila.
   // Si ya se buscó en toda la base (enServidor), esas filas ya vienen filtradas.
@@ -3600,7 +3665,7 @@ function renderTodasFallasTabla(){
   if(contador){
     if(enServidor) contador.textContent = `${datosFiltrados.length}${busquedaServidor.hayMas ? '+' : ''} en toda la base`;
     else if(busquedaServidor.pendiente && terminos.length) contador.textContent = 'Buscando en toda la base…';
-    else contador.textContent = (terminos.length || filtroEstadoTodasFallas.size) ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
+    else contador.textContent = (terminos.length || filtroEstadoTodasFallas.size || filtroMasivoTodasFallas !== 'todas') ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
   }
   const pista = document.getElementById('panelInferiorPista');
   if(pista) pista.textContent = `${enServidor ? 'Resultados de la búsqueda' : 'Mostrando ' + ultimosTodasFallas.length + (hayMasTodasFallas ? ' (las más recientes)' : '')} · clic en una fila para ubicarla en el mapa`;
@@ -3658,7 +3723,7 @@ function renderTodasFallasTabla(){
     }
 
     return `<tr onclick="enfocarFalla('${f.id}')">
-      <td class="mono">${f.ot || '—'}</td>
+      <td class="mono">${f.ot || '—'}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}</td>
       <td class="mono">${f.orden_externa ? escHtml(f.orden_externa) : '—'}</td>
       <td>${fechaCelda}</td>
       ${fechaReal}
