@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.12.2';
+const VERSION_APP = '1.12.3';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1239,7 +1239,7 @@ async function formUsuarios() {
   const estado = (d) => ({
     nombre: $('.u-nom', d).value.trim(), rol: $('.u-rol', d).value,
     notif: ROLES_CON_NOTIF.includes($('.u-rol', d).value) && $('.u-notif', d).checked,
-    foto: ['contratista', 'contratista2'].includes($('.u-rol', d).value) && $('.u-foto', d).checked,
+    foto: ['contratista', 'contratista2', 'camion'].includes($('.u-rol', d).value) && $('.u-foto', d).checked,
   });
   $('#uLista', h).innerHTML = us.map((u) => `<div class="tarjeta-u" data-id="${esc(u.id)}" style="border:1px solid #d6ddd9;border-radius:12px;padding:10px;margin:10px 0">
       <input class="campo u-nom" value="${esc(u.nombre || '')}" aria-label="Nombre">
@@ -1256,7 +1256,7 @@ async function formUsuarios() {
     const refrescar = () => {
       const habil = ROLES_CON_NOTIF.includes($('.u-rol', d).value);
       $('.u-notifl', d).style.display = habil ? 'flex' : 'none';
-      $('.u-fotol', d).style.display = ['contratista', 'contratista2'].includes($('.u-rol', d).value) ? 'flex' : 'none';
+      $('.u-fotol', d).style.display = ['contratista', 'contratista2', 'camion'].includes($('.u-rol', d).value) ? 'flex' : 'none';
       const n = filas.filter((x) => JSON.stringify(estado(x)) !== x._orig).length;
       filas.forEach((x) => { x.style.background = JSON.stringify(estado(x)) !== x._orig ? '#fff8e1' : ''; });
       ok.disabled = n === 0;

@@ -5557,7 +5557,7 @@ const ROLES_DISPONIBLES = ['admin','ito','ito2','contratista','contratista2','ca
 // Roles que pueden ingresar fallas: solo ellos pueden tener habilitado el notificador externo
 // (la base de datos también lo exige y lo apaga si el rol cambia a otro).
 const ROLES_CON_NOTIFICADOR = ['admin','ito','ito2','contratista2'];
-const ROLES_CON_FOTO = ['contratista','contratista2'];
+const ROLES_CON_FOTO = ['contratista','contratista2','camion'];
 function htmlCeldaFoto(rol, marcado){
   return ROLES_CON_FOTO.includes(rol)
     ? `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" class="foto-obligatoria" ${marcado ? 'checked' : ''}> Exigir foto</label>`
