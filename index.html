@@ -5513,7 +5513,27 @@ async function cargarEstadisticas(fechaInicio, fechaFin){
 const TOTAL_PUNTOS_COMUNA = 36090; // total real de puntos lumínicos de La Florida (Fase 1)
 const COLORES_GRAFICO = ['#1f4d3d','#2563a8','#d98e2f','#c1443c','#7a5ca8','#3a8a5c','#e0b400'];
 
-document.getElementById('descargarPdfBtn').onclick = () => generarPdfEstadisticas();
+document.getElementById('descargarPdfBtn').onclick = () => generarPdfPeriodo();
+
+// El botón azul del panel "Período" genera el mismo informe nuevo de la pestaña "Análisis"
+// (mapa en la hoja 1, estadísticas en la hoja 2) para el período elegido arriba.
+// Si el usuario no tiene permiso para el análisis, se usa el resumen antiguo.
+async function generarPdfPeriodo(){
+  const btn = document.getElementById('descargarPdfBtn');
+  const esDia = document.getElementById('tabDia').classList.contains('active');
+  const ini = esDia ? document.getElementById('fechaDiaEspecifico').value : document.getElementById('fechaInicioRango').value;
+  const fin = esDia ? ini : document.getElementById('fechaFinRango').value;
+  if(!ini || !fin){ alert('Elige primero el período.'); return; }
+  const textoOriginal = btn.textContent;
+  btn.textContent = '…'; btn.disabled = true;
+  let d = null;
+  try{ d = await rpcAnalisisFallas(ini, fin); }
+  catch(e){ console.warn('No se pudo obtener el análisis del período:', e); }
+  btn.textContent = textoOriginal; btn.disabled = false;
+  if(!d){ return generarPdfEstadisticas(); }
+  ultimoAnalisis = d;
+  await generarPdfAnalisis();
+}
 
 async function generarPdfEstadisticas(){
   const btn = document.getElementById('descargarPdfBtn');
