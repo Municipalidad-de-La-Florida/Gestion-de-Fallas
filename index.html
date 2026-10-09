@@ -5334,10 +5334,11 @@ async function generarPdfAnalisis(soloResumen){
     pdf.text('promedio desde el ingreso al sistema', margen + mitad + 11, 77);
 
     // Fallas por día
-    tarjeta(margen, 97, ancho - margen * 2, 44, 'Fallas informadas por día');
+    const wPie = 62, wDia = ancho - margen * 2 - wPie - 6;
+    tarjeta(margen, 97, wDia, 44, 'Fallas informadas por día');
     {
       const serie = diasP.map(x => x.fallas || 0), mx = Math.max(1, ...serie);
-      const x0 = margen + 6, wTot = ancho - margen * 2 - 12, n = Math.max(1, serie.length), paso = wTot / n, bw = Math.min(6, paso * 0.78), base = 130, hMax = 22;
+      const x0 = margen + 6, wTot = wDia - 12, n = Math.max(1, serie.length), paso = wTot / n, bw = Math.min(6, paso * 0.78), base = 130, hMax = 22;
       serie.forEach((v, i) => {
         if(!v) return;
         const hb = Math.max(0.6, v / mx * hMax);
@@ -5352,6 +5353,32 @@ async function generarPdfAnalisis(soloResumen){
         const iMax = serie.indexOf(mx);
         pdf.text(`punta: ${mx} falla${mx === 1 ? '' : 's'} el ${f2(diasP[iMax].fecha)}`, x0 + wTot / 2, base + 5, {align: 'center'});
       }
+    }
+
+    // Circuito vs. individuales (mismos colores que "Fallas más frecuentes")
+    {
+      const nCir = codigos.filter(c => c.tipo === 'linea').reduce((a, c) => a + (c.fallas || 0), 0);
+      const nPun = codigos.filter(c => c.tipo !== 'linea').reduce((a, c) => a + (c.fallas || 0), 0);
+      const tot = nCir + nPun, xp = margen + wDia + 6;
+      tarjeta(xp, 97, wPie, 44, 'Circuito / individuales');
+      const px = 300, c = document.createElement('canvas'); c.width = c.height = px;
+      const g = c.getContext('2d');
+      if(tot){
+        let ang = -Math.PI / 2;
+        [[nPun, LIMA], [nCir, VERDE]].forEach(([v, col]) => {
+          if(!v) return;
+          const a2 = ang + Math.PI * 2 * v / tot;
+          g.strokeStyle = `rgb(${col.join(',')})`; g.lineWidth = px * 0.2; g.beginPath(); g.arc(px / 2, px / 2, px * 0.37, ang, a2); g.stroke(); ang = a2;
+        });
+      } else { g.strokeStyle = '#dfe7e1'; g.lineWidth = px * 0.2; g.beginPath(); g.arc(px / 2, px / 2, px * 0.37, 0, Math.PI * 2); g.stroke(); }
+      g.fillStyle = '#003100'; g.font = `800 ${Math.round(px * 0.22)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(tot), px / 2, px / 2 + 3);
+      pdf.addImage(c.toDataURL('image/png'), 'PNG', xp + 4, 108, 30, 30);
+      [['Individuales', nPun, LIMA], ['Circuitos', nCir, VERDE]].forEach(([t, v, col], i) => {
+        const yy = 118 + i * 10;
+        pdf.setFillColor(...col); pdf.circle(xp + 38, yy - 1, 1.5, 'F');
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(t, xp + 41, yy);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.text(`${v}${tot ? ' (' + Math.round(v / tot * 100) + '%)' : ''}`, xp + 41, yy + 4);
+      });
     }
 
     // Fallas más frecuentes (definición completa) y por ITO
