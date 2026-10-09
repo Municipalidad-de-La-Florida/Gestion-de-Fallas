@@ -2,7 +2,7 @@
 // - Archivos propios de la app: red primero (así las actualizaciones llegan de inmediato) y copia guardada de respaldo.
 // - Leaflet (CDN): copia guardada tras la primera carga.
 // - Supabase y mapas: siempre por red, nunca se guardan (datos siempre al día).
-const VERSION = 'fm-v12';
+const VERSION = 'fm-v13';
 const APP = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
