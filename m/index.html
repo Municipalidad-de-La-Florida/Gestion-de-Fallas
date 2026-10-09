@@ -62,7 +62,10 @@
         <button class="chip" data-f="reportada">Reportadas</button>
         <button class="chip" data-f="pendiente">Pendientes</button>
       </div>
-      <label id="listaSinAsignarBox" class="chk-sin-asignar" hidden><input type="checkbox" id="listaSinAsignar"> <span>Sin asignar <b id="listaSinAsignarN"></b></span></label>
+      <div class="fila-chk">
+        <label id="listaSinAsignarBox" class="chk-sin-asignar" hidden><input type="checkbox" id="listaSinAsignar"> <span>Sin asignar <b id="listaSinAsignarN"></b></span></label>
+        <label id="listaMasivoBox" class="chk-sin-asignar" hidden><input type="checkbox" id="listaMasivo" checked style="accent-color:#7c3aed"> <span class="tag-masivo">Masivo</span> <b id="listaMasivoN"></b></label>
+      </div>
       <div id="listaResumen" class="hint"></div>
     </div>
     <div id="listaItems"></div>
