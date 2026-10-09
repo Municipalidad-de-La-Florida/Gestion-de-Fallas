@@ -5249,7 +5249,7 @@ async function generarPdfAnalisis(soloResumen){
     pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
     pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
     pdf.setFont('helvetica', 'bold'); {
-      pdf.setFontSize(9);
+      pdf.setFontSize(8);
       const anchoGen = pdf.getTextWidth('Generado por el Sistema de Gestión de Fallas');
       const maxT = ancho - margen - 2 - anchoGen - 6 - (margen + 2);
       let fs = 24; pdf.setFontSize(fs);
@@ -5259,10 +5259,10 @@ async function generarPdfAnalisis(soloResumen){
     pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
     pdf.text(`Periodo: ${fmtLarga(ini)} al`, margen + 2, 29.5);
     pdf.text(fmtLarga(fin), margen + 2, 35);
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
-    pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
-    pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 20, {align: 'right'});
-    pdf.text(`extraído por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 25, {align: 'right'});
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(255, 255, 255);
+    pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 24, {align: 'right'});
+    pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 29.5, {align: 'right'});
+    pdf.text(`extraído por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 35, {align: 'right'});
 
     // Panel de indicadores
     const py = alto - 56, ph = 44;
