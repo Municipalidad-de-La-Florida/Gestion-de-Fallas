@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.13.2';
+const VERSION_APP = '1.15.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -116,6 +116,27 @@ function sumarDiasStr(fechaStr, dias) {
   return new Date(Date.UTC(y, m - 1, d + dias)).toISOString().slice(0, 10);
 }
 function fmtFecha(iso) { return iso ? FMT_VISTA.format(new Date(iso)) : '—'; }
+// Fecha corta y hora en horario de Chile (dd/mm, hh:mm). Vacía si no hay fecha.
+function fmtFechaHoraCorta(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).map((x) => [x.type, x.value]));
+  return `${p.day}/${p.month}, ${p.hour}:${p.minute}`;
+}
+// Duración desde que se informó la falla (mismo criterio que la web de escritorio).
+function fmtDuracion(iso) {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (isNaN(ms) || ms < 0) return '0 min';
+  const total = Math.floor(ms / 60000);
+  const dias = Math.floor(total / 1440), horas = Math.floor((total % 1440) / 60), min = total % 60;
+  const partes = [];
+  if (dias > 0) partes.push(`${dias} día${dias !== 1 ? 's' : ''}`);
+  if (horas > 0) partes.push(`${horas} h`);
+  if (dias === 0 && min > 0) partes.push(`${min} min`);
+  return partes.length ? partes.join(' ') : '0 min';
+}
 function fmtFechaCorta(fechaStr) { const [y, m, d] = fechaStr.split('-'); return `${d}-${m}-${y}`; }
 function hace(iso) {
   if (!iso) return '';
@@ -392,6 +413,7 @@ function ocupar(btn, fn) {
 let hojaAbierta = false;
 function abrirHoja(html) {
   $('#hojaContenido').innerHTML = html;
+  $('#hoja').classList.remove('hoja-menu');
   $('#hoja').hidden = false;
   $('#velo').hidden = false;
   $('#hoja').scrollTop = 0;
@@ -941,14 +963,21 @@ async function abrirFalla(p, geom) {
     ['OS', p.ot || '—'],
     p.orden_externa ? ['Orden externa', p.orden_externa] : null,
     ['Tipo', tipoLabel(p)],
-    p.tipo === 'punto' ? ['Llave / N.° mun.', `${p.llave ?? '—'} / ${p.nro_mun ?? '—'}`] : ['Puntos afectados', p.puntos_afectados ?? '—'],
+    p.tipo === 'punto' ? ['Llave / N.° mun.', `${p.llave ?? '—'} / ${p.nro_mun ?? '—'}`] : null,
     p.cardinalidad ? ['Cardinalidad', p.cardinalidad] : null,
-    ['Informó', p.nombre_creador || p.nombre_real_creador || '—'],
-    ['Fecha de la falla', fmtFecha(p.fecha_falla)],
-    p.asignado_camion_nombre ? ['Camión asignado', p.asignado_camion_nombre] : null,
-    p.estado === 'reparada' ? ['Reparada por', p.reparado_por_nombre || '—'] : null,
-    p.estado === 'reparada' ? ['Fecha de reparación', fmtFecha(p.fecha_reparacion)] : null,
+    ['Informada', fmtFecha(p.fecha_falla)],
+    ['Inspector', p.nombre_creador || p.nombre_real_creador || '—'],
+    ['Duración de la falla', fmtDuracion(p.fecha_falla)],
+    p.tipo !== 'punto' ? ['Puntos afectados', p.puntos_afectados ?? '—'] : null,
+    p.asignado_camion_nombre ? ['Asignado por', `${p.asignado_por_nombre || '—'}${p.fecha_asignacion ? ' · ' + fmtFechaHoraCorta(p.fecha_asignacion) : ''}`] : null,
+    // "Asignado a" solo en fallas activas; en reparadas/pendientes la zona de respuesta lleva "Responde"
+    p.asignado_camion_nombre && p.estado !== 'reparada' && p.estado !== 'pendiente' ? ['Asignado a', p.asignado_camion_nombre] : null,
   ].filter(Boolean);
+  const kvRespuesta = p.estado === 'reparada'
+    ? [['Responde', p.reparado_por_nombre || '—'], ['Fecha respuesta', fmtFecha(p.fecha_reparacion)]]
+    : p.estado === 'pendiente'
+      ? [['Responde', p.pendiente_por_nombre || '—'], ['Fecha respuesta', fmtFecha(p.fecha_pendiente)]]
+      : [];
   const puedeCerrarEsta = puedeCerrar() && !p.cascada && p.estado !== 'reparada';
   const puedeNuevaAqui = puedeReportar() && p.estado === 'reparada';
   const puedeAsignarEsta = puedeAsignar() && !p.cascada && p.estado !== 'reparada';
@@ -956,9 +985,15 @@ async function abrirFalla(p, geom) {
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
     <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-    ${p.estado === 'reparada' && p.descripcion_reparacion ? `<h3>Trabajo realizado</h3><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
-    ${p.estado === 'reparada' ? '<div id="fotosFalla"></div>' : ''}
-    ${p.estado === 'pendiente' ? `<div class="aviso"><b>Pendiente</b> por ${esc(p.pendiente_por_nombre || '—')} · ${esc(fmtFecha(p.fecha_pendiente))}<br><pre class="texto">${esc(p.motivo_pendiente || '')}</pre></div>` : ''}
+    ${p.estado === 'reparada' ? `<div style="border-top:1px solid var(--linea);margin-top:12px;padding-top:4px">
+      <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+      ${p.descripcion_reparacion ? `<h3>Trabajo realizado</h3><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
+      <div id="fotosFalla"></div>
+    </div>` : ''}
+    ${p.estado === 'pendiente' ? `<div style="border-top:1px solid var(--linea);margin-top:12px;padding-top:4px">
+      <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+      <h3>Motivo</h3><pre class="texto">${esc(p.motivo_pendiente || '')}</pre>
+    </div>` : ''}
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
       ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario">Registrar reparación</button>` : ''}
@@ -1328,7 +1363,7 @@ async function formUsuarios() {
         const r = await api(`/rest/v1/usuarios?id=eq.${d.dataset.id}`, { method: 'PATCH', prefer: 'return=representation', body: { nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto } });
         if (!r || !r.length) throw new Error('sin permiso');
         n++; d._orig = JSON.stringify(e);
-        if (d.dataset.id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = e.rol; S.perfil.foto_obligatoria = e.foto; $('#barraNombre').textContent = e.nombre; $('#barraRol').textContent = rolVisible(); }
+        if (d.dataset.id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = e.rol; S.perfil.foto_obligatoria = e.foto; $('#barraNombre').textContent = e.nombre; $('#barraAvatar').textContent = iniciales(e.nombre); $('#barraRol').textContent = rolVisible(); }
       } catch (err) { errores.push(`${e.nombre}: ${err.message}`); }
     }
     if (errores.length) toast(`Guardados ${n}. Error: ${errores.join('; ')}`, 'error');
@@ -1473,20 +1508,27 @@ async function revisarVersion() {
 }
 
 /* ------------------------------ menú ------------------------------ */
+const iniciales = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((x) => x[0]).join('').toUpperCase();
 const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const esStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 $('#btnMenu').addEventListener('click', () => {
+  const ini = iniciales(S.perfil.nombre);
+  const ico = (d) => `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const chev = '<svg class="m-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
   const h = abrirHoja(`
-    <h2>${esc(S.perfil.nombre)}</h2>
-    <div class="hint">Perfil: ${esc(rolVisible())} · versión ${VERSION_APP}</div>
-    <div class="acciones" style="margin-top:14px">
-      ${S.instalar ? '<button id="mInstalar" class="btn btn-primario">Instalar la app en este teléfono</button>' : ''}
+    <div class="m-cab">
+      <div class="m-avatar">${esc(ini)}</div>
+      <div><div class="m-nombre">${esc(S.perfil.nombre)}</div><span class="m-pastilla">${esc(rolVisible())} · v${VERSION_APP}</span></div>
+    </div>
+    <div class="m-lista">
+      ${S.instalar ? '<button id="mInstalar" class="btn btn-primario" style="margin:10px 0 6px;width:100%">Instalar la app en este teléfono</button>' : ''}
       ${!S.instalar && esIOS() && !esStandalone() ? '<div class="aviso">Para instalarla en iPhone: toca el botón <b>Compartir</b> de Safari y luego <b>Añadir a pantalla de inicio</b>.</div>' : ''}
-      <button id="mPush" class="btn btn-secundario" hidden>Avisos</button>
-      ${rol() === 'admin' ? '<button id="mUsuarios" class="btn btn-secundario">Gestionar usuarios</button>' : ''}
-      <button id="mActualizar" class="btn btn-secundario">Actualizar la app ahora</button>
-      <button id="mSalir" class="btn btn-peligro">Cerrar sesión</button>
+      <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
+      ${rol() === 'admin' ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Gestionar usuarios</span>${chev}</button>` : ''}
+      <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
+      <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
     </div>`);
+  $('#hoja').classList.add('hoja-menu');
   const i = $('#mInstalar', h);
   if (i) i.addEventListener('click', async () => { S.instalar.prompt(); await S.instalar.userChoice; S.instalar = null; cerrarHoja(); });
   const mp = $('#mPush', h);
@@ -1494,7 +1536,7 @@ $('#btnMenu').addEventListener('click', () => {
     suscripcionActual().then((sub) => {
       if (!document.body.contains(mp)) return;
       const on = Notification.permission === 'granted' && !!sub;
-      mp.hidden = false; mp.textContent = on ? 'Desactivar avisos en este teléfono' : 'Activar avisos en este teléfono';
+      mp.hidden = false; $('.t', mp).textContent = on ? 'Desactivar avisos' : 'Activar avisos';
       mp.addEventListener('click', ocupar(mp, async () => {
         if (on) { await desactivarPush(); toast('Avisos desactivados', 'ok'); } else { await activarPush(); toast('Avisos activados', 'ok'); }
         cerrarHoja();
@@ -1505,7 +1547,7 @@ $('#btnMenu').addEventListener('click', () => {
   }
   const mu = $('#mUsuarios', h);
   if (mu) mu.addEventListener('click', () => formUsuarios());
-  $('#mActualizar', h).addEventListener('click', () => { $('#mActualizar', h).textContent = 'Actualizando…'; forzarActualizacion(); });
+  $('#mActualizar', h).addEventListener('click', () => { $('#mActualizar', h).querySelector('.t').textContent = 'Actualizando…'; forzarActualizacion(); });
   $('#mSalir', h).addEventListener('click', async () => { try { await desactivarPush(); } catch (e) { /* */ } salir(); });
 });
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.instalar = e; });
@@ -1517,6 +1559,7 @@ async function entrarApp() {
   $('#pantallaLogin').hidden = true;
   $('#pantallaApp').hidden = false;
   $('#barraNombre').textContent = S.perfil.nombre;
+  $('#barraAvatar').textContent = iniciales(S.perfil.nombre);
   $('#barraRol').textContent = rolVisible();
   restaurarModo();
   pintarModo();
