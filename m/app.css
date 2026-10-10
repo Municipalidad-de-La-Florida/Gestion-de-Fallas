@@ -213,3 +213,27 @@ textarea.campo{ min-height:70px; }
 .m-rojo{ color:var(--rojo); }
 .m-rojo-ico{ background:#fbe7e5; color:var(--rojo); }
 .leaflet-bottom{ bottom:calc(var(--safe-b) + 76px); }
+
+/* ---------- Filtros de la lista ---------- */
+.lf-fila{ display:flex; gap:8px; }
+.lf-fila input{ flex:1; min-width:0; }
+.lf-btn{ position:relative; flex:0 0 auto; width:44px; height:44px; padding:0; border:0; border-radius:12px; background:#eef2f0; color:var(--verde); display:flex; align-items:center; justify-content:center; }
+.lf-btn.on{ background:var(--verde); color:#fff; }
+.lf-num{ position:absolute; top:-4px; right:-4px; min-width:18px; height:18px; padding:0 4px; border-radius:9px; background:var(--rojo); color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.lf-panel{ margin-top:10px; padding:12px; border-radius:14px; background:#fff; border:1px solid var(--linea); }
+.lf-t{ font-size:11.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--tinta-2); font-weight:700; margin-bottom:7px; }
+.lf-chips{ display:flex; gap:7px; flex-wrap:wrap; }
+.lf-pie{ margin-top:10px; }
+.fchip{ display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 13px; border-radius:16px; border:1.5px solid var(--cc,#dfe5e2); background:var(--cc,#fff); color:#fff; font-size:13px; font-weight:600; }
+.fchip .fdot{ width:9px; height:9px; border-radius:50%; background:#fff; display:inline-block; }
+.fchip[data-e="reportada"]{ --cc:#d33a2c; --ct:#c1443c; }
+.fchip[data-e="pendiente"]{ --cc:#f08c00; --ct:#a96a12; }
+.fchip[data-e="reparada"]{ --cc:#2e9e57; --ct:#2e7a4d; }
+.fchip[data-e="reiterada"]{ --cc:#7b3fe4; --ct:#7b3fe4; }
+.fchip[data-e].off{ background:#fff; color:var(--ct); border-color:#dfe5e2; }
+.fchip[data-e].off .fdot{ background:var(--cc); }
+.fchip input{ display:none; }
+.fchip-azul, .fchip-viol{ background:#fff; }
+.fchip-azul{ color:#2a5db0; border-color:#cfdcf2; --cc:#2a5db0; }
+.fchip-viol{ color:#7c3aed; border-color:#e5d8fb; --cc:#7c3aed; }
+.fchip-azul:has(input:checked), .fchip-viol:has(input:checked){ background:var(--cc); color:#fff; border-color:var(--cc); }

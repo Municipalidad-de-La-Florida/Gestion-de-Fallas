@@ -276,21 +276,60 @@
   .mode-btn.active{border-color:var(--primary);background:#eef5f1;color:var(--primary);}
   .mode-btn-blue{background:#2563a8; color:#fff; border:1.5px solid #000; text-align:center; justify-content:center;}
   .mode-btn-blue:hover{background:#1e4f87;}
-  .btn-inf{justify-content:center;text-align:center;background:var(--primary);color:#fff;border:1.5px solid var(--primary);border-radius:8px;font-weight:700;margin-bottom:0;padding:9px 16px;transition:background .15s;}
-  .btn-inf:hover{background:var(--primary-light);border-color:var(--primary-light);}
+  .btn-inf{justify-content:center;text-align:center;height:42px;background:linear-gradient(90deg,#1f4d3d,#2a6a53);color:#fff;border:0;border-radius:12px;font-weight:700;font-size:14px;margin-bottom:0;padding:0 16px;transition:filter .15s;}
+  .btn-inf:hover{filter:brightness(1.12);}
   .btn-inf.abierto,.btn-inf.sel{background:var(--amber);border-color:var(--amber);color:#2a1c05;}
   .btn-inf .chev{font-size:10px;transition:transform .2s;}
   .btn-inf.abierto .chev{transform:rotate(180deg);}
-  .fi{padding:8px 12px;border-bottom:1px solid var(--line);font-size:12.5px;cursor:pointer;}
+  /* Barra lateral renovada */
+  .ley-toggle{display:flex;width:100%;align-items:center;justify-content:space-between;border:0;background:none;padding:0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-weight:700;cursor:pointer;}
+  .ley-toggle svg{transition:transform .2s;transform:rotate(180deg);}
+  .ley-toggle[aria-expanded="true"] svg{transform:none;}
+  #leyendaCuerpo[hidden]{display:none;}
+  .lat-top{padding:2px 12px 10px;flex-shrink:0;}
+  .lat-tit{display:flex;align-items:center;gap:8px;margin:8px 0;}
+  .lat-tit h3{margin:0;font-size:14px;text-transform:none;letter-spacing:0;color:var(--ink);}
+  .lat-cuenta{min-width:24px;height:20px;padding:0 7px;border-radius:10px;background:var(--primary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+  .lat-busq{display:flex;gap:8px;}
+  .lat-input{width:100%;box-sizing:border-box;height:38px;padding:0 26px 0 34px;border:0;border-radius:12px;font-size:12.5px;outline:none;background:#eef2f0;-webkit-appearance:none;appearance:none;}
+  .lat-input:focus{box-shadow:0 0 0 2px rgba(31,77,61,.25);}
+  .lat-fbtn{position:relative;flex:none;width:38px;height:38px;padding:0;border:0;border-radius:12px;background:#eef2f0;color:var(--primary);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .lat-fbtn.activo{background:var(--primary);color:#fff;}
+  .lat-fnum{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;background:var(--red);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+  .lat-fnum[hidden]{display:none;}
+  .lat-panel{margin-top:10px;padding:10px;border-radius:12px;background:#f4f7f5;border:1px solid #e3e9e5;}
+  .lat-panel[hidden]{display:none;}
+  .lat-pt{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-weight:700;margin-bottom:6px;}
+  .lat-chips{display:flex;gap:6px;flex-wrap:wrap;}
+  .fchip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:14px;border:1.5px solid var(--cc,#dbe2dc);background:var(--cc,#fff);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .fchip .fdot{width:8px;height:8px;border-radius:50%;background:#fff;display:inline-block;}
+  .fchip[data-estado="reportada"]{--cc:#c1443c;--ct:#c1443c;}
+  .fchip[data-estado="pendiente"]{--cc:#d98e2f;--ct:#a96a12;}
+  .fchip[data-estado="reparada"]{--cc:#3a8a5c;--ct:#2e7a4d;}
+  .fchip[data-estado="reiterada"]{--cc:#8e44ad;--ct:#8e44ad;}
+  .fchip[data-estado].off{background:#fff;color:var(--ct);border-color:#dbe2dc;}
+  .fchip[data-estado].off .fdot{background:var(--cc);}
+  .fchip input{display:none;}
+  .fchip-azul,.fchip-viol{background:#fff;}
+  .fchip-azul{color:#2a5db0;border-color:#cfdcf2;--cc:#2a5db0;}
+  .fchip-viol{color:#7c3aed;border-color:#e5d8fb;--cc:#7c3aed;}
+  .fchip-azul:has(input:checked),.fchip-viol:has(input:checked){background:var(--cc);color:#fff;border-color:var(--cc);}
+  .lat-pie{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:11.5px;color:var(--ink-soft);}
+  .lat-link{border:0;background:none;color:#2a5db0;font-weight:600;font-size:11.5px;cursor:pointer;padding:0;}
+  #fallasList{background:var(--bg);padding-top:8px;}
+  .fi{margin:0 10px 6px;padding:5px 10px 6px;background:#fff;border:1px solid #e3e9e5;border-left:4px solid var(--red);border-radius:8px;font-size:12.5px;cursor:pointer;}
   .fi:hover{background:#f7faf8;}
-  .fi-1{display:flex;align-items:center;gap:7px;min-height:22px;}
-  .fi-cod{font-weight:800;font-size:15px;color:var(--ink);padding-left:8px;border-left:4px solid #c9a227;letter-spacing:.02em;}
-  .fi-os{font-weight:500;font-size:11.5px;color:var(--ink-soft);white-space:nowrap;}
+  .fi.fi-est-pendiente{border-left-color:var(--amber);}
+  .fi.fi-est-reiterada{border-left-color:#8e44ad;}
+  .fi.fi-est-reparada{border-left-color:var(--green);}
+  .fi-1{display:flex;align-items:center;gap:7px;line-height:1.2;}
+  .fi-cod{font-weight:800;font-size:13.5px;color:var(--ink);letter-spacing:.02em;}
+  .fi-os{font-weight:500;font-size:11px;color:var(--ink-soft);white-space:nowrap;}
   .fi-sp{flex:1;}
   .fi-acc{border:1px solid var(--line);background:#fff;border-radius:6px;font-size:11px;padding:1px 5px;line-height:1.4;cursor:pointer;margin:0 !important;}
   .fi-acc.fi-del{border-color:var(--red);background:#fbe7e5;}
-  .fi-nom{margin:1px 0 2px 12px;font-size:11px;font-weight:400;color:var(--ink-soft);}
-  .fi-2{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--ink-soft);}
+  .fi-nom{margin:1px 0 0;font-size:11.5px;font-weight:400;color:var(--ink);line-height:1.25;}
+  .fi-2{display:flex;align-items:center;gap:8px;margin-top:1px;font-size:10.5px;color:var(--ink-soft);line-height:1.25;}
   .fi-q{flex:1;min-width:0;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .fi-oe{color:#2563a8;font-weight:600;white-space:nowrap;}
   .fi-oe.vacio{color:#b3beb7;font-weight:400;}
@@ -575,9 +614,9 @@
   <div id="sidebar">
     <div id="sidebarResizeHandle" class="sidebar-resize-handle"></div>
     <div id="sidebarNormal" style="display:flex; flex-direction:column; flex:1; min-height:0;">
-      <div class="section" id="reportSection" style="display:none; flex-shrink:0; padding:8px 12px 6px;">
+      <div class="section" id="reportSection" style="display:none; flex-shrink:0; padding:12px 12px 8px;">
         <div id="menuInformarInicial">
-          <button class="mode-btn btn-inf" id="btnInformarFalla" style="width:100%;">📋 Informar falla <span class="chev">▼</span></button>
+          <button class="mode-btn btn-inf" id="btnInformarFalla" style="width:100%;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Informar falla <span class="chev">▼</span></button>
           <div id="submenuInformar" style="display:none; margin-top:6px; gap:8px;">
             <button class="mode-btn btn-inf" id="btnAgregarFalla" style="flex:1; font-size:12.5px; padding:8px 6px;">Agregar falla</button>
             <button class="mode-btn btn-inf" id="btnInformarInspeccion" style="flex:1; font-size:12.5px; padding:8px 6px; white-space:nowrap;">Informar inspección</button>
@@ -609,31 +648,38 @@
         <div class="hint">Haz clic en una falla del mapa o de la lista de abajo para registrar su reparación.</div>
       </div>
 
-      <div class="section" style="padding:6px 12px; flex-shrink:0;">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <h3 style="margin:0; white-space:nowrap;">Fallas activas</h3>
+      <div class="section lat-top">
+        <div class="lat-tit"><h3>Fallas activas</h3><span id="fallasCuenta" class="lat-cuenta">0</span></div>
+        <div class="lat-busq">
           <form id="buscarFallasForm" role="search" autocomplete="off" onsubmit="return false;" style="position:relative; flex:1; min-width:0; margin:0;">
-            <span style="position:absolute; left:9px; top:50%; transform:translateY(-50%); font-size:11px; pointer-events:none;">🔍</span>
-            <input type="search" id="buscarFallasLateral" name="busqueda_fallas_lateral_x7" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" data-lpignore="true" data-1p-ignore="true" data-form-type="other" placeholder="Buscar OS, OE, reportó, llave" style="width:100%; box-sizing:border-box; padding:7px 26px 7px 28px; border:1.5px solid var(--line); border-radius:8px; font-size:12px; outline:none; background:#fff; -webkit-appearance:none; appearance:none;">
-            <button type="button" id="buscarFallasLimpiar" title="Borrar búsqueda" style="display:none; position:absolute; right:6px; top:50%; transform:translateY(-50%); border:none; background:none; cursor:pointer; color:var(--ink-soft); font-size:13px; padding:0;">✕</button>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position:absolute; left:11px; top:50%; transform:translateY(-50%); pointer-events:none; color:#7b8780;"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+            <input type="search" id="buscarFallasLateral" name="busqueda_fallas_lateral_x7" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" data-lpignore="true" data-1p-ignore="true" data-form-type="other" placeholder="Buscar OS, OE, reportó, llave" class="lat-input">
+            <button type="button" id="buscarFallasLimpiar" title="Borrar búsqueda" style="display:none; position:absolute; right:8px; top:50%; transform:translateY(-50%); border:none; background:none; cursor:pointer; color:var(--ink-soft); font-size:13px; padding:0;">✕</button>
           </form>
+          <button type="button" id="btnFiltros" class="lat-fbtn" aria-label="Filtros" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg><span id="filtrosNum" class="lat-fnum" hidden>0</span></button>
         </div>
-      </div>
-      <div style="display:flex; flex-wrap:wrap; align-items:center; column-gap:14px; flex-shrink:0;">
-      <label id="filtroSinAsignarBox" style="display:none; align-items:center; gap:7px; padding:2px 12px 5px; font-size:12px; font-weight:600; cursor:pointer; flex-shrink:0;">
-        <input type="checkbox" id="filtroSinAsignar" style="margin:0; width:15px; height:15px; accent-color:var(--primary);">
-        <span>Sin asignar <span id="sinAsignarN" style="color:var(--ink-soft); font-weight:700;"></span></span>
-      </label>
-      <label id="filtroMasivoBox" style="display:flex; align-items:center; gap:7px; padding:2px 12px 5px; font-size:12px; font-weight:600; cursor:pointer; flex-shrink:0;" title="Marcada: se ven solo las fallas masivas. Desmarcada: se ven todas">
-        <input type="checkbox" id="filtroMasivo" style="margin:0; width:15px; height:15px; accent-color:#7c3aed;">
-        <span class="tag-masivo" style="margin:0;">Masivo</span><span id="masivoN" style="color:var(--ink-soft); font-weight:700;"></span>
-      </label>
+        <div id="filtrosPanel" class="lat-panel" hidden>
+          <div class="lat-pt">Estado</div>
+          <div class="lat-chips">
+            <button type="button" class="fchip" data-estado="reportada" onclick="toggleFiltroEstado('reportada')"><i class="fdot" id="swatchReportada"></i>Reportada</button>
+            <button type="button" class="fchip" data-estado="pendiente" onclick="toggleFiltroEstado('pendiente')"><i class="fdot" id="swatchPendiente"></i>Pendiente</button>
+            <button type="button" class="fchip" data-estado="reparada" onclick="toggleFiltroEstado('reparada')"><i class="fdot" id="swatchReparada"></i>Reparada</button>
+            <button type="button" class="fchip" data-estado="reiterada" onclick="toggleFiltroEstado('reiterada')"><i class="fdot" id="swatchReiterada"></i>Reiterada</button>
+          </div>
+          <div class="lat-pt" style="margin-top:10px;">Otros</div>
+          <div class="lat-chips">
+            <label id="filtroSinAsignarBox" class="fchip fchip-azul" style="display:none;"><input type="checkbox" id="filtroSinAsignar"><span>Sin asignar <span id="sinAsignarN"></span></span></label>
+            <label id="filtroMasivoBox" class="fchip fchip-viol" style="display:none;" title="Marcada: se ven solo las fallas masivas. Desmarcada: se ven todas"><input type="checkbox" id="filtroMasivo"><span>Masivo <span id="masivoN"></span></span></label>
+          </div>
+          <div class="lat-pie"><button type="button" id="filtrosLimpiar" class="lat-link">Limpiar filtros</button><span id="filtrosResumen"></span></div>
+        </div>
       </div>
       <div id="fallasListaEstado" class="hint" style="display:none; margin:0; padding:0 12px 4px; flex-shrink:0;"></div>
       <div id="fallasList" style="flex:1; overflow-y:auto; min-height:80px;"><div class="empty-state">Navega el mapa para ver fallas del sector.</div></div>
 
-      <div class="section" style="flex-shrink:0; border-top:1px solid var(--line);">
-        <h3>Leyenda</h3>
+      <div class="section" style="flex-shrink:0; border-top:1px solid var(--line); padding:10px 14px;">
+        <button type="button" id="leyendaToggle" class="ley-toggle" aria-expanded="false"><span>Leyenda</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 15l-6-6-6 6"/></svg></button>
+        <div id="leyendaCuerpo" hidden style="margin-top:8px;">
         <div class="legend-item"><span class="swatch ln" style="background:#8a9a90"></span>Circuitos (zoom ≥ 17)</div>
         <div class="legend-item" style="cursor:pointer;" onclick="toggleFiltroEmpalmes()"><svg id="swatchEmpalmes" width="12" height="12" viewBox="0 0 24 24"><polygon points="12,1 15,9 23,9 17,14 19,22 12,17 5,22 7,14 1,9 9,9" fill="#b23a48"/></svg><span style="margin-left:6px;">Empalmes (zoom ≥ 19)</span></div>
         <div class="legend-item"><span class="swatch" style="background:#5b7a68"></span>Punto Lumínico (zoom ≥ 17)</div>
@@ -644,12 +690,7 @@
           <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroPoste('FACHADA')"><svg id="swatchPosteFACHADA" width="11" height="11" viewBox="0 0 10 10"><path d="M1,5 A4,4 0 0 1 9,5 Z" fill="#5b7a68"/></svg><span style="margin-left:6px;">Fachada</span></div>
           <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroPoste('ORNAMENTAL')"><svg id="swatchPosteORNAMENTAL" width="11" height="11" viewBox="0 0 10 10"><polygon points="5,0.6 9.3,4 7.6,9.2 2.4,9.2 0.7,4" fill="#5b7a68"/></svg><span style="margin-left:6px;">P. Ornamental</span></div>
         </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; column-gap:6px; margin-top:8px;">
-          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroEstado('reportada')"><span class="swatch filtro-estado-swatch" id="swatchReportada" style="background:var(--red)"></span>Reportada</div>
-          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroEstado('pendiente')"><span class="swatch filtro-estado-swatch" id="swatchPendiente" style="background:#d98e2f"></span>Pendiente</div>
-          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroEstado('reparada')"><span class="swatch filtro-estado-swatch" id="swatchReparada" style="background:var(--green)"></span>Reparada</div>
-          <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroEstado('reiterada')"><span class="swatch filtro-estado-swatch" id="swatchReiterada" style="background:#8e44ad"></span>Reiterada</div>
-          <div class="legend-item" style="margin-bottom:3px;"><span class="swatch" style="background:#2563a8"></span>Del período (📊)</div>
+        <div class="legend-item" style="margin-top:8px;"><span class="swatch" style="background:#2563a8"></span>Del período (📊)</div>
         </div>
       </div>
     </div>
@@ -2226,8 +2267,11 @@ let filtrosEstadoVisible = {reportada:true, pendiente:true, reparada:true, reite
 function toggleFiltroEstado(estado){
   filtrosEstadoVisible[estado] = !filtrosEstadoVisible[estado];
   const swatch = document.getElementById('swatch' + estado.charAt(0).toUpperCase() + estado.slice(1));
-  if(swatch) swatch.style.opacity = filtrosEstadoVisible[estado] ? '1' : '0.3';
+  if(swatch) swatch.style.opacity = '';
+  const chip = document.querySelector('.fchip[data-estado="' + estado + '"]');
+  if(chip) chip.classList.toggle('off', !filtrosEstadoVisible[estado]);
   renderFallasOnMap();
+  if(typeof renderFallasList === 'function') renderFallasList();
 }
 window.toggleFiltroEstado = toggleFiltroEstado;
 
@@ -3058,6 +3102,39 @@ document.getElementById('filtroSinAsignar').addEventListener('change', (e) => {
   renderFallasDesdeCache();
 });
 
+
+// ---- Panel de filtros de la barra lateral ----
+function contarFiltrosActivos(){
+  let n = Object.values(filtrosEstadoVisible).filter(v => v === false).length;
+  if(filtroSinAsignarActivo()) n++;
+  if(soloMasivoActivo()) n++;
+  return n;
+}
+function actualizarFiltrosUI(nMostrando){
+  const c = document.getElementById('fallasCuenta'); if(c) c.textContent = nMostrando;
+  const n = contarFiltrosActivos();
+  const num = document.getElementById('filtrosNum'), btn = document.getElementById('btnFiltros');
+  if(num){ num.textContent = n; num.hidden = n === 0; }
+  if(btn) btn.classList.toggle('activo', n > 0);
+  const r = document.getElementById('filtrosResumen');
+  if(r) r.textContent = (busquedaLateral && busquedaLateral.texto) ? '' : 'Mostrando ' + nMostrando + ' de ' + (fallasEnArea || []).length;
+}
+document.getElementById('leyendaToggle').addEventListener('click', () => {
+  const c = document.getElementById('leyendaCuerpo'), b = document.getElementById('leyendaToggle');
+  c.hidden = !c.hidden; b.setAttribute('aria-expanded', String(!c.hidden));
+});
+document.getElementById('btnFiltros').addEventListener('click', () => {
+  const panel = document.getElementById('filtrosPanel');
+  panel.hidden = !panel.hidden;
+  document.getElementById('btnFiltros').setAttribute('aria-expanded', String(!panel.hidden));
+});
+document.getElementById('filtrosLimpiar').addEventListener('click', () => {
+  Object.keys(filtrosEstadoVisible).forEach(e => { if(filtrosEstadoVisible[e] === false) toggleFiltroEstado(e); });
+  try{ localStorage.setItem('fa_sin_asignar', '0'); localStorage.setItem('fa_solo_masivo', '0'); }catch(_){}
+  renderFallasList();
+  renderFallasDesdeCache();
+});
+
 function renderFallasList(){
   const list = document.getElementById('fallasList');
   const estado = document.getElementById('fallasListaEstado');
@@ -3071,10 +3148,12 @@ function renderFallasList(){
     filas = fallasEnArea.map(normalizarFilaLateral);
     if(filtroSinAsignarActivo()) filas = filas.filter(f => !f.asignado);
     if(soloMasivoActivo()) filas = filas.filter(f => f.masivo);
+    filas = filas.filter(f => filtrosEstadoVisible[f.estado] !== false);
   }
   actualizarCasillaSinAsignar();
   actualizarCasillaMasivo();
-  estado.style.display = filas.length ? 'block' : 'none';
+  actualizarFiltrosUI(filas.length);
+  estado.style.display = (buscando && filas.length) ? 'block' : 'none';
   estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${filtroSinAsignarActivo() ? ' sin asignar' : ''}${soloMasivoActivo() ? ' masivas' : ''}`;
   if(!filas.length){
     list.innerHTML = buscando
@@ -3095,7 +3174,7 @@ function renderFallasList(){
     const nombreFalla = descripcionCodigoAnalisis(f.tipo, f.tipo_falla) || '';
     const lineaLlave = (buscando && f.llave != null && terminos.some(t => String(f.llave).toLowerCase().includes(t.toLowerCase())))
       ? `<div class="fi-nom" style="margin-top:1px;">Llave ${resaltarTexto(f.llave, terminos)}</div>` : '';
-    return `<div class="fi" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
+    return `<div class="fi fi-est-${f.estado}" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
       <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
       <div class="fi-nom">${escHtml(nombreFalla)}</div>
       <div class="fi-2"><span class="fi-q">${resaltarTexto(f.quien, terminos)}</span><span class="fi-oe${f.orden_externa ? '' : ' vacio'}">OE: ${f.orden_externa ? resaltarTexto(f.orden_externa, terminos) : '—'}</span><span class="fi-fh">${fechaTxt}</span></div>

@@ -57,15 +57,24 @@
 
   <main id="vistaLista" hidden>
     <div class="lista-filtros">
-      <input id="listaBuscar" type="search" placeholder="Buscar OS, llave, código…" autocomplete="off">
-      <div class="chips" id="listaChips">
-        <button class="chip sel" data-f="todas">Todas</button>
-        <button class="chip" data-f="reportada">Reportadas</button>
-        <button class="chip" data-f="pendiente">Pendientes</button>
+      <div class="lf-fila">
+        <input id="listaBuscar" type="search" placeholder="Buscar OS, llave, código…" autocomplete="off">
+        <button type="button" id="btnFiltrosLista" class="lf-btn" aria-label="Filtros" aria-expanded="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z"/></svg><span id="filtrosListaNum" class="lf-num" hidden>0</span></button>
       </div>
-      <div class="fila-chk">
-        <label id="listaSinAsignarBox" class="chk-sin-asignar" hidden><input type="checkbox" id="listaSinAsignar"> <span>Sin asignar <b id="listaSinAsignarN"></b></span></label>
-        <label id="listaMasivoBox" class="chk-sin-asignar" hidden><input type="checkbox" id="listaMasivo" style="accent-color:#7c3aed"> <span class="tag-masivo">Masivo</span> <b id="listaMasivoN"></b></label>
+      <div id="filtrosListaPanel" class="lf-panel" hidden>
+        <div class="lf-t">Estado</div>
+        <div class="lf-chips" id="listaChips">
+          <button type="button" class="fchip" data-e="reportada"><i class="fdot"></i>Reportada</button>
+          <button type="button" class="fchip" data-e="pendiente"><i class="fdot"></i>Pendiente</button>
+          <button type="button" class="fchip" data-e="reparada"><i class="fdot"></i>Reparada</button>
+          <button type="button" class="fchip" data-e="reiterada"><i class="fdot"></i>Reiterada</button>
+        </div>
+        <div class="lf-t" style="margin-top:12px">Otros</div>
+        <div class="lf-chips">
+          <label id="listaSinAsignarBox" class="fchip fchip-azul" hidden><input type="checkbox" id="listaSinAsignar"><span>Sin asignar <b id="listaSinAsignarN"></b></span></label>
+          <label id="listaMasivoBox" class="fchip fchip-viol" hidden><input type="checkbox" id="listaMasivo"><span>Masivo <b id="listaMasivoN"></b></span></label>
+        </div>
+        <div class="lf-pie"><button type="button" id="filtrosListaLimpiar" class="btn-link" style="padding:0">Limpiar filtros</button></div>
       </div>
       <div id="listaResumen" class="hint"></div>
     </div>
