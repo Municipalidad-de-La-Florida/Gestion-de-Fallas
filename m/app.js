@@ -1390,11 +1390,22 @@ $('#chipModo').addEventListener('click', abrirInspeccion);
 
 /* ------------------------- abrir una falla desde un aviso ------------------------- */
 async function abrirFallaPorId(id) {
+  // Siempre se pide la falla actualizada: la copia en memoria puede estar vieja (p. ej. una falla recién reparada
+  // aún figura como activa) y el aviso justamente llega cuando algo cambió. Si no hay red, se usa la copia local.
   let f = S.features.find((x) => x.properties.id === id);
-  if (!f) {
+  try {
     const geo = await rpc('fallas_geojson', { p_id: id });
-    f = geo && geo.features && geo.features[0];
-    if (f) f._c = centroGeom(f.geometry);
+    const fresca = geo && geo.features && geo.features[0];
+    if (fresca) {
+      fresca._c = centroGeom(fresca.geometry);
+      const i = S.features.findIndex((x) => x.properties.id === id);
+      if (i >= 0) S.features[i] = fresca; else S.features.push(fresca);
+      S.activas = S.features.filter((x) => x.properties.estado !== 'reparada');
+      f = fresca;
+      cargarFallas(); // deja el mapa y la lista al día en segundo plano
+    }
+  } catch (e) {
+    if (e.name === 'SesionExpirada') throw e;
   }
   if (!f) { toast('No se encontró la falla del aviso (puede haber sido eliminada).', 'error'); return; }
   cambiarVista('mapa');
