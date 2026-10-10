@@ -2515,14 +2515,22 @@ async function abrirPopupFalla(feat){
   const infoLlaveMun = p.tipo === 'punto'
     ? `<div class="hint" style="margin-top:6px;">N.° de Llave: <b>${escHtml(p.llave ?? '—')}</b> · N.° Municipal: <b>${escHtml(p.nro_mun ?? '—')}</b></div>`
     : '';
+  // Fecha corta y hora de la asignación al camión (dd/mm, hh:mm). Vacía si no quedó registrada.
+  const fechaAsignacionCorta = (() => {
+    if(!p.fecha_asignacion) return '';
+    const d = new Date(p.fecha_asignacion);
+    if(isNaN(d.getTime())) return '';
+    const dos = n => String(n).padStart(2, '0');
+    return `${dos(d.getDate())}/${dos(d.getMonth() + 1)}, ${dos(d.getHours())}:${dos(d.getMinutes())}`;
+  })();
   const infoGeneral = `
     ${infoLlaveMun}
     <div class="hint" style="margin-top:6px;">Informada: <b>${fechaFalla}</b></div>
     <div class="hint">Inspector: <b>${p.nombre_creador || '—'}</b></div>
     <div class="hint">Duración de la falla: <b>${duracion}</b></div>
     <div class="hint">Puntos lumínicos afectados: <b>${p.puntos_afectados ?? '—'}</b></div>
-    <div class="hint">Asignado a: <b>${p.asignado_camion_nombre || 'Sin asignar'}</b></div>
-    ${p.asignado_camion_nombre ? `<div class="hint">Asignado por: <b>${p.asignado_por_nombre || '—'}</b></div>` : ''}
+    ${p.asignado_camion_nombre ? `<div class="hint">Asignado por: <b>${p.asignado_por_nombre || '—'}</b>${fechaAsignacionCorta ? ` · ${fechaAsignacionCorta}` : ''}</div>` : ''}
+    ${(p.estado === 'reparada' || p.estado === 'pendiente') ? '' : `<div class="hint">Asignado a: <b>${p.asignado_camion_nombre || 'Sin asignar'}</b></div>`}
     ${infoComentario}
     ${infoComentarioAsignacion}
   `;
