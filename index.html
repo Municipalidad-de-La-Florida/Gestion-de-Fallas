@@ -2591,7 +2591,7 @@ async function abrirPopupFalla(feat){
   const botonEliminarHtml = puedeEliminar
     ? `<button id="eliminarDesdeMapaBtn" title="Eliminar falla" style="flex-shrink:0; width:26px; height:26px; padding:0; border:1.5px solid var(--red); border-radius:6px; background:#fbe7e5; color:var(--red); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>`
     : '';
-  const puedeAsignarCamion = ['contratista','contratista2','admin'].includes(rolEfectivo()) && !p.cascada && !p._vistaHistorica;
+  const puedeAsignarCamion = ['contratista','contratista2','admin'].includes(rolEfectivo()) && !p.cascada && !p._vistaHistorica && p.estado !== 'reparada';
   const asignarCamionHtml = puedeAsignarCamion ? `
     <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
       <div class="hint" style="margin-bottom:4px;">Asignar a camión:</div>
