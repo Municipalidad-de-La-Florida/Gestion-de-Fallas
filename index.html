@@ -2517,9 +2517,9 @@ async function abrirPopupFalla(feat){
     : '';
   const infoGeneral = `
     ${infoLlaveMun}
-    <div class="hint" style="margin-top:6px;">Fecha y hora: <b>${fechaFalla}</b></div>
-    <div class="hint">Duración: <b>${duracion}</b></div>
+    <div class="hint" style="margin-top:6px;">Informada: <b>${fechaFalla}</b></div>
     <div class="hint">Inspector: <b>${p.nombre_creador || '—'}</b></div>
+    <div class="hint">Duración de la falla: <b>${duracion}</b></div>
     <div class="hint">Puntos lumínicos afectados: <b>${p.puntos_afectados ?? '—'}</b></div>
     <div class="hint">Asignado a: <b>${p.asignado_camion_nombre || 'Sin asignar'}</b></div>
     ${p.asignado_camion_nombre ? `<div class="hint">Asignado por: <b>${p.asignado_por_nombre || '—'}</b></div>` : ''}
@@ -2596,7 +2596,9 @@ async function abrirPopupFalla(feat){
   ` : '';
 
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
-  const tituloConEliminar = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">${botonEditarHtml}${botonEliminarHtml}<b>${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</b></div>
+  // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
+  const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
+  const tituloConEliminar = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">${botonEditarHtml}${botonEliminarHtml}<b>${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</b>${insigniaEstado}</div>
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   let contenidoPanel;
@@ -2609,7 +2611,6 @@ async function abrirPopupFalla(feat){
     `).join('');
     const columnaIzquierda = `
       ${tituloConEliminar}
-      <div class="hint">Estado: ${p.estado.replace('_',' ')}</div>
       ${infoCardinalidad}
       ${infoGeneral}
       ${infoReparacion}
@@ -2629,7 +2630,6 @@ async function abrirPopupFalla(feat){
   } else {
     contenidoPanel = `
       ${tituloConEliminar}
-      <div class="hint">Estado: ${p.estado.replace('_',' ')}</div>
       ${infoCardinalidad}
       ${infoGeneral}
       ${infoReparacion}
