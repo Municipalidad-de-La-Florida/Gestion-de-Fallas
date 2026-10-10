@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.14.0';
+const VERSION_APP = '1.15.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1363,7 +1363,7 @@ async function formUsuarios() {
         const r = await api(`/rest/v1/usuarios?id=eq.${d.dataset.id}`, { method: 'PATCH', prefer: 'return=representation', body: { nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto } });
         if (!r || !r.length) throw new Error('sin permiso');
         n++; d._orig = JSON.stringify(e);
-        if (d.dataset.id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = e.rol; S.perfil.foto_obligatoria = e.foto; $('#barraNombre').textContent = e.nombre; $('#barraRol').textContent = rolVisible(); }
+        if (d.dataset.id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = e.rol; S.perfil.foto_obligatoria = e.foto; $('#barraNombre').textContent = e.nombre; $('#barraAvatar').textContent = iniciales(e.nombre); $('#barraRol').textContent = rolVisible(); }
       } catch (err) { errores.push(`${e.nombre}: ${err.message}`); }
     }
     if (errores.length) toast(`Guardados ${n}. Error: ${errores.join('; ')}`, 'error');
@@ -1508,15 +1508,16 @@ async function revisarVersion() {
 }
 
 /* ------------------------------ menú ------------------------------ */
+const iniciales = (n) => String(n || '?').trim().split(/\s+/).slice(0, 2).map((x) => x[0]).join('').toUpperCase();
 const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const esStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 $('#btnMenu').addEventListener('click', () => {
-  const iniciales = String(S.perfil.nombre || '?').trim().split(/\s+/).slice(0, 2).map((x) => x[0]).join('').toUpperCase();
+  const ini = iniciales(S.perfil.nombre);
   const ico = (d) => `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   const chev = '<svg class="m-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
   const h = abrirHoja(`
     <div class="m-cab">
-      <div class="m-avatar">${esc(iniciales)}</div>
+      <div class="m-avatar">${esc(ini)}</div>
       <div><div class="m-nombre">${esc(S.perfil.nombre)}</div><span class="m-pastilla">${esc(rolVisible())} · v${VERSION_APP}</span></div>
     </div>
     <div class="m-lista">
@@ -1558,6 +1559,7 @@ async function entrarApp() {
   $('#pantallaLogin').hidden = true;
   $('#pantallaApp').hidden = false;
   $('#barraNombre').textContent = S.perfil.nombre;
+  $('#barraAvatar').textContent = iniciales(S.perfil.nombre);
   $('#barraRol').textContent = rolVisible();
   restaurarModo();
   pintarModo();
