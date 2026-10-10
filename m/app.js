@@ -974,7 +974,9 @@ async function abrirFalla(p, geom) {
   ].filter(Boolean);
   const kvRespuesta = p.estado === 'reparada'
     ? [['Responde', p.reparado_por_nombre || '—'], ['Fecha respuesta', fmtFecha(p.fecha_reparacion)]]
-    : [];
+    : p.estado === 'pendiente'
+      ? [['Responde', p.pendiente_por_nombre || '—'], ['Fecha respuesta', fmtFecha(p.fecha_pendiente)]]
+      : [];
   const puedeCerrarEsta = puedeCerrar() && !p.cascada && p.estado !== 'reparada';
   const puedeNuevaAqui = puedeReportar() && p.estado === 'reparada';
   const puedeAsignarEsta = puedeAsignar() && !p.cascada && p.estado !== 'reparada';
@@ -987,7 +989,10 @@ async function abrirFalla(p, geom) {
       ${p.descripcion_reparacion ? `<h3>Trabajo realizado</h3><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
       <div id="fotosFalla"></div>
     </div>` : ''}
-    ${p.estado === 'pendiente' ? `<div class="aviso"><b>Pendiente</b> por ${esc(p.pendiente_por_nombre || '—')} · ${esc(fmtFecha(p.fecha_pendiente))}<br><pre class="texto">${esc(p.motivo_pendiente || '')}</pre></div>` : ''}
+    ${p.estado === 'pendiente' ? `<div style="border-top:1px solid var(--linea);margin-top:12px;padding-top:4px">
+      <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+      <h3>Motivo</h3><pre class="texto">${esc(p.motivo_pendiente || '')}</pre>
+    </div>` : ''}
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
       ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario">Registrar reparación</button>` : ''}
