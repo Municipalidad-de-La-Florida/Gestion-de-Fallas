@@ -27,14 +27,41 @@
   .login-box button:hover{background:var(--primary-light);}
   .login-error{color:var(--red);font-size:12px;margin-top:8px;min-height:16px;}
   #app{display:none; grid-template-columns:1fr 340px; grid-template-rows:56px 1fr; height:100vh;}
-  header{grid-column:1/3;background:var(--primary);color:#fff;display:flex;align-items:center;padding:0 20px;gap:14px;z-index:20;}
+  header{grid-column:1/3;background:linear-gradient(90deg,#1f4d3d,#2a6a53);border-bottom:3px solid var(--amber);box-sizing:border-box;color:#fff;display:flex;align-items:center;padding:0 16px 0 20px;gap:16px;z-index:20;}
   header .logo-lf{height:85%;width:auto;display:block;flex:none;}
   body.modo-movil header .logo-lf{display:none;}
-  header .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:15px;}
-  header .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--amber);}
-  header .userinfo{margin-left:auto;font-size:12px;display:flex;align-items:center;gap:10px;}
-  header .role-badge{background:rgba(255,255,255,0.15);padding:4px 10px;border-radius:20px;font-weight:600;text-transform:uppercase;font-size:10.5px;letter-spacing:.03em;}
-  header button.logout{background:transparent;border:1px solid rgba(255,255,255,0.4);color:#fff;padding:6px 10px;border-radius:6px;font-size:11.5px;cursor:pointer;}
+  header .brand{line-height:1.2;}
+  header .brand-t{font-weight:700;font-size:15px;}
+  header .brand-s{font-size:11px;color:#ffd9a0;}
+  header .brand-sep,.hb-sep{width:1px;height:26px;background:rgba(255,255,255,.25);flex:none;}
+  header .userinfo{margin-left:auto;font-size:12px;display:flex;align-items:center;gap:8px;}
+  header .userinfo .hb-sep{margin:0 4px;}
+  .hb{display:flex;align-items:center;gap:8px;height:38px;padding:0 14px 0 6px;border:0;border-radius:10px;background:rgba(255,255,255,.1);color:#fff;font-size:13px;font-weight:500;cursor:pointer;}
+  .hb:hover,.hb-ic:hover{background:rgba(255,255,255,.2);}
+  .hb-chip{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none;}
+  .hb-ic{display:flex;align-items:center;justify-content:center;width:38px;height:38px;padding:0;border:0;border-radius:10px;background:rgba(255,255,255,.1);cursor:pointer;}
+  .um{position:relative;}
+  .um-btn{display:flex;align-items:center;gap:9px;height:40px;padding:0 8px 0 5px;border:0;border-radius:20px;background:rgba(255,255,255,.16);color:#fff;cursor:pointer;}
+  .um-btn:hover{background:rgba(255,255,255,.24);}
+  .um-av,.um-av2{border-radius:50%;background:var(--amber);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none;}
+  .um-av{width:30px;height:30px;font-size:11px;}
+  .um-av2{width:34px;height:34px;font-size:12px;}
+  .um-txt,.um-ht{display:flex;flex-direction:column;text-align:left;line-height:1.15;}
+  .um-n{font-size:13px;font-weight:600;}
+  .um-r{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:#ffd9a0;}
+  .um-panel{position:absolute;top:calc(100% + 8px);right:0;width:260px;background:#fff;color:var(--ink);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden;z-index:3000;}
+  .um-panel[hidden]{display:none;}
+  .um-head{background:var(--primary);color:#fff;padding:12px 14px;display:flex;align-items:center;gap:10px;}
+  .um-n2{font-size:13.5px;font-weight:600;}
+  .um-r2{font-size:11px;color:#ffd9a0;}
+  .um-body{padding:6px 0;}
+  .um-lbl{padding:6px 12px;font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;}
+  .um-sel{display:block;width:calc(100% - 24px);margin:0 12px 6px;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 8px;font-size:13px;color:var(--ink);background:#fff;}
+  .um-div{height:1px;background:#edf1ef;margin:4px 0;}
+  .um-item{display:flex;align-items:center;gap:12px;width:100%;height:42px;padding:0 12px;border:0;background:none;color:var(--ink);font-size:13.5px;font-weight:500;text-align:left;cursor:pointer;}
+  .um-item:hover{background:#f4f7f5;}
+  .um-ico{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none;}
+  .um-out{color:var(--red);}
   #map{width:100%;height:100%;position:relative;z-index:600;}
   .report-panel{
     display:none; position:absolute; top:16px; left:16px; z-index:900;
@@ -324,11 +351,12 @@
 
   /* Header: permite que los botones se envuelvan en vez de desbordar */
   body.modo-movil #app{ grid-template-rows:auto 1fr !important; grid-template-columns:1fr !important; }
-  body.modo-movil header{ flex-wrap:wrap; padding:8px 10px; gap:8px; row-gap:6px; }
-  body.modo-movil header .brand{ font-size:13px; }
+  body.modo-movil header{ flex-wrap:wrap; padding:6px 10px; gap:8px; row-gap:6px; }
+  body.modo-movil header .brand-s, body.modo-movil header .brand-sep{ display:none; }
+  body.modo-movil header .brand-t{ font-size:13px; }
   body.modo-movil header .userinfo{ flex-wrap:wrap; gap:6px; margin-left:0; width:100%; justify-content:flex-start; }
-  body.modo-movil header .role-badge{ font-size:9.5px; padding:3px 8px; }
-  body.modo-movil header select#viewAsSelect{ font-size:11px; }
+  body.modo-movil .hb{ padding:0 8px 0 5px; } body.modo-movil .hb .bt{ display:none; }
+  body.modo-movil .um{ margin-left:auto; } body.modo-movil .um-panel{ right:0; }
 
   /* El panel lateral pasa a ser un cajón (drawer) sobre el mapa en vez de achicar el mapa */
   body.modo-movil #sidebar{
@@ -361,7 +389,6 @@
   body.modo-movil header button.logout{ padding:8px 10px; font-size:12px; }
   body.modo-movil .login-box{ width:calc(100vw - 48px); padding:24px; }
 
-  #toggleModoDispositivoBtn{ font-size:15px; }
 </style>
 </head>
 <body>
@@ -385,29 +412,47 @@
 <div id="app">
   <header>
     <img class="logo-lf" src="logo-laflorida.png" alt="La Florida municipalidad">
-    <div class="brand"><span class="dot"></span>Gestión de Fallas de Alumbrado Público</div>
-    <button class="logout" id="fallasRapidoBtn" style="display:none; width:27px; height:27px; padding:0; font-size:14px; margin-left:4px; align-items:center; justify-content:center;" title="Ver todas las fallas">⚡</button>
-    <button class="logout" id="historialModoBtn" style="display:none; width:27px; height:27px; padding:0; font-size:14px; margin-left:4px; align-items:center; justify-content:center;" title="Modo historial: clic en un punto o circuito para ver su historial">👀</button>
+    <span class="hb-sep brand-sep"></span>
+    <div class="brand"><div class="brand-t">Gestión de Fallas</div><div class="brand-s">Alumbrado Público</div></div>
     <div class="userinfo">
-      <span id="userNombre"></span>
-      <span class="role-badge" id="userRol"></span>
-      <select id="viewAsSelect" style="display:none; border-radius:6px; border:1px solid rgba(255,255,255,0.4); background:rgba(255,255,255,0.12); color:#fff; font-size:11.5px; padding:5px 6px;">
-        <option value="" style="color:#000;">Ver como: Admin</option>
-        <option value="ito" style="color:#000;">Ver como: ITO</option>
-        <option value="ito2" style="color:#000;">Ver como: ITO2</option>
-        <option value="contratista" style="color:#000;">Ver como: Contratista</option>
-        <option value="camion" style="color:#000;">Ver como: Camión</option>
-        <option value="observador" style="color:#000;">Ver como: Observador</option>
-      </select>
-      <button class="logout" id="statsBtn" style="margin-right:4px;">📊 Estadísticas</button>
-      <button class="logout" id="todasBtn" style="margin-right:4px; display:none;">📋 Todas las fallas</button>
-      <button class="logout" id="toggleSearchBtn" style="margin-right:4px;">🔍 Buscador</button>
-      <button class="logout" id="usuariosBtn" style="margin-right:4px; display:none;">👥 Usuarios</button>
-      <button class="logout" id="notificadoresBtn" style="margin-right:4px; display:none;">📣 Notificadores</button>
-      <button class="logout" id="cambiarPassBtn" style="margin-right:4px;">🔑 Contraseña</button>
-      <button class="logout" id="toggleSidebarBtn" title="Mostrar/ocultar panel">☰ Panel</button>
-      <button class="logout" id="toggleModoDispositivoBtn" title="Cambiar entre modo Escritorio y modo Móvil" style="margin-left:4px;">🖥️ Escritorio</button>
-      <button class="logout" id="logoutBtn">Salir</button>
+      <button type="button" class="hb" id="statsBtn"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span class="bt">Estadísticas</span></button>
+      <button type="button" class="hb" id="todasBtn" style="display:none;"><span class="hb-chip" style="background:#e6eefb;color:#2a5db0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg></span><span class="bt">Todas las fallas</span></button>
+      <button type="button" class="hb" id="toggleSearchBtn"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span><span class="bt">Buscador</span></button>
+      <span class="hb-sep"></span>
+      <button type="button" class="hb-ic" id="fallasRapidoBtn" title="Ver todas las fallas" aria-label="Ver todas las fallas" style="display:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:#ffd54a"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></button>
+      <button type="button" class="hb-ic" id="historialModoBtn" title="Modo historial: clic en un punto o circuito para ver su historial" aria-label="Modo historial: clic en un punto o circuito para ver su historial" style="display:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:#b9a3f5"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
+      <button type="button" class="hb-ic" id="toggleSidebarBtn" title="Mostrar/ocultar panel" aria-label="Mostrar/ocultar panel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:#9ee0c0"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
+      <span class="hb-sep"></span>
+      <div class="um" id="userMenuBox">
+        <button type="button" class="um-btn" id="userMenuBtn" aria-haspopup="true" aria-expanded="false">
+          <span class="um-av" id="userAvatar"></span>
+          <span class="um-txt"><span class="um-n" id="userNombre"></span><span class="um-r" id="userRol"></span></span>
+          <svg class="um-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="um-panel" id="userMenuPanel" hidden>
+          <div class="um-head"><span class="um-av2" id="userAvatar2"></span><span class="um-ht"><span class="um-n2" id="userNombre2"></span><span class="um-r2" id="userRol2"></span></span></div>
+          <div class="um-body">
+            <div id="viewAsBox" style="display:none;">
+              <div class="um-lbl">Ver como</div>
+              <select id="viewAsSelect" class="um-sel">
+                <option value="">Admin</option>
+                <option value="ito">ITO</option>
+                <option value="ito2">ITO2</option>
+                <option value="contratista">Contratista</option>
+                <option value="camion">Camión</option>
+                <option value="observador">Observador</option>
+              </select>
+              <div class="um-div"></div>
+            </div>
+            <button type="button" class="um-item" id="usuariosBtn" style="display:none;"><span class="um-ico" style="background:#e6eefb;color:#2a5db0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/></svg></span><span class="lbl">Usuarios</span></button>
+            <button type="button" class="um-item" id="notificadoresBtn" style="display:none;"><span class="um-ico" style="background:#fff1d9;color:#8a5200;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/></svg></span><span class="lbl">Notificadores</span></button>
+            <button type="button" class="um-item" id="cambiarPassBtn"><span class="um-ico" style="background:#eef2f0;color:#55665c;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg></span><span class="lbl">Cambiar contraseña</span></button>
+            <button type="button" class="um-item" id="toggleModoDispositivoBtn" title="Cambiar entre modo Escritorio y modo Móvil"><span class="um-ico" style="background:#e3f1ea;color:#1f7a52;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span class="lbl">Modo: Escritorio</span></button>
+            <div class="um-div"></div>
+            <button type="button" class="um-item um-out" id="logoutBtn"><span class="um-ico" style="background:#fbe7e5;color:#c1443c;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/></svg></span><span class="lbl">Salir</span></button>
+          </div>
+        </div>
+      </div>
     </div>
   </header>
   <div id="mapArea" style="display:flex; flex-direction:column; min-height:0; height:100%;">
@@ -989,18 +1034,17 @@ async function cargarPerfilYIniciar(userId){
     currentUser = data[0];
     document.getElementById('login').style.display = 'none';
     document.getElementById('app').style.display = 'grid';
-    document.getElementById('userNombre').textContent = currentUser.nombre;
-    document.getElementById('userRol').textContent = rolVisible(currentUser.rol);
+    pintarUsuarioBarra(currentUser.nombre, rolVisible(currentUser.rol));
     if(currentUser.rol === 'admin'){
       // El selector "Ver como" y el botón ⚡ SIEMPRE se mantienen visibles para el
       // admin real, sin importar qué rol esté simulando en un momento dado.
-      document.getElementById('viewAsSelect').style.display = 'inline-block';
+      document.getElementById('viewAsBox').style.display = 'block';
       document.getElementById('viewAsSelect').onchange = (e) => {
         modoVista = e.target.value || null;
         actualizarVisibilidadPorRol();
       };
-      document.getElementById('fallasRapidoBtn').style.display = 'inline-flex';
-      document.getElementById('historialModoBtn').style.display = 'inline-flex';
+      document.getElementById('fallasRapidoBtn').style.display = '';
+      document.getElementById('historialModoBtn').style.display = '';
     }
     actualizarVisibilidadPorRol();
     initMap();
@@ -1018,14 +1062,14 @@ function actualizarVisibilidadPorRol(){
   const rol = rolEfectivo();
   // El botón de gestión de usuarios sí sigue la simulación (un ITO/Contratista/Observador
   // real no vería este botón, así que tampoco debe verse al simular esos roles)
-  document.getElementById('usuariosBtn').style.display = (rol === 'admin') ? 'inline-block' : 'none';
-  document.getElementById('notificadoresBtn').style.display = (rol === 'admin') ? 'inline-block' : 'none';
+  document.getElementById('usuariosBtn').style.display = (rol === 'admin') ? '' : 'none';
+  document.getElementById('notificadoresBtn').style.display = (rol === 'admin') ? '' : 'none';
   document.getElementById('reportSection').style.display = (rol === 'ito' || rol === 'ito2' || rol === 'admin' || rol === 'contratista2') ? 'block' : 'none';
   // Contratista2 solo puede ingresar fallas individuales ("Agregar falla"), no inspecciones
   document.getElementById('btnInformarInspeccion').style.display = (rol === 'contratista2') ? 'none' : '';
   document.getElementById('repararSection').style.display = ['contratista','contratista2','camion'].includes(rol) ? 'block' : 'none';
-  document.getElementById('statsBtn').style.display = (rol === 'contratista' || rol === 'contratista2') ? 'none' : 'inline-block';
-  document.getElementById('todasBtn').style.display = (rol === 'admin' || rol === 'ito' || rol === 'ito2' || rol === 'contratista' || rol === 'contratista2') ? 'inline-block' : 'none';
+  document.getElementById('statsBtn').style.display = (rol === 'contratista' || rol === 'contratista2') ? 'none' : '';
+  document.getElementById('todasBtn').style.display = (rol === 'admin' || rol === 'ito' || rol === 'ito2' || rol === 'contratista' || rol === 'contratista2') ? '' : 'none';
   // si cambia el rol efectivo (ej. "ver como"), se sale de cualquier modo de reporte activo
   salirModoInformar();
 }
@@ -1268,6 +1312,23 @@ function salirModoInformar(limpiarGuardado = false){
   renderFallasOnMap(); // redibuja para que las fallas reparadas vuelvan a mostrar su popup normal
 }
 
+const _ini = (n) => String(n || '?').trim().split(/\s+/).slice(0,2).map(x => x[0]).join('').toUpperCase();
+function pintarUsuarioBarra(nombre, rolTxt){
+  ['userNombre','userNombre2'].forEach(i => { const e = document.getElementById(i); if(e) e.textContent = nombre; });
+  ['userRol','userRol2'].forEach(i => { const e = document.getElementById(i); if(e) e.textContent = rolTxt; });
+  ['userAvatar','userAvatar2'].forEach(i => { const e = document.getElementById(i); if(e) e.textContent = _ini(nombre); });
+}
+
+// ---------- Menú de usuario (barra superior) ----------
+(function(){
+  const btn = document.getElementById('userMenuBtn'), panel = document.getElementById('userMenuPanel');
+  const cerrar = () => { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  btn.addEventListener('click', (e) => { e.stopPropagation(); panel.hidden = !panel.hidden; btn.setAttribute('aria-expanded', String(!panel.hidden)); });
+  panel.addEventListener('click', (e) => { if(e.target.closest('.um-item')) cerrar(); });
+  document.addEventListener('click', (e) => { if(!panel.hidden && !e.target.closest('#userMenuBox')) cerrar(); });
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && !panel.hidden) cerrar(); });
+})();
+
 document.getElementById('toggleSearchBtn').onclick = () => {
   const box = document.getElementById('searchBox');
   box.style.display = box.style.display === 'none' ? 'block' : 'none';
@@ -1280,7 +1341,7 @@ function aplicarModoDispositivo(modo){
   const movil = modo === 'movil';
   document.body.classList.toggle('modo-movil', movil);
   const btn = document.getElementById('toggleModoDispositivoBtn');
-  if(btn) btn.textContent = movil ? '📱 Móvil' : '🖥️ Escritorio';
+  if(btn){ const l = btn.querySelector('.lbl'); if(l) l.textContent = movil ? 'Modo: Móvil' : 'Modo: Escritorio'; }
   // Limpiamos estilos inline que haya dejado el otro modo, para que no choquen con las reglas CSS.
   const sidebar = document.getElementById('sidebar');
   const app = document.getElementById('app');
@@ -3195,7 +3256,7 @@ document.getElementById('fallasRapidoBtn').onclick = () => mostrarModalTodas();
 document.getElementById('historialModoBtn').onclick = () => {
   modoHistorial = !modoHistorial;
   const btn = document.getElementById('historialModoBtn');
-  btn.style.background = modoHistorial ? '#2563a8' : 'transparent';
+  btn.style.background = modoHistorial ? '#7c3aed' : '';
   btn.title = modoHistorial
     ? 'Modo historial ACTIVO — clic en un punto o circuito (clic aquí de nuevo para salir)'
     : 'Modo historial: clic en un punto o circuito para ver su historial';
@@ -5996,8 +6057,7 @@ async function guardarUsuariosCambiados(){
         currentUser.nombre = e.nombre; currentUser.rol = e.rol;
         currentUser.notificador_externo_habilitado = !!r[0].notificador_externo_habilitado;
         currentUser.foto_obligatoria = !!r[0].foto_obligatoria;
-        document.getElementById('userNombre').textContent = e.nombre;
-        document.getElementById('userRol').textContent = rolVisible(e.rol);
+        pintarUsuarioBarra(e.nombre, rolVisible(e.rol));
       }
     }catch(err){ errores.push(`${e.nombre}: ${err.message}`); }
   }
