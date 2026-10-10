@@ -116,6 +116,27 @@ function sumarDiasStr(fechaStr, dias) {
   return new Date(Date.UTC(y, m - 1, d + dias)).toISOString().slice(0, 10);
 }
 function fmtFecha(iso) { return iso ? FMT_VISTA.format(new Date(iso)) : '—'; }
+// Fecha corta y hora en horario de Chile (dd/mm, hh:mm). Vacía si no hay fecha.
+function fmtFechaHoraCorta(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).map((x) => [x.type, x.value]));
+  return `${p.day}/${p.month}, ${p.hour}:${p.minute}`;
+}
+// Duración desde que se informó la falla (mismo criterio que la web de escritorio).
+function fmtDuracion(iso) {
+  if (!iso) return '—';
+  const ms = Date.now() - new Date(iso).getTime();
+  if (isNaN(ms) || ms < 0) return '0 min';
+  const total = Math.floor(ms / 60000);
+  const dias = Math.floor(total / 1440), horas = Math.floor((total % 1440) / 60), min = total % 60;
+  const partes = [];
+  if (dias > 0) partes.push(`${dias} día${dias !== 1 ? 's' : ''}`);
+  if (horas > 0) partes.push(`${horas} h`);
+  if (dias === 0 && min > 0) partes.push(`${min} min`);
+  return partes.length ? partes.join(' ') : '0 min';
+}
 function fmtFechaCorta(fechaStr) { const [y, m, d] = fechaStr.split('-'); return `${d}-${m}-${y}`; }
 function hace(iso) {
   if (!iso) return '';
@@ -941,14 +962,19 @@ async function abrirFalla(p, geom) {
     ['OS', p.ot || '—'],
     p.orden_externa ? ['Orden externa', p.orden_externa] : null,
     ['Tipo', tipoLabel(p)],
-    p.tipo === 'punto' ? ['Llave / N.° mun.', `${p.llave ?? '—'} / ${p.nro_mun ?? '—'}`] : ['Puntos afectados', p.puntos_afectados ?? '—'],
+    p.tipo === 'punto' ? ['Llave / N.° mun.', `${p.llave ?? '—'} / ${p.nro_mun ?? '—'}`] : null,
     p.cardinalidad ? ['Cardinalidad', p.cardinalidad] : null,
-    ['Informó', p.nombre_creador || p.nombre_real_creador || '—'],
-    ['Fecha de la falla', fmtFecha(p.fecha_falla)],
-    p.asignado_camion_nombre ? ['Camión asignado', p.asignado_camion_nombre] : null,
-    p.estado === 'reparada' ? ['Reparada por', p.reparado_por_nombre || '—'] : null,
-    p.estado === 'reparada' ? ['Fecha de reparación', fmtFecha(p.fecha_reparacion)] : null,
+    ['Informada', fmtFecha(p.fecha_falla)],
+    ['Inspector', p.nombre_creador || p.nombre_real_creador || '—'],
+    ['Duración de la falla', fmtDuracion(p.fecha_falla)],
+    p.tipo !== 'punto' ? ['Puntos afectados', p.puntos_afectados ?? '—'] : null,
+    p.asignado_camion_nombre ? ['Asignado por', `${p.asignado_por_nombre || '—'}${p.fecha_asignacion ? ' · ' + fmtFechaHoraCorta(p.fecha_asignacion) : ''}`] : null,
+    // "Asignado a" solo en fallas activas; en reparadas/pendientes la zona de respuesta lleva "Responde"
+    p.asignado_camion_nombre && p.estado !== 'reparada' && p.estado !== 'pendiente' ? ['Asignado a', p.asignado_camion_nombre] : null,
   ].filter(Boolean);
+  const kvRespuesta = p.estado === 'reparada'
+    ? [['Responde', p.reparado_por_nombre || '—'], ['Fecha respuesta', fmtFecha(p.fecha_reparacion)]]
+    : [];
   const puedeCerrarEsta = puedeCerrar() && !p.cascada && p.estado !== 'reparada';
   const puedeNuevaAqui = puedeReportar() && p.estado === 'reparada';
   const puedeAsignarEsta = puedeAsignar() && !p.cascada && p.estado !== 'reparada';
@@ -956,8 +982,11 @@ async function abrirFalla(p, geom) {
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
     <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-    ${p.estado === 'reparada' && p.descripcion_reparacion ? `<h3>Trabajo realizado</h3><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
-    ${p.estado === 'reparada' ? '<div id="fotosFalla"></div>' : ''}
+    ${p.estado === 'reparada' ? `<div style="border-top:1px solid var(--linea);margin-top:12px;padding-top:4px">
+      <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+      ${p.descripcion_reparacion ? `<h3>Trabajo realizado</h3><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
+      <div id="fotosFalla"></div>
+    </div>` : ''}
     ${p.estado === 'pendiente' ? `<div class="aviso"><b>Pendiente</b> por ${esc(p.pendiente_por_nombre || '—')} · ${esc(fmtFecha(p.fecha_pendiente))}<br><pre class="texto">${esc(p.motivo_pendiente || '')}</pre></div>` : ''}
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
