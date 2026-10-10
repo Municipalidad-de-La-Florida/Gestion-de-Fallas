@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.13.2';
+const VERSION_APP = '1.14.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -413,6 +413,7 @@ function ocupar(btn, fn) {
 let hojaAbierta = false;
 function abrirHoja(html) {
   $('#hojaContenido').innerHTML = html;
+  $('#hoja').classList.remove('hoja-menu');
   $('#hoja').hidden = false;
   $('#velo').hidden = false;
   $('#hoja').scrollTop = 0;
@@ -1510,17 +1511,23 @@ async function revisarVersion() {
 const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const esStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 $('#btnMenu').addEventListener('click', () => {
+  const iniciales = String(S.perfil.nombre || '?').trim().split(/\s+/).slice(0, 2).map((x) => x[0]).join('').toUpperCase();
+  const ico = (d) => `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const chev = '<svg class="m-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
   const h = abrirHoja(`
-    <h2>${esc(S.perfil.nombre)}</h2>
-    <div class="hint">Perfil: ${esc(rolVisible())} · versión ${VERSION_APP}</div>
-    <div class="acciones" style="margin-top:14px">
-      ${S.instalar ? '<button id="mInstalar" class="btn btn-primario">Instalar la app en este teléfono</button>' : ''}
+    <div class="m-cab">
+      <div class="m-avatar">${esc(iniciales)}</div>
+      <div><div class="m-nombre">${esc(S.perfil.nombre)}</div><span class="m-pastilla">${esc(rolVisible())} · v${VERSION_APP}</span></div>
+    </div>
+    <div class="m-lista">
+      ${S.instalar ? '<button id="mInstalar" class="btn btn-primario" style="margin:10px 0 6px;width:100%">Instalar la app en este teléfono</button>' : ''}
       ${!S.instalar && esIOS() && !esStandalone() ? '<div class="aviso">Para instalarla en iPhone: toca el botón <b>Compartir</b> de Safari y luego <b>Añadir a pantalla de inicio</b>.</div>' : ''}
-      <button id="mPush" class="btn btn-secundario" hidden>Avisos</button>
-      ${rol() === 'admin' ? '<button id="mUsuarios" class="btn btn-secundario">Gestionar usuarios</button>' : ''}
-      <button id="mActualizar" class="btn btn-secundario">Actualizar la app ahora</button>
-      <button id="mSalir" class="btn btn-peligro">Cerrar sesión</button>
+      <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
+      ${rol() === 'admin' ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Gestionar usuarios</span>${chev}</button>` : ''}
+      <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
+      <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
     </div>`);
+  $('#hoja').classList.add('hoja-menu');
   const i = $('#mInstalar', h);
   if (i) i.addEventListener('click', async () => { S.instalar.prompt(); await S.instalar.userChoice; S.instalar = null; cerrarHoja(); });
   const mp = $('#mPush', h);
@@ -1528,7 +1535,7 @@ $('#btnMenu').addEventListener('click', () => {
     suscripcionActual().then((sub) => {
       if (!document.body.contains(mp)) return;
       const on = Notification.permission === 'granted' && !!sub;
-      mp.hidden = false; mp.textContent = on ? 'Desactivar avisos en este teléfono' : 'Activar avisos en este teléfono';
+      mp.hidden = false; $('.t', mp).textContent = on ? 'Desactivar avisos' : 'Activar avisos';
       mp.addEventListener('click', ocupar(mp, async () => {
         if (on) { await desactivarPush(); toast('Avisos desactivados', 'ok'); } else { await activarPush(); toast('Avisos activados', 'ok'); }
         cerrarHoja();
@@ -1539,7 +1546,7 @@ $('#btnMenu').addEventListener('click', () => {
   }
   const mu = $('#mUsuarios', h);
   if (mu) mu.addEventListener('click', () => formUsuarios());
-  $('#mActualizar', h).addEventListener('click', () => { $('#mActualizar', h).textContent = 'Actualizando…'; forzarActualizacion(); });
+  $('#mActualizar', h).addEventListener('click', () => { $('#mActualizar', h).querySelector('.t').textContent = 'Actualizando…'; forzarActualizacion(); });
   $('#mSalir', h).addEventListener('click', async () => { try { await desactivarPush(); } catch (e) { /* */ } salir(); });
 });
 window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.instalar = e; });

@@ -190,3 +190,26 @@ textarea.campo{ min-height:70px; }
 .btn-masivo{ position:absolute; top:16px; right:58px; z-index:2; height:30px; padding:0 14px; border:2px solid #7c3aed; background:#fff; color:#7c3aed; border-radius:10px; font-size:13px; font-weight:700; }
 .btn-masivo.on{ background:#7c3aed; color:#fff; box-shadow:0 0 0 3px rgba(124,58,237,.25); }
 #hojaContenido:has(.btn-masivo) h2{ margin-right:130px; }
+
+/* ---------- Menú (panel de opciones) ---------- */
+#hoja.hoja-menu{ padding:0; border-radius:18px 18px 0 0; }
+#hoja.hoja-menu #hojaContenido{ padding-bottom:calc(var(--safe-b) + 10px); }
+.hoja-menu .hoja-asa{ position:absolute; top:6px; left:50%; transform:translateX(-50%); width:36px; height:4px; margin:0; background:rgba(255,255,255,.35); z-index:2; }
+.hoja-menu .hoja-x{ top:10px; right:8px; width:36px; height:36px; background:none; color:rgba(255,255,255,.85); font-size:18px; z-index:2; }
+.m-cab{ display:flex; align-items:center; gap:12px; background:var(--verde); color:#fff; padding:24px 18px 16px; }
+.m-avatar{ width:40px; height:40px; border-radius:50%; background:#fff; color:var(--verde); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex:0 0 auto; }
+.m-nombre{ font-size:16px; font-weight:600; line-height:1.2; }
+.m-pastilla{ display:inline-block; margin-top:3px; padding:1px 9px; border-radius:20px; background:rgba(255,255,255,.18); font-size:11.5px; }
+.m-lista{ padding:4px 18px 4px; }
+.m-fila{ display:flex; align-items:center; gap:14px; width:100%; height:52px; padding:0 4px; border:0; border-top:1px solid #edf1ef; background:none; color:var(--tinta); font-size:15px; font-weight:500; text-align:left; }
+.m-fila:first-child, .m-fila[hidden] + .m-fila:not([hidden]){ border-top-color:transparent; }
+.m-fila[hidden]{ display:none; }
+.m-fila:active{ background:#f4f7f5; }
+.m-fila .t{ flex:1; }
+.m-chev{ color:#9aa6a0; flex:0 0 auto; }
+.m-ico{ width:34px; height:34px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex:0 0 auto; }
+.m-ambar{ background:#fff1d9; color:#8a5200; }
+.m-azul{ background:#e6eefb; color:#2a5db0; }
+.m-verde{ background:#e3f1ea; color:#1f7a52; }
+.m-rojo{ color:var(--rojo); }
+.m-rojo-ico{ background:#fbe7e5; color:var(--rojo); }
