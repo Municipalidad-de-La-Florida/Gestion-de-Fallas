@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.15.1';
+const VERSION_APP = '1.16.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -390,6 +390,7 @@ const S = {
   centrarAlFijar: false,
   vista: 'mapa',
   filtro: 'todas',
+  estadosOff: {},
   busqueda: '',
   instalar: null,
 };
@@ -670,6 +671,7 @@ function dibujarFallas() {
     const p = f.properties;
     if (soloSin && (p.estado === 'reparada' || p.cascada || p.asignado_camion_id)) return;
     if (soloMasivo() && (!p.masivo || p.cascada)) return;
+    if (S.estadosOff[p.estado]) return;
     const reparada = p.estado === 'reparada';
     if (p.cascada && z < ZOOM_DATOS) return;
     const color = COLOR_ESTADO[p.estado] || '#d33a2c';
@@ -1194,7 +1196,8 @@ function renderLista() {
   if (filtroSinAsignar()) items = items.filter((f) => !f.properties.asignado_camion_id);
   if (soloMasivo()) items = items.filter((f) => f.properties.masivo);
   const total = items.length;
-  if (S.filtro !== 'todas') items = items.filter((f) => f.properties.estado === S.filtro || (S.filtro === 'reportada' && f.properties.estado === 'reiterada'));
+  items = items.filter((f) => !S.estadosOff[f.properties.estado]);
+  actualizarFiltrosListaUI();
   if (q) {
     items = items.filter((f) => {
       const p = f.properties;
@@ -1224,9 +1227,25 @@ $('#listaSinAsignar').addEventListener('change', (e) => fijarSinAsignar(e.target
 $('#listaMasivo').addEventListener('change', (e) => fijarMasivo(e.target.checked));
 $('#badgeSinAsignar').addEventListener('click', () => fijarSinAsignar(false));
 $('#listaBuscar').addEventListener('input', (e) => { S.busqueda = e.target.value; renderLista(); });
-$$('#listaChips .chip').forEach((b) => b.addEventListener('click', () => {
-  $$('#listaChips .chip').forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); S.filtro = b.dataset.f; renderLista();
+/* Panel de filtros (estado, sin asignar, masivo): afecta a la lista y al mapa */
+function cuentaFiltrosLista() { return Object.values(S.estadosOff).filter(Boolean).length + (filtroSinAsignar() ? 1 : 0) + (soloMasivo() ? 1 : 0); }
+function actualizarFiltrosListaUI() {
+  const n = cuentaFiltrosLista(), num = $('#filtrosListaNum'), btn = $('#btnFiltrosLista');
+  if (!num) return;
+  num.textContent = n; num.hidden = n === 0; btn.classList.toggle('on', n > 0);
+  $$('#listaChips .fchip').forEach((c) => c.classList.toggle('off', !!S.estadosOff[c.dataset.e]));
+}
+$('#btnFiltrosLista').addEventListener('click', () => {
+  const p = $('#filtrosListaPanel'); p.hidden = !p.hidden; $('#btnFiltrosLista').setAttribute('aria-expanded', String(!p.hidden));
+});
+$$('#listaChips .fchip').forEach((b) => b.addEventListener('click', () => {
+  S.estadosOff[b.dataset.e] = !S.estadosOff[b.dataset.e]; dibujarFallas(); renderLista();
 }));
+$('#filtrosListaLimpiar').addEventListener('click', () => {
+  S.estadosOff = {};
+  try { localStorage.setItem('fa_sin_asignar', '0'); localStorage.setItem('fa_solo_masivo', '0'); } catch (e) { /* */ }
+  actualizarSinAsignarUI(); dibujarFallas(); renderLista();
+});
 
 function cambiarVista(v) {
   S.vista = v;
