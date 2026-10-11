@@ -55,6 +55,7 @@ main{ flex:1 1 auto; position:relative; min-height:0; }
 .zoom-aviso{ position:absolute; z-index:500; top:10px; left:50%; transform:translateX(-50%); background:rgba(24,33,29,.86); color:#fff; padding:8px 14px; border-radius:20px; font-size:13px; pointer-events:none; white-space:nowrap; }
 .fab{ position:absolute; z-index:500; right:14px; bottom:calc(var(--safe-b) + 84px); width:46px; height:46px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:50%; border:0; background:#fff; color:var(--verde); box-shadow:0 4px 14px rgba(0,0,0,.2); }
 .fab.activo{ background:var(--verde); color:#fff; }
+.fab2{ bottom:calc(var(--safe-b) + 140px); }
 
 #navInferior{ position:absolute; z-index:800; left:14px; right:14px; bottom:calc(var(--safe-b) + 12px); height:58px; display:flex; align-items:center; gap:4px; padding:0 6px; background:#fff; border-radius:20px; box-shadow:0 6px 22px rgba(0,0,0,.2); }
 .nav-btn{ flex:1; height:46px; border:0; border-radius:15px; background:none; padding:0 4px; font-size:13px; font-weight:600; color:var(--tinta-2); display:flex; align-items:center; justify-content:center; gap:7px; position:relative; white-space:nowrap; }
