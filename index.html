@@ -764,6 +764,19 @@
           <select id="inspItoSelect" style="width:100%; margin-top:4px;">
             <option value="">Todos los ITOs</option>
           </select>
+          <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:10px;">
+            <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Resultado:</span>
+            <button type="button" class="chip-estado activo" data-ires="todas" onclick="fijarFiltroInsp('res','todas')">Todas</button>
+            <button type="button" class="chip-estado" data-ires="con" onclick="fijarFiltroInsp('res','con')">Con fallas</button>
+            <button type="button" class="chip-estado" data-ires="sin" onclick="fijarFiltroInsp('res','sin')">Sin fallas</button>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:8px;">
+            <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Sus fallas:</span>
+            <button type="button" class="chip-estado" data-iest="abiertas" onclick="fijarFiltroInsp('est','abiertas')">Con abiertas</button>
+            <button type="button" class="chip-estado" data-iest="reiteradas" onclick="fijarFiltroInsp('est','reiteradas')">Con reiteradas</button>
+            <button type="button" class="chip-estado" data-iest="pendientes" onclick="fijarFiltroInsp('est','pendientes')">Con pendientes</button>
+            <button type="button" class="chip-estado" data-iest="reparadas" onclick="fijarFiltroInsp('est','reparadas')">Todo reparado</button>
+          </div>
         </div>
         <div id="selectorAnalisis" style="display:none;">
           <div class="periodo-row" style="margin-bottom:10px;">
@@ -4271,6 +4284,7 @@ async function cargarItosEst(){
   pintarFiltrosEst();
 }
 function reiniciarFiltrosEst(){
+  reiniciarFiltrosInsp();
   FILTROS_EST.medir = 'informada'; FILTROS_EST.masivo = 'todas'; FILTROS_EST.asignadores.clear(); FILTROS_EST.ito = '';
   pintarFiltrosEst();
 }
@@ -4522,12 +4536,42 @@ function actualizarSelectorIto(){
   sel.value = itos.has(previo) ? previo : '';
 }
 
+// Filtros de la lista de inspecciones: resultado (con/sin fallas) y estado de sus fallas (varios a la vez: basta que cumpla uno)
+const FILTRO_INSP = {res: 'todas', est: new Set()};
+function reiniciarFiltrosInsp(){ FILTRO_INSP.res = 'todas'; FILTRO_INSP.est.clear(); pintarChipsInsp(); }
+function pintarChipsInsp(){
+  document.querySelectorAll('[data-ires]').forEach(c => c.classList.toggle('activo', c.dataset.ires === FILTRO_INSP.res));
+  document.querySelectorAll('[data-iest]').forEach(c => c.classList.toggle('activo', FILTRO_INSP.est.has(c.dataset.iest)));
+}
+function fijarFiltroInsp(k, v){
+  if(k === 'res') FILTRO_INSP.res = v;
+  else if(FILTRO_INSP.est.has(v)) FILTRO_INSP.est.delete(v);
+  else FILTRO_INSP.est.add(v);
+  pintarChipsInsp();
+  renderListadoInspecciones();
+}
+window.fijarFiltroInsp = fijarFiltroInsp;
+function pasaFiltroInsp(i){
+  const n = i.fallas || 0;
+  if(FILTRO_INSP.res === 'con' && !n) return false;
+  if(FILTRO_INSP.res === 'sin' && n) return false;
+  if(FILTRO_INSP.est.size){
+    const abiertas = (i.reportadas || 0) + (i.pendientes || 0) + (i.reiteradas || 0);
+    const cumple = (FILTRO_INSP.est.has('abiertas') && abiertas > 0)
+      || (FILTRO_INSP.est.has('reiteradas') && (i.reiteradas || 0) > 0)
+      || (FILTRO_INSP.est.has('pendientes') && (i.pendientes || 0) > 0)
+      || (FILTRO_INSP.est.has('reparadas') && n > 0 && abiertas === 0);
+    if(!cumple) return false;
+  }
+  return true;
+}
 function renderListadoInspecciones(){
   const content = document.getElementById('statsContent');
   const itoSel = document.getElementById('inspItoSelect').value;
-  const filas = inspeccionesCache.filter(i => !itoSel || i.ito_id === itoSel);
+  const filas = inspeccionesCache.filter(i => (!itoSel || i.ito_id === itoSel) && pasaFiltroInsp(i));
   if(!filas.length){
-    content.innerHTML = `<div class="empty-state">No hay inspecciones registradas ${itoSel ? 'de ese ITO ' : ''}en este rango de fechas.</div>`;
+    const conFiltros = itoSel || FILTRO_INSP.res !== 'todas' || FILTRO_INSP.est.size;
+    content.innerHTML = `<div class="empty-state">${conFiltros ? 'Ninguna inspección cumple los filtros elegidos en este rango de fechas.' : 'No hay inspecciones registradas en este rango de fechas.'}</div>`;
     return;
   }
   const totalFallas = filas.reduce((s, i) => s + (i.fallas || 0), 0);
@@ -4731,7 +4775,13 @@ function renderDetalleInspeccion(det){
     enlazarEditarInspeccion(det);
     return;
   }
+  const chipsDetalle = ['reportada','pendiente','reiterada','reparada'].filter(e => cuenta[e]).map(e =>
+    `<button type="button" class="chip-estado" data-dest="${e}"><span class="dot" style="background:${colorEstado[e]}"></span>${e.charAt(0).toUpperCase() + e.slice(1)} <span class="n">(${cuenta[e]})</span></button>`).join('');
   cont.innerHTML = encabezado + `
+    <div id="inspFiltroDetalle" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-bottom:8px;">
+      <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Estado:</span>
+      <button type="button" class="chip-estado activo" data-dest="todas">Todas <span class="n">(${fallas.length})</span></button>${chipsDetalle}
+    </div>
     <table id="inspeccionTabla" style="width:100%; border-collapse:collapse;">
       <thead>
         <tr style="text-align:left; border-bottom:2px solid var(--line);">
@@ -4745,7 +4795,7 @@ function renderDetalleInspeccion(det){
       </thead>
       <tbody>
         ${fallas.map(f => `
-          <tr data-id="${escHtml(f.id)}">
+          <tr data-id="${escHtml(f.id)}" data-estado="${escHtml(f.estado)}">
             <td class="mono">${escHtml(f.ot || '—')}</td>
             <td><b>${escHtml(f.tipo_falla)}</b><div class="hint">${escHtml(descripcionCodigoFalla(f))}</div></td>
             <td>${htmlUbicacionFalla(f)}</td>
@@ -4757,6 +4807,22 @@ function renderDetalleInspeccion(det){
     </table>`;
   cont.querySelectorAll('#inspeccionTabla tbody tr').forEach(tr => {
     tr.onclick = () => enfocarFallaInspeccion(tr.dataset.id);
+  });
+  // Filtro por estado dentro del detalle (varios a la vez; ninguno marcado = todas)
+  const estDetalle = new Set();
+  const aplicarFiltroDetalle = () => {
+    cont.querySelectorAll('#inspFiltroDetalle [data-dest]').forEach(c =>
+      c.classList.toggle('activo', c.dataset.dest === 'todas' ? estDetalle.size === 0 : estDetalle.has(c.dataset.dest)));
+    cont.querySelectorAll('#inspeccionTabla tbody tr').forEach(tr => {
+      tr.style.display = (!estDetalle.size || estDetalle.has(tr.dataset.estado)) ? '' : 'none';
+    });
+  };
+  cont.querySelectorAll('#inspFiltroDetalle [data-dest]').forEach(c => c.onclick = () => {
+    const e = c.dataset.dest;
+    if(e === 'todas') estDetalle.clear();
+    else if(estDetalle.has(e)) estDetalle.delete(e);
+    else estDetalle.add(e);
+    aplicarFiltroDetalle();
   });
   enlazarPdfInspeccion();
   enlazarContinuarInspeccion(insp);
