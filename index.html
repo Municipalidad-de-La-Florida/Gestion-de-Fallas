@@ -735,6 +735,9 @@
             <button class="periodo-btn" data-p="hoy">Hoy</button>
             <button class="periodo-btn" data-p="semana">Últimos 7 días</button>
             <button class="periodo-btn" data-p="mes">Últimos 30 días</button>
+            <button class="periodo-btn" data-p="trimestre">Últimos 90 días</button>
+            <button class="periodo-btn" data-p="estemes">Este mes</button>
+            <button class="periodo-btn" data-p="mesant">Mes anterior</button>
           </div>
           <div class="hint">O elige las fechas (para un solo día, la misma en ambas):</div>
           <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
@@ -747,6 +750,9 @@
           <div class="periodo-row" style="margin-bottom:10px;">
             <button class="insp-rango-btn" data-p="semana">Últimos 7 días</button>
             <button class="insp-rango-btn" data-p="mes">Últimos 30 días</button>
+            <button class="insp-rango-btn" data-p="trimestre">Últimos 90 días</button>
+            <button class="insp-rango-btn" data-p="estemes">Este mes</button>
+            <button class="insp-rango-btn" data-p="mesant">Mes anterior</button>
           </div>
           <div class="hint">O elige un rango manual:</div>
           <div style="display:flex; gap:6px; margin-top:6px;">
@@ -763,12 +769,32 @@
             <button class="ana-rango-btn" data-p="semana">Últimos 7 días</button>
             <button class="ana-rango-btn" data-p="mes">Últimos 30 días</button>
             <button class="ana-rango-btn" data-p="trimestre">Últimos 90 días</button>
+            <button class="ana-rango-btn" data-p="estemes">Este mes</button>
+            <button class="ana-rango-btn" data-p="mesant">Mes anterior</button>
           </div>
           <div class="hint">O elige un rango manual:</div>
           <div style="display:flex; gap:6px; margin-top:6px;">
             <input type="date" id="fechaAnaInicio" style="flex:1; min-width:0;">
             <input type="date" id="fechaAnaFin" style="flex:1; min-width:0;">
           </div>
+        </div>
+      </div>
+      <div id="filtrosEstBar" style="display:none; flex-wrap:wrap; gap:8px 14px; padding:0 18px 10px; border-bottom:1px solid var(--line);">
+        <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
+          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Medir por:</span>
+          <button type="button" class="chip-estado activo" data-medir="informada" onclick="fijarFiltroEst('medir','informada')">Fecha informada</button>
+          <button type="button" class="chip-estado" data-medir="reparacion" onclick="fijarFiltroEst('medir','reparacion')">Fecha de reparación</button>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
+          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Subcontrato:</span>
+          <button type="button" class="chip-estado morado activo" data-fmas="todas" onclick="fijarFiltroEst('masivo','todas')">Todas</button>
+          <button type="button" class="chip-estado morado" data-fmas="si" onclick="fijarFiltroEst('masivo','si')">Masivo</button>
+          <button type="button" class="chip-estado morado" data-fmas="no" onclick="fijarFiltroEst('masivo','no')">Normal</button>
+        </div>
+        <div id="filtrosEstAsignador" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div>
+        <div id="filtrosEstItoWrap" style="display:none; align-items:center; gap:6px;">
+          <span style="font-size:11.5px; color:var(--ink-soft);">ITO:</span>
+          <select id="filtrosEstIto" onchange="fijarFiltroEst('ito', this.value)" style="font-size:12px; padding:3px 6px;"><option value="">Todos los ITOs</option></select>
         </div>
       </div>
       <div id="statsContent" style="flex:1; overflow-y:auto; padding:0 18px 18px;"><div class="empty-state">Selecciona una fecha.</div></div>
@@ -3370,6 +3396,8 @@ function mostrarSidebarStats(){
   document.getElementById('tabInspecciones').style.display = ['admin','ito','ito2'].includes(rolEfectivo()) ? '' : 'none';
   // El Análisis solo lo ven admin e ito2 (la base de datos también lo exige).
   document.getElementById('tabAnalisis').style.display = ['admin','ito2'].includes(rolEfectivo()) ? '' : 'none';
+  reiniciarFiltrosEst();
+  actualizarBarraFiltrosEst();
   if(!document.getElementById('fechaInicioRango').value){
     seleccionarPeriodoRapido('hoy');   // por defecto, el día de hoy (también carga las estadísticas)
   } else {
@@ -4147,26 +4175,121 @@ document.getElementById('tabPeriodo').onclick = () => {
 };
 document.getElementById('fechaDiaEspecifico').onchange = actualizarEstadisticasYMapa;
 document.getElementById('fechaInicioRango').onchange = () => {
-  document.querySelectorAll('.periodo-btn').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll(BOTONES_RANGO).forEach(x=>x.classList.remove('active'));
   const ini = document.getElementById('fechaInicioRango'), fin = document.getElementById('fechaFinRango');
   if(ini.value && (!fin.value || fin.value < ini.value)) fin.value = ini.value;   // "Desde" posterior a "Hasta": ajusta "Hasta"
+  copiarRangoACompartido('fechaInicioRango', 'fechaFinRango');
   actualizarEstadisticasYMapa();
 };
 document.getElementById('fechaFinRango').onchange = () => {
-  document.querySelectorAll('.periodo-btn').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll(BOTONES_RANGO).forEach(x=>x.classList.remove('active'));
   const ini = document.getElementById('fechaInicioRango'), fin = document.getElementById('fechaFinRango');
   if(fin.value && (!ini.value || ini.value > fin.value)) ini.value = fin.value;   // "Hasta" anterior a "Desde": ajusta "Desde"
+  copiarRangoACompartido('fechaInicioRango', 'fechaFinRango');
   actualizarEstadisticasYMapa();
 };
 document.querySelectorAll('.periodo-btn').forEach(b => b.onclick = () => seleccionarPeriodoRapido(b.dataset.p));
 
-function seleccionarPeriodoRapido(periodo){
-  document.querySelectorAll('.periodo-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
-  // "Últimos N días" = los N días corridos que terminan hoy (hoy incluido), en hora de Chile.
-  const dias = periodo === 'hoy' ? 1 : (periodo === 'semana' ? 7 : 30);
+// ---- Rango compartido entre "Día o período", "Inspecciones" y "Análisis" ----
+// Los mismos botones en las tres pestañas, y el rango elegido se mantiene al cambiar de pestaña.
+const PARES_RANGO = [['fechaInicioRango','fechaFinRango'], ['fechaInspInicio','fechaInspFin'], ['fechaAnaInicio','fechaAnaFin']];
+const BOTONES_RANGO = '.periodo-btn, .insp-rango-btn, .ana-rango-btn';
+function rangoDePreset(p){
   const hoy = hoyChileStr();
-  document.getElementById('fechaInicioRango').value = sumarDiasStr(hoy, -(dias - 1));
-  document.getElementById('fechaFinRango').value = hoy;
+  if(p === 'estemes') return {ini: hoy.slice(0, 8) + '01', fin: hoy};
+  if(p === 'mesant'){
+    const [y, m] = hoy.split('-').map(Number);
+    const ini = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 10);   // día 1 del mes anterior
+    const fin = new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);   // último día del mes anterior
+    return {ini, fin};
+  }
+  // "Últimos N días" = los N días corridos que terminan hoy (hoy incluido), en hora de Chile.
+  const dias = p === 'hoy' ? 1 : (p === 'semana' ? 7 : (p === 'trimestre' ? 90 : 30));
+  return {ini: sumarDiasStr(hoy, -(dias - 1)), fin: hoy};
+}
+function fijarRangoCompartido(ini, fin, preset){
+  PARES_RANGO.forEach(([a, b]) => { document.getElementById(a).value = ini; document.getElementById(b).value = fin; });
+  document.querySelectorAll(BOTONES_RANGO).forEach(x => x.classList.toggle('active', !!preset && x.dataset.p === preset));
+}
+function copiarRangoACompartido(idIni, idFin){
+  const ini = document.getElementById(idIni).value, fin = document.getElementById(idFin).value;
+  PARES_RANGO.forEach(([a, b]) => { if(a !== idIni){ document.getElementById(a).value = ini; document.getElementById(b).value = fin; } });
+}
+
+// ---- Filtros de Estadísticas y Análisis: medir por fecha informada o de reparación, subcontrato, asignador, ITO ----
+const FILTROS_EST = {medir: 'informada', masivo: 'todas', asignadores: new Set(), ito: ''};
+function extraFiltrosEst(conIto){
+  const e = {};
+  if(FILTROS_EST.medir !== 'informada') e.p_medir = FILTROS_EST.medir;
+  if(FILTROS_EST.masivo !== 'todas') e.p_masivo = FILTROS_EST.masivo === 'si';
+  if(FILTROS_EST.asignadores.size) e.p_asignadores = [...FILTROS_EST.asignadores];
+  if(conIto && FILTROS_EST.ito) e.p_ito = FILTROS_EST.ito;
+  return e;
+}
+function claveFiltrosEst(conIto){ return JSON.stringify(extraFiltrosEst(conIto)); }
+function veAsignadoresEst(){ return ['admin','contratista','contratista2','ito2'].includes(rolEfectivo()); }
+let asignadoresEst = null;   // [{id, nombre}] quienes han asignado alguna falla
+async function cargarAsignadoresEst(){
+  if(asignadoresEst || !veAsignadoresEst()) return;
+  try{
+    const filas = await db.select('fallas', 'select=asignado_por_id&asignado_por_id=not.is.null');
+    const ids = [...new Set((filas || []).map(f => f.asignado_por_id))];
+    asignadoresEst = ids.length
+      ? await db.select('usuarios', `select=id,nombre&id=in.(${ids.join(',')})&order=nombre.asc`)
+      : [];
+  }catch(e){ asignadoresEst = []; console.warn('No se pudo cargar la lista de asignadores:', e); }
+  pintarFiltrosEst();
+}
+let itosEst = null;
+async function cargarItosEst(){
+  if(itosEst) return;
+  try{ itosEst = await db.select('usuarios', 'select=id,nombre&rol=in.(ito,ito2)&order=nombre.asc'); }
+  catch(e){ itosEst = []; }
+  pintarFiltrosEst();
+}
+function reiniciarFiltrosEst(){
+  FILTROS_EST.medir = 'informada'; FILTROS_EST.masivo = 'todas'; FILTROS_EST.asignadores.clear(); FILTROS_EST.ito = '';
+  pintarFiltrosEst();
+}
+function fijarFiltroEst(k, v){
+  if(k === 'asignador'){
+    if(v === '__todos') FILTROS_EST.asignadores.clear();
+    else if(FILTROS_EST.asignadores.has(v)) FILTROS_EST.asignadores.delete(v);
+    else FILTROS_EST.asignadores.add(v);
+  } else FILTROS_EST[k] = v;
+  pintarFiltrosEst();
+  if(document.getElementById('tabAnalisis').classList.contains('active')) cargarAnalisis();
+  else actualizarEstadisticasYMapa();
+}
+window.fijarFiltroEst = fijarFiltroEst;
+function pintarFiltrosEst(){
+  const bar = document.getElementById('filtrosEstBar');
+  if(!bar) return;
+  const enAna = document.getElementById('tabAnalisis').classList.contains('active');
+  const enInsp = document.getElementById('tabInspecciones').classList.contains('active');
+  bar.style.display = enInsp ? 'none' : 'flex';
+  bar.querySelectorAll('[data-medir]').forEach(c => c.classList.toggle('activo', c.dataset.medir === FILTROS_EST.medir));
+  bar.querySelectorAll('[data-fmas]').forEach(c => c.classList.toggle('activo', c.dataset.fmas === FILTROS_EST.masivo));
+  const cont = document.getElementById('filtrosEstAsignador');
+  if(veAsignadoresEst() && asignadoresEst && asignadoresEst.length){
+    cont.style.display = 'flex';
+    cont.innerHTML = '<span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Asignada por:</span>' +
+      `<button type="button" class="chip-estado ${FILTROS_EST.asignadores.size ? '' : 'activo'}" onclick="fijarFiltroEst('asignador','__todos')">Todos</button>` +
+      asignadoresEst.map(u => `<button type="button" class="chip-estado ${FILTROS_EST.asignadores.has(u.id) ? 'activo' : ''}" onclick="fijarFiltroEst('asignador','${u.id}')">${escHtml(u.nombre)}</button>`).join('');
+  } else cont.style.display = 'none';
+  const wrap = document.getElementById('filtrosEstItoWrap');
+  wrap.style.display = enAna ? 'flex' : 'none';
+  if(enAna && itosEst){
+    const sel = document.getElementById('filtrosEstIto');
+    sel.innerHTML = '<option value="">Todos los ITOs</option>' + itosEst.map(u => `<option value="${u.id}">${escHtml(u.nombre)}</option>`).join('');
+    sel.value = FILTROS_EST.ito;
+  }
+}
+function actualizarBarraFiltrosEst(){ pintarFiltrosEst(); cargarAsignadoresEst(); if(document.getElementById('tabAnalisis').classList.contains('active')) cargarItosEst(); }
+
+function seleccionarPeriodoRapido(periodo){
+  const r = rangoDePreset(periodo);
+  fijarRangoCompartido(r.ini, r.fin, periodo);
   actualizarEstadisticasYMapa();
 }
 
@@ -4206,11 +4329,11 @@ function actualizarEstadisticasYMapa(){
 // rango no debe volver a descargar las mismas geometrías.
 const cachePeriodoGeojsonPorRango = {};
 async function renderFallasPeriodoEnMapa(fechaInicio, fechaFin){
-  const clave = fechaInicio + '|' + fechaFin;
+  const clave = fechaInicio + '|' + fechaFin + '|' + claveFiltrosEst(false);
   try{
     let geojson = cachePeriodoGeojsonPorRango[clave];
     if(!geojson){
-      geojson = await db.rpc('fallas_geojson_periodo', {fecha_inicio: fechaInicio, fecha_fin: fechaFin});
+      geojson = await db.rpc('fallas_geojson_periodo', {fecha_inicio: fechaInicio, fecha_fin: fechaFin, ...extraFiltrosEst(false)});
       cachePeriodoGeojsonPorRango[clave] = geojson;
     }
     fallasPeriodoLayerGroup.clearLayers();
@@ -4289,6 +4412,8 @@ document.getElementById('tabInspecciones').onclick = () => {
   if(!document.getElementById('fechaInspInicio').value){
     inspeccionesModoRecientes = true;
     document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.remove('active'));
+  } else {
+    inspeccionesModoRecientes = false;   // ya hay un rango elegido (compartido con las otras pestañas)
   }
   cargarListadoInspecciones();
 };
@@ -4310,17 +4435,16 @@ let inspeccionesModoRecientes = true;   // true = últimas 6, sin fechas elegida
 function seleccionarRangoInspecciones(periodo, cargar = true){
   document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
   inspeccionesModoRecientes = false;
-  const dias = periodo === 'semana' ? 7 : 30;
-  const hoy = hoyChileStr();
-  document.getElementById('fechaInspInicio').value = sumarDiasStr(hoy, -(dias - 1));
-  document.getElementById('fechaInspFin').value = hoy;
+  const r = rangoDePreset(periodo);
+  fijarRangoCompartido(r.ini, r.fin, periodo);
   if(cargar) cargarListadoInspecciones();
 }
 document.querySelectorAll('.insp-rango-btn').forEach(b => b.onclick = () => seleccionarRangoInspecciones(b.dataset.p));
 ['fechaInspInicio','fechaInspFin'].forEach(id => {
   document.getElementById(id).onchange = () => {
     inspeccionesModoRecientes = false;
-    document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll(BOTONES_RANGO).forEach(x => x.classList.remove('active'));
+    copiarRangoACompartido('fechaInspInicio', 'fechaInspFin');
     cargarListadoInspecciones();
   };
 });
@@ -4820,18 +4944,22 @@ function limpiarCapaAnalisis(){
 
 function seleccionarRangoAnalisis(periodo, cargar = true){
   document.querySelectorAll('.ana-rango-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
-  const dias = periodo === 'semana' ? 7 : (periodo === 'trimestre' ? 90 : 30);
-  const hoy = hoyChileStr();
-  document.getElementById('fechaAnaInicio').value = sumarDiasStr(hoy, -(dias - 1));
-  document.getElementById('fechaAnaFin').value = hoy;
+  const r = rangoDePreset(periodo);
+  fijarRangoCompartido(r.ini, r.fin, periodo);
   if(cargar) cargarAnalisis();
 }
 document.querySelectorAll('.ana-rango-btn').forEach(b => b.onclick = () => seleccionarRangoAnalisis(b.dataset.p));
 ['fechaAnaInicio','fechaAnaFin'].forEach(id => {
   document.getElementById(id).onchange = () => {
-    document.querySelectorAll('.ana-rango-btn').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll(BOTONES_RANGO).forEach(x => x.classList.remove('active'));
+    copiarRangoACompartido('fechaAnaInicio', 'fechaAnaFin');
     cargarAnalisis();
   };
+});
+// Al cambiar de pestaña se actualiza qué filtros se muestran (ITO solo en Análisis; ninguno en Inspecciones).
+['tabDia','tabPeriodo','tabInspecciones','tabAnalisis'].forEach(id => {
+  const el = document.getElementById(id), previo = el.onclick;
+  el.onclick = function(ev){ const r = previo.call(this, ev); actualizarBarraFiltrosEst(); return r; };
 });
 
 async function cargarAnalisis(){
@@ -4880,10 +5008,10 @@ function fmtPctPuntos(n, total){
 }
 // Trae el análisis y le suma los puntos lumínicos afectados (función aparte en la base).
 async function rpcAnalisisFallas(ini, fin){
-  const d = await db.rpc('analisis_fallas', {p_inicio: ini, p_fin: fin});
+  const d = await db.rpc('analisis_fallas', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true)});
   if(d && d.resumen){
     try{
-      const p = await db.rpc('analisis_puntos_afectados', {p_inicio: ini, p_fin: fin});
+      const p = await db.rpc('analisis_puntos_afectados', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true)});
       if(p){ d.resumen.puntos_afectados = p.puntos_afectados; d.resumen.total_puntos = p.total_puntos; }
     }catch(e){ console.warn('No se pudieron obtener los puntos lumínicos afectados:', e); }
   }
@@ -5545,7 +5673,8 @@ async function generarPdfAnalisis(soloResumen){
     try{
       const g = await db.rpc('fallas_geojson_periodo', {
         fecha_inicio: fechaChileLocal(ini, 0, 0, 0).toISOString(),
-        fecha_fin: fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString()
+        fecha_fin: fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString(),
+        ...extraFiltrosEst(false)
       });
       feats = ((g && g.features) || []).filter(f => !(f.properties && f.properties.cascada));
     }catch(e){ console.warn('No se pudieron obtener las fallas del período para el mapa:', e); }
@@ -5975,12 +6104,12 @@ async function generarPdfAnalisis(soloResumen){
 const cacheEstadisticasPorRango = {};
 async function cargarEstadisticas(fechaInicio, fechaFin){
   const content = document.getElementById('statsContent');
-  const clave = fechaInicio + '|' + fechaFin;
+  const clave = fechaInicio + '|' + fechaFin + '|' + claveFiltrosEst(false);
   content.innerHTML = '<div class="empty-state">Cargando...</div>';
   try{
     let d = cacheEstadisticasPorRango[clave];
     if(!d){
-      d = await db.rpc('estadisticas_fallas', {fecha_inicio: fechaInicio, fecha_fin: fechaFin});
+      d = await db.rpc('estadisticas_fallas', {fecha_inicio: fechaInicio, fecha_fin: fechaFin, ...extraFiltrosEst(false)});
       cacheEstadisticasPorRango[clave] = d;
     }
     const total = d.total_fallas || 0;
