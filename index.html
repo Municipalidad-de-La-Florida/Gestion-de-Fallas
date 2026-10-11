@@ -536,6 +536,7 @@
           <span class="hint" id="panelInferiorPista" style="margin:0; font-size:11px;">Mostrando las más recientes · clic en una fila para ubicarla en el mapa</span>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
+          <button class="mode-btn" id="toggleRealesBtn" style="display:none; padding:3px 8px; font-size:15px; line-height:1.2; margin:0; border-radius:7px;"></button>
           <button class="mode-btn" id="toggleExportBtn" style="background:var(--primary); color:#fff; border-color:var(--primary); padding:3px 10px; font-size:11.5px; margin:0; border-radius:7px;">📥 Exportar</button>
           <button class="close-x" id="closeTodasBtn" style="position:static; font-size:17px; line-height:1; padding:0 2px;">×</button>
         </div>
@@ -3479,6 +3480,8 @@ function mostrarModalTodas(){
   document.getElementById('historialContenido').style.display = 'none';
   document.getElementById('inspeccionContenido').style.display = 'none';
   document.getElementById('toggleExportBtn').style.display = ['admin','ito','ito2','contratista','contratista2'].includes(rolEfectivo()) ? 'inline-block' : 'none';
+  document.getElementById('toggleRealesBtn').style.display = rolEfectivo() === 'admin' ? 'inline-block' : 'none';
+  pintarBotonReales();
   document.getElementById('todasPanel').classList.add('visible');
   cargarTodasFallas(); // usa caché salvo que algo la haya invalidado (ver todasFallasCacheVigente)
   setTimeout(() => { if(map) map.invalidateSize(); }, 50);
@@ -3496,6 +3499,7 @@ async function mostrarHistorial(tipoEntidad, gid, etiqueta){
   document.getElementById('historialContenido').style.display = 'block';
   document.getElementById('inspeccionContenido').style.display = 'none';
   document.getElementById('toggleExportBtn').style.display = 'none';
+  document.getElementById('toggleRealesBtn').style.display = 'none';
   document.getElementById('todasPanel').classList.add('visible');
   setTimeout(() => { if(map) map.invalidateSize(); }, 50);
 
@@ -3795,8 +3799,8 @@ function invalidarCacheTodasFallas(){
 async function cargarTodasFallas(){
   const tbody = document.getElementById('todasFallasTbody');
   const esAdmin = rolEfectivo() === 'admin';
-  document.getElementById('thFechaReal').style.display = esAdmin ? 'table-cell' : 'none';
-  document.getElementById('thIngresadoPorReal').style.display = esAdmin ? 'table-cell' : 'none';
+  document.getElementById('thFechaReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
+  document.getElementById('thIngresadoPorReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
   document.getElementById('thAsignacion').style.display = verAsignacionTodas() ? 'table-cell' : 'none';
   if(todasFallasCacheVigente){
     renderTodasFallasTabla();
@@ -3824,6 +3828,25 @@ let textoBusquedaTodasFallas = '';
 function normalizarBusqueda(t){
   return String(t ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
 }
+// Columnas "Fecha real" e "Ingresado por (real)" (solo admin): se pueden ocultar con el botón del monito.
+// 🙈 = se están viendo los datos reales (clic para taparlos); 🐵 = están ocultos (clic para verlos).
+let ocultarReales = false;
+try{ ocultarReales = localStorage.getItem('ocultarRealesTodas') === '1'; }catch(e){}
+function pintarBotonReales(){
+  const b = document.getElementById('toggleRealesBtn');
+  if(!b) return;
+  b.textContent = ocultarReales ? '🐵' : '🙈';
+  b.title = ocultarReales ? 'Mostrar fecha real e ingresado por (real)' : 'Ocultar fecha real e ingresado por (real)';
+}
+document.getElementById('toggleRealesBtn').onclick = () => {
+  ocultarReales = !ocultarReales;
+  try{ localStorage.setItem('ocultarRealesTodas', ocultarReales ? '1' : '0'); }catch(e){}
+  pintarBotonReales();
+  const esAdmin = rolEfectivo() === 'admin';
+  document.getElementById('thFechaReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
+  document.getElementById('thIngresadoPorReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
+  renderTodasFallasTabla();
+};
 function textoBusquedaDeFalla(f, esAdmin){
   const fecha = f.fecha_creacion ? new Date(f.fecha_creacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
   const partes = [
@@ -3977,7 +4000,7 @@ function renderTodasFallasTabla(){
   // Buscador: todas las palabras escritas deben aparecer en alguna columna de la fila.
   // Si ya se buscó en toda la base (enServidor), esas filas ya vienen filtradas.
   const datosFiltrados = (terminos.length && !enServidor)
-    ? porEstado.filter(f => { const h = textoBusquedaDeFalla(f, esAdmin); return terminos.every(t => h.includes(t)); })
+    ? porEstado.filter(f => { const h = textoBusquedaDeFalla(f, esAdmin && !ocultarReales); return terminos.every(t => h.includes(t)); })
     : porEstado;
 
   const contador = document.getElementById('contadorBusquedaTodas');
@@ -4010,8 +4033,8 @@ function renderTodasFallasTabla(){
     const fechaCelda = esAdmin
       ? `<input type="datetime-local" class="popup-input" style="margin:0; padding:4px 6px; font-size:11.5px; width:170px;" value="${toDatetimeLocalValue(f.fecha_creacion)}" onclick="event.stopPropagation();" onchange="event.stopPropagation(); actualizarFechaFalla('${f.id}', this.value)">`
       : fecha;
-    const fechaReal = esAdmin ? `<td style="display:table-cell;">${new Date(f.creado_en).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</td>` : '';
-    const ingresadoPorReal = esAdmin ? `<td style="display:table-cell;">${f.nombre_real_creador || '—'}</td>` : '';
+    const fechaReal = (esAdmin && !ocultarReales) ? `<td style="display:table-cell;">${new Date(f.creado_en).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</td>` : '';
+    const ingresadoPorReal = (esAdmin && !ocultarReales) ? `<td style="display:table-cell;">${f.nombre_real_creador || '—'}</td>` : '';
     const idCorto = f.id.slice(0,8);
     let boton = '';
     if(rolEfectivo() === 'admin'){
@@ -4661,6 +4684,7 @@ async function abrirDetalleInspeccion(id){
   document.getElementById('historialContenido').style.display = 'none';
   contenedor.style.display = 'block';
   document.getElementById('toggleExportBtn').style.display = 'none';
+  document.getElementById('toggleRealesBtn').style.display = 'none';
   document.getElementById('todasPanel').classList.add('visible');
   setTimeout(() => { if(map) map.invalidateSize(); }, 50);
   contenedor.innerHTML = '<div class="empty-state">Cargando...</div>';
