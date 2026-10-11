@@ -552,11 +552,18 @@
           <button type="button" class="chip-estado" data-estado="reiterada" onclick="filtrarTodasFallasPorEstado('reiterada')"><span class="dot" style="background:#8e44ad"></span>Reiterada <span class="n" id="cntEstadoReiterada"></span></button>
         </div>
         <div id="todasFiltroMasivo" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
-          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Masivo:</span>
+          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Subcontrato:</span>
           <button type="button" class="chip-estado morado activo" data-masivo="todas" onclick="filtrarTodasFallasPorMasivo('todas')">Todas</button>
-          <button type="button" class="chip-estado morado" data-masivo="si" onclick="filtrarTodasFallasPorMasivo('si')">Sí</button>
-          <button type="button" class="chip-estado morado" data-masivo="no" onclick="filtrarTodasFallasPorMasivo('no')">No</button>
+          <button type="button" class="chip-estado morado" data-masivo="si" onclick="filtrarTodasFallasPorMasivo('si')">Masivo</button>
+          <button type="button" class="chip-estado morado" data-masivo="no" onclick="filtrarTodasFallasPorMasivo('no')">Normal</button>
         </div>
+        <div id="todasFiltroAsignacion" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;">
+          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Asignación:</span>
+          <button type="button" class="chip-estado activo" data-asig="todas" onclick="filtrarTodasFallasPorAsignacion('todas')">Todas</button>
+          <button type="button" class="chip-estado" data-asig="sin" onclick="filtrarTodasFallasPorAsignacion('sin')">Sin asignar</button>
+          <button type="button" class="chip-estado" data-asig="asignadas" onclick="filtrarTodasFallasPorAsignacion('asignadas')">Asignadas</button>
+        </div>
+        <div id="todasFiltroAsignador" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div>
 
         <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:220px;">
           <input type="search" id="buscadorTodasFallas" name="buscar-fallas-tabla" autocomplete="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" placeholder="🔍 Buscar por OS, orden externa, código, cliente, llave, nombre, estado, fecha..." style="flex:1; min-width:0; box-sizing:border-box; padding:4px 9px; font-size:12px; border:1.5px solid var(--line); border-radius:8px; background:#fff; color:var(--ink);">
@@ -578,12 +585,13 @@
               <th style="padding:8px 10px;">N° Llave</th>
               <th style="padding:8px 10px;">Puntos afectados</th>
               <th style="padding:8px 10px;">Estado</th>
+              <th style="padding:8px 10px; display:none;" id="thAsignacion">Asignación</th>
               <th style="padding:8px 10px;">Fotos</th>
               <th style="padding:8px 10px;"></th>
             </tr>
           </thead>
           <tbody id="todasFallasTbody">
-            <tr><td colspan="13" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+            <tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
           </tbody>
         </table>
         <div id="cargarMasTodasWrap" style="display:none; text-align:center; padding:10px 0 4px;">
@@ -3396,14 +3404,42 @@ document.getElementById('historialModoBtn').onclick = () => {
 };
 document.getElementById('closeTodasBtn').onclick = () => cerrarModalTodas();
 document.getElementById('toggleExportBtn').onclick = () => {
+  const ver = verAsignacionTodas();
   const panel = mostrarPanel(`
     <b>Exportar fallas a CSV</b>
-    <div class="hint" style="margin:8px 0;">Selecciona el rango de fechas a exportar (incluye datos de la reparación):</div>
+    <div class="hint" style="margin:8px 0 4px;">Período según la fecha de:</div>
+    <div style="display:flex; flex-direction:column; gap:3px; font-size:12.5px; margin-bottom:8px;">
+      <label><input type="radio" name="exportTipoFecha" value="reparacion" checked> Reparación</label>
+      <label><input type="radio" name="exportTipoFecha" value="informada"> Informada (reporte)</label>
+      ${ver ? '<label><input type="radio" name="exportTipoFecha" value="asignacion"> Asignación</label>' : ''}
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px;">
+      <button type="button" class="chip-estado" data-rap="siempre">Desde siempre</button>
+      <button type="button" class="chip-estado" data-rap="7">7 días</button>
+      <button type="button" class="chip-estado" data-rap="mes">Este mes</button>
+      <button type="button" class="chip-estado" data-rap="mesant">Mes anterior</button>
+    </div>
     <input type="date" id="exportFechaInicio" class="popup-input" style="width:100%; margin-bottom:6px;">
     <div class="hint" style="text-align:center; margin:2px 0;">hasta</div>
-    <input type="date" id="exportFechaFin" class="popup-input" style="width:100%; margin-bottom:10px;">
+    <input type="date" id="exportFechaFin" class="popup-input" style="width:100%; margin-bottom:8px;">
+    <div class="hint" id="exportResumenFiltros" style="margin-bottom:8px;"></div>
     <button class="popup-btn" id="descargarCsvBtn">Descargar CSV</button>
   `);
+  const ini = panel.querySelector('#exportFechaInicio'), fin = panel.querySelector('#exportFechaFin');
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  panel.querySelectorAll('[data-rap]').forEach(b => b.onclick = () => {
+    const hoy = new Date(), k = b.dataset.rap;
+    if(k === 'siempre'){ ini.value = ''; fin.value = ''; }
+    else if(k === '7'){ const d = new Date(); d.setDate(d.getDate()-6); ini.value = iso(d); fin.value = iso(hoy); }
+    else if(k === 'mes'){ ini.value = iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)); fin.value = iso(hoy); }
+    else { ini.value = iso(new Date(hoy.getFullYear(), hoy.getMonth()-1, 1)); fin.value = iso(new Date(hoy.getFullYear(), hoy.getMonth(), 0)); }
+  });
+  const partes = [];
+  if(filtroEstadoTodasFallas.size) partes.push('estado: ' + [...filtroEstadoTodasFallas].join(', '));
+  if(filtroMasivoTodasFallas !== 'todas') partes.push('subcontrato: ' + (filtroMasivoTodasFallas === 'si' ? 'masivo' : 'normal'));
+  if(ver && filtroAsignTodasFallas !== 'todas') partes.push(filtroAsignTodasFallas === 'sin' ? 'sin asignar' : 'asignadas');
+  if(ver && filtroAsignadoresTodasFallas.size) partes.push(filtroAsignadoresTodasFallas.size + ' asignador(es)');
+  panel.querySelector('#exportResumenFiltros').textContent = partes.length ? 'Se aplican los filtros de la tabla: ' + partes.join(' · ') : 'Sin filtros de la tabla: se exporta todo el período.';
   panel.querySelector('#descargarCsvBtn').onclick = () => exportarCsv();
 };
 
@@ -3646,6 +3682,54 @@ function filtrarTodasFallasPorMasivo(v){
 }
 window.filtrarTodasFallasPorMasivo = filtrarTodasFallasPorMasivo;
 
+// ---- Filtros de asignación en "Todas las fallas" (solo admin / contratista / contratista2) ----
+function verAsignacionTodas(){ return ['admin','contratista','contratista2'].includes(rolEfectivo()); }
+let filtroAsignTodasFallas = 'todas';           // 'todas' | 'sin' | 'asignadas'
+const filtroAsignadoresTodasFallas = new Set();  // ids de quienes asignaron; vacío = todos
+function filtrarTodasFallasPorAsignacion(v){
+  filtroAsignTodasFallas = v;
+  renderTodasFallasTabla();
+}
+window.filtrarTodasFallasPorAsignacion = filtrarTodasFallasPorAsignacion;
+function filtrarTodasFallasPorAsignador(id){
+  if(id === '__todos') filtroAsignadoresTodasFallas.clear();
+  else if(filtroAsignadoresTodasFallas.has(id)) filtroAsignadoresTodasFallas.delete(id);
+  else filtroAsignadoresTodasFallas.add(id);
+  renderTodasFallasTabla();
+}
+window.filtrarTodasFallasPorAsignador = filtrarTodasFallasPorAsignador;
+function celdaAsignacionTodas(f){
+  if(!f.asignado_camion_nombre && !f.asignado_por_nombre) return '<span style="color:var(--ink-soft);">Sin asignar</span>';
+  const fecha = f.fecha_asignacion ? new Date(f.fecha_asignacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+  return `<b>${escHtml(f.asignado_por_nombre || '—')}</b>${f.asignado_camion_nombre ? `<br>→ ${escHtml(f.asignado_camion_nombre)}` : ''}${fecha ? `<br><span style="color:var(--ink-soft);">${fecha}</span>` : ''}`;
+}
+function pasaFiltrosAsignacionTodas(f){
+  if(!verAsignacionTodas()) return true;
+  const asignada = !!f.asignado_camion_id || !!f.asignado_camion_nombre;
+  if(filtroAsignTodasFallas === 'sin' && asignada) return false;
+  if(filtroAsignTodasFallas === 'asignadas' && !asignada) return false;
+  if(filtroAsignadoresTodasFallas.size && !filtroAsignadoresTodasFallas.has(f.asignado_por_id)) return false;
+  return true;
+}
+function actualizarChipsAsignacionTodas(){
+  const contAsig = document.getElementById('todasFiltroAsignacion');
+  const contPor = document.getElementById('todasFiltroAsignador');
+  if(!contAsig || !contPor) return;
+  const ver = verAsignacionTodas();
+  contAsig.style.display = ver ? 'flex' : 'none';
+  contPor.style.display = ver ? 'flex' : 'none';
+  if(!ver) return;
+  contAsig.querySelectorAll('.chip-estado').forEach(c => c.classList.toggle('activo', c.dataset.asig === filtroAsignTodasFallas));
+  const conteo = new Map();
+  ultimosTodasFallas.forEach(f => { if(f.asignado_por_id) conteo.set(f.asignado_por_id, {nombre: f.asignado_por_nombre || '—', n: (conteo.get(f.asignado_por_id)?.n || 0) + 1}); });
+  const lista = [...conteo.entries()].sort((a,b) => b[1].n - a[1].n);
+  contPor.innerHTML = lista.length
+    ? `<span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Asignada por:</span>
+       <button type="button" class="chip-estado ${filtroAsignadoresTodasFallas.size ? '' : 'activo'}" onclick="filtrarTodasFallasPorAsignador('__todos')">Todos</button>` +
+      lista.map(([id, v]) => `<button type="button" class="chip-estado ${filtroAsignadoresTodasFallas.has(id) ? 'activo' : ''}" onclick="filtrarTodasFallasPorAsignador('${id}')">${escHtml(v.nombre)} <span class="n">(${v.n})</span></button>`).join('')
+    : '';
+}
+
 function actualizarChipsEstadoTodas(){
   const cont = document.getElementById('todasFiltroEstado');
   if(!cont) return;
@@ -3685,12 +3769,13 @@ async function cargarTodasFallas(){
   const esAdmin = rolEfectivo() === 'admin';
   document.getElementById('thFechaReal').style.display = esAdmin ? 'table-cell' : 'none';
   document.getElementById('thIngresadoPorReal').style.display = esAdmin ? 'table-cell' : 'none';
+  document.getElementById('thAsignacion').style.display = verAsignacionTodas() ? 'table-cell' : 'none';
   if(todasFallasCacheVigente){
     renderTodasFallasTabla();
     if(!conteoFotosTodas) cargarConteoFotosTodas();
     return;
   }
-  tbody.innerHTML = '<tr><td colspan="13" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
     const todas = await db.rpc('resumen_todas_fallas', {limite: PAGINA_TODAS_FALLAS, desplazamiento: 0});
     ultimosTodasFallas = todas || [];
@@ -3702,7 +3787,7 @@ async function cargarTodasFallas(){
     cargarConteoFotosTodas();
     if(textoBusquedaTodasFallas.trim()) evaluarBusquedaServidor(); // había texto escrito: volver a buscar
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="13" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
   }
 }
 
@@ -3716,7 +3801,7 @@ function textoBusquedaDeFalla(f, esAdmin){
   const partes = [
     f.ot, f.orden_externa, f.tipo_falla, f.n_cliente,
     f.tipo === 'punto' ? f.llave : '', f.tipo === 'punto' ? 'punto' : 'circuito',
-    f.nombre_creador, esAdmin ? f.nombre_real_creador : '',
+    f.nombre_creador, esAdmin ? f.nombre_real_creador : '', verAsignacionTodas() ? f.asignado_por_nombre : '', verAsignacionTodas() ? f.asignado_camion_nombre : '',
     f.estado ? String(f.estado).replace('_',' ') : '', fecha, f.puntos_afectados
   ];
   return normalizarBusqueda(partes.filter(x => x !== null && x !== undefined && x !== '').join(' '));
@@ -3828,9 +3913,10 @@ function renderTodasFallasTabla(){
   const esAdmin = rolEfectivo() === 'admin';
 
   actualizarChipsEstadoTodas();
+  actualizarChipsAsignacionTodas();
 
   if(!ultimosTodasFallas.length){
-    tbody.innerHTML = '<tr><td colspan="13" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
     return;
   }
 
@@ -3858,6 +3944,7 @@ function renderTodasFallasTabla(){
     : datosOrdenados;
   if(filtroMasivoTodasFallas === 'si') porEstado = porEstado.filter(f => f.masivo);
   else if(filtroMasivoTodasFallas === 'no') porEstado = porEstado.filter(f => !f.masivo);
+  porEstado = porEstado.filter(pasaFiltrosAsignacionTodas);
 
   // Buscador: todas las palabras escritas deben aparecer en alguna columna de la fila.
   // Si ya se buscó en toda la base (enServidor), esas filas ya vienen filtradas.
@@ -3869,7 +3956,7 @@ function renderTodasFallasTabla(){
   if(contador){
     if(enServidor) contador.textContent = `${datosFiltrados.length}${busquedaServidor.hayMas ? '+' : ''} en toda la base`;
     else if(busquedaServidor.pendiente && terminos.length) contador.textContent = 'Buscando en toda la base…';
-    else contador.textContent = (terminos.length || filtroEstadoTodasFallas.size || filtroMasivoTodasFallas !== 'todas') ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
+    else contador.textContent = (terminos.length || filtroEstadoTodasFallas.size || filtroMasivoTodasFallas !== 'todas' || (verAsignacionTodas() && (filtroAsignTodasFallas !== 'todas' || filtroAsignadoresTodasFallas.size))) ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
   }
   const pista = document.getElementById('panelInferiorPista');
   if(pista) pista.textContent = `${enServidor ? 'Resultados de la búsqueda' : 'Mostrando ' + ultimosTodasFallas.length + (hayMasTodasFallas ? ' (las más recientes)' : '')} · clic en una fila para ubicarla en el mapa`;
@@ -3886,7 +3973,7 @@ function renderTodasFallasTabla(){
     const msj = terminos.length
       ? `No hay fallas que coincidan con la búsqueda ${donde}.`
       : `No hay fallas con el estado seleccionado ${donde}.`;
-    tbody.innerHTML = `<tr><td colspan="13" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
     return;
   }
 
@@ -3938,6 +4025,7 @@ function renderTodasFallasTabla(){
       <td>${f.tipo === 'punto' ? (f.llave ?? '—') : '—'}</td>
       <td>${f.puntos_afectados}</td>
       <td><span class="badge ${f.estado}" ${tooltipEstado ? `title="${tooltipEstado.replace(/"/g,'&quot;')}"` : ''} style="${tooltipEstado ? 'cursor:help;' : ''}">${f.estado.replace('_',' ')}</span></td>
+      ${verAsignacionTodas() ? `<td style="font-size:11.5px; line-height:1.3;">${celdaAsignacionTodas(f)}</td>` : ''}
       <td>${celdaFotosTodas(f.id)}</td>
       <td>${boton}</td>
     </tr>`;
@@ -3961,23 +4049,32 @@ window.eliminarDesdeTodas = eliminarDesdeTodas;
 async function exportarCsv(){
   const ini = document.getElementById('exportFechaInicio').value;
   const fin = document.getElementById('exportFechaFin').value;
-  if(!ini || !fin){ alert('Selecciona la fecha de inicio y de fin.'); return; }
-  const fechaInicio = fechaChileLocal(ini, 0, 0, 0).toISOString();
-  const fechaFin = fechaChileLocal(fin, 23, 59, 59).toISOString();
+  if(!!ini !== !!fin){ alert('Indica fecha de inicio y de fin, o deja ambas vacías para exportar desde siempre.'); return; }
+  const tipoFecha = (document.querySelector('input[name="exportTipoFecha"]:checked') || {}).value || 'reparacion';
+  const fechaInicio = ini ? fechaChileLocal(ini, 0, 0, 0).toISOString() : null;
+  const fechaFin = fin ? fechaChileLocal(fin, 23, 59, 59).toISOString() : null;
+  const ver = verAsignacionTodas();
 
   const btn = document.getElementById('descargarCsvBtn');
   const textoOriginal = btn.textContent;
   btn.textContent = 'Generando...'; btn.disabled = true;
   try{
-    const filas = await db.rpc('resumen_fallas_exportar', {fecha_inicio: fechaInicio, fecha_fin: fechaFin});
-    if(!filas || !filas.length){ alert('No hay fallas en ese rango de fechas.'); return; }
+    const params = {fecha_inicio: fechaInicio, fecha_fin: fechaFin, tipo_fecha: tipoFecha};
+    if(ver && filtroAsignadoresTodasFallas.size) params.asignadores = [...filtroAsignadoresTodasFallas];
+    let filas = await db.rpc('resumen_fallas_exportar', params);
+    // Mismos filtros que la tabla (estado, subcontrato, asignación)
+    filas = (filas || []).filter(f =>
+      (!filtroEstadoTodasFallas.size || filtroEstadoTodasFallas.has(f.estado)) &&
+      (filtroMasivoTodasFallas === 'todas' || (filtroMasivoTodasFallas === 'si' ? !!f.masivo : !f.masivo)) &&
+      (!ver || filtroAsignTodasFallas === 'todas' || (filtroAsignTodasFallas === 'sin' ? !f.asignado_camion_nombre : !!f.asignado_camion_nombre)));
+    if(!filas || !filas.length){ alert('No hay fallas con esos filtros y ese período.'); return; }
 
     const esAdmin = rolEfectivo() === 'admin';
     const encabezados = ['OS','Orden Externa','Tipo','Código','Estado','Fecha reporte','Reportado por','N° Cliente',
       'N° Llave','N° Municipal','Tipo de poste','Puntos afectados',
       'Reparado por','Fecha reparación','Descripción reparación',
-      'Dejado pendiente por','Fecha pendiente','Motivo pendiente'
-      ].concat(esAdmin ? ['Fecha real','Ingresado por (real)'] : []);
+      'Dejado pendiente por','Fecha pendiente','Motivo pendiente','Subcontrato'
+      ].concat(ver ? ['Asignada por','Camión asignado','Fecha asignación'] : []).concat(esAdmin ? ['Fecha real','Ingresado por (real)'] : []);
     const escapar = (v) => `"${String(v ?? '').replace(/\r?\n/g, ' | ').replace(/"/g,'""')}"`;
     const filasCsv = filas.map(f => {
       const base = [
@@ -3991,8 +4088,13 @@ async function exportarCsv(){
         f.descripcion_reparacion || '',
         f.pendiente_por_nombre || '',
         f.fecha_pendiente ? new Date(f.fecha_pendiente).toLocaleString('es-CL') : '',
-        f.motivo_pendiente || ''
+        f.motivo_pendiente || '',
+        f.masivo ? 'Masivo' : 'Normal'
       ];
+      if(ver){
+        base.push(f.asignado_por_nombre || '', f.asignado_camion_nombre || '',
+          f.fecha_asignacion ? new Date(f.fecha_asignacion).toLocaleString('es-CL') : '');
+      }
       if(esAdmin){
         base.push(f.fecha_creacion_real ? new Date(f.fecha_creacion_real).toLocaleString('es-CL') : '');
         base.push(f.nombre_real_creador || '');
@@ -4005,7 +4107,7 @@ async function exportarCsv(){
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `fallas_${ini}_a_${fin}.csv`;
+    a.download = ini ? `fallas_${tipoFecha}_${ini}_a_${fin}.csv` : `fallas_${tipoFecha}_desde_siempre.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
