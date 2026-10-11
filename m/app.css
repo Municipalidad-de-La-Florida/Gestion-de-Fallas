@@ -238,3 +238,6 @@ textarea.campo{ min-height:70px; }
 .fchip-azul{ color:#2a5db0; border-color:#cfdcf2; --cc:#2a5db0; }
 .fchip-viol{ color:#7c3aed; border-color:#e5d8fb; --cc:#7c3aed; }
 .fchip-azul:has(input:checked), .fchip-viol:has(input:checked){ background:var(--cc); color:#fff; border-color:var(--cc); }
+.fchip-sel{ background:#fff; color:var(--tinta); border-color:var(--linea); }
+.fchip-sel.on{ background:#eef5f1; color:var(--verde); border-color:var(--verde); }
+.fchip-sel b{ font-weight:500; opacity:.75; }

@@ -314,6 +314,9 @@
   .fchip-azul{color:#2a5db0;border-color:#cfdcf2;--cc:#2a5db0;}
   .fchip-viol{color:#7c3aed;border-color:#e5d8fb;--cc:#7c3aed;}
   .fchip-azul:has(input:checked),.fchip-viol:has(input:checked){background:var(--cc);color:#fff;border-color:var(--cc);}
+  .fchip-sel{background:#fff;color:var(--ink);border-color:#dbe2dc;}
+  .fchip-sel.on{background:#eef5f1;color:var(--primary);border-color:var(--primary);}
+  .fchip-sel .n{font-weight:500;opacity:.75;}
   .lat-pie{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:11.5px;color:var(--ink-soft);}
   .lat-link{border:0;background:none;color:#2a5db0;font-weight:600;font-size:11.5px;cursor:pointer;padding:0;}
   #fallasList{background:var(--bg);padding-top:8px;}
@@ -665,10 +668,19 @@
             <button type="button" class="fchip" data-estado="pendiente" onclick="toggleFiltroEstado('pendiente')"><i class="fdot" id="swatchPendiente"></i>Pendiente</button>
             <button type="button" class="fchip" data-estado="reiterada" onclick="toggleFiltroEstado('reiterada')"><i class="fdot" id="swatchReiterada"></i>Reiterada</button>
           </div>
-          <div class="lat-pt" style="margin-top:10px;">Otros</div>
-          <div class="lat-chips">
-            <label id="filtroSinAsignarBox" class="fchip fchip-azul" style="display:none;"><input type="checkbox" id="filtroSinAsignar"><span>Sin asignar <span id="sinAsignarN"></span></span></label>
-            <label id="filtroMasivoBox" class="fchip fchip-viol" style="display:none;" title="Marcada: se ven solo las fallas masivas. Desmarcada: se ven todas"><input type="checkbox" id="filtroMasivo"><span>Masivo <span id="masivoN"></span></span></label>
+          <div id="filtroAsignacionGrupo" style="display:none;">
+            <div class="lat-pt" style="margin-top:10px;">Asignación</div>
+            <div class="lat-chips" id="chipsAsignacion">
+              <button type="button" class="fchip fchip-sel on" data-asig="todas">Todas</button>
+              <button type="button" class="fchip fchip-sel" data-asig="sin">Sin asignar <span class="n" id="sinAsignarN"></span></button>
+              <button type="button" class="fchip fchip-sel" data-asig="asignadas">Asignadas <span class="n" id="asignadasN"></span></button>
+            </div>
+          </div>
+          <div class="lat-pt" style="margin-top:10px;">Subcontrato</div>
+          <div class="lat-chips" id="chipsSubcontrato">
+            <button type="button" class="fchip fchip-sel on" data-sub="todas">Todas</button>
+            <button type="button" class="fchip fchip-sel" data-sub="masivo">Masivo <span class="n" id="masivoN"></span></button>
+            <button type="button" class="fchip fchip-sel" data-sub="normal">Normal <span class="n" id="normalN"></span></button>
           </div>
           <div class="lat-pie"><button type="button" id="filtrosLimpiar" class="lat-link">Limpiar filtros</button><span id="filtrosResumen"></span></div>
         </div>
@@ -2397,13 +2409,20 @@ function renderFallasDesdeCache(){
     const geojson = ultimoFallasGeoJSON;
     fallasLayerGroup.clearLayers();
     if(!geojson || !geojson.features) return;
-    const sinAsignar = filtroSinAsignarActivo();
+    const asigFiltro = asignacionActiva(), subFiltro = filtroSubcontrato;
     geojson.features.forEach(feat => {
       const estado = feat.properties.estado;
       if(filtrosEstadoVisible[estado] === false) return;
-      if(soloMasivoActivo() && (!feat.properties.masivo || feat.properties.cascada)) return;
-      // Filtro "Sin asignar": solo fallas activas sin camión (los puntos de cascada se ocultan; manda el circuito)
-      if(sinAsignar && (estado === 'reparada' || feat.properties.cascada || feat.properties.asignado_camion_id)) return;
+      // Subcontrato: los puntos de cascada se ocultan (manda el circuito); las reparadas recientes se siguen viendo
+      if(subFiltro !== 'todas'){
+        if(feat.properties.cascada) return;
+        if(subFiltro === 'masivo' ? !feat.properties.masivo : !!feat.properties.masivo) return;
+      }
+      // Asignación: solo fallas activas (los puntos de cascada se ocultan; manda el circuito)
+      if(asigFiltro !== 'todas'){
+        if(estado === 'reparada' || feat.properties.cascada) return;
+        if(asigFiltro === 'sin' ? !!feat.properties.asignado_camion_id : !feat.properties.asignado_camion_id) return;
+      }
       const color = colorEstado[estado] || '#999';
       const fallaId = feat.properties.id;
       // Si la falla ya está reparada y el usuario está en modo "agregar/informar falla" (y no viendo
@@ -3099,51 +3118,51 @@ function editarFallaLateral(id){
 }
 window.editarFallaLateral = editarFallaLateral;
 
-// ---- Filtro "Sin asignar" (admin, contratista, contratista2): afecta a la lista y al mapa ----
+// ---- Filtros "Asignación" (admin, contratista, contratista2) y "Subcontrato": afectan a la lista y al mapa ----
+// No se guardan: se reinician al abrir o recargar la página. Los contadores muestran el estado actual de la comuna
+// (todas las fallas activas del área), sin importar los filtros puestos.
+try{ localStorage.removeItem('fa_sin_asignar'); localStorage.removeItem('fa_solo_masivo'); }catch(_){}
 const ROLES_FILTRO_ASIGNAR = ['admin','contratista','contratista2'];
 function puedeFiltrarSinAsignar(){ return ROLES_FILTRO_ASIGNAR.includes(rolEfectivo()); }
-function filtroSinAsignarActivo(){
-  if(!puedeFiltrarSinAsignar()) return false;
-  try{ return localStorage.getItem('fa_sin_asignar') === '1'; }catch(e){ return false; }
+let filtroAsignacion = 'todas';    // 'todas' | 'sin' | 'asignadas'
+let filtroSubcontrato = 'todas';   // 'todas' | 'masivo' | 'normal'
+function asignacionActiva(){ return puedeFiltrarSinAsignar() ? filtroAsignacion : 'todas'; }
+function filtroSinAsignarActivo(){ return asignacionActiva() === 'sin'; }
+function soloMasivoActivo(){ return filtroSubcontrato === 'masivo'; }
+// ¿Una falla de la lista pasa los filtros de Asignación y Subcontrato?
+function pasaFiltrosOtros(masivo, asignadoCamionId){
+  const a = asignacionActiva();
+  if(a === 'sin' && asignadoCamionId) return false;
+  if(a === 'asignadas' && !asignadoCamionId) return false;
+  if(filtroSubcontrato === 'masivo' && !masivo) return false;
+  if(filtroSubcontrato === 'normal' && masivo) return false;
+  return true;
 }
-function soloMasivoActivo(){
-  try{ return localStorage.getItem('fa_solo_masivo') === '1'; }catch(e){ return false; }
+function actualizarFiltrosOtrosUI(){
+  const grupo = document.getElementById('filtroAsignacionGrupo');
+  if(grupo) grupo.style.display = puedeFiltrarSinAsignar() ? '' : 'none';
+  const base = fallasEnArea || [];
+  const nSin = base.filter(f => !f.asignado_camion_id).length;
+  const nMas = base.filter(f => f.masivo).length;
+  const poner = (id, n) => { const el = document.getElementById(id); if(el) el.textContent = '(' + n + ')'; };
+  poner('sinAsignarN', nSin); poner('asignadasN', base.length - nSin);
+  poner('masivoN', nMas); poner('normalN', base.length - nMas);
+  document.querySelectorAll('#chipsAsignacion .fchip').forEach(c => c.classList.toggle('on', c.dataset.asig === filtroAsignacion));
+  document.querySelectorAll('#chipsSubcontrato .fchip').forEach(c => c.classList.toggle('on', c.dataset.sub === filtroSubcontrato));
 }
-function actualizarCasillaMasivo(){
-  const cb = document.getElementById('filtroMasivo');
-  if(!cb) return;
-  cb.checked = soloMasivoActivo();
-  const n = (fallasEnArea || []).filter(f => f.masivo).length;
-  document.getElementById('masivoN').textContent = '(' + n + ')';
-  document.getElementById('filtroMasivoBox').style.display = (n || soloMasivoActivo()) ? 'flex' : 'none';
-}
-document.getElementById('filtroMasivo').addEventListener('change', (e) => {
-  try{ localStorage.setItem('fa_solo_masivo', e.target.checked ? '1' : '0'); }catch(_){}
-  renderFallasList();
-  renderFallasDesdeCache();
-});
-function actualizarCasillaSinAsignar(){
-  const box = document.getElementById('filtroSinAsignarBox');
-  if(!box) return;
-  const ok = puedeFiltrarSinAsignar();
-  box.style.display = ok ? 'flex' : 'none';
-  if(!ok) return;
-  document.getElementById('filtroSinAsignar').checked = filtroSinAsignarActivo();
-  const n = (fallasEnArea || []).filter(f => !f.asignado_camion_id).length;
-  document.getElementById('sinAsignarN').textContent = '(' + n + ')';
-}
-document.getElementById('filtroSinAsignar').addEventListener('change', (e) => {
-  try{ localStorage.setItem('fa_sin_asignar', e.target.checked ? '1' : '0'); }catch(_){}
-  renderFallasList();
-  renderFallasDesdeCache();
-});
+document.querySelectorAll('#chipsAsignacion .fchip').forEach(c => c.addEventListener('click', () => {
+  filtroAsignacion = c.dataset.asig; renderFallasList(); renderFallasDesdeCache();
+}));
+document.querySelectorAll('#chipsSubcontrato .fchip').forEach(c => c.addEventListener('click', () => {
+  filtroSubcontrato = c.dataset.sub; renderFallasList(); renderFallasDesdeCache();
+}));
 
 
 // ---- Panel de filtros de la barra lateral ----
 function contarFiltrosActivos(){
   let n = Object.values(filtrosEstadoVisible).filter(v => v === false).length;
-  if(filtroSinAsignarActivo()) n++;
-  if(soloMasivoActivo()) n++;
+  if(asignacionActiva() !== 'todas') n++;
+  if(filtroSubcontrato !== 'todas') n++;
   return n;
 }
 function actualizarFiltrosUI(nMostrando){
@@ -3166,7 +3185,7 @@ document.getElementById('btnFiltros').addEventListener('click', () => {
 });
 document.getElementById('filtrosLimpiar').addEventListener('click', () => {
   Object.keys(filtrosEstadoVisible).forEach(e => { if(filtrosEstadoVisible[e] === false) toggleFiltroEstado(e); });
-  try{ localStorage.setItem('fa_sin_asignar', '0'); localStorage.setItem('fa_solo_masivo', '0'); }catch(_){}
+  filtroAsignacion = 'todas'; filtroSubcontrato = 'todas';
   renderFallasList();
   renderFallasDesdeCache();
 });
@@ -3182,15 +3201,13 @@ function renderFallasList(){
     filas = (busquedaLateral.filas || []).map(normalizarFilaLateral);
   } else {
     filas = fallasEnArea.map(normalizarFilaLateral);
-    if(filtroSinAsignarActivo()) filas = filas.filter(f => !f.asignado);
-    if(soloMasivoActivo()) filas = filas.filter(f => f.masivo);
+    filas = filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado));
     filas = filas.filter(f => filtrosEstadoVisible[f.estado] !== false);
   }
-  actualizarCasillaSinAsignar();
-  actualizarCasillaMasivo();
+  actualizarFiltrosOtrosUI();
   actualizarFiltrosUI(filas.length);
   estado.style.display = (buscando && filas.length) ? 'block' : 'none';
-  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${filtroSinAsignarActivo() ? ' sin asignar' : ''}${soloMasivoActivo() ? ' masivas' : ''}`;
+  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${asignacionActiva() === 'sin' ? ' sin asignar' : (asignacionActiva() === 'asignadas' ? ' asignadas' : '')}${filtroSubcontrato === 'masivo' ? ' · masivo' : (filtroSubcontrato === 'normal' ? ' · normal' : '')}`;
   if(!filas.length){
     list.innerHTML = buscando
       ? `<div class="empty-state">Sin resultados para «${escHtml(busquedaLateral.texto)}».</div>`

@@ -69,10 +69,19 @@
           <button type="button" class="fchip" data-e="pendiente"><i class="fdot"></i>Pendiente</button>
           <button type="button" class="fchip" data-e="reiterada"><i class="fdot"></i>Reiterada</button>
         </div>
-        <div class="lf-t" style="margin-top:12px">Otros</div>
-        <div class="lf-chips">
-          <label id="listaSinAsignarBox" class="fchip fchip-azul" hidden><input type="checkbox" id="listaSinAsignar"><span>Sin asignar <b id="listaSinAsignarN"></b></span></label>
-          <label id="listaMasivoBox" class="fchip fchip-viol" hidden><input type="checkbox" id="listaMasivo"><span>Masivo <b id="listaMasivoN"></b></span></label>
+        <div id="listaAsigGrupo" hidden>
+          <div class="lf-t" style="margin-top:12px">Asignación</div>
+          <div class="lf-chips" id="listaAsig">
+            <button type="button" class="fchip fchip-sel on" data-asig="todas">Todas</button>
+            <button type="button" class="fchip fchip-sel" data-asig="sin">Sin asignar <b id="listaSinAsignarN"></b></button>
+            <button type="button" class="fchip fchip-sel" data-asig="asignadas">Asignadas <b id="listaAsignadasN"></b></button>
+          </div>
+        </div>
+        <div class="lf-t" style="margin-top:12px">Subcontrato</div>
+        <div class="lf-chips" id="listaSub">
+          <button type="button" class="fchip fchip-sel on" data-sub="todas">Todas</button>
+          <button type="button" class="fchip fchip-sel" data-sub="masivo">Masivo <b id="listaMasivoN"></b></button>
+          <button type="button" class="fchip fchip-sel" data-sub="normal">Normal <b id="listaNormalN"></b></button>
         </div>
         <div class="lf-pie"><button type="button" id="filtrosListaLimpiar" class="btn-link" style="padding:0">Limpiar filtros</button></div>
       </div>
