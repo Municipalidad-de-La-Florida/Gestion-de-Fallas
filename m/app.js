@@ -526,6 +526,9 @@ function definirMarcadorForma() {
   });
 }
 
+// Contorno aproximado de la comuna de La Florida (unión de las 7 zonas de inspección), [lon, lat].
+const COMUNA_CONTORNO = [[-70.61499,-33.54631],[-70.61355,-33.54657],[-70.61155,-33.54662],[-70.61118,-33.54649],[-70.61091,-33.54621],[-70.61081,-33.54582],[-70.61077,-33.53893],[-70.61025,-33.53724],[-70.60996,-33.5262],[-70.61036,-33.52165],[-70.61067,-33.5206],[-70.61183,-33.51063],[-70.61204,-33.51023],[-70.61388,-33.50836],[-70.61386,-33.50817],[-70.58323,-33.51019],[-70.56585,-33.51162],[-70.56557,-33.51159],[-70.56511,-33.51142],[-70.56278,-33.51148],[-70.56054,-33.51167],[-70.54189,-33.51225],[-70.54155,-33.51289],[-70.54127,-33.51307],[-70.54095,-33.51312],[-70.53844,-33.51299],[-70.53471,-33.51148],[-70.53199,-33.51067],[-70.52929,-33.51016],[-70.52711,-33.50904],[-70.52351,-33.50891],[-70.52009,-33.50763],[-70.51981,-33.51044],[-70.52061,-33.5121],[-70.52052,-33.51569],[-70.52258,-33.51895],[-70.52414,-33.52085],[-70.52642,-33.52223],[-70.53137,-33.52181],[-70.53538,-33.52072],[-70.53575,-33.52078],[-70.53739,-33.52146],[-70.54267,-33.52103],[-70.54312,-33.52117],[-70.54338,-33.52147],[-70.54408,-33.52562],[-70.54394,-33.52598],[-70.54357,-33.52627],[-70.5419,-33.52657],[-70.54224,-33.52877],[-70.54217,-33.52914],[-70.54189,-33.52947],[-70.54219,-33.53253],[-70.5421,-33.53299],[-70.54183,-33.53327],[-70.54146,-33.5334],[-70.54075,-33.53329],[-70.53554,-33.53369],[-70.53443,-33.53495],[-70.5351,-33.53548],[-70.53592,-33.5357],[-70.53748,-33.53652],[-70.53917,-33.53669],[-70.53948,-33.53678],[-70.53972,-33.53699],[-70.53992,-33.53733],[-70.54104,-33.53812],[-70.54178,-33.53905],[-70.54221,-33.54001],[-70.54547,-33.54136],[-70.54752,-33.54148],[-70.55137,-33.54193],[-70.55172,-33.54206],[-70.55198,-33.54235],[-70.55207,-33.54279],[-70.55129,-33.5456],[-70.55242,-33.54551],[-70.55692,-33.54412],[-70.55807,-33.54398],[-70.56624,-33.54366],[-70.56863,-33.54362],[-70.56902,-33.54371],[-70.56932,-33.54398],[-70.56943,-33.54428],[-70.5694,-33.54467],[-70.56809,-33.54755],[-70.55735,-33.56067],[-70.58366,-33.56544],[-70.58405,-33.56569],[-70.5842,-33.56597],[-70.58424,-33.5662],[-70.58378,-33.56896],[-70.5923,-33.57009],[-70.5985,-33.56731],[-70.59889,-33.56724],[-70.60019,-33.56736],[-70.60149,-33.5678],[-70.61153,-33.57044],[-70.61256,-33.56217],[-70.61145,-33.56205],[-70.61116,-33.56196],[-70.61097,-33.56183],[-70.6108,-33.56157],[-70.61075,-33.56111],[-70.61499,-33.54631]];
+
 function iniciarMapa() {
   definirMarcadorForma();
   if (map) { map.invalidateSize(); return; }
@@ -540,6 +543,32 @@ function iniciarMapa() {
   map.on('moveend', cargarArea);
   map.on('zoomend', () => { ajustarRadios(); dibujarFallas(); });
   map.on('click', () => { /* un toque en el vacío no hace nada */ });
+  // Atenuar lo que queda fuera de la comuna (botón en el mapa, se recuerda la elección). No bloquea toques.
+  map.createPane('atenuadoPane');
+  map.getPane('atenuadoPane').style.zIndex = 250;             // sobre el fondo, bajo líneas y puntos
+  map.getPane('atenuadoPane').style.pointerEvents = 'none';
+  const contornoLL = COMUNA_CONTORNO.map((c) => [c[1], c[0]]);
+  const capaAtenuado = L.layerGroup([
+    L.polygon([[[-85, -180], [-85, 180], [85, 180], [85, -180]], contornoLL],
+      { pane: 'atenuadoPane', interactive: false, stroke: false, fillColor: '#f4f6f3', fillOpacity: 0.85 }),
+    L.polyline(contornoLL.concat([contornoLL[0]]),
+      { pane: 'atenuadoPane', interactive: false, color: '#1f4d3d', weight: 2.5, opacity: 0.85 }),
+  ]);
+  let atenuar = true;
+  try { if (localStorage.getItem('fa_atenuar_comuna') === '0') atenuar = false; } catch (e) { /* */ }
+  const aplicarAtenuado = () => {
+    if (atenuar) capaAtenuado.addTo(map); else map.removeLayer(capaAtenuado);
+    const b = $('#btnComuna');
+    b.classList.toggle('activo', atenuar);
+    b.setAttribute('aria-pressed', atenuar ? 'true' : 'false');
+    b.title = atenuar ? 'Mostrar también fuera de la comuna' : 'Atenuar fuera de la comuna';
+  };
+  $('#btnComuna').addEventListener('click', () => {
+    atenuar = !atenuar;
+    try { localStorage.setItem('fa_atenuar_comuna', atenuar ? '1' : '0'); } catch (e) { /* */ }
+    aplicarAtenuado();
+  });
+  aplicarAtenuado();
 }
 const radioPunto = () => { const z = map.getZoom(); return z >= 19 ? 11 : z >= 18 ? 9 : 7; };
 function ajustarRadios() { const r = radioPunto(); capaPuntos.eachLayer((l) => l.setRadius && l.setRadius(r)); }
