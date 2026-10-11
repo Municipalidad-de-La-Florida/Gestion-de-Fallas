@@ -652,24 +652,44 @@ function abrirEmpalme(p) {
     ${infoSoloLectura()}`);
 }
 
-/* Filtro "Sin asignar" (admin, contratista y contratista2): afecta a la lista y al mapa */
+/* Filtros "Asignación" (admin, contratista y contratista2) y "Subcontrato": afectan a la lista y al mapa.
+   No se guardan: se reinician al abrir la app. Los contadores muestran el estado actual de la comuna,
+   sin importar los filtros puestos. */
+try { localStorage.removeItem('fa_sin_asignar'); localStorage.removeItem('fa_solo_masivo'); } catch (e) { /* */ }
 const puedeFiltrarSinAsignar = () => ['admin', 'contratista', 'contratista2'].includes(rol());
-function filtroSinAsignar() {
-  if (!puedeFiltrarSinAsignar()) return false;
-  try { return localStorage.getItem('fa_sin_asignar') === '1'; } catch (e) { return false; }
+const FO = { asig: 'todas', sub: 'todas' };   // asig: todas | sin | asignadas · sub: todas | masivo | normal
+const asigActiva = () => (puedeFiltrarSinAsignar() ? FO.asig : 'todas');
+const cuentaFiltrosOtros = () => (asigActiva() !== 'todas' ? 1 : 0) + (FO.sub !== 'todas' ? 1 : 0);
+function pasaFiltrosOtros(masivo, asignadoId) {
+  const a = asigActiva();
+  if (a === 'sin' && asignadoId) return false;
+  if (a === 'asignadas' && !asignadoId) return false;
+  if (FO.sub === 'masivo' && !masivo) return false;
+  if (FO.sub === 'normal' && masivo) return false;
+  return true;
 }
-/* Filtro "Masivo": casilla marcada = solo las masivas; desmarcada = todas (lista y mapa) */
-function soloMasivo() { try { return localStorage.getItem('fa_solo_masivo') === '1'; } catch (e) { return false; } }
-function actualizarMasivoUI() {
-  const caja = $('#listaMasivoBox'); if (!caja) return;
-  const n = S.activas.filter((f) => !f.properties.cascada && f.properties.masivo).length;
-  caja.hidden = !(n || soloMasivo());
-  $('#listaMasivo').checked = soloMasivo();
-  $('#listaMasivoN').textContent = '(' + n + ')';
+function actualizarFiltrosOtrosUI() {
+  const grupo = $('#listaAsigGrupo'); if (!grupo) return;
+  grupo.hidden = !puedeFiltrarSinAsignar();
+  const base = S.activas.filter((f) => !f.properties.cascada);
+  const nSin = base.filter((f) => !f.properties.asignado_camion_id).length;
+  const nMas = base.filter((f) => f.properties.masivo).length;
+  const poner = (id, n) => { $(id).textContent = '(' + n + ')'; };
+  poner('#listaSinAsignarN', nSin); poner('#listaAsignadasN', base.length - nSin);
+  poner('#listaMasivoN', nMas); poner('#listaNormalN', base.length - nMas);
+  $$('#listaAsig .fchip').forEach((c) => c.classList.toggle('on', c.dataset.asig === FO.asig));
+  $$('#listaSub .fchip').forEach((c) => c.classList.toggle('on', c.dataset.sub === FO.sub));
+  // Aviso sobre el mapa mientras haya filtros de Asignación o Subcontrato puestos
+  const partes = [];
+  if (asigActiva() === 'sin') partes.push('sin asignar'); else if (asigActiva() === 'asignadas') partes.push('asignadas');
+  if (FO.sub === 'masivo') partes.push('masivo'); else if (FO.sub === 'normal') partes.push('normal');
+  const b = $('#badgeSinAsignar');
+  b.hidden = !partes.length;
+  b.textContent = 'Solo ' + partes.join(' · ') + ' ✕';
 }
-function fijarMasivo(solo) {
-  try { localStorage.setItem('fa_solo_masivo', solo ? '1' : '0'); } catch (e) { /* */ }
-  actualizarMasivoUI(); dibujarFallas(); if (S.vista === 'lista') renderLista();
+function fijarFiltroOtros(k, v) {
+  FO[k] = v;
+  actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista();
 }
 const htmlBotonMasivo = () => '<button type="button" class="btn-masivo" id="fMasivo" aria-pressed="false">Masivo</button>';
 function activarBotonMasivo(h) {
@@ -677,29 +697,18 @@ function activarBotonMasivo(h) {
   b.addEventListener('click', () => { b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on') ? 'true' : 'false'); });
 }
 const leerMasivo = (h) => !!$('#fMasivo.on', h);
-function actualizarSinAsignarUI() {
-  const ok = puedeFiltrarSinAsignar(), on = filtroSinAsignar();
-  const caja = $('#listaSinAsignarBox'); if (!caja) return;
-  caja.hidden = !ok;
-  $('#listaSinAsignar').checked = on;
-  $('#listaSinAsignarN').textContent = '(' + S.activas.filter((f) => !f.properties.cascada && !f.properties.asignado_camion_id).length + ')';
-  $('#badgeSinAsignar').hidden = !on;
-  actualizarMasivoUI();
-}
-function fijarSinAsignar(v) {
-  try { localStorage.setItem('fa_sin_asignar', v ? '1' : '0'); } catch (e) { /* */ }
-  actualizarSinAsignarUI(); dibujarFallas(); if (S.vista === 'lista') renderLista();
-}
 
 function dibujarFallas() {
   if (!map || !capaFallas) return;
   const z = map.getZoom();
   capaFallas.clearLayers();
-  const soloSin = filtroSinAsignar();
+  const asigF = asigActiva(), subF = FO.sub;
   S.features.forEach((f) => {
     const p = f.properties;
-    if (soloSin && (p.estado === 'reparada' || p.cascada || p.asignado_camion_id)) return;
-    if (soloMasivo() && (!p.masivo || p.cascada)) return;
+    // Subcontrato: los puntos de cascada se ocultan (manda el circuito); las reparadas recientes se siguen viendo
+    if (subF !== 'todas') { if (p.cascada) return; if (subF === 'masivo' ? !p.masivo : !!p.masivo) return; }
+    // Asignación: solo fallas activas (los puntos de cascada se ocultan; manda el circuito)
+    if (asigF !== 'todas') { if (p.estado === 'reparada' || p.cascada) return; if (asigF === 'sin' ? p.asignado_camion_id : !p.asignado_camion_id) return; }
     if (S.estadosOff[p.estado]) return;
     const reparada = p.estado === 'reparada';
     if (p.cascada && z < ZOOM_DATOS) return;
@@ -785,7 +794,7 @@ async function cargarFallas(manual) {
     const geo = await rpc('fallas_geojson', {});
     S.features = ((geo && geo.features) || []).map((f) => { f._c = centroGeom(f.geometry); return f; });
     S.activas = S.features.filter((f) => f.properties.estado !== 'reparada');
-    actualizarSinAsignarUI();
+    actualizarFiltrosOtrosUI();
     dibujarFallas();
     const n = S.activas.filter((f) => !f.properties.cascada).length;
     const c = $('#navCuenta');
@@ -1220,10 +1229,9 @@ function formCierre(p, borr) {
 /* ---------------------------- lista de fallas ---------------------------- */
 function renderLista() {
   const q = S.busqueda.trim().toLowerCase();
-  actualizarSinAsignarUI();
+  actualizarFiltrosOtrosUI();
   let items = S.activas.filter((f) => !f.properties.cascada);
-  if (filtroSinAsignar()) items = items.filter((f) => !f.properties.asignado_camion_id);
-  if (soloMasivo()) items = items.filter((f) => f.properties.masivo);
+  items = items.filter((f) => pasaFiltrosOtros(!!f.properties.masivo, f.properties.asignado_camion_id));
   const total = items.length;
   items = items.filter((f) => !S.estadosOff[f.properties.estado]);
   actualizarFiltrosListaUI();
@@ -1252,12 +1260,12 @@ function renderLista() {
     abrirFalla(f.properties, f.geometry);
   }));
 }
-$('#listaSinAsignar').addEventListener('change', (e) => fijarSinAsignar(e.target.checked));
-$('#listaMasivo').addEventListener('change', (e) => fijarMasivo(e.target.checked));
-$('#badgeSinAsignar').addEventListener('click', () => fijarSinAsignar(false));
+$$('#listaAsig .fchip').forEach((c) => c.addEventListener('click', () => fijarFiltroOtros('asig', c.dataset.asig)));
+$$('#listaSub .fchip').forEach((c) => c.addEventListener('click', () => fijarFiltroOtros('sub', c.dataset.sub)));
+$('#badgeSinAsignar').addEventListener('click', () => { FO.asig = 'todas'; FO.sub = 'todas'; actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista(); });
 $('#listaBuscar').addEventListener('input', (e) => { S.busqueda = e.target.value; renderLista(); });
 /* Panel de filtros (estado, sin asignar, masivo): afecta a la lista y al mapa */
-function cuentaFiltrosLista() { return Object.values(S.estadosOff).filter(Boolean).length + (filtroSinAsignar() ? 1 : 0) + (soloMasivo() ? 1 : 0); }
+function cuentaFiltrosLista() { return Object.values(S.estadosOff).filter(Boolean).length + cuentaFiltrosOtros(); }
 function actualizarFiltrosListaUI() {
   const n = cuentaFiltrosLista(), num = $('#filtrosListaNum'), btn = $('#btnFiltrosLista');
   if (!num) return;
@@ -1272,8 +1280,8 @@ $$('#listaChips .fchip').forEach((b) => b.addEventListener('click', () => {
 }));
 $('#filtrosListaLimpiar').addEventListener('click', () => {
   S.estadosOff = {};
-  try { localStorage.setItem('fa_sin_asignar', '0'); localStorage.setItem('fa_solo_masivo', '0'); } catch (e) { /* */ }
-  actualizarSinAsignarUI(); dibujarFallas(); renderLista();
+  FO.asig = 'todas'; FO.sub = 'todas';
+  actualizarFiltrosOtrosUI(); dibujarFallas(); renderLista();
 });
 
 function cambiarVista(v) {

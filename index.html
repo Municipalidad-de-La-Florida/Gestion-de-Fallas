@@ -314,6 +314,9 @@
   .fchip-azul{color:#2a5db0;border-color:#cfdcf2;--cc:#2a5db0;}
   .fchip-viol{color:#7c3aed;border-color:#e5d8fb;--cc:#7c3aed;}
   .fchip-azul:has(input:checked),.fchip-viol:has(input:checked){background:var(--cc);color:#fff;border-color:var(--cc);}
+  .fchip-sel{background:#fff;color:var(--ink);border-color:#dbe2dc;}
+  .fchip-sel.on{background:#eef5f1;color:var(--primary);border-color:var(--primary);}
+  .fchip-sel .n{font-weight:500;opacity:.75;}
   .lat-pie{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:11.5px;color:var(--ink-soft);}
   .lat-link{border:0;background:none;color:#2a5db0;font-weight:600;font-size:11.5px;cursor:pointer;padding:0;}
   #fallasList{background:var(--bg);padding-top:8px;}
@@ -533,6 +536,7 @@
           <span class="hint" id="panelInferiorPista" style="margin:0; font-size:11px;">Mostrando las más recientes · clic en una fila para ubicarla en el mapa</span>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
+          <button class="mode-btn" id="toggleRealesBtn" style="display:none; padding:3px 8px; font-size:15px; line-height:1.2; margin:0; border-radius:7px;"></button>
           <button class="mode-btn" id="toggleExportBtn" style="background:var(--primary); color:#fff; border-color:var(--primary); padding:3px 10px; font-size:11.5px; margin:0; border-radius:7px;">📥 Exportar</button>
           <button class="close-x" id="closeTodasBtn" style="position:static; font-size:17px; line-height:1; padding:0 2px;">×</button>
         </div>
@@ -549,11 +553,18 @@
           <button type="button" class="chip-estado" data-estado="reiterada" onclick="filtrarTodasFallasPorEstado('reiterada')"><span class="dot" style="background:#8e44ad"></span>Reiterada <span class="n" id="cntEstadoReiterada"></span></button>
         </div>
         <div id="todasFiltroMasivo" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
-          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Masivo:</span>
+          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Subcontrato:</span>
           <button type="button" class="chip-estado morado activo" data-masivo="todas" onclick="filtrarTodasFallasPorMasivo('todas')">Todas</button>
-          <button type="button" class="chip-estado morado" data-masivo="si" onclick="filtrarTodasFallasPorMasivo('si')">Sí</button>
-          <button type="button" class="chip-estado morado" data-masivo="no" onclick="filtrarTodasFallasPorMasivo('no')">No</button>
+          <button type="button" class="chip-estado morado" data-masivo="si" onclick="filtrarTodasFallasPorMasivo('si')">Masivo</button>
+          <button type="button" class="chip-estado morado" data-masivo="no" onclick="filtrarTodasFallasPorMasivo('no')">Normal</button>
         </div>
+        <div id="todasFiltroAsignacion" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;">
+          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Asignación:</span>
+          <button type="button" class="chip-estado activo" data-asig="todas" onclick="filtrarTodasFallasPorAsignacion('todas')">Todas</button>
+          <button type="button" class="chip-estado" data-asig="sin" onclick="filtrarTodasFallasPorAsignacion('sin')">Sin asignar</button>
+          <button type="button" class="chip-estado" data-asig="asignadas" onclick="filtrarTodasFallasPorAsignacion('asignadas')">Asignadas</button>
+        </div>
+        <div id="todasFiltroAsignador" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div>
 
         <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:220px;">
           <input type="search" id="buscadorTodasFallas" name="buscar-fallas-tabla" autocomplete="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" placeholder="🔍 Buscar por OS, orden externa, código, cliente, llave, nombre, estado, fecha..." style="flex:1; min-width:0; box-sizing:border-box; padding:4px 9px; font-size:12px; border:1.5px solid var(--line); border-radius:8px; background:#fff; color:var(--ink);">
@@ -575,12 +586,13 @@
               <th style="padding:8px 10px;">N° Llave</th>
               <th style="padding:8px 10px;">Puntos afectados</th>
               <th style="padding:8px 10px;">Estado</th>
+              <th style="padding:8px 10px; display:none;" id="thAsignacion">Asignación</th>
               <th style="padding:8px 10px;">Fotos</th>
               <th style="padding:8px 10px;"></th>
             </tr>
           </thead>
           <tbody id="todasFallasTbody">
-            <tr><td colspan="13" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+            <tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
           </tbody>
         </table>
         <div id="cargarMasTodasWrap" style="display:none; text-align:center; padding:10px 0 4px;">
@@ -663,13 +675,21 @@
           <div class="lat-chips">
             <button type="button" class="fchip" data-estado="reportada" onclick="toggleFiltroEstado('reportada')"><i class="fdot" id="swatchReportada"></i>Reportada</button>
             <button type="button" class="fchip" data-estado="pendiente" onclick="toggleFiltroEstado('pendiente')"><i class="fdot" id="swatchPendiente"></i>Pendiente</button>
-            <button type="button" class="fchip" data-estado="reparada" onclick="toggleFiltroEstado('reparada')"><i class="fdot" id="swatchReparada"></i>Reparada</button>
             <button type="button" class="fchip" data-estado="reiterada" onclick="toggleFiltroEstado('reiterada')"><i class="fdot" id="swatchReiterada"></i>Reiterada</button>
           </div>
-          <div class="lat-pt" style="margin-top:10px;">Otros</div>
-          <div class="lat-chips">
-            <label id="filtroSinAsignarBox" class="fchip fchip-azul" style="display:none;"><input type="checkbox" id="filtroSinAsignar"><span>Sin asignar <span id="sinAsignarN"></span></span></label>
-            <label id="filtroMasivoBox" class="fchip fchip-viol" style="display:none;" title="Marcada: se ven solo las fallas masivas. Desmarcada: se ven todas"><input type="checkbox" id="filtroMasivo"><span>Masivo <span id="masivoN"></span></span></label>
+          <div id="filtroAsignacionGrupo" style="display:none;">
+            <div class="lat-pt" style="margin-top:10px;">Asignación</div>
+            <div class="lat-chips" id="chipsAsignacion">
+              <button type="button" class="fchip fchip-sel on" data-asig="todas">Todas</button>
+              <button type="button" class="fchip fchip-sel" data-asig="sin">Sin asignar <span class="n" id="sinAsignarN"></span></button>
+              <button type="button" class="fchip fchip-sel" data-asig="asignadas">Asignadas <span class="n" id="asignadasN"></span></button>
+            </div>
+          </div>
+          <div class="lat-pt" style="margin-top:10px;">Subcontrato</div>
+          <div class="lat-chips" id="chipsSubcontrato">
+            <button type="button" class="fchip fchip-sel on" data-sub="todas">Todas</button>
+            <button type="button" class="fchip fchip-sel" data-sub="masivo">Masivo <span class="n" id="masivoN"></span></button>
+            <button type="button" class="fchip fchip-sel" data-sub="normal">Normal <span class="n" id="normalN"></span></button>
           </div>
           <div class="lat-pie"><button type="button" id="filtrosLimpiar" class="lat-link">Limpiar filtros</button><span id="filtrosResumen"></span></div>
         </div>
@@ -716,6 +736,9 @@
             <button class="periodo-btn" data-p="hoy">Hoy</button>
             <button class="periodo-btn" data-p="semana">Últimos 7 días</button>
             <button class="periodo-btn" data-p="mes">Últimos 30 días</button>
+            <button class="periodo-btn" data-p="trimestre">Últimos 90 días</button>
+            <button class="periodo-btn" data-p="estemes">Este mes</button>
+            <button class="periodo-btn" data-p="mesant">Mes anterior</button>
           </div>
           <div class="hint">O elige las fechas (para un solo día, la misma en ambas):</div>
           <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
@@ -728,6 +751,9 @@
           <div class="periodo-row" style="margin-bottom:10px;">
             <button class="insp-rango-btn" data-p="semana">Últimos 7 días</button>
             <button class="insp-rango-btn" data-p="mes">Últimos 30 días</button>
+            <button class="insp-rango-btn" data-p="trimestre">Últimos 90 días</button>
+            <button class="insp-rango-btn" data-p="estemes">Este mes</button>
+            <button class="insp-rango-btn" data-p="mesant">Mes anterior</button>
           </div>
           <div class="hint">O elige un rango manual:</div>
           <div style="display:flex; gap:6px; margin-top:6px;">
@@ -738,18 +764,51 @@
           <select id="inspItoSelect" style="width:100%; margin-top:4px;">
             <option value="">Todos los ITOs</option>
           </select>
+          <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:10px;">
+            <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Resultado:</span>
+            <button type="button" class="chip-estado activo" data-ires="todas" onclick="fijarFiltroInsp('res','todas')">Todas</button>
+            <button type="button" class="chip-estado" data-ires="con" onclick="fijarFiltroInsp('res','con')">Con fallas</button>
+            <button type="button" class="chip-estado" data-ires="sin" onclick="fijarFiltroInsp('res','sin')">Sin fallas</button>
+          </div>
+          <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:8px;">
+            <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Sus fallas:</span>
+            <button type="button" class="chip-estado" data-iest="abiertas" onclick="fijarFiltroInsp('est','abiertas')">Con abiertas</button>
+            <button type="button" class="chip-estado" data-iest="reiteradas" onclick="fijarFiltroInsp('est','reiteradas')">Con reiteradas</button>
+            <button type="button" class="chip-estado" data-iest="pendientes" onclick="fijarFiltroInsp('est','pendientes')">Con pendientes</button>
+            <button type="button" class="chip-estado" data-iest="reparadas" onclick="fijarFiltroInsp('est','reparadas')">Todo reparado</button>
+          </div>
         </div>
         <div id="selectorAnalisis" style="display:none;">
           <div class="periodo-row" style="margin-bottom:10px;">
             <button class="ana-rango-btn" data-p="semana">Últimos 7 días</button>
             <button class="ana-rango-btn" data-p="mes">Últimos 30 días</button>
             <button class="ana-rango-btn" data-p="trimestre">Últimos 90 días</button>
+            <button class="ana-rango-btn" data-p="estemes">Este mes</button>
+            <button class="ana-rango-btn" data-p="mesant">Mes anterior</button>
           </div>
           <div class="hint">O elige un rango manual:</div>
           <div style="display:flex; gap:6px; margin-top:6px;">
             <input type="date" id="fechaAnaInicio" style="flex:1; min-width:0;">
             <input type="date" id="fechaAnaFin" style="flex:1; min-width:0;">
           </div>
+        </div>
+      </div>
+      <div id="filtrosEstBar" style="display:none; flex-wrap:wrap; gap:8px 14px; padding:0 18px 10px; border-bottom:1px solid var(--line);">
+        <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
+          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Medir por:</span>
+          <button type="button" class="chip-estado activo" data-medir="informada" onclick="fijarFiltroEst('medir','informada')">Fecha informada</button>
+          <button type="button" class="chip-estado" data-medir="reparacion" onclick="fijarFiltroEst('medir','reparacion')">Fecha de reparación</button>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
+          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Subcontrato:</span>
+          <button type="button" class="chip-estado morado activo" data-fmas="todas" onclick="fijarFiltroEst('masivo','todas')">Todas</button>
+          <button type="button" class="chip-estado morado" data-fmas="si" onclick="fijarFiltroEst('masivo','si')">Masivo</button>
+          <button type="button" class="chip-estado morado" data-fmas="no" onclick="fijarFiltroEst('masivo','no')">Normal</button>
+        </div>
+        <div id="filtrosEstAsignador" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div>
+        <div id="filtrosEstItoWrap" style="display:none; align-items:center; gap:6px;">
+          <span style="font-size:11.5px; color:var(--ink-soft);">ITO:</span>
+          <select id="filtrosEstIto" onchange="fijarFiltroEst('ito', this.value)" style="font-size:12px; padding:3px 6px;"><option value="">Todos los ITOs</option></select>
         </div>
       </div>
       <div id="statsContent" style="flex:1; overflow-y:auto; padding:0 18px 18px;"><div class="empty-state">Selecciona una fecha.</div></div>
@@ -2398,13 +2457,20 @@ function renderFallasDesdeCache(){
     const geojson = ultimoFallasGeoJSON;
     fallasLayerGroup.clearLayers();
     if(!geojson || !geojson.features) return;
-    const sinAsignar = filtroSinAsignarActivo();
+    const asigFiltro = asignacionActiva(), subFiltro = filtroSubcontrato;
     geojson.features.forEach(feat => {
       const estado = feat.properties.estado;
       if(filtrosEstadoVisible[estado] === false) return;
-      if(soloMasivoActivo() && (!feat.properties.masivo || feat.properties.cascada)) return;
-      // Filtro "Sin asignar": solo fallas activas sin camión (los puntos de cascada se ocultan; manda el circuito)
-      if(sinAsignar && (estado === 'reparada' || feat.properties.cascada || feat.properties.asignado_camion_id)) return;
+      // Subcontrato: los puntos de cascada se ocultan (manda el circuito); las reparadas recientes se siguen viendo
+      if(subFiltro !== 'todas'){
+        if(feat.properties.cascada) return;
+        if(subFiltro === 'masivo' ? !feat.properties.masivo : !!feat.properties.masivo) return;
+      }
+      // Asignación: solo fallas activas (los puntos de cascada se ocultan; manda el circuito)
+      if(asigFiltro !== 'todas'){
+        if(estado === 'reparada' || feat.properties.cascada) return;
+        if(asigFiltro === 'sin' ? !!feat.properties.asignado_camion_id : !feat.properties.asignado_camion_id) return;
+      }
       const color = colorEstado[estado] || '#999';
       const fallaId = feat.properties.id;
       // Si la falla ya está reparada y el usuario está en modo "agregar/informar falla" (y no viendo
@@ -3100,51 +3166,51 @@ function editarFallaLateral(id){
 }
 window.editarFallaLateral = editarFallaLateral;
 
-// ---- Filtro "Sin asignar" (admin, contratista, contratista2): afecta a la lista y al mapa ----
+// ---- Filtros "Asignación" (admin, contratista, contratista2) y "Subcontrato": afectan a la lista y al mapa ----
+// No se guardan: se reinician al abrir o recargar la página. Los contadores muestran el estado actual de la comuna
+// (todas las fallas activas del área), sin importar los filtros puestos.
+try{ localStorage.removeItem('fa_sin_asignar'); localStorage.removeItem('fa_solo_masivo'); }catch(_){}
 const ROLES_FILTRO_ASIGNAR = ['admin','contratista','contratista2'];
 function puedeFiltrarSinAsignar(){ return ROLES_FILTRO_ASIGNAR.includes(rolEfectivo()); }
-function filtroSinAsignarActivo(){
-  if(!puedeFiltrarSinAsignar()) return false;
-  try{ return localStorage.getItem('fa_sin_asignar') === '1'; }catch(e){ return false; }
+let filtroAsignacion = 'todas';    // 'todas' | 'sin' | 'asignadas'
+let filtroSubcontrato = 'todas';   // 'todas' | 'masivo' | 'normal'
+function asignacionActiva(){ return puedeFiltrarSinAsignar() ? filtroAsignacion : 'todas'; }
+function filtroSinAsignarActivo(){ return asignacionActiva() === 'sin'; }
+function soloMasivoActivo(){ return filtroSubcontrato === 'masivo'; }
+// ¿Una falla de la lista pasa los filtros de Asignación y Subcontrato?
+function pasaFiltrosOtros(masivo, asignadoCamionId){
+  const a = asignacionActiva();
+  if(a === 'sin' && asignadoCamionId) return false;
+  if(a === 'asignadas' && !asignadoCamionId) return false;
+  if(filtroSubcontrato === 'masivo' && !masivo) return false;
+  if(filtroSubcontrato === 'normal' && masivo) return false;
+  return true;
 }
-function soloMasivoActivo(){
-  try{ return localStorage.getItem('fa_solo_masivo') === '1'; }catch(e){ return false; }
+function actualizarFiltrosOtrosUI(){
+  const grupo = document.getElementById('filtroAsignacionGrupo');
+  if(grupo) grupo.style.display = puedeFiltrarSinAsignar() ? '' : 'none';
+  const base = fallasEnArea || [];
+  const nSin = base.filter(f => !f.asignado_camion_id).length;
+  const nMas = base.filter(f => f.masivo).length;
+  const poner = (id, n) => { const el = document.getElementById(id); if(el) el.textContent = '(' + n + ')'; };
+  poner('sinAsignarN', nSin); poner('asignadasN', base.length - nSin);
+  poner('masivoN', nMas); poner('normalN', base.length - nMas);
+  document.querySelectorAll('#chipsAsignacion .fchip').forEach(c => c.classList.toggle('on', c.dataset.asig === filtroAsignacion));
+  document.querySelectorAll('#chipsSubcontrato .fchip').forEach(c => c.classList.toggle('on', c.dataset.sub === filtroSubcontrato));
 }
-function actualizarCasillaMasivo(){
-  const cb = document.getElementById('filtroMasivo');
-  if(!cb) return;
-  cb.checked = soloMasivoActivo();
-  const n = (fallasEnArea || []).filter(f => f.masivo).length;
-  document.getElementById('masivoN').textContent = '(' + n + ')';
-  document.getElementById('filtroMasivoBox').style.display = (n || soloMasivoActivo()) ? 'flex' : 'none';
-}
-document.getElementById('filtroMasivo').addEventListener('change', (e) => {
-  try{ localStorage.setItem('fa_solo_masivo', e.target.checked ? '1' : '0'); }catch(_){}
-  renderFallasList();
-  renderFallasDesdeCache();
-});
-function actualizarCasillaSinAsignar(){
-  const box = document.getElementById('filtroSinAsignarBox');
-  if(!box) return;
-  const ok = puedeFiltrarSinAsignar();
-  box.style.display = ok ? 'flex' : 'none';
-  if(!ok) return;
-  document.getElementById('filtroSinAsignar').checked = filtroSinAsignarActivo();
-  const n = (fallasEnArea || []).filter(f => !f.asignado_camion_id).length;
-  document.getElementById('sinAsignarN').textContent = '(' + n + ')';
-}
-document.getElementById('filtroSinAsignar').addEventListener('change', (e) => {
-  try{ localStorage.setItem('fa_sin_asignar', e.target.checked ? '1' : '0'); }catch(_){}
-  renderFallasList();
-  renderFallasDesdeCache();
-});
+document.querySelectorAll('#chipsAsignacion .fchip').forEach(c => c.addEventListener('click', () => {
+  filtroAsignacion = c.dataset.asig; renderFallasList(); renderFallasDesdeCache();
+}));
+document.querySelectorAll('#chipsSubcontrato .fchip').forEach(c => c.addEventListener('click', () => {
+  filtroSubcontrato = c.dataset.sub; renderFallasList(); renderFallasDesdeCache();
+}));
 
 
 // ---- Panel de filtros de la barra lateral ----
 function contarFiltrosActivos(){
   let n = Object.values(filtrosEstadoVisible).filter(v => v === false).length;
-  if(filtroSinAsignarActivo()) n++;
-  if(soloMasivoActivo()) n++;
+  if(asignacionActiva() !== 'todas') n++;
+  if(filtroSubcontrato !== 'todas') n++;
   return n;
 }
 function actualizarFiltrosUI(nMostrando){
@@ -3167,7 +3233,7 @@ document.getElementById('btnFiltros').addEventListener('click', () => {
 });
 document.getElementById('filtrosLimpiar').addEventListener('click', () => {
   Object.keys(filtrosEstadoVisible).forEach(e => { if(filtrosEstadoVisible[e] === false) toggleFiltroEstado(e); });
-  try{ localStorage.setItem('fa_sin_asignar', '0'); localStorage.setItem('fa_solo_masivo', '0'); }catch(_){}
+  filtroAsignacion = 'todas'; filtroSubcontrato = 'todas';
   renderFallasList();
   renderFallasDesdeCache();
 });
@@ -3183,15 +3249,13 @@ function renderFallasList(){
     filas = (busquedaLateral.filas || []).map(normalizarFilaLateral);
   } else {
     filas = fallasEnArea.map(normalizarFilaLateral);
-    if(filtroSinAsignarActivo()) filas = filas.filter(f => !f.asignado);
-    if(soloMasivoActivo()) filas = filas.filter(f => f.masivo);
+    filas = filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado));
     filas = filas.filter(f => filtrosEstadoVisible[f.estado] !== false);
   }
-  actualizarCasillaSinAsignar();
-  actualizarCasillaMasivo();
+  actualizarFiltrosOtrosUI();
   actualizarFiltrosUI(filas.length);
   estado.style.display = (buscando && filas.length) ? 'block' : 'none';
-  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${filtroSinAsignarActivo() ? ' sin asignar' : ''}${soloMasivoActivo() ? ' masivas' : ''}`;
+  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${asignacionActiva() === 'sin' ? ' sin asignar' : (asignacionActiva() === 'asignadas' ? ' asignadas' : '')}${filtroSubcontrato === 'masivo' ? ' · masivo' : (filtroSubcontrato === 'normal' ? ' · normal' : '')}`;
   if(!filas.length){
     list.innerHTML = buscando
       ? `<div class="empty-state">Sin resultados para «${escHtml(busquedaLateral.texto)}».</div>`
@@ -3346,6 +3410,8 @@ function mostrarSidebarStats(){
   document.getElementById('tabInspecciones').style.display = ['admin','ito','ito2'].includes(rolEfectivo()) ? '' : 'none';
   // El Análisis solo lo ven admin e ito2 (la base de datos también lo exige).
   document.getElementById('tabAnalisis').style.display = ['admin','ito2'].includes(rolEfectivo()) ? '' : 'none';
+  reiniciarFiltrosEst();
+  actualizarBarraFiltrosEst();
   if(!document.getElementById('fechaInicioRango').value){
     seleccionarPeriodoRapido('hoy');   // por defecto, el día de hoy (también carga las estadísticas)
   } else {
@@ -3380,14 +3446,42 @@ document.getElementById('historialModoBtn').onclick = () => {
 };
 document.getElementById('closeTodasBtn').onclick = () => cerrarModalTodas();
 document.getElementById('toggleExportBtn').onclick = () => {
+  const ver = verAsignacionTodas();
   const panel = mostrarPanel(`
     <b>Exportar fallas a CSV</b>
-    <div class="hint" style="margin:8px 0;">Selecciona el rango de fechas a exportar (incluye datos de la reparación):</div>
+    <div class="hint" style="margin:8px 0 4px;">Período según la fecha de:</div>
+    <div style="display:flex; flex-direction:column; gap:3px; font-size:12.5px; margin-bottom:8px;">
+      <label><input type="radio" name="exportTipoFecha" value="informada" checked> Informada (registro de la falla)</label>
+      <label><input type="radio" name="exportTipoFecha" value="reparacion"> Reparación (trabajos realizados)</label>
+      ${ver ? '<label><input type="radio" name="exportTipoFecha" value="asignacion"> Asignación</label>' : ''}
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px;">
+      <button type="button" class="chip-estado" data-rap="siempre">Desde siempre</button>
+      <button type="button" class="chip-estado" data-rap="7">7 días</button>
+      <button type="button" class="chip-estado" data-rap="mes">Este mes</button>
+      <button type="button" class="chip-estado" data-rap="mesant">Mes anterior</button>
+    </div>
     <input type="date" id="exportFechaInicio" class="popup-input" style="width:100%; margin-bottom:6px;">
     <div class="hint" style="text-align:center; margin:2px 0;">hasta</div>
-    <input type="date" id="exportFechaFin" class="popup-input" style="width:100%; margin-bottom:10px;">
+    <input type="date" id="exportFechaFin" class="popup-input" style="width:100%; margin-bottom:8px;">
+    <div class="hint" id="exportResumenFiltros" style="margin-bottom:8px;"></div>
     <button class="popup-btn" id="descargarCsvBtn">Descargar CSV</button>
   `);
+  const ini = panel.querySelector('#exportFechaInicio'), fin = panel.querySelector('#exportFechaFin');
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  panel.querySelectorAll('[data-rap]').forEach(b => b.onclick = () => {
+    const hoy = new Date(), k = b.dataset.rap;
+    if(k === 'siempre'){ ini.value = ''; fin.value = ''; }
+    else if(k === '7'){ const d = new Date(); d.setDate(d.getDate()-6); ini.value = iso(d); fin.value = iso(hoy); }
+    else if(k === 'mes'){ ini.value = iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)); fin.value = iso(hoy); }
+    else { ini.value = iso(new Date(hoy.getFullYear(), hoy.getMonth()-1, 1)); fin.value = iso(new Date(hoy.getFullYear(), hoy.getMonth(), 0)); }
+  });
+  const partes = [];
+  if(filtroEstadoTodasFallas.size) partes.push('estado: ' + [...filtroEstadoTodasFallas].join(', '));
+  if(filtroMasivoTodasFallas !== 'todas') partes.push('subcontrato: ' + (filtroMasivoTodasFallas === 'si' ? 'masivo' : 'normal'));
+  if(ver && filtroAsignTodasFallas !== 'todas') partes.push(filtroAsignTodasFallas === 'sin' ? 'sin asignar' : 'asignadas');
+  if(ver && filtroAsignadoresTodasFallas.size) partes.push(filtroAsignadoresTodasFallas.size + ' asignador(es)');
+  panel.querySelector('#exportResumenFiltros').textContent = partes.length ? 'Se aplican los filtros de la tabla: ' + partes.join(' · ') : 'Sin filtros de la tabla: se exporta todo el período.';
   panel.querySelector('#descargarCsvBtn').onclick = () => exportarCsv();
 };
 
@@ -3399,6 +3493,8 @@ function mostrarModalTodas(){
   document.getElementById('historialContenido').style.display = 'none';
   document.getElementById('inspeccionContenido').style.display = 'none';
   document.getElementById('toggleExportBtn').style.display = ['admin','ito','ito2','contratista','contratista2'].includes(rolEfectivo()) ? 'inline-block' : 'none';
+  document.getElementById('toggleRealesBtn').style.display = rolEfectivo() === 'admin' ? 'inline-block' : 'none';
+  pintarBotonReales();
   document.getElementById('todasPanel').classList.add('visible');
   cargarTodasFallas(); // usa caché salvo que algo la haya invalidado (ver todasFallasCacheVigente)
   setTimeout(() => { if(map) map.invalidateSize(); }, 50);
@@ -3416,6 +3512,7 @@ async function mostrarHistorial(tipoEntidad, gid, etiqueta){
   document.getElementById('historialContenido').style.display = 'block';
   document.getElementById('inspeccionContenido').style.display = 'none';
   document.getElementById('toggleExportBtn').style.display = 'none';
+  document.getElementById('toggleRealesBtn').style.display = 'none';
   document.getElementById('todasPanel').classList.add('visible');
   setTimeout(() => { if(map) map.invalidateSize(); }, 50);
 
@@ -3630,6 +3727,54 @@ function filtrarTodasFallasPorMasivo(v){
 }
 window.filtrarTodasFallasPorMasivo = filtrarTodasFallasPorMasivo;
 
+// ---- Filtros de asignación en "Todas las fallas" (solo admin / contratista / contratista2) ----
+function verAsignacionTodas(){ return ['admin','contratista','contratista2'].includes(rolEfectivo()); }
+let filtroAsignTodasFallas = 'todas';           // 'todas' | 'sin' | 'asignadas'
+const filtroAsignadoresTodasFallas = new Set();  // ids de quienes asignaron; vacío = todos
+function filtrarTodasFallasPorAsignacion(v){
+  filtroAsignTodasFallas = v;
+  renderTodasFallasTabla();
+}
+window.filtrarTodasFallasPorAsignacion = filtrarTodasFallasPorAsignacion;
+function filtrarTodasFallasPorAsignador(id){
+  if(id === '__todos') filtroAsignadoresTodasFallas.clear();
+  else if(filtroAsignadoresTodasFallas.has(id)) filtroAsignadoresTodasFallas.delete(id);
+  else filtroAsignadoresTodasFallas.add(id);
+  renderTodasFallasTabla();
+}
+window.filtrarTodasFallasPorAsignador = filtrarTodasFallasPorAsignador;
+function celdaAsignacionTodas(f){
+  if(!f.asignado_camion_nombre && !f.asignado_por_nombre) return '<span style="color:var(--ink-soft);">Sin asignar</span>';
+  const fecha = f.fecha_asignacion ? new Date(f.fecha_asignacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
+  return `<b>${escHtml(f.asignado_por_nombre || '—')}</b>${f.asignado_camion_nombre ? `<br>→ ${escHtml(f.asignado_camion_nombre)}` : ''}${fecha ? `<br><span style="color:var(--ink-soft);">${fecha}</span>` : ''}`;
+}
+function pasaFiltrosAsignacionTodas(f){
+  if(!verAsignacionTodas()) return true;
+  const asignada = !!f.asignado_camion_id || !!f.asignado_camion_nombre;
+  if(filtroAsignTodasFallas === 'sin' && asignada) return false;
+  if(filtroAsignTodasFallas === 'asignadas' && !asignada) return false;
+  if(filtroAsignadoresTodasFallas.size && !filtroAsignadoresTodasFallas.has(f.asignado_por_id)) return false;
+  return true;
+}
+function actualizarChipsAsignacionTodas(){
+  const contAsig = document.getElementById('todasFiltroAsignacion');
+  const contPor = document.getElementById('todasFiltroAsignador');
+  if(!contAsig || !contPor) return;
+  const ver = verAsignacionTodas();
+  contAsig.style.display = ver ? 'flex' : 'none';
+  contPor.style.display = ver ? 'flex' : 'none';
+  if(!ver) return;
+  contAsig.querySelectorAll('.chip-estado').forEach(c => c.classList.toggle('activo', c.dataset.asig === filtroAsignTodasFallas));
+  const conteo = new Map();
+  ultimosTodasFallas.forEach(f => { if(f.asignado_por_id) conteo.set(f.asignado_por_id, {nombre: f.asignado_por_nombre || '—', n: (conteo.get(f.asignado_por_id)?.n || 0) + 1}); });
+  const lista = [...conteo.entries()].sort((a,b) => b[1].n - a[1].n);
+  contPor.innerHTML = lista.length
+    ? `<span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Asignada por:</span>
+       <button type="button" class="chip-estado ${filtroAsignadoresTodasFallas.size ? '' : 'activo'}" onclick="filtrarTodasFallasPorAsignador('__todos')">Todos</button>` +
+      lista.map(([id, v]) => `<button type="button" class="chip-estado ${filtroAsignadoresTodasFallas.has(id) ? 'activo' : ''}" onclick="filtrarTodasFallasPorAsignador('${id}')">${escHtml(v.nombre)} <span class="n">(${v.n})</span></button>`).join('')
+    : '';
+}
+
 function actualizarChipsEstadoTodas(){
   const cont = document.getElementById('todasFiltroEstado');
   if(!cont) return;
@@ -3667,14 +3812,15 @@ function invalidarCacheTodasFallas(){
 async function cargarTodasFallas(){
   const tbody = document.getElementById('todasFallasTbody');
   const esAdmin = rolEfectivo() === 'admin';
-  document.getElementById('thFechaReal').style.display = esAdmin ? 'table-cell' : 'none';
-  document.getElementById('thIngresadoPorReal').style.display = esAdmin ? 'table-cell' : 'none';
+  document.getElementById('thFechaReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
+  document.getElementById('thIngresadoPorReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
+  document.getElementById('thAsignacion').style.display = verAsignacionTodas() ? 'table-cell' : 'none';
   if(todasFallasCacheVigente){
     renderTodasFallasTabla();
     if(!conteoFotosTodas) cargarConteoFotosTodas();
     return;
   }
-  tbody.innerHTML = '<tr><td colspan="13" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
     const todas = await db.rpc('resumen_todas_fallas', {limite: PAGINA_TODAS_FALLAS, desplazamiento: 0});
     ultimosTodasFallas = todas || [];
@@ -3686,7 +3832,7 @@ async function cargarTodasFallas(){
     cargarConteoFotosTodas();
     if(textoBusquedaTodasFallas.trim()) evaluarBusquedaServidor(); // había texto escrito: volver a buscar
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="13" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
   }
 }
 
@@ -3695,12 +3841,31 @@ let textoBusquedaTodasFallas = '';
 function normalizarBusqueda(t){
   return String(t ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
 }
+// Columnas "Fecha real" e "Ingresado por (real)" (solo admin): se pueden ocultar con el botón del monito.
+// 🙈 = se están viendo los datos reales (clic para taparlos); 🐵 = están ocultos (clic para verlos).
+let ocultarReales = false;
+try{ ocultarReales = localStorage.getItem('ocultarRealesTodas') === '1'; }catch(e){}
+function pintarBotonReales(){
+  const b = document.getElementById('toggleRealesBtn');
+  if(!b) return;
+  b.textContent = ocultarReales ? '🐵' : '🙈';
+  b.title = ocultarReales ? 'Mostrar fecha real e ingresado por (real)' : 'Ocultar fecha real e ingresado por (real)';
+}
+document.getElementById('toggleRealesBtn').onclick = () => {
+  ocultarReales = !ocultarReales;
+  try{ localStorage.setItem('ocultarRealesTodas', ocultarReales ? '1' : '0'); }catch(e){}
+  pintarBotonReales();
+  const esAdmin = rolEfectivo() === 'admin';
+  document.getElementById('thFechaReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
+  document.getElementById('thIngresadoPorReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
+  renderTodasFallasTabla();
+};
 function textoBusquedaDeFalla(f, esAdmin){
   const fecha = f.fecha_creacion ? new Date(f.fecha_creacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
   const partes = [
     f.ot, f.orden_externa, f.tipo_falla, f.n_cliente,
     f.tipo === 'punto' ? f.llave : '', f.tipo === 'punto' ? 'punto' : 'circuito',
-    f.nombre_creador, esAdmin ? f.nombre_real_creador : '',
+    f.nombre_creador, esAdmin ? f.nombre_real_creador : '', verAsignacionTodas() ? f.asignado_por_nombre : '', verAsignacionTodas() ? f.asignado_camion_nombre : '',
     f.estado ? String(f.estado).replace('_',' ') : '', fecha, f.puntos_afectados
   ];
   return normalizarBusqueda(partes.filter(x => x !== null && x !== undefined && x !== '').join(' '));
@@ -3812,9 +3977,10 @@ function renderTodasFallasTabla(){
   const esAdmin = rolEfectivo() === 'admin';
 
   actualizarChipsEstadoTodas();
+  actualizarChipsAsignacionTodas();
 
   if(!ultimosTodasFallas.length){
-    tbody.innerHTML = '<tr><td colspan="13" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
     return;
   }
 
@@ -3842,18 +4008,19 @@ function renderTodasFallasTabla(){
     : datosOrdenados;
   if(filtroMasivoTodasFallas === 'si') porEstado = porEstado.filter(f => f.masivo);
   else if(filtroMasivoTodasFallas === 'no') porEstado = porEstado.filter(f => !f.masivo);
+  porEstado = porEstado.filter(pasaFiltrosAsignacionTodas);
 
   // Buscador: todas las palabras escritas deben aparecer en alguna columna de la fila.
   // Si ya se buscó en toda la base (enServidor), esas filas ya vienen filtradas.
   const datosFiltrados = (terminos.length && !enServidor)
-    ? porEstado.filter(f => { const h = textoBusquedaDeFalla(f, esAdmin); return terminos.every(t => h.includes(t)); })
+    ? porEstado.filter(f => { const h = textoBusquedaDeFalla(f, esAdmin && !ocultarReales); return terminos.every(t => h.includes(t)); })
     : porEstado;
 
   const contador = document.getElementById('contadorBusquedaTodas');
   if(contador){
     if(enServidor) contador.textContent = `${datosFiltrados.length}${busquedaServidor.hayMas ? '+' : ''} en toda la base`;
     else if(busquedaServidor.pendiente && terminos.length) contador.textContent = 'Buscando en toda la base…';
-    else contador.textContent = (terminos.length || filtroEstadoTodasFallas.size || filtroMasivoTodasFallas !== 'todas') ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
+    else contador.textContent = (terminos.length || filtroEstadoTodasFallas.size || filtroMasivoTodasFallas !== 'todas' || (verAsignacionTodas() && (filtroAsignTodasFallas !== 'todas' || filtroAsignadoresTodasFallas.size))) ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
   }
   const pista = document.getElementById('panelInferiorPista');
   if(pista) pista.textContent = `${enServidor ? 'Resultados de la búsqueda' : 'Mostrando ' + ultimosTodasFallas.length + (hayMasTodasFallas ? ' (las más recientes)' : '')} · clic en una fila para ubicarla en el mapa`;
@@ -3870,7 +4037,7 @@ function renderTodasFallasTabla(){
     const msj = terminos.length
       ? `No hay fallas que coincidan con la búsqueda ${donde}.`
       : `No hay fallas con el estado seleccionado ${donde}.`;
-    tbody.innerHTML = `<tr><td colspan="13" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
     return;
   }
 
@@ -3879,8 +4046,8 @@ function renderTodasFallasTabla(){
     const fechaCelda = esAdmin
       ? `<input type="datetime-local" class="popup-input" style="margin:0; padding:4px 6px; font-size:11.5px; width:170px;" value="${toDatetimeLocalValue(f.fecha_creacion)}" onclick="event.stopPropagation();" onchange="event.stopPropagation(); actualizarFechaFalla('${f.id}', this.value)">`
       : fecha;
-    const fechaReal = esAdmin ? `<td style="display:table-cell;">${new Date(f.creado_en).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</td>` : '';
-    const ingresadoPorReal = esAdmin ? `<td style="display:table-cell;">${f.nombre_real_creador || '—'}</td>` : '';
+    const fechaReal = (esAdmin && !ocultarReales) ? `<td style="display:table-cell;">${new Date(f.creado_en).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</td>` : '';
+    const ingresadoPorReal = (esAdmin && !ocultarReales) ? `<td style="display:table-cell;">${f.nombre_real_creador || '—'}</td>` : '';
     const idCorto = f.id.slice(0,8);
     let boton = '';
     if(rolEfectivo() === 'admin'){
@@ -3922,6 +4089,7 @@ function renderTodasFallasTabla(){
       <td>${f.tipo === 'punto' ? (f.llave ?? '—') : '—'}</td>
       <td>${f.puntos_afectados}</td>
       <td><span class="badge ${f.estado}" ${tooltipEstado ? `title="${tooltipEstado.replace(/"/g,'&quot;')}"` : ''} style="${tooltipEstado ? 'cursor:help;' : ''}">${f.estado.replace('_',' ')}</span></td>
+      ${verAsignacionTodas() ? `<td style="font-size:11.5px; line-height:1.3;">${celdaAsignacionTodas(f)}</td>` : ''}
       <td>${celdaFotosTodas(f.id)}</td>
       <td>${boton}</td>
     </tr>`;
@@ -3945,23 +4113,32 @@ window.eliminarDesdeTodas = eliminarDesdeTodas;
 async function exportarCsv(){
   const ini = document.getElementById('exportFechaInicio').value;
   const fin = document.getElementById('exportFechaFin').value;
-  if(!ini || !fin){ alert('Selecciona la fecha de inicio y de fin.'); return; }
-  const fechaInicio = fechaChileLocal(ini, 0, 0, 0).toISOString();
-  const fechaFin = fechaChileLocal(fin, 23, 59, 59).toISOString();
+  if(!!ini !== !!fin){ alert('Indica fecha de inicio y de fin, o deja ambas vacías para exportar desde siempre.'); return; }
+  const tipoFecha = (document.querySelector('input[name="exportTipoFecha"]:checked') || {}).value || 'informada';
+  const fechaInicio = ini ? fechaChileLocal(ini, 0, 0, 0).toISOString() : null;
+  const fechaFin = fin ? fechaChileLocal(fin, 23, 59, 59).toISOString() : null;
+  const ver = verAsignacionTodas();
 
   const btn = document.getElementById('descargarCsvBtn');
   const textoOriginal = btn.textContent;
   btn.textContent = 'Generando...'; btn.disabled = true;
   try{
-    const filas = await db.rpc('resumen_fallas_exportar', {fecha_inicio: fechaInicio, fecha_fin: fechaFin});
-    if(!filas || !filas.length){ alert('No hay fallas en ese rango de fechas.'); return; }
+    const params = {fecha_inicio: fechaInicio, fecha_fin: fechaFin, tipo_fecha: tipoFecha};
+    if(ver && filtroAsignadoresTodasFallas.size) params.asignadores = [...filtroAsignadoresTodasFallas];
+    let filas = await db.rpc('resumen_fallas_exportar', params);
+    // Mismos filtros que la tabla (estado, subcontrato, asignación)
+    filas = (filas || []).filter(f =>
+      (!filtroEstadoTodasFallas.size || filtroEstadoTodasFallas.has(f.estado)) &&
+      (filtroMasivoTodasFallas === 'todas' || (filtroMasivoTodasFallas === 'si' ? !!f.masivo : !f.masivo)) &&
+      (!ver || filtroAsignTodasFallas === 'todas' || (filtroAsignTodasFallas === 'sin' ? !f.asignado_camion_nombre : !!f.asignado_camion_nombre)));
+    if(!filas || !filas.length){ alert('No hay fallas con esos filtros y ese período.'); return; }
 
     const esAdmin = rolEfectivo() === 'admin';
     const encabezados = ['OS','Orden Externa','Tipo','Código','Estado','Fecha reporte','Reportado por','N° Cliente',
       'N° Llave','N° Municipal','Tipo de poste','Puntos afectados',
       'Reparado por','Fecha reparación','Descripción reparación',
-      'Dejado pendiente por','Fecha pendiente','Motivo pendiente'
-      ].concat(esAdmin ? ['Fecha real','Ingresado por (real)'] : []);
+      'Dejado pendiente por','Fecha pendiente','Motivo pendiente','Subcontrato'
+      ].concat(ver ? ['Asignada por','Camión asignado','Fecha asignación'] : []).concat(esAdmin ? ['Fecha real','Ingresado por (real)'] : []);
     const escapar = (v) => `"${String(v ?? '').replace(/\r?\n/g, ' | ').replace(/"/g,'""')}"`;
     const filasCsv = filas.map(f => {
       const base = [
@@ -3975,8 +4152,13 @@ async function exportarCsv(){
         f.descripcion_reparacion || '',
         f.pendiente_por_nombre || '',
         f.fecha_pendiente ? new Date(f.fecha_pendiente).toLocaleString('es-CL') : '',
-        f.motivo_pendiente || ''
+        f.motivo_pendiente || '',
+        f.masivo ? 'Masivo' : 'Normal'
       ];
+      if(ver){
+        base.push(f.asignado_por_nombre || '', f.asignado_camion_nombre || '',
+          f.fecha_asignacion ? new Date(f.fecha_asignacion).toLocaleString('es-CL') : '');
+      }
       if(esAdmin){
         base.push(f.fecha_creacion_real ? new Date(f.fecha_creacion_real).toLocaleString('es-CL') : '');
         base.push(f.nombre_real_creador || '');
@@ -3989,7 +4171,7 @@ async function exportarCsv(){
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `fallas_${ini}_a_${fin}.csv`;
+    a.download = ini ? `fallas_${tipoFecha}_${ini}_a_${fin}.csv` : `fallas_${tipoFecha}_desde_siempre.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -4029,26 +4211,122 @@ document.getElementById('tabPeriodo').onclick = () => {
 };
 document.getElementById('fechaDiaEspecifico').onchange = actualizarEstadisticasYMapa;
 document.getElementById('fechaInicioRango').onchange = () => {
-  document.querySelectorAll('.periodo-btn').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll(BOTONES_RANGO).forEach(x=>x.classList.remove('active'));
   const ini = document.getElementById('fechaInicioRango'), fin = document.getElementById('fechaFinRango');
   if(ini.value && (!fin.value || fin.value < ini.value)) fin.value = ini.value;   // "Desde" posterior a "Hasta": ajusta "Hasta"
+  copiarRangoACompartido('fechaInicioRango', 'fechaFinRango');
   actualizarEstadisticasYMapa();
 };
 document.getElementById('fechaFinRango').onchange = () => {
-  document.querySelectorAll('.periodo-btn').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll(BOTONES_RANGO).forEach(x=>x.classList.remove('active'));
   const ini = document.getElementById('fechaInicioRango'), fin = document.getElementById('fechaFinRango');
   if(fin.value && (!ini.value || ini.value > fin.value)) ini.value = fin.value;   // "Hasta" anterior a "Desde": ajusta "Desde"
+  copiarRangoACompartido('fechaInicioRango', 'fechaFinRango');
   actualizarEstadisticasYMapa();
 };
 document.querySelectorAll('.periodo-btn').forEach(b => b.onclick = () => seleccionarPeriodoRapido(b.dataset.p));
 
-function seleccionarPeriodoRapido(periodo){
-  document.querySelectorAll('.periodo-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
-  // "Últimos N días" = los N días corridos que terminan hoy (hoy incluido), en hora de Chile.
-  const dias = periodo === 'hoy' ? 1 : (periodo === 'semana' ? 7 : 30);
+// ---- Rango compartido entre "Día o período", "Inspecciones" y "Análisis" ----
+// Los mismos botones en las tres pestañas, y el rango elegido se mantiene al cambiar de pestaña.
+const PARES_RANGO = [['fechaInicioRango','fechaFinRango'], ['fechaInspInicio','fechaInspFin'], ['fechaAnaInicio','fechaAnaFin']];
+const BOTONES_RANGO = '.periodo-btn, .insp-rango-btn, .ana-rango-btn';
+function rangoDePreset(p){
   const hoy = hoyChileStr();
-  document.getElementById('fechaInicioRango').value = sumarDiasStr(hoy, -(dias - 1));
-  document.getElementById('fechaFinRango').value = hoy;
+  if(p === 'estemes') return {ini: hoy.slice(0, 8) + '01', fin: hoy};
+  if(p === 'mesant'){
+    const [y, m] = hoy.split('-').map(Number);
+    const ini = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 10);   // día 1 del mes anterior
+    const fin = new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);   // último día del mes anterior
+    return {ini, fin};
+  }
+  // "Últimos N días" = los N días corridos que terminan hoy (hoy incluido), en hora de Chile.
+  const dias = p === 'hoy' ? 1 : (p === 'semana' ? 7 : (p === 'trimestre' ? 90 : 30));
+  return {ini: sumarDiasStr(hoy, -(dias - 1)), fin: hoy};
+}
+function fijarRangoCompartido(ini, fin, preset){
+  PARES_RANGO.forEach(([a, b]) => { document.getElementById(a).value = ini; document.getElementById(b).value = fin; });
+  document.querySelectorAll(BOTONES_RANGO).forEach(x => x.classList.toggle('active', !!preset && x.dataset.p === preset));
+}
+function copiarRangoACompartido(idIni, idFin){
+  const ini = document.getElementById(idIni).value, fin = document.getElementById(idFin).value;
+  PARES_RANGO.forEach(([a, b]) => { if(a !== idIni){ document.getElementById(a).value = ini; document.getElementById(b).value = fin; } });
+}
+
+// ---- Filtros de Estadísticas y Análisis: medir por fecha informada o de reparación, subcontrato, asignador, ITO ----
+const FILTROS_EST = {medir: 'informada', masivo: 'todas', asignadores: new Set(), ito: ''};
+function extraFiltrosEst(conIto){
+  const e = {};
+  if(FILTROS_EST.medir !== 'informada') e.p_medir = FILTROS_EST.medir;
+  if(FILTROS_EST.masivo !== 'todas') e.p_masivo = FILTROS_EST.masivo === 'si';
+  if(FILTROS_EST.asignadores.size) e.p_asignadores = [...FILTROS_EST.asignadores];
+  if(conIto && FILTROS_EST.ito) e.p_ito = FILTROS_EST.ito;
+  return e;
+}
+function claveFiltrosEst(conIto){ return JSON.stringify(extraFiltrosEst(conIto)); }
+function veAsignadoresEst(){ return ['admin','contratista','contratista2','ito2'].includes(rolEfectivo()); }
+let asignadoresEst = null;   // [{id, nombre}] quienes han asignado alguna falla
+async function cargarAsignadoresEst(){
+  if(asignadoresEst || !veAsignadoresEst()) return;
+  try{
+    const filas = await db.select('fallas', 'select=asignado_por_id&asignado_por_id=not.is.null');
+    const ids = [...new Set((filas || []).map(f => f.asignado_por_id))];
+    asignadoresEst = ids.length
+      ? await db.select('usuarios', `select=id,nombre&id=in.(${ids.join(',')})&order=nombre.asc`)
+      : [];
+  }catch(e){ asignadoresEst = []; console.warn('No se pudo cargar la lista de asignadores:', e); }
+  pintarFiltrosEst();
+}
+let itosEst = null;
+async function cargarItosEst(){
+  if(itosEst) return;
+  try{ itosEst = await db.select('usuarios', 'select=id,nombre&rol=in.(ito,ito2)&order=nombre.asc'); }
+  catch(e){ itosEst = []; }
+  pintarFiltrosEst();
+}
+function reiniciarFiltrosEst(){
+  reiniciarFiltrosInsp();
+  FILTROS_EST.medir = 'informada'; FILTROS_EST.masivo = 'todas'; FILTROS_EST.asignadores.clear(); FILTROS_EST.ito = '';
+  pintarFiltrosEst();
+}
+function fijarFiltroEst(k, v){
+  if(k === 'asignador'){
+    if(v === '__todos') FILTROS_EST.asignadores.clear();
+    else if(FILTROS_EST.asignadores.has(v)) FILTROS_EST.asignadores.delete(v);
+    else FILTROS_EST.asignadores.add(v);
+  } else FILTROS_EST[k] = v;
+  pintarFiltrosEst();
+  if(document.getElementById('tabAnalisis').classList.contains('active')) cargarAnalisis();
+  else actualizarEstadisticasYMapa();
+}
+window.fijarFiltroEst = fijarFiltroEst;
+function pintarFiltrosEst(){
+  const bar = document.getElementById('filtrosEstBar');
+  if(!bar) return;
+  const enAna = document.getElementById('tabAnalisis').classList.contains('active');
+  const enInsp = document.getElementById('tabInspecciones').classList.contains('active');
+  bar.style.display = enInsp ? 'none' : 'flex';
+  bar.querySelectorAll('[data-medir]').forEach(c => c.classList.toggle('activo', c.dataset.medir === FILTROS_EST.medir));
+  bar.querySelectorAll('[data-fmas]').forEach(c => c.classList.toggle('activo', c.dataset.fmas === FILTROS_EST.masivo));
+  const cont = document.getElementById('filtrosEstAsignador');
+  if(veAsignadoresEst() && asignadoresEst && asignadoresEst.length){
+    cont.style.display = 'flex';
+    cont.innerHTML = '<span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Asignada por:</span>' +
+      `<button type="button" class="chip-estado ${FILTROS_EST.asignadores.size ? '' : 'activo'}" onclick="fijarFiltroEst('asignador','__todos')">Todos</button>` +
+      asignadoresEst.map(u => `<button type="button" class="chip-estado ${FILTROS_EST.asignadores.has(u.id) ? 'activo' : ''}" onclick="fijarFiltroEst('asignador','${u.id}')">${escHtml(u.nombre)}</button>`).join('');
+  } else cont.style.display = 'none';
+  const wrap = document.getElementById('filtrosEstItoWrap');
+  wrap.style.display = enAna ? 'flex' : 'none';
+  if(enAna && itosEst){
+    const sel = document.getElementById('filtrosEstIto');
+    sel.innerHTML = '<option value="">Todos los ITOs</option>' + itosEst.map(u => `<option value="${u.id}">${escHtml(u.nombre)}</option>`).join('');
+    sel.value = FILTROS_EST.ito;
+  }
+}
+function actualizarBarraFiltrosEst(){ pintarFiltrosEst(); cargarAsignadoresEst(); if(document.getElementById('tabAnalisis').classList.contains('active')) cargarItosEst(); }
+
+function seleccionarPeriodoRapido(periodo){
+  const r = rangoDePreset(periodo);
+  fijarRangoCompartido(r.ini, r.fin, periodo);
   actualizarEstadisticasYMapa();
 }
 
@@ -4088,11 +4366,11 @@ function actualizarEstadisticasYMapa(){
 // rango no debe volver a descargar las mismas geometrías.
 const cachePeriodoGeojsonPorRango = {};
 async function renderFallasPeriodoEnMapa(fechaInicio, fechaFin){
-  const clave = fechaInicio + '|' + fechaFin;
+  const clave = fechaInicio + '|' + fechaFin + '|' + claveFiltrosEst(false);
   try{
     let geojson = cachePeriodoGeojsonPorRango[clave];
     if(!geojson){
-      geojson = await db.rpc('fallas_geojson_periodo', {fecha_inicio: fechaInicio, fecha_fin: fechaFin});
+      geojson = await db.rpc('fallas_geojson_periodo', {fecha_inicio: fechaInicio, fecha_fin: fechaFin, ...extraFiltrosEst(false)});
       cachePeriodoGeojsonPorRango[clave] = geojson;
     }
     fallasPeriodoLayerGroup.clearLayers();
@@ -4171,6 +4449,8 @@ document.getElementById('tabInspecciones').onclick = () => {
   if(!document.getElementById('fechaInspInicio').value){
     inspeccionesModoRecientes = true;
     document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.remove('active'));
+  } else {
+    inspeccionesModoRecientes = false;   // ya hay un rango elegido (compartido con las otras pestañas)
   }
   cargarListadoInspecciones();
 };
@@ -4192,17 +4472,16 @@ let inspeccionesModoRecientes = true;   // true = últimas 6, sin fechas elegida
 function seleccionarRangoInspecciones(periodo, cargar = true){
   document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
   inspeccionesModoRecientes = false;
-  const dias = periodo === 'semana' ? 7 : 30;
-  const hoy = hoyChileStr();
-  document.getElementById('fechaInspInicio').value = sumarDiasStr(hoy, -(dias - 1));
-  document.getElementById('fechaInspFin').value = hoy;
+  const r = rangoDePreset(periodo);
+  fijarRangoCompartido(r.ini, r.fin, periodo);
   if(cargar) cargarListadoInspecciones();
 }
 document.querySelectorAll('.insp-rango-btn').forEach(b => b.onclick = () => seleccionarRangoInspecciones(b.dataset.p));
 ['fechaInspInicio','fechaInspFin'].forEach(id => {
   document.getElementById(id).onchange = () => {
     inspeccionesModoRecientes = false;
-    document.querySelectorAll('.insp-rango-btn').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll(BOTONES_RANGO).forEach(x => x.classList.remove('active'));
+    copiarRangoACompartido('fechaInspInicio', 'fechaInspFin');
     cargarListadoInspecciones();
   };
 });
@@ -4257,12 +4536,42 @@ function actualizarSelectorIto(){
   sel.value = itos.has(previo) ? previo : '';
 }
 
+// Filtros de la lista de inspecciones: resultado (con/sin fallas) y estado de sus fallas (varios a la vez: basta que cumpla uno)
+const FILTRO_INSP = {res: 'todas', est: new Set()};
+function reiniciarFiltrosInsp(){ FILTRO_INSP.res = 'todas'; FILTRO_INSP.est.clear(); pintarChipsInsp(); }
+function pintarChipsInsp(){
+  document.querySelectorAll('[data-ires]').forEach(c => c.classList.toggle('activo', c.dataset.ires === FILTRO_INSP.res));
+  document.querySelectorAll('[data-iest]').forEach(c => c.classList.toggle('activo', FILTRO_INSP.est.has(c.dataset.iest)));
+}
+function fijarFiltroInsp(k, v){
+  if(k === 'res') FILTRO_INSP.res = v;
+  else if(FILTRO_INSP.est.has(v)) FILTRO_INSP.est.delete(v);
+  else FILTRO_INSP.est.add(v);
+  pintarChipsInsp();
+  renderListadoInspecciones();
+}
+window.fijarFiltroInsp = fijarFiltroInsp;
+function pasaFiltroInsp(i){
+  const n = i.fallas || 0;
+  if(FILTRO_INSP.res === 'con' && !n) return false;
+  if(FILTRO_INSP.res === 'sin' && n) return false;
+  if(FILTRO_INSP.est.size){
+    const abiertas = (i.reportadas || 0) + (i.pendientes || 0) + (i.reiteradas || 0);
+    const cumple = (FILTRO_INSP.est.has('abiertas') && abiertas > 0)
+      || (FILTRO_INSP.est.has('reiteradas') && (i.reiteradas || 0) > 0)
+      || (FILTRO_INSP.est.has('pendientes') && (i.pendientes || 0) > 0)
+      || (FILTRO_INSP.est.has('reparadas') && n > 0 && abiertas === 0);
+    if(!cumple) return false;
+  }
+  return true;
+}
 function renderListadoInspecciones(){
   const content = document.getElementById('statsContent');
   const itoSel = document.getElementById('inspItoSelect').value;
-  const filas = inspeccionesCache.filter(i => !itoSel || i.ito_id === itoSel);
+  const filas = inspeccionesCache.filter(i => (!itoSel || i.ito_id === itoSel) && pasaFiltroInsp(i));
   if(!filas.length){
-    content.innerHTML = `<div class="empty-state">No hay inspecciones registradas ${itoSel ? 'de ese ITO ' : ''}en este rango de fechas.</div>`;
+    const conFiltros = itoSel || FILTRO_INSP.res !== 'todas' || FILTRO_INSP.est.size;
+    content.innerHTML = `<div class="empty-state">${conFiltros ? 'Ninguna inspección cumple los filtros elegidos en este rango de fechas.' : 'No hay inspecciones registradas en este rango de fechas.'}</div>`;
     return;
   }
   const totalFallas = filas.reduce((s, i) => s + (i.fallas || 0), 0);
@@ -4419,6 +4728,7 @@ async function abrirDetalleInspeccion(id){
   document.getElementById('historialContenido').style.display = 'none';
   contenedor.style.display = 'block';
   document.getElementById('toggleExportBtn').style.display = 'none';
+  document.getElementById('toggleRealesBtn').style.display = 'none';
   document.getElementById('todasPanel').classList.add('visible');
   setTimeout(() => { if(map) map.invalidateSize(); }, 50);
   contenedor.innerHTML = '<div class="empty-state">Cargando...</div>';
@@ -4465,7 +4775,13 @@ function renderDetalleInspeccion(det){
     enlazarEditarInspeccion(det);
     return;
   }
+  const chipsDetalle = ['reportada','pendiente','reiterada','reparada'].filter(e => cuenta[e]).map(e =>
+    `<button type="button" class="chip-estado" data-dest="${e}"><span class="dot" style="background:${colorEstado[e]}"></span>${e.charAt(0).toUpperCase() + e.slice(1)} <span class="n">(${cuenta[e]})</span></button>`).join('');
   cont.innerHTML = encabezado + `
+    <div id="inspFiltroDetalle" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-bottom:8px;">
+      <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Estado:</span>
+      <button type="button" class="chip-estado activo" data-dest="todas">Todas <span class="n">(${fallas.length})</span></button>${chipsDetalle}
+    </div>
     <table id="inspeccionTabla" style="width:100%; border-collapse:collapse;">
       <thead>
         <tr style="text-align:left; border-bottom:2px solid var(--line);">
@@ -4479,7 +4795,7 @@ function renderDetalleInspeccion(det){
       </thead>
       <tbody>
         ${fallas.map(f => `
-          <tr data-id="${escHtml(f.id)}">
+          <tr data-id="${escHtml(f.id)}" data-estado="${escHtml(f.estado)}">
             <td class="mono">${escHtml(f.ot || '—')}</td>
             <td><b>${escHtml(f.tipo_falla)}</b><div class="hint">${escHtml(descripcionCodigoFalla(f))}</div></td>
             <td>${htmlUbicacionFalla(f)}</td>
@@ -4491,6 +4807,22 @@ function renderDetalleInspeccion(det){
     </table>`;
   cont.querySelectorAll('#inspeccionTabla tbody tr').forEach(tr => {
     tr.onclick = () => enfocarFallaInspeccion(tr.dataset.id);
+  });
+  // Filtro por estado dentro del detalle (varios a la vez; ninguno marcado = todas)
+  const estDetalle = new Set();
+  const aplicarFiltroDetalle = () => {
+    cont.querySelectorAll('#inspFiltroDetalle [data-dest]').forEach(c =>
+      c.classList.toggle('activo', c.dataset.dest === 'todas' ? estDetalle.size === 0 : estDetalle.has(c.dataset.dest)));
+    cont.querySelectorAll('#inspeccionTabla tbody tr').forEach(tr => {
+      tr.style.display = (!estDetalle.size || estDetalle.has(tr.dataset.estado)) ? '' : 'none';
+    });
+  };
+  cont.querySelectorAll('#inspFiltroDetalle [data-dest]').forEach(c => c.onclick = () => {
+    const e = c.dataset.dest;
+    if(e === 'todas') estDetalle.clear();
+    else if(estDetalle.has(e)) estDetalle.delete(e);
+    else estDetalle.add(e);
+    aplicarFiltroDetalle();
   });
   enlazarPdfInspeccion();
   enlazarContinuarInspeccion(insp);
@@ -4702,18 +5034,22 @@ function limpiarCapaAnalisis(){
 
 function seleccionarRangoAnalisis(periodo, cargar = true){
   document.querySelectorAll('.ana-rango-btn').forEach(x => x.classList.toggle('active', x.dataset.p === periodo));
-  const dias = periodo === 'semana' ? 7 : (periodo === 'trimestre' ? 90 : 30);
-  const hoy = hoyChileStr();
-  document.getElementById('fechaAnaInicio').value = sumarDiasStr(hoy, -(dias - 1));
-  document.getElementById('fechaAnaFin').value = hoy;
+  const r = rangoDePreset(periodo);
+  fijarRangoCompartido(r.ini, r.fin, periodo);
   if(cargar) cargarAnalisis();
 }
 document.querySelectorAll('.ana-rango-btn').forEach(b => b.onclick = () => seleccionarRangoAnalisis(b.dataset.p));
 ['fechaAnaInicio','fechaAnaFin'].forEach(id => {
   document.getElementById(id).onchange = () => {
-    document.querySelectorAll('.ana-rango-btn').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll(BOTONES_RANGO).forEach(x => x.classList.remove('active'));
+    copiarRangoACompartido('fechaAnaInicio', 'fechaAnaFin');
     cargarAnalisis();
   };
+});
+// Al cambiar de pestaña se actualiza qué filtros se muestran (ITO solo en Análisis; ninguno en Inspecciones).
+['tabDia','tabPeriodo','tabInspecciones','tabAnalisis'].forEach(id => {
+  const el = document.getElementById(id), previo = el.onclick;
+  el.onclick = function(ev){ const r = previo.call(this, ev); actualizarBarraFiltrosEst(); return r; };
 });
 
 async function cargarAnalisis(){
@@ -4762,10 +5098,10 @@ function fmtPctPuntos(n, total){
 }
 // Trae el análisis y le suma los puntos lumínicos afectados (función aparte en la base).
 async function rpcAnalisisFallas(ini, fin){
-  const d = await db.rpc('analisis_fallas', {p_inicio: ini, p_fin: fin});
+  const d = await db.rpc('analisis_fallas', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true)});
   if(d && d.resumen){
     try{
-      const p = await db.rpc('analisis_puntos_afectados', {p_inicio: ini, p_fin: fin});
+      const p = await db.rpc('analisis_puntos_afectados', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true)});
       if(p){ d.resumen.puntos_afectados = p.puntos_afectados; d.resumen.total_puntos = p.total_puntos; }
     }catch(e){ console.warn('No se pudieron obtener los puntos lumínicos afectados:', e); }
   }
@@ -5427,7 +5763,8 @@ async function generarPdfAnalisis(soloResumen){
     try{
       const g = await db.rpc('fallas_geojson_periodo', {
         fecha_inicio: fechaChileLocal(ini, 0, 0, 0).toISOString(),
-        fecha_fin: fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString()
+        fecha_fin: fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString(),
+        ...extraFiltrosEst(false)
       });
       feats = ((g && g.features) || []).filter(f => !(f.properties && f.properties.cascada));
     }catch(e){ console.warn('No se pudieron obtener las fallas del período para el mapa:', e); }
@@ -5857,12 +6194,12 @@ async function generarPdfAnalisis(soloResumen){
 const cacheEstadisticasPorRango = {};
 async function cargarEstadisticas(fechaInicio, fechaFin){
   const content = document.getElementById('statsContent');
-  const clave = fechaInicio + '|' + fechaFin;
+  const clave = fechaInicio + '|' + fechaFin + '|' + claveFiltrosEst(false);
   content.innerHTML = '<div class="empty-state">Cargando...</div>';
   try{
     let d = cacheEstadisticasPorRango[clave];
     if(!d){
-      d = await db.rpc('estadisticas_fallas', {fecha_inicio: fechaInicio, fecha_fin: fechaFin});
+      d = await db.rpc('estadisticas_fallas', {fecha_inicio: fechaInicio, fecha_fin: fechaFin, ...extraFiltrosEst(false)});
       cacheEstadisticasPorRango[clave] = d;
     }
     const total = d.total_fallas || 0;
