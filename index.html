@@ -1584,6 +1584,42 @@ function initMap(){
     }
   });
   new ControlZonas().addTo(map);
+  // Atenuar lo que queda fuera de la comuna (botón 🎯, se recuerda la elección). No bloquea clics ni mueve el mapa.
+  map.createPane('atenuadoPane');
+  map.getPane('atenuadoPane').style.zIndex = 250;            // sobre el fondo (200), bajo líneas y símbolos
+  map.getPane('atenuadoPane').style.pointerEvents = 'none';
+  const contornoLL = COMUNA_CONTORNO.map(c => [c[1], c[0]]);
+  const capaAtenuado = L.layerGroup([
+    L.polygon([[[-85, -180], [-85, 180], [85, 180], [85, -180]], contornoLL],
+      {pane: 'atenuadoPane', interactive: false, stroke: false, fillColor: '#f4f6f3', fillOpacity: 0.85}),
+    L.polyline(contornoLL.concat([contornoLL[0]]),
+      {pane: 'atenuadoPane', interactive: false, color: '#1f4d3d', weight: 2.5, opacity: 0.85})
+  ]);
+  let atenuarComuna = true;
+  try{ if(localStorage.getItem('atenuarComuna') === '0') atenuarComuna = false; }catch(e){}
+  const ControlComuna = L.Control.extend({
+    options: {position: 'bottomright'},
+    onAdd: function(){
+      const a = L.DomUtil.create('a', 'leaflet-control leaflet-control-zonas');
+      a.id = 'toggleComunaBtn'; a.href = '#'; a.role = 'button'; a.textContent = '🎯';
+      L.DomEvent.disableClickPropagation(a);
+      L.DomEvent.on(a, 'click', L.DomEvent.preventDefault);
+      return a;
+    }
+  });
+  new ControlComuna().addTo(map);
+  const aplicarAtenuado = () => {
+    if(atenuarComuna) capaAtenuado.addTo(map); else map.removeLayer(capaAtenuado);
+    const b = document.getElementById('toggleComunaBtn');
+    b.classList.toggle('activo', atenuarComuna);
+    b.title = b.ariaLabel = atenuarComuna ? 'Mostrar también fuera de la comuna' : 'Atenuar fuera de la comuna';
+  };
+  document.getElementById('toggleComunaBtn').onclick = () => {
+    atenuarComuna = !atenuarComuna;
+    try{ localStorage.setItem('atenuarComuna', atenuarComuna ? '1' : '0'); }catch(e){}
+    aplicarAtenuado();
+  };
+  aplicarAtenuado();
   L.control.layers({'Fondo suave': fondoSuave, 'Fondo a color': fondoColor}, null, {position:'bottomright', collapsed:true}).addTo(map);
   map.on('baselayerchange', (e) => { try{ localStorage.setItem('fondoMapa', e.layer === fondoColor ? 'color' : 'suave'); }catch(err){} });
 
