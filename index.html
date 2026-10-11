@@ -3409,8 +3409,8 @@ document.getElementById('toggleExportBtn').onclick = () => {
     <b>Exportar fallas a CSV</b>
     <div class="hint" style="margin:8px 0 4px;">Período según la fecha de:</div>
     <div style="display:flex; flex-direction:column; gap:3px; font-size:12.5px; margin-bottom:8px;">
-      <label><input type="radio" name="exportTipoFecha" value="reparacion" checked> Reparación</label>
-      <label><input type="radio" name="exportTipoFecha" value="informada"> Informada (reporte)</label>
+      <label><input type="radio" name="exportTipoFecha" value="informada" checked> Informada (registro de la falla)</label>
+      <label><input type="radio" name="exportTipoFecha" value="reparacion"> Reparación (trabajos realizados)</label>
       ${ver ? '<label><input type="radio" name="exportTipoFecha" value="asignacion"> Asignación</label>' : ''}
     </div>
     <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:8px;">
@@ -4050,7 +4050,7 @@ async function exportarCsv(){
   const ini = document.getElementById('exportFechaInicio').value;
   const fin = document.getElementById('exportFechaFin').value;
   if(!!ini !== !!fin){ alert('Indica fecha de inicio y de fin, o deja ambas vacías para exportar desde siempre.'); return; }
-  const tipoFecha = (document.querySelector('input[name="exportTipoFecha"]:checked') || {}).value || 'reparacion';
+  const tipoFecha = (document.querySelector('input[name="exportTipoFecha"]:checked') || {}).value || 'informada';
   const fechaInicio = ini ? fechaChileLocal(ini, 0, 0, 0).toISOString() : null;
   const fechaFin = fin ? fechaChileLocal(fin, 23, 59, 59).toISOString() : null;
   const ver = verAsignacionTodas();
