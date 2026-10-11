@@ -173,8 +173,9 @@
   .modal-card h2{margin:0 0 14px; font-size:17px;}
   .modal-card h3{font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:20px 0 10px;}
   .modal-card .close-x{position:absolute; top:14px; right:16px; font-size:20px;}
-  .periodo-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:6px;}
-  .periodo-btn{border:1.5px solid var(--line); background:#fff; padding:7px 12px; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;}
+  .periodo-row{display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:6px;}
+  .periodo-lbl{font-size:11.5px;color:var(--ink-soft);font-weight:700;min-width:62px;}
+  .periodo-btn{border:1.5px solid var(--line); background:#fff; padding:6px 9px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer;}
   .periodo-btn.active{border-color:var(--primary); background:var(--primary); color:#fff;}
   .periodo-row input[type=date]{border:1.5px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12.5px;}
   .stat-grid-modal{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px;}
@@ -190,9 +191,9 @@
   .toggle-row button.active{border-color:var(--primary); background:var(--primary); color:#fff;}
 
   /* Pestaña "Inspecciones": selector de rango/ITO, tarjetas y detalle */
-  .insp-rango-btn{border:1.5px solid var(--line); background:#fff; padding:7px 12px; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;}
+  .insp-rango-btn{border:1.5px solid var(--line); background:#fff; padding:6px 9px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer;}
   .insp-rango-btn.active{border-color:var(--primary); background:var(--primary); color:#fff;}
-  .ana-rango-btn{border:1.5px solid var(--line); background:#fff; padding:7px 12px; border-radius:8px; font-size:12.5px; font-weight:600; cursor:pointer;}
+  .ana-rango-btn{border:1.5px solid var(--line); background:#fff; padding:6px 9px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer;}
   .ana-rango-btn.active{border-color:var(--primary); background:var(--primary); color:#fff;}
   #selectorAnalisis input[type=date]{border:1.5px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12.5px; background:#fff; font-family:inherit;}
   .ana-tit{font-size:13px; font-weight:800; color:var(--primary); margin:18px 0 4px;}
@@ -286,22 +287,22 @@
   .ley-toggle svg{transition:transform .2s;transform:rotate(180deg);}
   .ley-toggle[aria-expanded="true"] svg{transform:none;}
   #leyendaCuerpo[hidden]{display:none;}
-  .lat-top{padding:2px 12px 10px;flex-shrink:0;}
-  .lat-tit{display:flex;align-items:center;gap:8px;margin:8px 0;}
+  .lat-top{padding:0 12px 6px;flex-shrink:0;}
+  .lat-tit{display:flex;align-items:center;gap:8px;margin:4px 0;}
   .lat-tit h3{margin:0;font-size:14px;text-transform:none;letter-spacing:0;color:var(--ink);}
   .lat-cuenta{min-width:24px;height:20px;padding:0 7px;border-radius:10px;background:var(--primary);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
   .lat-busq{display:flex;gap:8px;}
-  .lat-input{width:100%;box-sizing:border-box;height:38px;padding:0 26px 0 34px;border:0;border-radius:12px;font-size:12.5px;outline:none;background:#eef2f0;-webkit-appearance:none;appearance:none;}
+  .lat-input{width:100%;box-sizing:border-box;height:34px;padding:0 26px 0 34px;border:0;border-radius:12px;font-size:12.5px;outline:none;background:#eef2f0;-webkit-appearance:none;appearance:none;}
   .lat-input:focus{box-shadow:0 0 0 2px rgba(31,77,61,.25);}
-  .lat-fbtn{position:relative;flex:none;width:38px;height:38px;padding:0;border:0;border-radius:12px;background:#eef2f0;color:var(--primary);display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .lat-fbtn{position:relative;flex:none;width:34px;height:34px;padding:0;border:0;border-radius:12px;background:#eef2f0;color:var(--primary);display:flex;align-items:center;justify-content:center;cursor:pointer;}
   .lat-fbtn.activo{background:var(--primary);color:#fff;}
   .lat-fnum{position:absolute;top:-4px;right:-4px;min-width:16px;height:16px;border-radius:8px;background:var(--red);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;}
   .lat-fnum[hidden]{display:none;}
-  .lat-panel{margin-top:10px;padding:10px;border-radius:12px;background:#f4f7f5;border:1px solid #e3e9e5;}
+  .lat-panel{margin-top:6px;padding:6px 9px;border-radius:12px;background:#f4f7f5;border:1px solid #e3e9e5;}
   .lat-panel[hidden]{display:none;}
-  .lat-pt{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-weight:700;margin-bottom:6px;}
-  .lat-chips{display:flex;gap:6px;flex-wrap:wrap;}
-  .fchip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:14px;border:1.5px solid var(--cc,#dbe2dc);background:var(--cc,#fff);color:#fff;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .lat-pt{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-weight:700;margin-bottom:3px;}
+  .lat-chips{display:flex;gap:4px;flex-wrap:wrap;}
+  .fchip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:12px;border:1.5px solid var(--cc,#dbe2dc);background:var(--cc,#fff);color:#fff;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;}
   .fchip .fdot{width:8px;height:8px;border-radius:50%;background:#fff;display:inline-block;}
   .fchip[data-estado="reportada"]{--cc:#c1443c;--ct:#c1443c;}
   .fchip[data-estado="pendiente"]{--cc:#d98e2f;--ct:#a96a12;}
@@ -317,7 +318,7 @@
   .fchip-sel{background:#fff;color:var(--ink);border-color:#dbe2dc;}
   .fchip-sel.on{background:#eef5f1;color:var(--primary);border-color:var(--primary);}
   .fchip-sel .n{font-weight:500;opacity:.75;}
-  .lat-pie{display:flex;justify-content:space-between;align-items:center;margin-top:10px;font-size:11.5px;color:var(--ink-soft);}
+  .lat-pie{display:flex;justify-content:space-between;align-items:center;margin-top:5px;font-size:11.5px;color:var(--ink-soft);}
   .lat-link{border:0;background:none;color:#2a5db0;font-weight:600;font-size:11.5px;cursor:pointer;padding:0;}
   #fallasList{background:var(--bg);padding-top:8px;}
   .fi{margin:0 10px 6px;padding:5px 10px 6px;background:#fff;border:1px solid #e3e9e5;border-left:4px solid var(--red);border-radius:8px;font-size:12.5px;cursor:pointer;}
@@ -678,14 +679,14 @@
             <button type="button" class="fchip" data-estado="reiterada" onclick="toggleFiltroEstado('reiterada')"><i class="fdot" id="swatchReiterada"></i>Reiterada</button>
           </div>
           <div id="filtroAsignacionGrupo" style="display:none;">
-            <div class="lat-pt" style="margin-top:10px;">Asignación</div>
+            <div class="lat-pt" style="margin-top:5px;">Asignación</div>
             <div class="lat-chips" id="chipsAsignacion">
               <button type="button" class="fchip fchip-sel on" data-asig="todas">Todas</button>
               <button type="button" class="fchip fchip-sel" data-asig="sin">Sin asignar <span class="n" id="sinAsignarN"></span></button>
               <button type="button" class="fchip fchip-sel" data-asig="asignadas">Asignadas <span class="n" id="asignadasN"></span></button>
             </div>
           </div>
-          <div class="lat-pt" style="margin-top:10px;">Subcontrato</div>
+          <div class="lat-pt" style="margin-top:5px;">Subcontrato</div>
           <div class="lat-chips" id="chipsSubcontrato">
             <button type="button" class="fchip fchip-sel on" data-sub="todas">Todas</button>
             <button type="button" class="fchip fchip-sel" data-sub="masivo">Masivo <span class="n" id="masivoN"></span></button>
@@ -732,11 +733,15 @@
           <input type="date" id="fechaDiaEspecifico" class="popup-input" style="width:100%;">
         </div>
         <div id="selectorPeriodo">
+          <div class="periodo-row" style="margin-bottom:6px;">
+            <span class="periodo-lbl">Últimos</span>
+            <button class="periodo-btn" data-p="semana">7 días</button>
+            <button class="periodo-btn" data-p="mes">30 días</button>
+            <button class="periodo-btn" data-p="trimestre">90 días</button>
+          </div>
           <div class="periodo-row" style="margin-bottom:10px;">
+            <span class="periodo-lbl">Calendario</span>
             <button class="periodo-btn" data-p="hoy">Hoy</button>
-            <button class="periodo-btn" data-p="semana">Últimos 7 días</button>
-            <button class="periodo-btn" data-p="mes">Últimos 30 días</button>
-            <button class="periodo-btn" data-p="trimestre">Últimos 90 días</button>
             <button class="periodo-btn" data-p="estemes">Este mes</button>
             <button class="periodo-btn" data-p="mesant">Mes anterior</button>
           </div>
@@ -748,10 +753,14 @@
           </div>
         </div>
         <div id="selectorInspecciones" style="display:none;">
+          <div class="periodo-row" style="margin-bottom:6px;">
+            <span class="periodo-lbl">Últimos</span>
+            <button class="insp-rango-btn" data-p="semana">7 días</button>
+            <button class="insp-rango-btn" data-p="mes">30 días</button>
+            <button class="insp-rango-btn" data-p="trimestre">90 días</button>
+          </div>
           <div class="periodo-row" style="margin-bottom:10px;">
-            <button class="insp-rango-btn" data-p="semana">Últimos 7 días</button>
-            <button class="insp-rango-btn" data-p="mes">Últimos 30 días</button>
-            <button class="insp-rango-btn" data-p="trimestre">Últimos 90 días</button>
+            <span class="periodo-lbl">Calendario</span>
             <button class="insp-rango-btn" data-p="estemes">Este mes</button>
             <button class="insp-rango-btn" data-p="mesant">Mes anterior</button>
           </div>
@@ -779,10 +788,14 @@
           </div>
         </div>
         <div id="selectorAnalisis" style="display:none;">
+          <div class="periodo-row" style="margin-bottom:6px;">
+            <span class="periodo-lbl">Últimos</span>
+            <button class="ana-rango-btn" data-p="semana">7 días</button>
+            <button class="ana-rango-btn" data-p="mes">30 días</button>
+            <button class="ana-rango-btn" data-p="trimestre">90 días</button>
+          </div>
           <div class="periodo-row" style="margin-bottom:10px;">
-            <button class="ana-rango-btn" data-p="semana">Últimos 7 días</button>
-            <button class="ana-rango-btn" data-p="mes">Últimos 30 días</button>
-            <button class="ana-rango-btn" data-p="trimestre">Últimos 90 días</button>
+            <span class="periodo-lbl">Calendario</span>
             <button class="ana-rango-btn" data-p="estemes">Este mes</button>
             <button class="ana-rango-btn" data-p="mesant">Mes anterior</button>
           </div>
