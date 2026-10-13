@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.17.0';
+const VERSION_APP = '1.18.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -802,7 +802,13 @@ $('#btnUbicacion').addEventListener('click', () => {
 });
 
 /* ------------------------- datos de fallas ------------------------- */
+const CONTR = {};   // id -> {nombre, masivo} para la etiqueta de contrato en la lista
+async function cargarContratosEtiqueta() {
+  try { (await select('contratos', 'select=id,nombre,defecto_para')).forEach((c) => { CONTR[c.id] = { nombre: c.nombre, masivo: c.defecto_para === 'masivo' }; }); if (S.vista === 'lista') renderLista(); } catch (e) { /* sin etiqueta */ }
+}
+const tagContrato = (id) => (id && CONTR[id] ? ` <span class="tag-ctr ${CONTR[id].masivo ? 'm' : 'n'}">${esc(CONTR[id].nombre)}</span>` : '');
 async function cargarFallas(manual) {
+  if (!Object.keys(CONTR).length) cargarContratosEtiqueta();
   const btn = $('#btnActualizar');
   if (manual) btn.classList.add('girando');
   try {
@@ -1265,7 +1271,7 @@ function renderLista() {
     return `<button class="tarjeta est-${esc(p.estado)}" data-i="${i}">
       <div class="tarjeta-top"><b>${esc(p.tipo_falla)} · ${esc(DESC_CODIGO[p.tipo_falla] || '')}</b>${d != null ? `<span class="dist">${esc(fmtDist(d))}</span>` : ''}</div>
       <div class="sub">OS ${esc(p.ot || '—')} · ${p.tipo === 'punto' ? 'Llave ' + esc(p.llave ?? '—') : esc(p.puntos_afectados ?? '') + ' puntos (circuito)'} · <span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
-      <div class="sub">${esc(p.nombre_creador || '—')} · ${esc(hace(p.fecha_falla))}</div>
+      <div class="sub">${esc(p.nombre_creador || '—')} · ${esc(hace(p.fecha_falla))}${tagContrato(p.contrato_id)}</div>
     </button>`;
   }).join('') : '<div class="vacio">No hay fallas activas con este filtro.</div>';
   $$('#listaItems .tarjeta').forEach((b) => b.addEventListener('click', () => {
