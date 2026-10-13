@@ -619,7 +619,7 @@
               </tr>
             </thead>
             <tbody id="historialTbody">
-              <tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+              <tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
             </tbody>
           </table>
         </div>
@@ -838,7 +838,8 @@
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeUsuariosBtn">×</button>
     <h2>Gestión de usuarios</h2>
-    <div class="hint" style="margin-bottom:12px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Foto obligatoria</b> (solo contratistas) exige adjuntar al menos una fotografía al registrar una reparación, y esas reparaciones se hacen desde la app del teléfono. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div>
+    <div class="hint" style="margin-bottom:12px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Foto obligatoria</b> (solo contratistas) exige adjuntar al menos una fotografía al registrar una reparación, y esas reparaciones se hacen desde la app del teléfono. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). La columna <b>Contratos</b> (contratistas y camiones) indica a qué contratos pertenece cada usuario; puede ser más de uno. Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div>
+    <div id="contratosAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><button id="guardarUsuariosBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;" disabled>Guardar cambios</button><span id="usuariosEstado" class="hint" style="margin:0;">Sin cambios</span></div>
     <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
@@ -849,11 +850,12 @@
             <th style="padding:8px 10px;">Rol</th>
             <th style="padding:8px 10px;">Notificadores</th>
             <th style="padding:8px 10px;">Foto obligatoria</th>
+            <th style="padding:8px 10px;">Contratos</th>
             <th style="padding:8px 10px;"></th>
           </tr>
         </thead>
         <tbody id="usuariosTbody">
-          <tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+          <tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -3535,11 +3537,11 @@ async function mostrarHistorial(tipoEntidad, gid, etiqueta){
   setTimeout(() => { if(map) map.invalidateSize(); }, 50);
 
   const tbody = document.getElementById('historialTbody');
-  tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
     const filas = await db.rpc('historial_entidad', {tipo_entidad: tipoEntidad, entidad_gid: gid});
     if(!filas || !filas.length){
-      tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Sin fallas registradas para este elemento todavía.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">Sin fallas registradas para este elemento todavía.</td></tr>';
       return;
     }
 
@@ -3635,7 +3637,7 @@ async function mostrarHistorial(tipoEntidad, gid, etiqueta){
       </tr>`;
     }).join('');
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando historial: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando historial: ${e.message}</td></tr>`;
   }
 }
 window.mostrarHistorial = mostrarHistorial;
@@ -6671,6 +6673,67 @@ const ROLES_DISPONIBLES = ['admin','ito','ito2','contratista','contratista2','ca
 // (la base de datos también lo exige y lo apaga si el rol cambia a otro).
 const ROLES_CON_NOTIFICADOR = ['admin','ito','ito2','contratista2'];
 const ROLES_CON_FOTO = ['contratista','contratista2','camion'];
+// Roles que pertenecen a uno o más contratos (los demás ven todo)
+const ROLES_CON_CONTRATO = ['contratista','contratista2','camion'];
+let CONTRATOS_LISTA = [];   // todos los contratos (activos e inactivos)
+const escAttr = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+function htmlCeldaContratos(rol, ids){
+  if(!ROLES_CON_CONTRATO.includes(rol)) return '<span style="color:var(--ink-soft);" title="Este rol ve todos los contratos">—</span>';
+  const sel = new Set(ids || []);
+  const visibles = CONTRATOS_LISTA.filter(c => c.activo || sel.has(c.id));
+  if(!visibles.length) return '<span style="color:var(--ink-soft);">Sin contratos creados</span>';
+  return visibles.map(c => `<label style="display:flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap;"><input type="checkbox" class="contrato-chk" value="${c.id}" ${sel.has(c.id) ? 'checked' : ''}> ${escAttr(c.nombre)}${c.activo ? '' : ' <i style="color:var(--ink-soft);">(inactivo)</i>'}</label>`).join('');
+}
+// Bloque "Contratos" del modal: crear, renombrar, activar/desactivar
+function pintarContratosAdmin(){
+  const cont = document.getElementById('contratosAdmin');
+  if(!cont) return;
+  cont.innerHTML = `<div style="font-weight:700; margin-bottom:6px;">Contratos</div>
+    <div class="hint" style="margin:0 0 8px;">Un contrato inactivo deja de ofrecerse al asignar, pero sigue visible donde ya estaba. Aún no restringe lo que ve cada usuario.</div>
+    ${CONTRATOS_LISTA.map(c => `<div class="contrato-fila" data-id="${c.id}" style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+      <input type="text" class="popup-input contrato-nombre" value="${escAttr(c.nombre)}" style="margin:0; padding:6px 8px; max-width:280px;">
+      <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:12px;"><input type="checkbox" class="contrato-activo" ${c.activo ? 'checked' : ''}> Activo</label>
+      <span class="contrato-msg hint" style="margin:0;"></span></div>`).join('') || '<div class="hint">Todavía no hay contratos.</div>'}
+    <div style="display:flex; gap:8px; margin-top:8px;"><input type="text" id="contratoNuevoNombre" class="popup-input" placeholder="Nombre del nuevo contrato" style="margin:0; padding:6px 8px; max-width:280px;"><button type="button" id="contratoNuevoBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer;">＋ Crear contrato</button></div>`;
+  cont.querySelectorAll('.contrato-fila').forEach(f => {
+    const id = f.dataset.id, msg = f.querySelector('.contrato-msg');
+    const guardar = async (cambios, deshacer) => {
+      msg.textContent = 'Guardando…';
+      try{
+        const r = await db.update('contratos', `id=eq.${id}`, cambios);
+        if(!Array.isArray(r) || !r.length) throw new Error('no se guardó (¿sin permiso?)');
+        const c = CONTRATOS_LISTA.find(x => x.id === id); Object.assign(c, cambios);
+        msg.textContent = '✓ Guardado';
+        refrescarCeldasContratos();
+      }catch(e){ msg.textContent = ''; deshacer(); alert('No se pudo guardar el contrato: ' + (/duplicate|unique|contratos_nombre/i.test(e.message) ? 'ya existe un contrato con ese nombre.' : e.message)); }
+    };
+    const inp = f.querySelector('.contrato-nombre'), chk = f.querySelector('.contrato-activo');
+    inp.onchange = () => {
+      const nuevo = inp.value.trim(), antes = CONTRATOS_LISTA.find(x => x.id === id).nombre;
+      if(!nuevo){ inp.value = antes; return; }
+      if(nuevo !== antes) guardar({nombre: nuevo}, () => { inp.value = antes; });
+    };
+    chk.onchange = () => guardar({activo: chk.checked}, () => { chk.checked = !chk.checked; });
+  });
+  document.getElementById('contratoNuevoBtn').onclick = async () => {
+    const inp = document.getElementById('contratoNuevoNombre'), nombre = inp.value.trim();
+    if(!nombre) return;
+    try{
+      const r = await db.insert('contratos', {nombre});
+      CONTRATOS_LISTA.push(r[0]); CONTRATOS_LISTA.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+      pintarContratosAdmin(); refrescarCeldasContratos();
+    }catch(e){ alert('No se pudo crear el contrato: ' + (/duplicate|unique|contratos_nombre/i.test(e.message) ? 'ya existe un contrato con ese nombre.' : e.message)); }
+  };
+}
+// Vuelve a dibujar la columna Contratos de cada fila, conservando lo marcado en pantalla
+function refrescarCeldasContratos(){
+  document.querySelectorAll('#usuariosTbody tr[data-id]').forEach(tr => {
+    const celda = tr.querySelector('.contratos-celda'); if(!celda) return;
+    celda.innerHTML = htmlCeldaContratos(tr.querySelector('.rol-select').value, JSON.parse(tr.dataset.contr || '[]'));
+    celda.querySelectorAll('.contrato-chk').forEach(ch => ch.onchange = () => { tr.dataset.contr = JSON.stringify([...celda.querySelectorAll('.contrato-chk:checked')].map(x => x.value)); });
+  });
+  refrescarCambiosUsuarios();
+}
 function htmlCeldaFoto(rol, marcado){
   return ROLES_CON_FOTO.includes(rol)
     ? `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" class="foto-obligatoria" ${marcado ? 'checked' : ''}> Exigir foto</label>`
@@ -6684,21 +6747,30 @@ function htmlCeldaNotificador(rol, habilitado){
 
 async function cargarUsuarios(){
   const tbody = document.getElementById('usuariosTbody');
-  tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
     const usuarios = await db.select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc');
+    let relaciones = [];
+    try{
+      CONTRATOS_LISTA = await db.select('contratos', 'select=id,nombre,activo&order=nombre.asc');
+      relaciones = await db.select('usuario_contratos', 'select=usuario_id,contrato_id');
+    }catch(e){ CONTRATOS_LISTA = []; console.warn('No se pudieron cargar los contratos (¿ejecutaste el SQL de contratos?):', e); }
+    const contratosDe = {};
+    relaciones.forEach(r => { (contratosDe[r.usuario_id] = contratosDe[r.usuario_id] || []).push(r.contrato_id); });
+    pintarContratosAdmin();
     if(!usuarios.length){
-      tbody.innerHTML = '<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
       return;
     }
     tbody.innerHTML = usuarios.map(u => {
       const opciones = ROLES_DISPONIBLES.map(r => `<option value="${r}" ${r===u.rol?'selected':''}>${r}</option>`).join('');
-      return `<tr data-id="${u.id}" data-notif="${u.notificador_externo_habilitado ? '1' : '0'}" data-foto="${u.foto_obligatoria ? '1' : '0'}">
+      return `<tr data-id="${u.id}" data-notif="${u.notificador_externo_habilitado ? '1' : '0'}" data-foto="${u.foto_obligatoria ? '1' : '0'}" data-contr='${JSON.stringify(contratosDe[u.id] || [])}'>
         <td><input type="text" class="popup-input nombre-input" value="${u.nombre||''}" style="margin:0; padding:6px 8px;"></td>
         <td>${u.email || '—'}</td>
         <td><select class="rol-select" style="padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; font-size:12px;">${opciones}</select></td>
         <td class="notif-celda" style="white-space:nowrap;">${htmlCeldaNotificador(u.rol, u.notificador_externo_habilitado)}</td>
         <td class="foto-celda" style="white-space:nowrap;">${htmlCeldaFoto(u.rol, u.foto_obligatoria)}</td>
+        <td class="contratos-celda" style="font-size:12px;">${htmlCeldaContratos(u.rol, contratosDe[u.id])}</td>
         <td><button class="reset-pass-btn" style="font-size:11px; border:1px solid var(--amber); color:var(--amber); background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer;" ${!u.email?'disabled':''}>Enviar reset</button></td>
       </tr>`;
     }).join('');
@@ -6719,7 +6791,14 @@ async function cargarUsuarios(){
         if(chk) chk.onchange = () => { tr.dataset.foto = chk.checked ? '1' : '0'; };
       };
       enlazarFoto();
+      const celdaContr = tr.querySelector('.contratos-celda');
+      const enlazarContratos = () => celdaContr.querySelectorAll('.contrato-chk').forEach(ch => ch.onchange = () => {
+        tr.dataset.contr = JSON.stringify([...celdaContr.querySelectorAll('.contrato-chk:checked')].map(x => x.value));
+      });
+      enlazarContratos();
       rolSelect.onchange = () => {
+        celdaContr.innerHTML = htmlCeldaContratos(rolSelect.value, JSON.parse(tr.dataset.contr || '[]'));
+        enlazarContratos();
         celdaNotif.innerHTML = htmlCeldaNotificador(rolSelect.value, tr.dataset.notif === '1');
         enlazarCasilla();
         celdaFoto.innerHTML = htmlCeldaFoto(rolSelect.value, tr.dataset.foto === '1');
@@ -6733,7 +6812,7 @@ async function cargarUsuarios(){
     });
     refrescarCambiosUsuarios();
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="6" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
   }
 }
 
@@ -6744,7 +6823,8 @@ function estadoFilaUsuario(tr){
     nombre: tr.querySelector('.nombre-input').value.trim(),
     rol,
     notif: ROLES_CON_NOTIFICADOR.includes(rol) && tr.dataset.notif === '1',
-    foto: ROLES_CON_FOTO.includes(rol) && tr.dataset.foto === '1'
+    foto: ROLES_CON_FOTO.includes(rol) && tr.dataset.foto === '1',
+    contratos: ROLES_CON_CONTRATO.includes(rol) ? JSON.parse(tr.dataset.contr || '[]').slice().sort() : []
   };
 }
 function filasUsuariosModificadas(){
@@ -6771,8 +6851,12 @@ async function guardarUsuariosCambiados(){
     try{
       const r = await db.update('usuarios', `id=eq.${id}`, {nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto});
       if(!Array.isArray(r) || !r.length) throw new Error('no se guardó (¿sin permiso?)');
+      const orig0 = JSON.parse(tr.dataset.orig || '{}');
+      if(JSON.stringify(orig0.contratos || []) !== JSON.stringify(e.contratos)){
+        await db.rpc('set_contratos_usuario', {p_usuario: id, p_contratos: e.contratos});
+      }
       ok++;
-      tr.dataset.orig = JSON.stringify({nombre: e.nombre, rol: e.rol, notif: !!r[0].notificador_externo_habilitado, foto: !!r[0].foto_obligatoria});
+      tr.dataset.orig = JSON.stringify({nombre: e.nombre, rol: e.rol, notif: !!r[0].notificador_externo_habilitado, foto: !!r[0].foto_obligatoria, contratos: e.contratos});
       if(id === currentUser.id){
         currentUser.nombre = e.nombre; currentUser.rol = e.rol;
         currentUser.notificador_externo_habilitado = !!r[0].notificador_externo_habilitado;
