@@ -1866,7 +1866,7 @@ function pintarTrafosSuministro(){
   suminTrafos.forEach((t) => {
     const ic = L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: '<div class="sum-tr"><b>⚡</b></div>' });
     L.marker([t.lat, t.lon], { icon: ic, zIndexOffset: -500 }).bindPopup(
-      `<b>⚡ Transformador ${suminEsc(t.numpos)}</b><br>Clientes sin luz: <b>${suminEsc(t.clientes ?? '—')}</b>` +
+      `<b>⚡ Transformador ${suminEsc(t.numpos)}</b><br>Clientes sin luz: <b>${suminEsc(t.clientes ?? '—')}</b>${t.avisos ? '<br>Cantidad de avisos: <b>' + suminEsc(t.avisos) + '</b>' : ''}` +
       `${t.inicio ? '<br>Corte desde: ' + suminEsc(t.inicio) : ''}${t.reposicion ? '<br>Reposición estimada: ' + suminEsc(t.reposicion) : ''}` +
       `${t.incidencia ? '<br>Incidencia: ' + suminEsc(t.incidencia) : ''}<br><small>Fuente: Enel</small>`).addTo(suminLayer);
   });
@@ -1874,7 +1874,7 @@ function pintarTrafosSuministro(){
 }
 async function cargarSuministro(){
   try{
-    const [e, t] = await Promise.all([ db.select('suministro_enel', 'select=*&id=eq.1'), db.select('suministro_trafos', 'select=numpos,incidencia,clientes,inicio,reposicion,lat,lon') ]);
+    const [e, t] = await Promise.all([ db.select('suministro_enel', 'select=*&id=eq.1'), db.select('suministro_trafos', 'select=numpos,incidencia,clientes,avisos,inicio,reposicion,lat,lon') ]);
     suminDato = (e && e[0]) || null; suminTrafos = t || [];
   }catch(err){ suminDato = null; suminTrafos = []; }
   pintarSuministro();

@@ -30,6 +30,7 @@ create table if not exists public.suministro_trafos (
   numpos       text not null,
   incidencia   text not null default '',
   clientes     int,
+  avisos       int,             -- cantidad de avisos (llamadas de clientes) según Enel
   inicio       text,
   reposicion   text,
   estado       text,
@@ -39,6 +40,8 @@ create table if not exists public.suministro_trafos (
   actualizado_en timestamptz not null default now(),
   primary key (numpos, incidencia)
 );
+
+alter table public.suministro_trafos add column if not exists avisos int;   -- por si la tabla ya existía
 
 -- Control interno de la petición en curso (una fila)
 create table if not exists public.suministro_peticiones (
@@ -159,12 +162,13 @@ begin
 
     -- Transformadores cuyo centro cae dentro del contorno de La Florida
     delete from public.suministro_trafos;
-    insert into public.suministro_trafos (numpos, incidencia, clientes, inicio, reposicion, estado, alimentador, lon, lat)
-    select distinct on (numpos, incidencia) numpos, incidencia, clientes, inicio, reposicion, estado, alimentador, lon, lat
+    insert into public.suministro_trafos (numpos, incidencia, clientes, avisos, inicio, reposicion, estado, alimentador, lon, lat)
+    select distinct on (numpos, incidencia) numpos, incidencia, clientes, avisos, inicio, reposicion, estado, alimentador, lon, lat
     from (
       select f->'properties'->>'numpos' as numpos,
              coalesce(f->'properties'->>'INCIDENCIA', '') as incidencia,
              nullif(trim(f->'properties'->>'CLITOTAL'), '')::int as clientes,
+             nullif(trim(f->'properties'->>'CANTAVISOS'), '')::int as avisos,
              nullif(trim(f->'properties'->>'FECHA_INICIO'), '') as inicio,
              nullif(trim(f->'properties'->>'FECHA_REPOSICION'), '') as reposicion,
              nullif(trim(f->'properties'->>'ESTADOINC'), '') as estado,
