@@ -316,6 +316,8 @@ textarea.campo{ min-height:70px; }
   .sum-f{margin-top:7px; font-size:11px; color:#778;}
   .sum-tr{width:24px; height:24px; transform:rotate(45deg); border-radius:6px; background:#263238; border:2px solid #fff; box-shadow:0 1px 5px rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;}
   .sum-tr b{transform:rotate(-45deg); color:#ffd54a; font-size:13px; line-height:1;}
+  .sum-ad{width:15px; height:15px; transform:rotate(45deg); border-radius:4px; background:#263238; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;}
+  .sum-ad i{width:5px; height:5px; border-radius:50%; background:#ffd54a; display:block;}
 
 /* Ajustes (admin) */
 .u-card-s{ background:#fff; border-radius:14px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,.07); }
