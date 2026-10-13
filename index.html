@@ -1845,7 +1845,7 @@ function suminEstado(){
   if(!suminDato) return null;
   const min = (Date.now() - new Date(suminDato.actualizado_en).getTime()) / 60000;
   const pct = Number(suminDato.porcentaje || 0), n = Number(suminDato.clientes_afectados || 0);
-  const viejo = min > 30;
+  const viejo = min > 90;
   const nivel = viejo ? 'gris' : (pct <= 5 ? 'verde' : pct <= 10 ? 'ambar' : 'rojo');   // verde hasta 5%, amarillo hasta 10%, rojo sobre 10%
   return { nivel, n, pct, viejo, min };
 }
@@ -1869,6 +1869,7 @@ function pintarSuministro(){
       <label class="sum-sw"><input type="checkbox" id="sumVer" ${suminVer ? 'checked' : ''}> Mostrar transformadores en el mapa</label>
       ${suminPuedeAvisos() ? `<label class="sum-sw"><input type="checkbox" id="sumAv" ${suminAvisosVer ? 'checked' : ''}> Mostrar avisos de clientes en el mapa</label>
       <button type="button" id="sumLista" class="sum-btn" ${suminAvisos.length ? '' : 'disabled'}>Ver listado de avisos (caso, cliente, dirección)</button>` : ''}
+      ${suminPuedeAvisos() ? `<button type="button" id="sumAct" class="sum-btn" ${suminActualizando ? 'disabled' : ''}>${suminActualizando ? 'Actualizando… (≈1 min)' : '↻ Actualizar datos ahora'}</button>` : ''}
       ${suminPuedeAvisos() ? `<button type="button" id="sumPdf" class="sum-btn">Descargar informe (PDF)</button>` : ''}
       <div class="sum-f">Fuente: Mapa de Emergencia de Enel · actualizado ${suminEsc(suminHora(d.actualizado_en))}${est.viejo ? ' (dato antiguo)' : ''}</div>
     </div>`;
@@ -1878,6 +1879,8 @@ function pintarSuministro(){
   if(sw) sw.addEventListener('change', () => { suminVer = sw.checked; try{ localStorage.setItem('fa_sum_trafos', suminVer ? '1' : '0'); }catch(e){} pintarTrafosSuministro(); });
   const sa = cont.querySelector('#sumAv');
   if(sa) sa.addEventListener('change', () => { suminAvisosVer = sa.checked; try{ localStorage.setItem('fa_sum_avisos', suminAvisosVer ? '1' : '0'); }catch(e){} pintarAvisosSuministro(); });
+  const su = cont.querySelector('#sumAct');
+  if(su) su.addEventListener('click', () => suminActualizarAhora());
   const sp = cont.querySelector('#sumPdf');
   if(sp) sp.addEventListener('click', () => generarPdfSuministro(sp));
   const sl = cont.querySelector('#sumLista');
@@ -1907,6 +1910,23 @@ function pintarLeyendaSuministro(){
   };
 }
 
+let suminActualizando = false;
+// Pide a Enel los datos de inmediato (los trae el servidor en ~1 min) y vuelve a leer hasta que lleguen
+async function suminActualizarAhora(){
+  if(suminActualizando) return;
+  const antes = suminDato ? suminDato.actualizado_en : null;
+  suminActualizando = true; pintarSuministro();
+  try{
+    const r = await db.rpc('suministro_actualizar_ahora', {});
+    if(r && r.ok === false){ alert('La lectura de Enel está apagada (Ajustes del administrador).'); return; }
+    for(const espera of [15000, 15000, 20000, 20000, 25000]){
+      await new Promise((ok) => setTimeout(ok, espera));
+      await cargarSuministro();
+      if(suminDato && suminDato.actualizado_en !== antes) break;
+    }
+  }catch(e){ alert('No se pudo actualizar: ' + (e && e.message ? e.message : e)); }
+  finally{ suminActualizando = false; pintarSuministro(); }
+}
 function suminAvisosAgrupados(){
   const g = new Map();
   suminAvisos.forEach((a) => { const k = a.lat.toFixed(6) + ',' + a.lon.toFixed(6); if(!g.has(k)) g.set(k, { lat: a.lat, lon: a.lon, items: [] }); g.get(k).items.push(a); });

@@ -333,3 +333,6 @@ textarea.campo{ min-height:70px; }
 
 /* El indicador de suministro no se muestra en la app (los puntos sí se dibujan en el mapa) */
 .sum-ctl{ display:none !important; }
+
+.u-btn{display:block; width:100%; margin:10px 0 4px; padding:11px 12px; border:1.5px solid #1d4e3d; border-radius:10px; background:#fff; color:#1d4e3d; font-weight:700; font-size:14px;}
+.u-btn:disabled{opacity:.5;}

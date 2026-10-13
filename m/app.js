@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.21.3';
+const VERSION_APP = '1.21.4';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -832,7 +832,7 @@ function suminEstado(){
   if(!suminDato) return null;
   const min = (Date.now() - new Date(suminDato.actualizado_en).getTime()) / 60000;
   const pct = Number(suminDato.porcentaje || 0), n = Number(suminDato.clientes_afectados || 0);
-  const viejo = min > 30;
+  const viejo = min > 90;
   const nivel = viejo ? 'gris' : (pct <= 5 ? 'verde' : pct <= 10 ? 'ambar' : 'rojo');   // verde hasta 5%, amarillo hasta 10%, rojo sobre 10%
   return { nivel, n, pct, viejo, min };
 }
@@ -1622,6 +1622,7 @@ async function pintarAjustesU() {
     <div class="u-card-s"><h4>⚡ Suministro eléctrico (Enel)</h4>
       <button type="button" class="u-tog ${est.activo ? 'on' : ''}" data-a="sumtog"><span class="u-tx"><b>Lectura de datos de Enel</b><span>${est.activo ? 'Activo' : 'Apagado'}</span></span><span class="u-sw ${est.activo ? 'on' : ''}"></span></button>
       <div class="u-kv"><span>Última lectura</span><b>${est.ultima_lectura ? esc(horaU(est.ultima_lectura)) : '—'}</b></div>
+      <button type="button" class="u-btn" data-a="sumact">↻ Actualizar datos ahora</button>
       <div class="u-kv"><span>Se consulta cada</span><b>${esc(est.cada_min)} min</b></div>
       <div class="u-kv"><span>Transformadores en La Florida</span><b>${esc(est.trafos)}</b></div>
       <div class="u-kv"><span>Avisos de clientes en La Florida</span><b>${esc(est.avisos ?? 0)}</b></div>
@@ -1791,6 +1792,13 @@ $('#uCuerpo').addEventListener('click', async (ev) => {
   const fila = b.closest('[data-id]'); const id = fila ? fila.dataset.id : null;
   const a = b.dataset.a;
   if (a === 'nuevo') return nuevoContratoU();
+  if (a === 'sumact') {
+    b.disabled = true; b.textContent = 'Solicitando…';
+    try { const r = await rpc('suministro_actualizar_ahora', {}); toast(r && r.ok === false ? 'La lectura de Enel está apagada' : 'Pedido a Enel: llegan en ~1 minuto', r && r.ok === false ? 'error' : 'ok'); setTimeout(() => { if (U.tab === 'ajustes') pintarAjustesU(); }, 70000); }
+    catch (e) { toast(e.message, 'error'); }
+    b.disabled = false; b.textContent = '↻ Actualizar datos ahora';
+    return;
+  }
   if (a === 'sumtog') {
     const quiere = !b.classList.contains('on');
     if (!quiere && !confirm('¿Apagar la lectura de Enel? El indicador y los transformadores se ocultarán para todos los usuarios.')) return;
