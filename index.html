@@ -1896,10 +1896,10 @@ function pintarAvisosSuministro(){
   suminAvisosLayer.clearLayers();
   if(!suminAvisosVer || !suminDato || !suminPuedeAvisos() || !suminAvisos.length){ if(map.hasLayer(suminAvisosLayer)) map.removeLayer(suminAvisosLayer); return; }
   suminAvisosAgrupados().forEach((g) => {
-    const lista = g.items.slice(0, 6).map((a) => `<div style="margin-top:5px;border-top:1px solid #eee;padding-top:4px"><b>Caso ${suminEsc(a.incidencia || '—')}</b> · Aviso ${suminEsc(a.cod_aviso)}<br>Cliente N.° <b>${suminEsc(a.numero_cliente || '—')}</b><br>${suminEsc(a.direccion || '')}${a.reposicion ? '<br>Reposición est.: ' + suminEsc(a.reposicion) : ''}</div>`).join('');
-    const mas = g.items.length > 6 ? `<div style="margin-top:5px"><small>y ${g.items.length - 6} aviso(s) más en este punto</small></div>` : '';
+    const lista = g.items.map((a) => `<div style="margin-top:5px;border-top:1px solid #eee;padding-top:4px"><b>Caso ${suminEsc(a.incidencia || '—')}</b> · Aviso ${suminEsc(a.cod_aviso)}<br>Cliente N.° <b>${suminEsc(a.numero_cliente || '—')}</b><br>${suminEsc(a.direccion || '')}${a.reposicion ? '<br>Reposición est.: ' + suminEsc(a.reposicion) : ''}</div>`).join('');
+    const mas = '';
     L.marker([g.lat, g.lon], { icon: L.divIcon({ className: '', iconSize: [19, 19], iconAnchor: [9.5, 9.5], html: '<div class="sum-ad"><i></i></div>' }) })
-      .bindPopup(`<b>${g.items.length} aviso${g.items.length === 1 ? '' : 's'} de clientes</b>${lista}${mas}<div style="margin-top:5px"><small>Fuente: Enel</small></div>`).addTo(suminAvisosLayer);
+      .bindPopup(`<b>${g.items.length} aviso${g.items.length === 1 ? '' : 's'} de clientes</b><div style="max-height:190px;overflow-y:auto;padding-right:4px">${lista}</div>${mas}<div style="margin-top:5px"><small>Fuente: Enel</small></div>`).addTo(suminAvisosLayer);
   });
   if(!map.hasLayer(suminAvisosLayer)) suminAvisosLayer.addTo(map);
 }
