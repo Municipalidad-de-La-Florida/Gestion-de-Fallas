@@ -2025,9 +2025,10 @@ async function generarPdfSuministro(btn){
     const fechaLarga = ahora.toLocaleDateString('es-CL', {timeZone: ZONA_CHILE, weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'});
     const horaLect = new Date(d.actualizado_en).toLocaleTimeString('es-CL', {timeZone: ZONA_CHILE, hour: '2-digit', minute: '2-digit', hour12: false});
 
-    // Geometría de la hoja: encabezado arriba, mapa a la izquierda, panel de indicadores a la derecha, pie abajo
-    const hEnc = 28, hPie = 8, wPanel = 92;
-    const xMapa = 0, yMapa = hEnc, wMapa = ancho - wPanel, hMapa = alto - hEnc - hPie;
+    // Geometría de la hoja: encabezado, mapa a todo el ancho, barra de indicadores abajo, pie
+    const hEnc = 28, hPie = 8, hBarra = 40;
+    const xMapa = 0, yMapa = hEnc, wMapa = ancho, hMapa = alto - hEnc - hPie - hBarra;
+    const yBarra = yMapa + hMapa;
 
     // Encabezado (mismo estilo que los demás informes)
     pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, hEnc, 'F');
@@ -2045,7 +2046,7 @@ async function generarPdfSuministro(btn){
     pdf.setFillColor(238, 242, 238); pdf.rect(xMapa, yMapa, wMapa, hMapa, 'F');
     try{
       const pxmm = 7.5;
-      const cv = await renderMapaCanvas([], {w: Math.round(wMapa * pxmm), h: Math.round(hMapa * pxmm), padding: 70, zMax: 17, contorno: true,
+      const cv = await renderMapaCanvas([], {w: Math.round(wMapa * pxmm), h: Math.round(hMapa * pxmm), padding: 60, zMax: 17, contorno: true,
         dibujar: (ctx, P) => {
           const rombo = (x, y, r, relleno) => {
             ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath();
@@ -2074,10 +2075,9 @@ async function generarPdfSuministro(btn){
     mini(xMapa + 9, yMapa + 7.8, 2.1, 0.8); pdf.text('Transformador', xMapa + 12.5, yMapa + 8.4);
     if(conAvisos){ mini(xMapa + 39.5, yMapa + 7.8, 1.5, 0.6); pdf.text('Aviso de cliente', xMapa + 42.5, yMapa + 8.4); }
 
-    // Panel derecho de indicadores
-    const px = ancho - wPanel + 5, pw = wPanel - 10;
-    pdf.setFillColor(255, 255, 255); pdf.rect(ancho - wPanel, yMapa, wPanel, hMapa, 'F');
-    pdf.setDrawColor(219, 226, 220); pdf.line(ancho - wPanel, yMapa, ancho - wPanel, yMapa + hMapa);
+    // Barra inferior de indicadores
+    pdf.setFillColor(255, 255, 255); pdf.rect(0, yBarra, ancho, hBarra + hPie, 'F');
+    pdf.setDrawColor(...VERDE); pdf.setLineWidth(0.6); pdf.line(0, yBarra, ancho, yBarra); pdf.setLineWidth(0.2);
     const anillo = (pct, pxl) => {
       const c = document.createElement('canvas'); c.width = c.height = pxl;
       const x = c.getContext('2d'), w = pxl * 0.115, r = (pxl - w) / 2;
@@ -2089,44 +2089,39 @@ async function generarPdfSuministro(btn){
       x.fillText(pctTxt + '%', pxl / 2, pxl / 2 + pxl * 0.02);
       return c.toDataURL('image/png');
     };
-    let y = yMapa + 6;
-    pdf.addImage(anillo(est.pct, 300), 'PNG', px, y, 26, 26);
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(20); pdf.setTextColor(...COL[est.nivel]); pdf.text(ETQ[est.nivel], px + 30, y + 11);
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris);
-    pdf.text('Según % de clientes afectados:', px + 30, y + 16.5);
-    pdf.text('verde hasta 5% · amarillo hasta 10% · rojo más', px + 30, y + 20.5);
-    y += 31;
+    pdf.addImage(anillo(est.pct, 300), 'PNG', margen, yBarra + 8, 24, 24);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15); pdf.setTextColor(...COL[est.nivel]); pdf.text(ETQ[est.nivel], margen + 28, yBarra + 19);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text('% de clientes', margen + 28, yBarra + 23.5); pdf.text('afectados', margen + 28, yBarra + 27);
     const kpi = (x, valor, etiqueta, sub, color) => {
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(20); pdf.setTextColor(...(color || VERDE)); pdf.text(String(valor), x, y + 8);
-      pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text(etiqueta, x, y + 13);
-      if(sub){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(sub, x, y + 17); }
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(22); pdf.setTextColor(...(color || VERDE)); pdf.text(String(valor), x, yBarra + 18);
+      pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text(etiqueta, x, yBarra + 23.5);
+      if(sub){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(sub, x, yBarra + 27.5); }
     };
-    kpi(px, suminNum(est.n), 'Clientes sin suministro', `de ${suminNum(d.clientes_total)} en la comuna`, COL.rojo);
-    kpi(px + pw / 2 + 3, suminNum(trafos.length), 'Transformadores', 'sin suministro');
-    y += 21;
-    if(conAvisos) { kpi(px, suminNum(avisos.length), 'Avisos de clientes', 'registrados en Enel'); y += 21; }
-    pdf.setDrawColor(219, 226, 220); pdf.line(px, y, px + pw, y); y += 5;
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(...VERDE);
-    pdf.text(trafos.length ? 'Transformadores más afectados' : 'Sin transformadores sin suministro.', px, y);
-    const hFin = yMapa + hMapa - 5;
-    if(trafos.length){
-      const libre = hFin - (y + 2) - 7;               // alto disponible para filas (menos encabezado de tabla)
-      const nFilas = Math.max(3, Math.min(trafos.length, Math.floor(libre / 5.4) - (trafos.length > 3 ? 1 : 0)));
-      const filas = trafos.slice(0, nFilas).map((t) => [t.n, t.numpos, suminNum(t.clientes), t.avisos ? suminNum(t.avisos) : '-', t.reposicion || '-']);
-      pdf.autoTable({
-        startY: y + 2, margin: {left: px, right: ancho - px - pw}, pageBreak: 'avoid',
-        head: [['N°', 'Transformador', 'Clientes', 'Avisos', 'Reposición est.']], body: filas,
-        styles: {fontSize: 7, cellPadding: 1.2, textColor: [30, 40, 35]}, headStyles: {fillColor: VERDE, textColor: 255, fontSize: 7},
-        alternateRowStyles: {fillColor: [244, 247, 244]},
-        columnStyles: {0: {cellWidth: 8, halign: 'center'}, 2: {halign: 'right'}, 3: {halign: 'right'}}
-      });
-      if(trafos.length > nFilas){
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
-        pdf.text(`y ${trafos.length - nFilas} más (ver en el mapa de la aplicación)`, px, pdf.lastAutoTable.finalY + 4);
-      }
-    }
+    kpi(68, suminNum(est.n), 'Clientes sin suministro', `de ${suminNum(d.clientes_total)} en la comuna`, COL.rojo);
+    kpi(110, suminNum(trafos.length), 'Transformadores', 'sin suministro');
+    if(conAvisos) kpi(138, suminNum(avisos.length), 'Avisos de clientes', 'registrados en Enel');
+
+    // Barras: clientes sin luz por transformador (hasta 9, en 3 columnas; el número coincide con el mapa)
+    const xb = 174, wb = ancho - margen - xb, colW = (wb - 8) / 3;
+    pdf.setDrawColor(219, 226, 220); pdf.line(xb - 6, yBarra + 6, xb - 6, yBarra + hBarra - 4);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(...VERDE);
+    pdf.text(trafos.length ? 'Clientes sin luz por transformador' : 'No hay transformadores sin suministro.', xb, yBarra + 9);
+    const maxCl = Math.max(1, ...trafos.map((t) => t.clientes || 0));
+    trafos.slice(0, 9).forEach((t, i) => {
+      const col = Math.floor(i / 3), fila = i % 3, x = xb + col * (colW + 4), yy = yBarra + 16 + fila * 7.5;
+      pdf.setFillColor(38, 50, 56); pdf.triangle(x, yy, x + 2.4, yy - 2.4, x + 4.8, yy, 'F'); pdf.triangle(x, yy, x + 2.4, yy + 2.4, x + 4.8, yy, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(5.5); pdf.setTextColor(255, 213, 74); pdf.text(String(t.n), x + 2.4, yy + 0.8, {align: 'center'});
+      let nom = String(t.numpos); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(30, 40, 35);
+      while(nom.length > 3 && pdf.getTextWidth(nom) > 9.5) nom = nom.slice(0, -1);
+      pdf.text(nom, x + 5.8, yy + 0.9);
+      const bx = x + 16.5, bw = colW - 16.5 - 7.5;
+      pdf.setFillColor(238, 242, 238); pdf.roundedRect(bx, yy - 1.4, bw, 2.8, 1, 1, 'F');
+      pdf.setFillColor(217, 58, 58); pdf.roundedRect(bx, yy - 1.4, Math.max(1.2, bw * (t.clientes || 0) / maxCl), 2.8, 1, 1, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(30, 40, 35); pdf.text(suminNum(t.clientes), x + colW, yy + 0.9, {align: 'right'});
+    });
+    if(trafos.length > 9){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text(`y ${trafos.length - 9} más (ver en el mapa de la aplicación)`, xb, yBarra + hBarra - 1.5); }
+
     // Pie
-    pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - hPie, ancho, hPie, 'F');
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
     pdf.text('Municipalidad de La Florida · Alumbrado público · Fuente: Mapa de Emergencia de Enel' + (conAvisos ? ' · Contiene datos de clientes: uso interno' : ''), margen, alto - 3.2);
     pdf.save(`suministro_enel_${ahora.toLocaleDateString('en-CA', {timeZone: ZONA_CHILE})}.pdf`);
