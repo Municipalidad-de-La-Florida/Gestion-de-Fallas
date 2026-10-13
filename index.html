@@ -3099,7 +3099,7 @@ function puedeEditarContrato(){ return !['contratista', 'camion', 'observador'].
 // Al crear: el selector aparece solo cuando la falla es Masivo. Al editar: siempre visible.
 function htmlSelectContrato(valor, siempre){
   if(!CONTRATOS_ACTIVOS.length && !valor) return '';
-  let ops = '<option value="">Sin contrato</option>' + CONTRATOS_ACTIVOS.map(c => `<option value="${c.id}" ${c.id === valor ? 'selected' : ''}>${escHtml(c.nombre)}</option>`).join('');
+  let ops = `<option value="">${siempre ? 'Sin contrato' : 'Automático'}</option>` + CONTRATOS_ACTIVOS.map(c => `<option value="${c.id}" ${c.id === valor ? 'selected' : ''}>${escHtml(c.nombre)}</option>`).join('');
   if(valor && !CONTRATOS_ACTIVOS.some(c => c.id === valor)) ops += `<option value="${valor}" selected>${escHtml(CONTRATOS_MAPA[valor] || 'Contrato')} (inactivo)</option>`;
   return `<div class="sel-contrato" ${siempre ? 'data-siempre="1"' : 'hidden'} style="margin-top:6px; font-size:12.5px;">Contrato <select class="sel-contrato-sel" style="padding:4px 6px; border:1.5px solid var(--line); border-radius:6px; font-size:12.5px;">${ops}</select></div>`;
 }
@@ -6774,10 +6774,11 @@ function pintarContratosAdmin(){
   const cont = document.getElementById('contratosAdmin');
   if(!cont) return;
   cont.innerHTML = `<div style="font-weight:700; margin-bottom:6px;">Contratos</div>
-    <div class="hint" style="margin:0 0 8px;">Un contrato inactivo deja de ofrecerse al asignar, pero sigue visible donde ya estaba. Aún no restringe lo que ve cada usuario.</div>
+    <div class="hint" style="margin:0 0 8px;">El contrato "por defecto" se asigna solo a las fallas nuevas: uno para las Masivo y otro para las normales. Un contrato inactivo deja de ofrecerse al asignar, pero sigue visible donde ya estaba. Aún no restringe lo que ve cada usuario.</div>
     ${CONTRATOS_LISTA.map(c => `<div class="contrato-fila" data-id="${c.id}" style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
       <input type="text" class="popup-input contrato-nombre" value="${escAttr(c.nombre)}" style="margin:0; padding:6px 8px; max-width:280px;">
       <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:12px;"><input type="checkbox" class="contrato-activo" ${c.activo ? 'checked' : ''}> Activo</label>
+      <label style="display:flex; align-items:center; gap:5px; font-size:12px;" title="Contrato que se asigna solo a las fallas nuevas">Por defecto para <select class="contrato-defecto" style="padding:4px 6px; border:1.5px solid var(--line); border-radius:6px; font-size:12px;"><option value="">—</option><option value="masivo" ${c.defecto_para === 'masivo' ? 'selected' : ''}>fallas Masivo</option><option value="normal" ${c.defecto_para === 'normal' ? 'selected' : ''}>fallas normales</option></select></label>
       <span class="contrato-msg hint" style="margin:0;"></span></div>`).join('') || '<div class="hint">Todavía no hay contratos.</div>'}
     <div style="display:flex; gap:8px; margin-top:8px;"><input type="text" id="contratoNuevoNombre" class="popup-input" placeholder="Nombre del nuevo contrato" style="margin:0; padding:6px 8px; max-width:280px;"><button type="button" id="contratoNuevoBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer;">＋ Crear contrato</button></div>`;
   cont.querySelectorAll('.contrato-fila').forEach(f => {
@@ -6799,6 +6800,20 @@ function pintarContratosAdmin(){
       if(nuevo !== antes) guardar({nombre: nuevo}, () => { inp.value = antes; });
     };
     chk.onchange = () => guardar({activo: chk.checked}, () => { chk.checked = !chk.checked; });
+    const selDef = f.querySelector('.contrato-defecto');
+    selDef.onchange = async () => {
+      const nuevo = selDef.value || null, antes = CONTRATOS_LISTA.find(x => x.id === id).defecto_para || '';
+      msg.textContent = 'Guardando…';
+      try{
+        // Cada tipo tiene un solo contrato por defecto: primero se libera el que lo tenía
+        if(nuevo) await db.update('contratos', `defecto_para=eq.${nuevo}&id=neq.${id}`, {defecto_para: null});
+        const r = await db.update('contratos', `id=eq.${id}`, {defecto_para: nuevo});
+        if(!Array.isArray(r) || !r.length) throw new Error('no se guardó (¿sin permiso?)');
+        CONTRATOS_LISTA.forEach(x => { if(nuevo && x.id !== id && x.defecto_para === nuevo) x.defecto_para = null; });
+        CONTRATOS_LISTA.find(x => x.id === id).defecto_para = nuevo;
+        pintarContratosAdmin();
+      }catch(e){ msg.textContent = ''; selDef.value = antes; alert('No se pudo guardar: ' + e.message); }
+    };
   });
   document.getElementById('contratoNuevoBtn').onclick = async () => {
     const inp = document.getElementById('contratoNuevoNombre'), nombre = inp.value.trim();
@@ -6838,7 +6853,7 @@ async function cargarUsuarios(){
     const usuarios = await db.select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc');
     let relaciones = [];
     try{
-      CONTRATOS_LISTA = await db.select('contratos', 'select=id,nombre,activo&order=nombre.asc');
+      CONTRATOS_LISTA = await db.select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc');
       relaciones = await db.select('usuario_contratos', 'select=usuario_id,contrato_id');
     }catch(e){ CONTRATOS_LISTA = []; console.warn('No se pudieron cargar los contratos (¿ejecutaste el SQL de contratos?):', e); }
     const contratosDe = {};

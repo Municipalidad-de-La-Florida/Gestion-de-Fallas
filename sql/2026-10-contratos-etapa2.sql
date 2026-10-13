@@ -49,8 +49,56 @@ begin
 end;
 $function$;
 drop trigger if exists trg_propagar_contrato_cascada on public.fallas;
-create trigger trg_propagar_contrato_cascada after update of contrato_id on public.fallas
+create trigger trg_propagar_contrato_cascada after update on public.fallas
   for each row execute function public.propagar_contrato_cascada();
+
+-- ============ Contrato por defecto: Masivo -> uno, normal -> otro ============
+-- Cada contrato puede ser el "por defecto" de las fallas Masivo o de las normales (uno por cada tipo).
+-- Se cambia desde 👥 Usuarios -> Contratos. Hoy: Elecnor = Masivo, Enel X - Clever = normal.
+alter table public.contratos add column if not exists defecto_para text check (defecto_para in ('masivo', 'normal'));
+create unique index if not exists contratos_defecto_uq on public.contratos (defecto_para) where defecto_para is not null;
+update public.contratos set defecto_para = 'masivo'
+  where lower(btrim(nombre)) = 'elecnor' and not exists (select 1 from public.contratos where defecto_para = 'masivo');
+update public.contratos set defecto_para = 'normal'
+  where lower(btrim(nombre)) = 'enel x - clever' and not exists (select 1 from public.contratos where defecto_para = 'normal');
+
+-- Falla nueva sin contrato: toma el contrato por defecto según sea Masivo o no (los puntos de un circuito heredan el del circuito).
+create or replace function public.contrato_por_defecto_insert()
+returns trigger language plpgsql set search_path to 'public'
+as $function$
+begin
+  if new.contrato_id is null and not coalesce(new.cascada, false) then
+    select id into new.contrato_id from public.contratos
+     where defecto_para = case when coalesce(new.masivo, false) then 'masivo' else 'normal' end and activo limit 1;
+  end if;
+  return new;
+end;
+$function$;
+drop trigger if exists trg_z_contrato_por_defecto_ins on public.fallas;
+create trigger trg_z_contrato_por_defecto_ins before insert on public.fallas
+  for each row execute function public.contrato_por_defecto_insert();
+
+-- Si una falla pasa a Masivo (o deja de serlo) y nadie eligió otro contrato, cambia al contrato por defecto que corresponda.
+-- No toca los contratos elegidos a mano (distintos de los dos por defecto).
+create or replace function public.contrato_por_defecto_update()
+returns trigger language plpgsql set search_path to 'public'
+as $function$
+declare
+  v_nuevo uuid;
+begin
+  if not new.cascada and coalesce(new.masivo, false) is distinct from coalesce(old.masivo, false)
+     and new.contrato_id is not distinct from old.contrato_id
+     and (new.contrato_id is null or exists (select 1 from public.contratos where id = new.contrato_id and defecto_para is not null)) then
+    select id into v_nuevo from public.contratos
+     where defecto_para = case when coalesce(new.masivo, false) then 'masivo' else 'normal' end and activo limit 1;
+    if v_nuevo is not null then new.contrato_id := v_nuevo; end if;
+  end if;
+  return new;
+end;
+$function$;
+drop trigger if exists trg_z_contrato_por_defecto_upd on public.fallas;
+create trigger trg_z_contrato_por_defecto_upd before update of masivo on public.fallas
+  for each row execute function public.contrato_por_defecto_update();
 
 -- ============ Todas las fallas (con contrato) ============
 drop function if exists public.resumen_todas_fallas(integer, integer, text);
