@@ -6012,9 +6012,9 @@ async function generarPdfAnalisis(soloResumen){
       pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x, y, w, h, 3, 3, 'FD');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...VERDE); pdf.text(titulo, x + 5, y + 8);
     };
-    const mitad = (ancho - margen * 2 - 6) / 2;
+    const mitad = (ancho - margen * 2 - 12) / 3;   // tres tarjetas en la fila superior
 
-    // Estado de las fallas (anillo) y tiempo de reparación
+    // Fila superior: estado de las fallas (anillo), tiempo de reparación y circuito / individuales
     tarjeta(margen, 45, mitad, 46, 'Estado de las fallas');
     {
       const px = 360, c = document.createElement('canvas'); c.width = c.height = px;
@@ -6026,20 +6026,20 @@ async function generarPdfAnalisis(soloResumen){
         x.strokeStyle = colorEstado[k]; x.lineWidth = px * 0.17; x.beginPath(); x.arc(px / 2, px / 2, px * 0.385, ang, a2); x.stroke(); ang = a2;
       });
       x.fillStyle = '#003100'; x.font = `800 ${Math.round(px * 0.2)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(String(tot), px / 2, px / 2 + 4);
-      pdf.addImage(c.toDataURL('image/png'), 'PNG', margen + 5, 56, 30, 30);
+      pdf.addImage(c.toDataURL('image/png'), 'PNG', margen + 3.5, 59, 25, 25);
     }
     [['Reparadas', 'reparada'], ['Reportadas', 'reportada'], ['Pendientes', 'pendiente'], ['Reiteradas', 'reiterada']].forEach(([t, k], i) => {
-      pdf.setFillColor(...COLOR_EST_PDF[k]); pdf.circle(margen + 42, 62 + i * 6.5, 1.5, 'F');
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text(t, margen + 46, 63 + i * 6.5);
-      pdf.setFont('helvetica', 'bold'); pdf.text(String(porEstado[k]), margen + mitad - 6, 63 + i * 6.5, {align: 'right'});
+      pdf.setFillColor(...COLOR_EST_PDF[k]); pdf.circle(margen + 32, 62 + i * 6.5, 1.3, 'F');
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(t, margen + 34.8, 63 + i * 6.5);
+      pdf.setFont('helvetica', 'bold'); pdf.text(String(porEstado[k]), margen + mitad - 3, 63 + i * 6.5, {align: 'right'});
     });
     tarjeta(margen + mitad + 6, 45, mitad, 46, 'Tiempo de reparación');
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(28); pdf.setTextColor(...VERDE); pdf.text(fmtHoras(rr.media_recortada_dias_ing, '-'), margen + mitad + 11, 70);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(26); pdf.setTextColor(...VERDE); pdf.text(fmtHoras(rr.media_recortada_dias_ing, '-'), margen + mitad + 11, 70);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
-    pdf.text('promedio desde el ingreso al sistema', margen + mitad + 11, 77);
+    pdf.text(pdf.splitTextToSize('promedio desde el ingreso al sistema', mitad - 12), margen + mitad + 11, 77);
 
     // Fallas por día
-    const wPie = 62, wDia = ancho - margen * 2 - wPie - 6;
+    const wDia = ancho - margen * 2;   // ahora el gráfico por día usa todo el ancho
     tarjeta(margen, 97, wDia, 44, 'Fallas informadas por día');
     {
       // Fallas ingresadas cada día, separadas en individuales (lima) y circuitos (verde oscuro)
@@ -6126,8 +6126,8 @@ async function generarPdfAnalisis(soloResumen){
     {
       const nCir = codigos.filter(c => c.tipo === 'linea').reduce((a, c) => a + (c.fallas || 0), 0);
       const nPun = codigos.filter(c => c.tipo !== 'linea').reduce((a, c) => a + (c.fallas || 0), 0);
-      const tot = nCir + nPun, xp = margen + wDia + 6;
-      tarjeta(xp, 97, wPie, 44, 'Circuito / individuales');
+      const tot = nCir + nPun, xp = margen + 2 * (mitad + 6);
+      tarjeta(xp, 45, mitad, 46, 'Circuito / individuales');
       const px = 300, c = document.createElement('canvas'); c.width = c.height = px;
       const g = c.getContext('2d');
       if(tot){
@@ -6139,12 +6139,12 @@ async function generarPdfAnalisis(soloResumen){
         });
       } else { g.strokeStyle = '#dfe7e1'; g.lineWidth = px * 0.2; g.beginPath(); g.arc(px / 2, px / 2, px * 0.37, 0, Math.PI * 2); g.stroke(); }
       g.fillStyle = '#003100'; g.font = `800 ${Math.round(px * 0.22)}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(tot), px / 2, px / 2 + 3);
-      pdf.addImage(c.toDataURL('image/png'), 'PNG', xp + 4, 108, 30, 30);
+      pdf.addImage(c.toDataURL('image/png'), 'PNG', xp + 3.5, 59, 25, 25);
       [['Individuales', nPun, LIMA], ['Circuitos', nCir, VERDE]].forEach(([t, v, col], i) => {
-        const yy = 118 + i * 10;
-        pdf.setFillColor(...col); pdf.circle(xp + 38, yy - 1, 1.5, 'F');
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(t, xp + 41, yy);
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.text(`${v}${tot ? ' (' + Math.round(v / tot * 100) + '%)' : ''}`, xp + 41, yy + 4);
+        const yy = 64 + i * 12;
+        pdf.setFillColor(...col); pdf.circle(xp + 32, yy - 1, 1.3, 'F');
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(t, xp + 34.8, yy);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.text(`${v}${tot ? ' (' + Math.round(v / tot * 100) + '%)' : ''}`, xp + 34.8, yy + 4);
       });
     }
 
