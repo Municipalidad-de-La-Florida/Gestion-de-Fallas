@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.21.5';
+const VERSION_APP = '1.21.6';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1618,7 +1618,11 @@ async function pintarAjustesU() {
   try { est = await rpc('suministro_estado', {}); }
   catch (e) { if (U.tab === 'ajustes') cuerpo.innerHTML = '<div class="u-nota">⚡ Suministro eléctrico (Enel): no disponible. Falta ejecutar sql/2026-10-suministro-interruptor.sql en Supabase.</div>'; return; }
   if (U.tab !== 'ajustes') return;
-  cuerpo.innerHTML = `<div class="u-nota">Muestra el indicador y los transformadores sin suministro en el mapa, para todos los usuarios. Apagado: no se consulta a Enel y el indicador se oculta para todos.</div>
+  const verDist = suminVer || (suminPuedeAvisos() && suminAvisosVer);
+  cuerpo.innerHTML = `<div class="u-card-s"><h4>🗺️ En mi mapa</h4>
+      <button type="button" class="u-tog ${verDist ? 'on' : ''}" data-a="sumver"><span class="u-tx"><b>Fallas de distribución (Enel)</b><span>${verDist ? 'Visibles: transformadores y avisos' : 'Ocultas en este teléfono'}</span></span><span class="u-sw ${verDist ? 'on' : ''}"></span></button>
+      <div class="u-nota" style="margin:6px 0 0">Solo afecta a este teléfono. No apaga la lectura de Enel para los demás.</div></div>
+    <div class="u-nota">Muestra el indicador y los transformadores sin suministro en el mapa, para todos los usuarios. Apagado: no se consulta a Enel y el indicador se oculta para todos.</div>
     <div class="u-card-s"><h4>⚡ Suministro eléctrico (Enel)</h4>
       <button type="button" class="u-tog ${est.activo ? 'on' : ''}" data-a="sumtog"><span class="u-tx"><b>Lectura de datos de Enel</b><span>${est.activo ? 'Activo' : 'Apagado'}</span></span><span class="u-sw ${est.activo ? 'on' : ''}"></span></button>
       <div class="u-kv"><span>Última lectura</span><b>${est.ultima_lectura ? esc(horaU(est.ultima_lectura)) : '—'}</b></div>
@@ -1792,6 +1796,15 @@ $('#uCuerpo').addEventListener('click', async (ev) => {
   const fila = b.closest('[data-id]'); const id = fila ? fila.dataset.id : null;
   const a = b.dataset.a;
   if (a === 'nuevo') return nuevoContratoU();
+  if (a === 'sumver') {
+    const nuevo = !b.classList.contains('on');
+    suminVer = nuevo; if (suminPuedeAvisos()) suminAvisosVer = nuevo;
+    try { localStorage.setItem('fa_sum_trafos', suminVer ? '1' : '0'); if (suminPuedeAvisos()) localStorage.setItem('fa_sum_avisos', suminAvisosVer ? '1' : '0'); } catch (e) {}
+    pintarTrafosSuministro(); pintarAvisosSuministro();
+    b.classList.toggle('on', nuevo); const sw = b.querySelector('.u-sw'); if (sw) sw.classList.toggle('on', nuevo);
+    const tx = b.querySelector('.u-tx span'); if (tx) tx.textContent = nuevo ? 'Visibles: transformadores y avisos' : 'Ocultas en este teléfono';
+    return;
+  }
   if (a === 'sumact') {
     b.disabled = true; b.textContent = 'Solicitando…';
     try { const r = await rpc('suministro_actualizar_ahora', {}); toast(r && r.ok === false ? 'La lectura de Enel está apagada' : 'Pedido a Enel: llegan en ~1 minuto', r && r.ok === false ? 'error' : 'ok'); setTimeout(() => { if (U.tab === 'ajustes') pintarAjustesU(); }, 70000); }
