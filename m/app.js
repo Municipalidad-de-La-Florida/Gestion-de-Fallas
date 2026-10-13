@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.21.4';
+const VERSION_APP = '1.21.5';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -822,7 +822,7 @@ async function cargarContratosEtiqueta() {
 }
 const tagContrato = (id) => (id && CONTR[id] ? ` <span class="tag-ctr ${CONTR[id].masivo ? 'm' : 'n'}">${esc(CONTR[id].nombre)}</span>` : '');
 
-/* ---------- Suministro eléctrico (Enel): indicador + transformadores sin luz ----------
+/* ---------- Suministro eléctrico (Enel): indicador + transformadores sin suministro ----------
    Lee las tablas suministro_enel / suministro_trafos, que llena el servidor cada 10 min
    (sql/2026-10-suministro-enel.sql). Si las tablas no existen o no hay dato, no se muestra nada. */
 let suminDato = null, suminTrafos = [], suminVer = true, suminLayer = null, suminCtl = null, suminAbierto = false;
@@ -848,10 +848,10 @@ function pintarSuministro(){
   cont.innerHTML = `<button type="button" class="sum-chip sum-${est.nivel}" aria-expanded="${suminAbierto}"><span class="sum-d"></span>⚡ ${suminEsc(etq)}${est.viejo ? ' · sin dato reciente' : ''}</button>
     <div class="sum-card" ${suminAbierto ? '' : 'hidden'}>
       <h4>⚡ Suministro eléctrico · ${suminEsc(d.comuna || 'La Florida')}</h4>
-      <div class="sum-k"><span>Clientes sin luz</span><b>${suminNum(est.n)}</b></div>
+      <div class="sum-k"><span>Clientes sin suministro</span><b>${suminNum(est.n)}</b></div>
       <div class="sum-k"><span>Clientes de la comuna</span><span>${suminNum(d.clientes_total)}</span></div>
       <div class="sum-k"><span>Porcentaje afectado</span><b>${suminEsc(String(est.pct).replace('.', ','))}%</b></div>
-      <div class="sum-k"><span>Transformadores sin luz</span><b>${suminTrafos.length}</b></div>
+      <div class="sum-k"><span>Transformadores sin suministro</span><b>${suminTrafos.length}</b></div>
       ${suminPuedeAvisos() ? `<div class="sum-k"><span>Avisos de clientes</span><b>${suminAvisos.length}</b></div>` : ''}
       <label class="sum-sw"><input type="checkbox" id="sumVer" ${suminVer ? 'checked' : ''}> Mostrar transformadores en el mapa</label>
       ${suminPuedeAvisos() ? `<label class="sum-sw"><input type="checkbox" id="sumAv" ${suminAvisosVer ? 'checked' : ''}> Mostrar avisos de clientes en el mapa</label>
@@ -915,7 +915,7 @@ function pintarTrafosSuministro(){
   suminTrafos.forEach((t) => {
     const ic = L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: '<div class="sum-tr"><b>⚡</b></div>' });
     L.marker([t.lat, t.lon], { icon: ic, zIndexOffset: -500 }).bindPopup(
-      `<b>⚡ Transformador ${suminEsc(t.numpos)}</b><br>Clientes sin luz: <b>${suminEsc(t.clientes ?? '—')}</b>${t.avisos ? '<br>Cantidad de avisos: <b>' + suminEsc(t.avisos) + '</b>' : ''}` +
+      `<b>⚡ Transformador ${suminEsc(t.numpos)}</b><br>Clientes sin suministro: <b>${suminEsc(t.clientes ?? '—')}</b>${t.avisos ? '<br>Cantidad de avisos: <b>' + suminEsc(t.avisos) + '</b>' : ''}` +
       `${t.inicio ? '<br>Corte desde: ' + suminEsc(t.inicio) : ''}${t.reposicion ? '<br>Reposición estimada: ' + suminEsc(t.reposicion) : ''}` +
       `${t.incidencia ? '<br>Incidencia: ' + suminEsc(t.incidencia) : ''}<br><small>Fuente: Enel</small>`).addTo(suminLayer);
   });
@@ -1618,7 +1618,7 @@ async function pintarAjustesU() {
   try { est = await rpc('suministro_estado', {}); }
   catch (e) { if (U.tab === 'ajustes') cuerpo.innerHTML = '<div class="u-nota">⚡ Suministro eléctrico (Enel): no disponible. Falta ejecutar sql/2026-10-suministro-interruptor.sql en Supabase.</div>'; return; }
   if (U.tab !== 'ajustes') return;
-  cuerpo.innerHTML = `<div class="u-nota">Muestra el indicador y los transformadores sin luz en el mapa, para todos los usuarios. Apagado: no se consulta a Enel y el indicador se oculta para todos.</div>
+  cuerpo.innerHTML = `<div class="u-nota">Muestra el indicador y los transformadores sin suministro en el mapa, para todos los usuarios. Apagado: no se consulta a Enel y el indicador se oculta para todos.</div>
     <div class="u-card-s"><h4>⚡ Suministro eléctrico (Enel)</h4>
       <button type="button" class="u-tog ${est.activo ? 'on' : ''}" data-a="sumtog"><span class="u-tx"><b>Lectura de datos de Enel</b><span>${est.activo ? 'Activo' : 'Apagado'}</span></span><span class="u-sw ${est.activo ? 'on' : ''}"></span></button>
       <div class="u-kv"><span>Última lectura</span><b>${est.ultima_lectura ? esc(horaU(est.ultima_lectura)) : '—'}</b></div>
