@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.19.0';
+const VERSION_APP = '1.20.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -875,7 +875,10 @@ function pintarTrafosSuministro(){
   });
   if(!map.hasLayer(suminLayer)) suminLayer.addTo(map);
 }
+let suminActivo = true;   // interruptor del admin (si la tabla aún no existe, se considera encendido)
 async function cargarSuministro(){
+  try{ const c = await select('suministro_config', 'select=activo&id=eq.1'); suminActivo = !(c && c[0] && c[0].activo === false); }catch(err){ suminActivo = true; }
+  if(!suminActivo){ suminDato = null; suminTrafos = []; pintarSuministro(); return; }
   try{
     const [e, t] = await Promise.all([ select('suministro_enel', 'select=*&id=eq.1'), select('suministro_trafos', 'select=numpos,incidencia,clientes,avisos,inicio,reposicion,lat,lon') ]);
     suminDato = (e && e[0]) || null; suminTrafos = t || [];
@@ -1542,14 +1545,34 @@ const formUsuarios = abrirUsuarios;
 
 function pintarTabsU() {
   const pend = U.notifs.filter((n) => !n.validado).length;
-  $('#uTabs').innerHTML = [['usuarios', 'Usuarios'], ['contratos', 'Contratos'], ['notificadores', 'Notificadores']]
+  $('#uTabs').innerHTML = [['usuarios', 'Usuarios'], ['contratos', 'Contratos'], ['notificadores', 'Notificadores'], ['ajustes', 'Ajustes']]
     .map(([k, t]) => `<button type="button" data-tab="${k}" class="${U.tab === k ? 'on' : ''}">${t}${k === 'notificadores' && pend ? `<b>${pend}</b>` : ''}</button>`).join('');
 }
 function pintarU() {
   pintarTabsU();
   if (U.tab === 'usuarios') pintarListaU();
   else if (U.tab === 'contratos') pintarContratosU();
+  else if (U.tab === 'ajustes') pintarAjustesU();
   else pintarNotifsU();
+}
+
+
+/* --- Ajustes: interruptor del suministro eléctrico (Enel) --- */
+const horaU = (iso) => { try { return new Date(iso).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return '—'; } };
+async function pintarAjustesU() {
+  const cuerpo = $('#uCuerpo');
+  cuerpo.innerHTML = '<div class="u-vacio">Cargando…</div>';
+  let est;
+  try { est = await rpc('suministro_estado', {}); }
+  catch (e) { if (U.tab === 'ajustes') cuerpo.innerHTML = '<div class="u-nota">⚡ Suministro eléctrico (Enel): no disponible. Falta ejecutar sql/2026-10-suministro-interruptor.sql en Supabase.</div>'; return; }
+  if (U.tab !== 'ajustes') return;
+  cuerpo.innerHTML = `<div class="u-nota">Muestra el indicador y los transformadores sin luz en el mapa, para todos los usuarios. Apagado: no se consulta a Enel y el indicador se oculta para todos.</div>
+    <div class="u-card-s"><h4>⚡ Suministro eléctrico (Enel)</h4>
+      <button type="button" class="u-tog ${est.activo ? 'on' : ''}" data-a="sumtog"><span class="u-tx"><b>Lectura de datos de Enel</b><span>${est.activo ? 'Activo' : 'Apagado'}</span></span><span class="u-sw ${est.activo ? 'on' : ''}"></span></button>
+      <div class="u-kv"><span>Última lectura</span><b>${est.ultima_lectura ? esc(horaU(est.ultima_lectura)) : '—'}</b></div>
+      <div class="u-kv"><span>Se consulta cada</span><b>${esc(est.cada_min)} min</b></div>
+      <div class="u-kv"><span>Transformadores en La Florida</span><b>${esc(est.trafos)}</b></div>
+      <div class="u-kv"><span>Último error</span><b>${est.error ? esc(est.error) : 'Ninguno'}</b></div></div>`;
 }
 
 /* --- Usuarios --- */
@@ -1715,6 +1738,13 @@ $('#uCuerpo').addEventListener('click', async (ev) => {
   const fila = b.closest('[data-id]'); const id = fila ? fila.dataset.id : null;
   const a = b.dataset.a;
   if (a === 'nuevo') return nuevoContratoU();
+  if (a === 'sumtog') {
+    const quiere = !b.classList.contains('on');
+    if (!quiere && !confirm('¿Apagar la lectura de Enel? El indicador y los transformadores se ocultarán para todos los usuarios.')) return;
+    try { await rpc('suministro_set_activo', { p_activo: quiere }); await cargarSuministro(); toast(quiere ? 'Lectura de Enel activada' : 'Lectura de Enel apagada', 'ok'); pintarAjustesU(); }
+    catch (e) { toast(e.message, 'error'); }
+    return;
+  }
   if (U.tab === 'contratos') {
     const c = U.contratos.find((x) => x.id === id); if (!c) return;
     if (a === 'act') { try { await cambiarContratoU(c, { activo: !c.activo }); pintarU(); } catch (e) { toast(msgContrato(e), 'error'); } }
