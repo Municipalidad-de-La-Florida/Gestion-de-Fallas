@@ -1811,9 +1811,11 @@ async function refrescarFallas(manual){
   const btn = document.getElementById('btnRefrescar');
   btn.classList.add('girando');
   const t0 = Date.now();
+  let capasFallaron = false;
   try{
     invalidarCacheTodasFallas();
-    await Promise.all([cargarFallasDelArea(), renderFallasOnMap()]);
+    const [, , capasOk] = await Promise.all([cargarFallasDelArea(), renderFallasOnMap(), manual ? cargarDatosDelArea(true) : true]);
+    if(capasOk === false) capasFallaron = true;
     if(document.getElementById('sidebarStats').style.display === 'flex'){
       fallasPeriodoLayerGroup.eachLayer(l => l.bringToFront());
     }
@@ -1827,7 +1829,8 @@ async function refrescarFallas(manual){
   actualizarAnilloRefresco();
   if(manual){
     const t = document.getElementById('toastRefrescar');
-    t.classList.add('on'); setTimeout(() => t.classList.remove('on'), 1600);
+    t.textContent = capasFallaron ? '⚠ Algunas capas no cargaron. Toca actualizar de nuevo.' : '✓ Actualizado';
+    t.classList.add('on'); setTimeout(() => t.classList.remove('on'), capasFallaron ? 3500 : 1600);
   }
 }
 function actualizarAnilloRefresco(){
@@ -1870,10 +1873,21 @@ function cargarDatosDelAreaDebounced(){
   cargarDatosDelAreaTimeout = setTimeout(cargarDatosDelArea, 250);
 }
 
-async function cargarDatosDelArea(){
+// Pide una capa de área con un reintento; si igual falla devuelve null (la caché no se marca, así se reintenta luego)
+async function rpcCapaReint(fn, args){
+  try{ return await db.rpc(fn, args); }
+  catch(e){ await new Promise(r => setTimeout(r, 600)); try{ return await db.rpc(fn, args); }catch(e2){ console.error(fn, e2); return null; } }
+}
+let _areaSeqWeb = 0;
+// forzar=true (botón Actualizar): ignora la caché por zona y vuelve a pedir todas las capas visibles.
+// Devuelve false si alguna capa no pudo cargarse.
+async function cargarDatosDelArea(forzar){
+  forzar = forzar === true;
   const z = map.getZoom();
   const b = map.getBounds();
   const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
+  const seq = ++_areaSeqWeb;
+  const args = {min_lon:bbox[0],min_lat:bbox[1],max_lon:bbox[2],max_lat:bbox[3]};
 
   toggleLayer(layerCircuitos, z >= 17);
   toggleLayer(layerCalles, false); // DESACTIVADA TEMPORALMENTE para revisar otras capas — reactivar con: z >= 14
@@ -1881,28 +1895,24 @@ async function cargarDatosDelArea(){
   toggleLayer(layerLoteos, z >= 19);
   toggleLayer(layerEmpalmes, z >= 19 && empalmesVisible);
 
-  if(z >= 17 && !bboxContenido(areaCache.circuitos, bbox)){
-    const data = await db.rpc('circuitos_en_area', {min_lon:bbox[0],min_lat:bbox[1],max_lon:bbox[2],max_lat:bbox[3]});
-    if(data){ layerCircuitos.clearLayers(); layerCircuitos.addData(data); areaCache.circuitos = expandirBbox(bbox, 0.5); }
-  }
+  const falta = (clave) => forzar || !bboxContenido(areaCache[clave], bbox);
+  let ok = true;
+  // Cada capa por separado y en paralelo: si una falla, las demás igual se dibujan
+  const tareas = [];
+  const capa = (clave, fn, aplicar) => tareas.push((async () => {
+    const data = await rpcCapaReint(fn, args);
+    if(seq !== _areaSeqWeb) return;            // llegó una carga más nueva (el usuario se movió)
+    if(data){ aplicar(data); areaCache[clave] = expandirBbox(bbox, 0.5); }
+    else { ok = false; areaCache[clave] = null; }
+  })());
+  if(z >= 17 && falta('circuitos')) capa('circuitos', 'circuitos_en_area', d => { layerCircuitos.clearLayers(); layerCircuitos.addData(d); });
   // Capa de calles desactivada temporalmente (ver línea de arriba); se deja de consultar para no gastar llamadas de más
-  // if(z >= 14){
-  //   const data = await db.rpc('calles_en_area', {min_lon:bbox[0],min_lat:bbox[1],max_lon:bbox[2],max_lat:bbox[3]});
-  //   if(data){ layerCalles.clearLayers(); layerCalles.addData(data); }
-  // }
-  if(z >= 17 && !bboxContenido(areaCache.puntos, bbox)){
-    const data = await db.rpc('puntos_en_area', {min_lon:bbox[0],min_lat:bbox[1],max_lon:bbox[2],max_lat:bbox[3]});
-    if(data){ ultimoPuntosGeoJSON = data; redibujarPuntos(); areaCache.puntos = expandirBbox(bbox, 0.5); }
-  }
-  if(z >= 19 && !bboxContenido(areaCache.loteos, bbox)){
-    const data = await db.rpc('loteos_en_area', {min_lon:bbox[0],min_lat:bbox[1],max_lon:bbox[2],max_lat:bbox[3]});
-    if(data){ layerLoteos.clearLayers(); layerLoteos.addData(data); areaCache.loteos = expandirBbox(bbox, 0.5); }
-  }
-  if(z >= 19 && !bboxContenido(areaCache.empalmes, bbox)){
-    const data = await db.rpc('empalmes_en_area', {min_lon:bbox[0],min_lat:bbox[1],max_lon:bbox[2],max_lat:bbox[3]});
-    if(data){ layerEmpalmes.clearLayers(); layerEmpalmes.addData(data); areaCache.empalmes = expandirBbox(bbox, 0.5); }
-  }
-  cargarFallasDelArea();
+  if(z >= 17 && falta('puntos')) capa('puntos', 'puntos_en_area', d => { ultimoPuntosGeoJSON = d; redibujarPuntos(); });
+  if(z >= 19 && falta('loteos')) capa('loteos', 'loteos_en_area', d => { layerLoteos.clearLayers(); layerLoteos.addData(d); });
+  if(z >= 19 && falta('empalmes')) capa('empalmes', 'empalmes_en_area', d => { layerEmpalmes.clearLayers(); layerEmpalmes.addData(d); });
+  await Promise.all(tareas);
+  if(!forzar) cargarFallasDelArea();
+  return ok;
 }
 function toggleLayer(layer, shouldShow){
   const has = map.hasLayer(layer);
