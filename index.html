@@ -6042,24 +6042,84 @@ async function generarPdfAnalisis(soloResumen){
     const wPie = 62, wDia = ancho - margen * 2 - wPie - 6;
     tarjeta(margen, 97, wDia, 44, 'Fallas informadas por día');
     {
-      const serie = diasP.map(x => (x.informadas !== undefined ? x.informadas : x.fallas) || 0), mx = Math.max(1, ...serie);
-      const x0 = margen + 6, wTot = wDia - 12, n = Math.max(1, serie.length), paso = wTot / n, bw = Math.min(6, paso * 0.78), base = 126.5, hMax = 19;
+      // Fallas ingresadas cada día, separadas en individuales (lima) y circuitos (verde oscuro)
+      const diaChile = (iso) => new Date(iso).toLocaleDateString('en-CA', {timeZone: 'America/Santiago'});
+      const porDiaTipo = {};
+      feats.forEach(f => {
+        const k = diaChile(f.properties.fecha_creacion);
+        const o = porDiaTipo[k] || (porDiaTipo[k] = {p: 0, c: 0});
+        if(f.properties.tipo === 'linea') o.c++; else o.p++;
+      });
+      const hayTipos = feats.length > 0;
+      const P = diasP.map(x => hayTipos ? (porDiaTipo[String(x.fecha).slice(0, 10)] || {p: 0}).p : ((x.informadas !== undefined ? x.informadas : x.fallas) || 0));
+      const C = diasP.map(x => hayTipos ? (porDiaTipo[String(x.fecha).slice(0, 10)] || {c: 0}).c : 0);
+      const serie = P.map((v, i) => v + C[i]);
+      const mx = Math.max(1, ...serie), n = Math.max(1, serie.length);
+      const prom = serie.length ? serie.reduce((a, b) => a + b, 0) / serie.length : 0;
+      const x0 = margen + 6, wTot = wDia - 12, wPlot = wTot - 11, paso = wPlot / n, bw = Math.min(6, paso * 0.78), base = 124, hMax = 14;   // wPlot deja a la derecha el espacio del promedio
+      const iMax = serie.indexOf(mx);
+      // Días hábiles (lun-vie) con al menos 1 falla: el de menos fallas (todos los empates si son 3 o menos)
+      const habiles = diasP.map((x, i) => i).filter(i => diasP[i].dow >= 1 && diasP[i].dow <= 5 && serie[i] > 0);
+      const mn = habiles.length ? Math.min(...habiles.map(i => serie[i])) : 0;
+      const empates = habiles.filter(i => serie[i] === mn);
+      const iMin = empates.length <= 3 ? empates : empates.slice(0, 1);
+      // Fines de semana: franja gris muy clara
+      diasP.forEach((x, i) => { if(x.dow === 0 || x.dow === 6){ pdf.setFillColor(240, 242, 240); pdf.rect(x0 + i * paso, base - hMax - 3, paso, hMax + 3 + 0.5, 'F'); } });
       serie.forEach((v, i) => {
         if(!v) return;
-        const hb = Math.max(0.6, v / mx * hMax);
-        pdf.setFillColor(...(v === mx ? VERDE : LIMA)); pdf.roundedRect(x0 + i * paso + (paso - bw) / 2, base - hb, bw, hb, 0.8, 0.8, 'F');
+        const bx = x0 + i * paso + (paso - bw) / 2;
+        const hp = P[i] / mx * hMax, hc = C[i] / mx * hMax;
+        if(P[i]){ pdf.setFillColor(...LIMA); pdf.rect(bx, base - hp, bw, hp, 'F'); }
+        if(C[i]){ pdf.setFillColor(...VERDE); pdf.rect(bx, base - hp - hc, bw, hc, 'F'); }
       });
-      pdf.setDrawColor(219, 226, 220); pdf.line(x0, base + 0.5, x0 + wTot, base + 0.5);
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
-      if(diasP.length){
-        const f2 = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7);
-        pdf.text(f2(diasP[0].fecha), x0, base + 5);
-        pdf.text(f2(diasP[diasP.length - 1].fecha), x0 + wTot, base + 5, {align: 'right'});
-        const iMax = serie.indexOf(mx);
-        pdf.text(`punta: ${mx} falla${mx === 1 ? '' : 's'} el ${f2(diasP[iMax].fecha)}`, x0 + wTot / 2, base + 5, {align: 'center'});
+      pdf.setDrawColor(219, 226, 220); pdf.setLineWidth(0.2); pdf.line(x0, base + 0.2, x0 + wPlot, base + 0.2);
+      // Promedio diario (línea punteada)
+      if(prom > 0){
+        const yp = base - prom / mx * hMax;
+        pdf.setDrawColor(85, 102, 92); pdf.setLineWidth(0.25); pdf.setLineDashPattern([1, 0.8], 0);
+        pdf.line(x0, yp, x0 + wPlot + 1.5, yp); pdf.setLineDashPattern([], 0);
+        // Símbolo de promedio (x con barra) y el valor, a la derecha de la línea
+        const txtProm = num(prom.toFixed(1));
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(...gris);
+        const xx = x0 + wPlot + 2.6, wX = pdf.getTextWidth('x');
+        pdf.text('x', xx, yp + 1);
+        pdf.setLineWidth(0.3); pdf.setDrawColor(...gris); pdf.line(xx, yp - 0.95, xx + wX, yp - 0.95);   // barra del símbolo
+        pdf.text(txtProm, xx + wX + 0.9, yp + 1);
       }
+      // Cifra sobre cada barra (en períodos largos, solo la punta y los días muy sobre el promedio)
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(5.5); pdf.setTextColor(...VERDE);
+      serie.forEach((v, i) => {
+        if(!v) return;
+        if(n > 45 && !(i === iMax || v >= prom * 1.8)) return;
+        pdf.text(String(v), x0 + i * paso + paso / 2, base - v / mx * hMax - 0.8, {align: 'center'});
+      });
+      // Letra del día de la semana; círculo lleno = día con más fallas, círculo hueco = día hábil con menos
+      const LET = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+      const f2 = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7);
+      const yl = base + 3.3;
+      diasP.forEach((x, i) => {
+        const cx = x0 + i * paso + paso / 2;
+        const esMax = i === iMax && mx > 0, esMin = iMin.includes(i);
+        pdf.setFont('helvetica', (esMax || esMin) ? 'bold' : 'normal');
+        if(esMax){ pdf.setFillColor(...VERDE); pdf.circle(cx, yl - 0.1, 1.55, 'F'); pdf.setTextColor(255, 255, 255); }
+        else if(esMin){ pdf.setFillColor(255, 255, 255); pdf.setDrawColor(...VERDE); pdf.setLineWidth(0.3); pdf.circle(cx, yl - 0.1, 1.45, 'FD'); pdf.setTextColor(...VERDE); }
+        else pdf.setTextColor(...gris);
+        if(n <= 62 || esMax || esMin){ pdf.setFontSize(5); pdf.text(LET[x.dow], cx, yl + 0.55, {align: 'center'}); }
+        if(x.dow === 1 || i === 0){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(4.8); pdf.setTextColor(...gris); pdf.text(f2(x.fecha), cx, base + 8, {align: 'center'}); }
+      });
+      // Leyenda
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris);
+      let lx = x0 + wTot;
+      [['Circuitos', VERDE], ['Individuales', LIMA]].forEach(([t, col]) => {
+        const w = pdf.getTextWidth(t); lx -= w; pdf.text(t, lx, 104.6); lx -= 3; pdf.setFillColor(...col); pdf.circle(lx, 103.7, 1.1, 'F'); lx -= 4.5;
+      });
+      // Nota
       pdf.setFontSize(5.5);
-      pdf.text(pdf.splitTextToSize('Nota: toda diferencia entre las fallas informadas por día y el estado de las fallas se debe a fallas ingresadas con anterioridad al período que aún no han sido reparadas, o que fueron reparadas dentro del período seleccionado.', wTot), x0, base + 9);
+      const medirRep = (typeof FILTROS_EST !== 'undefined' && FILTROS_EST.medir === 'reparacion');
+      const notaDia = medirRep
+        ? 'Fallas reparadas en el período, ubicadas en su día de ingreso (las ingresadas antes del período no aparecen). Un circuito cuenta como una falla.'
+        : 'Fallas ingresadas cada día; un circuito cuenta como una falla. ' + (iMin.length ? `Círculo lleno: día con más fallas (${mx}). Círculo hueco: día hábil con menos (${mn})${empates.length > iMin.length ? ', primero de ' + empates.length : ''}.` : '');
+      pdf.text(pdf.splitTextToSize(notaDia, wTot), x0, base + 11.5);
     }
 
     // Circuito vs. individuales (mismos colores que "Fallas más frecuentes")
