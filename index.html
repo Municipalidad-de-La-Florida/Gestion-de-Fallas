@@ -2485,8 +2485,20 @@ function renderFallasDesdeCache(){
     fallasLayerGroup.clearLayers();
     if(!geojson || !geojson.features) return;
     const asigFiltro = asignacionActiva(), subFiltro = filtroSubcontrato;
+    // Si un punto o circuito ya reparado (verde, visible unas horas) vuelve a tener una falla activa, se dibuja solo la nueva
+    const activasEn = new Set();
+    geojson.features.forEach(ft => {
+      const pr = ft.properties || {};
+      if(pr.estado === 'reparada') return;
+      if(pr.ref_punto_gid != null) activasEn.add('p' + pr.ref_punto_gid);
+      if(pr.ref_circuito_gid != null && !pr.cascada) activasEn.add('c' + pr.ref_circuito_gid);
+    });
     geojson.features.forEach(feat => {
       const estado = feat.properties.estado;
+      if(estado === 'reparada'){
+        const pr = feat.properties;
+        if((pr.ref_punto_gid != null && activasEn.has('p' + pr.ref_punto_gid)) || (pr.ref_circuito_gid != null && !pr.cascada && activasEn.has('c' + pr.ref_circuito_gid))) return;
+      }
       if(filtrosEstadoVisible[estado] === false) return;
       // Subcontrato: los puntos de cascada se ocultan (manda el circuito); las reparadas recientes se siguen viendo
       if(subFiltro !== 'todas'){
