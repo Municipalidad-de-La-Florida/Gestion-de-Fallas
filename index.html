@@ -5131,7 +5131,7 @@ async function rpcAnalisisFallas(ini, fin){
 // Se calcula con las mismas fallas del período (capa azul): no necesita datos nuevos en la base.
 const CALOR_COLORES = ['#ffffb2', '#fed976', '#feb24c', '#fd8d3c', '#f03b20', '#bd0026'];
 const CALOR_RADIO_M = 290;   // centro-vértice: celda de ~500 m de ancho
-let ANA_CALOR = {on: false, modo: 'fallas', reit: true};
+let ANA_CALOR = {on: true, modo: 'fallas', reit: true};
 let calorLayerGroup = null;
 const cacheGeojsonCalor = {};
 async function fallasGeojsonAnalisis(ini, fin){
@@ -5323,7 +5323,6 @@ function renderAnalisis(d){
 
   content.innerHTML = `
     <button class="popup-btn" id="anaPdfBtn" style="margin-top:10px;">📄 Descargar informe PDF</button>
-    ${tiles}
     <div class="ana-tit">Mapa de calor</div>
     <div class="hint">Celdas de ~500 m con el número de fallas (un circuito cuenta una vez) o de puntos lumínicos afectados. Respeta los filtros de arriba. También va en el informe PDF.</div>
     <div class="calor-ctl">
@@ -5332,6 +5331,7 @@ function renderAnalisis(d){
       <label><input type="checkbox" id="calorReit"> Marcar reiteradas</label>
     </div>
     <div id="calorLeyenda"></div>
+    ${tiles}
     <div class="ana-tit">Tiempo de reparación por código de falla</div>
     <div class="hint">Promedio sin el 5% más rápido ni el 5% más lento. * = menos de 20 reparaciones: promedio simple, sin recorte.</div>${porCodigo}
     <div class="ana-tit">Por ITO que informa</div>${porIto}
@@ -5493,11 +5493,10 @@ async function renderMapaCanvas(items, opciones = {}){
     // Borde de la comuna
     ctx.setLineDash([]); ctx.lineWidth = 7; ctx.strokeStyle = '#1f4d3d'; trazo(COMUNA_CONTORNO); ctx.stroke();
   }
-  // Mapa de calor: hexágonos recortados a la comuna, con el número de cada celda
+  // Mapa de calor: hexágonos completos (sobre la línea de la comuna), con el número de cada celda
   if(opciones.calor){
     const {celdas, max, reit} = opciones.calor;
     ctx.save();
-    ctx.beginPath(); COMUNA_CONTORNO.forEach((c, i) => { const [x, y] = P(c[0], c[1]); if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.closePath(); ctx.clip();
     celdas.forEach(c => {
       ctx.beginPath(); c.anillo.forEach((a, i) => { const [x, y] = P(a[0], a[1]); if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.closePath();
       ctx.globalAlpha = 0.72; ctx.fillStyle = colorCalor(c.v, max); ctx.fill(); ctx.globalAlpha = 1;
@@ -5508,8 +5507,6 @@ async function renderMapaCanvas(items, opciones = {}){
       ctx.fillStyle = c.v / max > 0.55 ? '#ffffff' : '#3a2a00'; ctx.fillText(String(c.v), x, y + 1);
     });
     ctx.restore();
-    ctx.setLineDash([]); ctx.lineWidth = 7; ctx.strokeStyle = '#1f4d3d';
-    ctx.beginPath(); COMUNA_CONTORNO.forEach((c, i) => { const [x, y] = P(c[0], c[1]); if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.closePath(); ctx.stroke();
     ctx.font = '15px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
     const atr0 = '© OpenStreetMap contributors', tw1 = ctx.measureText(atr0).width;
     ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(W - tw1 - 16, H - 26, tw1 + 16, 26);
