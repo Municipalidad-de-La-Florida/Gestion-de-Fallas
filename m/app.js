@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.18.1';
+const VERSION_APP = '1.19.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -821,7 +821,77 @@ async function cargarContratosEtiqueta() {
   try { (await select('contratos', 'select=id,nombre,defecto_para')).forEach((c) => { CONTR[c.id] = { nombre: c.nombre, masivo: c.defecto_para === 'masivo' }; }); if (S.vista === 'lista') renderLista(); } catch (e) { /* sin etiqueta */ }
 }
 const tagContrato = (id) => (id && CONTR[id] ? ` <span class="tag-ctr ${CONTR[id].masivo ? 'm' : 'n'}">${esc(CONTR[id].nombre)}</span>` : '');
+
+/* ---------- Suministro eléctrico (Enel): indicador + transformadores sin luz ----------
+   Lee las tablas suministro_enel / suministro_trafos, que llena el servidor cada 10 min
+   (sql/2026-10-suministro-enel.sql). Si las tablas no existen o no hay dato, no se muestra nada. */
+let suminDato = null, suminTrafos = [], suminVer = true, suminLayer = null, suminCtl = null, suminAbierto = false;
+const suminEsc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const suminNum = (n) => Number(n || 0).toLocaleString('es-CL');
+function suminEstado(){
+  if(!suminDato) return null;
+  const min = (Date.now() - new Date(suminDato.actualizado_en).getTime()) / 60000;
+  const pct = Number(suminDato.porcentaje || 0), n = Number(suminDato.clientes_afectados || 0);
+  const viejo = min > 30;
+  const nivel = viejo ? 'gris' : (pct <= 5 ? 'verde' : pct <= 10 ? 'ambar' : 'rojo');   // verde hasta 5%, amarillo hasta 10%, rojo sobre 10%
+  return { nivel, n, pct, viejo, min };
+}
+function suminHora(iso){ try{ return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }); }catch(e){ return ''; } }
+function pintarSuministro(){
+  const est = suminEstado();
+  if(!suminCtl) return;
+  const cont = suminCtl.getContainer();
+  if(!est){ cont.style.display = 'none'; if(suminLayer) suminLayer.clearLayers(); return; }
+  cont.style.display = '';
+  const etq = est.n === 0 ? 'Suministro normal' : `${suminNum(est.n)} sin luz · ${String(est.pct).replace('.', ',')}%`;
+  const d = suminDato;
+  cont.innerHTML = `<button type="button" class="sum-chip sum-${est.nivel}" aria-expanded="${suminAbierto}"><span class="sum-d"></span>⚡ ${suminEsc(etq)}${est.viejo ? ' · sin dato reciente' : ''}</button>
+    <div class="sum-card" ${suminAbierto ? '' : 'hidden'}>
+      <h4>⚡ Suministro eléctrico · ${suminEsc(d.comuna || 'La Florida')}</h4>
+      <div class="sum-k"><span>Clientes sin luz</span><b>${suminNum(est.n)}</b></div>
+      <div class="sum-k"><span>Clientes de la comuna</span><span>${suminNum(d.clientes_total)}</span></div>
+      <div class="sum-k"><span>Porcentaje afectado</span><b>${suminEsc(String(est.pct).replace('.', ','))}%</b></div>
+      <div class="sum-k"><span>Transformadores sin luz</span><b>${suminTrafos.length}</b></div>
+      <label class="sum-sw"><input type="checkbox" id="sumVer" ${suminVer ? 'checked' : ''}> Mostrar transformadores en el mapa</label>
+      <div class="sum-f">Fuente: Mapa de Emergencia de Enel · actualizado ${suminEsc(suminHora(d.actualizado_en))}${est.viejo ? ' (dato antiguo)' : ''}</div>
+    </div>`;
+  const chip = cont.querySelector('.sum-chip');
+  chip.addEventListener('click', () => { suminAbierto = !suminAbierto; pintarSuministro(); });
+  const sw = cont.querySelector('#sumVer');
+  if(sw) sw.addEventListener('change', () => { suminVer = sw.checked; try{ localStorage.setItem('fa_sum_trafos', suminVer ? '1' : '0'); }catch(e){} pintarTrafosSuministro(); });
+  pintarTrafosSuministro();
+}
+function pintarTrafosSuministro(){
+  if(!map) return;
+  if(!suminLayer) suminLayer = L.layerGroup();
+  suminLayer.clearLayers();
+  if(!suminVer || !suminDato){ if(map.hasLayer(suminLayer)) map.removeLayer(suminLayer); return; }
+  suminTrafos.forEach((t) => {
+    const ic = L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: '<div class="sum-tr"><b>⚡</b></div>' });
+    L.marker([t.lat, t.lon], { icon: ic, zIndexOffset: -500 }).bindPopup(
+      `<b>⚡ Transformador ${suminEsc(t.numpos)}</b><br>Clientes sin luz: <b>${suminEsc(t.clientes ?? '—')}</b>${t.avisos ? '<br>Cantidad de avisos: <b>' + suminEsc(t.avisos) + '</b>' : ''}` +
+      `${t.inicio ? '<br>Corte desde: ' + suminEsc(t.inicio) : ''}${t.reposicion ? '<br>Reposición estimada: ' + suminEsc(t.reposicion) : ''}` +
+      `${t.incidencia ? '<br>Incidencia: ' + suminEsc(t.incidencia) : ''}<br><small>Fuente: Enel</small>`).addTo(suminLayer);
+  });
+  if(!map.hasLayer(suminLayer)) suminLayer.addTo(map);
+}
+async function cargarSuministro(){
+  try{
+    const [e, t] = await Promise.all([ select('suministro_enel', 'select=*&id=eq.1'), select('suministro_trafos', 'select=numpos,incidencia,clientes,avisos,inicio,reposicion,lat,lon') ]);
+    suminDato = (e && e[0]) || null; suminTrafos = t || [];
+  }catch(err){ suminDato = null; suminTrafos = []; }
+  pintarSuministro();
+}
+function iniciarSuministro(){
+  if(suminCtl || !map) return;
+  try{ suminVer = localStorage.getItem('fa_sum_trafos') !== '0'; }catch(e){}
+  const Ctl = L.Control.extend({ options: { position: 'bottomleft' }, onAdd(){ const d = L.DomUtil.create('div', 'sum-ctl'); d.style.display = 'none'; L.DomEvent.disableClickPropagation(d); return d; } });
+  suminCtl = new Ctl().addTo(map);
+  cargarSuministro();
+}
+
 async function cargarFallas(manual) {
+  cargarSuministro();
   if (!Object.keys(CONTR).length) cargarContratosEtiqueta();
   const btn = $('#btnActualizar');
   if (manual) btn.classList.add('girando');
@@ -1877,6 +1947,7 @@ async function entrarApp() {
   S.vista = 'mapa';
   cambiarVista('mapa');
   iniciarMapa();
+  iniciarSuministro();
   setTimeout(() => map.invalidateSize(), 80);
   cacheBbox = null;
   await cargarFallas();

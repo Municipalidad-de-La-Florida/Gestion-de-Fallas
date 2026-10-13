@@ -302,3 +302,17 @@ textarea.campo{ min-height:70px; }
 .tag-ctr{display:inline-block;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;margin-left:4px}
 .tag-ctr.n{background:#e6eefb;color:#2a5db0}
 .tag-ctr.m{background:#efe3fb;color:#6a2fb0}
+
+  /* Suministro eléctrico (Enel) */
+  .sum-ctl{position:relative; margin:0 0 6px 10px !important; pointer-events:auto; font-family:inherit;}
+  .sum-chip{display:inline-flex; align-items:center; gap:7px; border:1px solid #cfd8d2; border-radius:16px; padding:6px 12px; font-size:12.5px; font-weight:700; background:#fff; color:#25312b; box-shadow:0 2px 8px rgba(0,0,0,.22); cursor:pointer;}
+  .sum-d{width:10px; height:10px; border-radius:50%; background:#2e9e5b;}
+  .sum-ambar .sum-d{background:#f0a500;} .sum-rojo .sum-d{background:#d93a3a;} .sum-gris .sum-d{background:#9aa5a0;}
+  .sum-card{position:absolute; left:0; bottom:38px; width:260px; background:#fff; border-radius:10px; padding:11px 13px; font-size:12.5px; box-shadow:0 4px 16px rgba(0,0,0,.3);}
+  .sum-card[hidden]{display:none;}
+  .sum-card h4{margin:0 0 7px; font-size:13.5px;}
+  .sum-k{display:flex; justify-content:space-between; margin:3px 0; color:#444;}
+  .sum-sw{display:flex; align-items:center; gap:7px; margin-top:8px; font-size:12px; color:#333;}
+  .sum-f{margin-top:7px; font-size:11px; color:#778;}
+  .sum-tr{width:24px; height:24px; transform:rotate(45deg); border-radius:6px; background:#263238; border:2px solid #fff; box-shadow:0 1px 5px rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;}
+  .sum-tr b{transform:rotate(-45deg); color:#ffd54a; font-size:13px; line-height:1;}
