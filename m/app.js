@@ -545,6 +545,10 @@ function iniciarMapa() {
   map.on('zoomend', () => { ajustarRadios(); dibujarFallas(); });
   map.on('click', () => { /* un toque en el vacío no hace nada */ });
   // Atenuar lo que queda fuera de la comuna (botón en el mapa, se recuerda la elección). No bloquea toques.
+  // El círculo de precisión del GPS va BAJO las fallas: encima teñía de azul los puntos morados/rojos
+  map.createPane('precisionPane');
+  map.getPane('precisionPane').style.zIndex = 300;
+  map.getPane('precisionPane').style.pointerEvents = 'none';
   map.createPane('atenuadoPane');
   map.getPane('atenuadoPane').style.zIndex = 250;             // sobre el fondo, bajo líneas y puntos
   map.getPane('atenuadoPane').style.pointerEvents = 'none';
@@ -766,7 +770,7 @@ function onPos(p) {
   if (map) {
     const ll = [S.pos.lat, S.pos.lng];
     if (!marcadorPos) {
-      circuloPos = L.circle(ll, { radius: S.pos.prec, weight: 1, color: '#2563a8', fillColor: '#2563a8', fillOpacity: 0.12, interactive: false }).addTo(map);
+      circuloPos = L.circle(ll, { radius: S.pos.prec, weight: 1, color: '#2563a8', fillColor: '#2563a8', fillOpacity: 0.12, interactive: false, pane: 'precisionPane' }).addTo(map);
       marcadorPos = L.circleMarker(ll, { radius: 9, weight: 3, color: '#fff', fillColor: '#2563a8', fillOpacity: 1, interactive: false, className: 'punto-ubicacion' }).addTo(map);
     } else {
       marcadorPos.setLatLng(ll); circuloPos.setLatLng(ll); circuloPos.setRadius(S.pos.prec);
