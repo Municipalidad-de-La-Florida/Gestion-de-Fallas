@@ -144,6 +144,8 @@
   .sum-modal-t td{padding:5px 8px; border-bottom:1px solid #eef2ef;}
   .sum-tr{width:24px; height:24px; transform:rotate(45deg); border-radius:6px; background:#263238; border:2px solid #fff; box-shadow:0 1px 5px rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;}
   .sum-tr b{transform:rotate(-45deg); color:#ffd54a; font-size:13px; line-height:1;}
+  .sum-ad{width:15px; height:15px; transform:rotate(45deg); border-radius:4px; background:#263238; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;}
+  .sum-ad i{width:5px; height:5px; border-radius:50%; background:#ffd54a; display:block;}
   #btnRefrescar{
     position:absolute; top:11px; z-index:800; display:none; width:44px; height:44px; padding:0; border:none; border-radius:50%;
     background:#fff; color:var(--primary); cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.18); align-items:center; justify-content:center;
@@ -1866,6 +1868,7 @@ function pintarSuministro(){
       <label class="sum-sw"><input type="checkbox" id="sumVer" ${suminVer ? 'checked' : ''}> Mostrar transformadores en el mapa</label>
       ${suminPuedeAvisos() ? `<label class="sum-sw"><input type="checkbox" id="sumAv" ${suminAvisosVer ? 'checked' : ''}> Mostrar avisos de clientes en el mapa</label>
       <button type="button" id="sumLista" class="sum-btn" ${suminAvisos.length ? '' : 'disabled'}>Ver listado de avisos (caso, cliente, dirección)</button>` : ''}
+      ${suminPuedeAvisos() ? `<button type="button" id="sumPdf" class="sum-btn">Descargar informe (PDF)</button>` : ''}
       <div class="sum-f">Fuente: Mapa de Emergencia de Enel · actualizado ${suminEsc(suminHora(d.actualizado_en))}${est.viejo ? ' (dato antiguo)' : ''}</div>
     </div>`;
   const chip = cont.querySelector('.sum-chip');
@@ -1874,6 +1877,8 @@ function pintarSuministro(){
   if(sw) sw.addEventListener('change', () => { suminVer = sw.checked; try{ localStorage.setItem('fa_sum_trafos', suminVer ? '1' : '0'); }catch(e){} pintarTrafosSuministro(); });
   const sa = cont.querySelector('#sumAv');
   if(sa) sa.addEventListener('change', () => { suminAvisosVer = sa.checked; try{ localStorage.setItem('fa_sum_avisos', suminAvisosVer ? '1' : '0'); }catch(e){} pintarAvisosSuministro(); });
+  const sp = cont.querySelector('#sumPdf');
+  if(sp) sp.addEventListener('click', () => generarPdfSuministro(sp));
   const sl = cont.querySelector('#sumLista');
   if(sl) sl.addEventListener('click', () => abrirListadoAvisos());
   pintarTrafosSuministro();
@@ -1893,7 +1898,7 @@ function pintarAvisosSuministro(){
   suminAvisosAgrupados().forEach((g) => {
     const lista = g.items.slice(0, 6).map((a) => `<div style="margin-top:5px;border-top:1px solid #eee;padding-top:4px"><b>Caso ${suminEsc(a.incidencia || '—')}</b> · Aviso ${suminEsc(a.cod_aviso)}<br>Cliente N.° <b>${suminEsc(a.numero_cliente || '—')}</b><br>${suminEsc(a.direccion || '')}${a.reposicion ? '<br>Reposición est.: ' + suminEsc(a.reposicion) : ''}</div>`).join('');
     const mas = g.items.length > 6 ? `<div style="margin-top:5px"><small>y ${g.items.length - 6} aviso(s) más en este punto</small></div>` : '';
-    L.circleMarker([g.lat, g.lon], { radius: 6, color: '#fff', weight: 2, fillColor: '#f08c00', fillOpacity: 1 })
+    L.marker([g.lat, g.lon], { icon: L.divIcon({ className: '', iconSize: [19, 19], iconAnchor: [9.5, 9.5], html: '<div class="sum-ad"><i></i></div>' }) })
       .bindPopup(`<b>${g.items.length} aviso${g.items.length === 1 ? '' : 's'} de clientes</b>${lista}${mas}<div style="margin-top:5px"><small>Fuente: Enel</small></div>`).addTo(suminAvisosLayer);
   });
   if(!map.hasLayer(suminAvisosLayer)) suminAvisosLayer.addTo(map);
@@ -1952,6 +1957,161 @@ async function cargarSuministro(){
   }
   pintarSuministro();
 }
+/* ---------- Informe PDF de suministro eléctrico (resumen: mapa + indicadores + detalle) ---------- */
+async function generarPdfSuministro(btn){
+  if(!window.jspdf || !window.jspdf.jsPDF){ alert('No se pudo cargar la librería de PDF. Revisa tu conexión y recarga la página.'); return; }
+  const txt0 = btn ? btn.textContent : '';
+  if(btn){ btn.textContent = 'Generando PDF…'; btn.disabled = true; }
+  try{
+    await cargarSuministro();   // datos al día
+    const est = suminEstado();
+    if(!est || !suminDato){ alert('Aún no hay datos de suministro para informar.'); return; }
+    const d = suminDato;
+    const pdf = new window.jspdf.jsPDF({orientation: 'portrait', unit: 'mm', format: 'a4'});
+    if(typeof pdf.autoTable !== 'function') throw new Error('No se cargó el complemento de tablas del PDF. Recarga la página.');
+    const ancho = pdf.internal.pageSize.getWidth(), alto = pdf.internal.pageSize.getHeight(), margen = 12;
+    const VERDE = [0, 49, 0], LIMA = [123, 211, 0], gris = [85, 102, 92];
+    const conOpacidad = (op, fn) => { pdf.saveGraphicsState(); pdf.setGState(new pdf.GState({opacity: op})); fn(); pdf.restoreGraphicsState(); };
+    const trafos = suminTrafos.slice().sort((a, b) => (b.clientes || 0) - (a.clientes || 0) || String(a.numpos).localeCompare(String(b.numpos)));
+    trafos.forEach((t, i) => { t.n = i + 1; });
+    const conAvisos = suminPuedeAvisos();
+    const avisos = conAvisos ? suminAvisos : [];
+    const COL = { verde: [46, 158, 91], ambar: [240, 165, 0], rojo: [217, 58, 58], gris: [120, 130, 125] };
+    const ETQ = { verde: 'Normal', ambar: 'Atención', rojo: 'Crítico', gris: 'Sin dato reciente' };
+    const pctTxt = String(est.pct).replace('.', ',');
+    const ahora = new Date();
+    const fechaTxt = ahora.toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false});
+    const fechaLarga = ahora.toLocaleDateString('es-CL', {timeZone: ZONA_CHILE, weekday: 'long', day: '2-digit', month: 'long', year: 'numeric'});
+    const horaLect = new Date(d.actualizado_en).toLocaleTimeString('es-CL', {timeZone: ZONA_CHILE, hour: '2-digit', minute: '2-digit', hour12: false});
+
+    const encabezado = (titulo, op) => {
+      conOpacidad(op || 1, () => { pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F'); });
+      pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
+      pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text(titulo, margen + 2, 22);
+      pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
+      pdf.text(fechaLarga.charAt(0).toUpperCase() + fechaLarga.slice(1), margen + 2, 29.5);
+      pdf.text(`Datos de Enel leídos a las ${horaLect} h`, margen + 2, 35);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
+      pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
+      pdf.text(fechaTxt, ancho - margen - 2, 20, {align: 'right'});
+      pdf.text(`extraído por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 25, {align: 'right'});
+    };
+
+    // ---------- HOJA 1: mapa a página completa + indicadores ----------
+    pdf.setFillColor(238, 242, 238); pdf.rect(0, 0, ancho, alto, 'F');
+    const py = alto - 96, ph = 82;
+    try{
+      const cv = await renderMapaCanvas([], {w: 1588, h: 2246, padding: 150, padTop: 340, padBottom: 770, zMax: 17, contorno: true,
+        dibujar: (ctx, P) => {
+          const rombo = (x, y, r, relleno) => {
+            ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath();
+            ctx.fillStyle = relleno; ctx.fill(); ctx.lineWidth = 3.5; ctx.lineJoin = 'round'; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+          };
+          // avisos (pequeños) primero, debajo de los transformadores
+          const ag = {}; avisos.forEach((a) => { ag[a.lat.toFixed(6) + ',' + a.lon.toFixed(6)] = a; });
+          Object.values(ag).forEach((a) => {
+            const [x, y] = P(a.lon, a.lat);
+            rombo(x, y, 11, '#263238');
+            ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fillStyle = '#ffd54a'; ctx.fill();
+          });
+          trafos.forEach((t) => {
+            const [x, y] = P(t.lon, t.lat);
+            rombo(x, y, 24, '#263238');
+            ctx.fillStyle = '#ffd54a'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(String(t.n), x, y + 1);
+          });
+        }});
+      if(cv) pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
+    }catch(e){ console.warn('No se pudo incluir el mapa del informe de suministro:', e); }
+
+    encabezado('Informe de suministro eléctrico', 0.93);
+
+    // Panel de indicadores
+    conOpacidad(0.96, () => { pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(margen - 2, py, ancho - (margen - 2) * 2, ph, 4, 4, 'FD'); });
+    const anillo = (pct, px) => {
+      const c = document.createElement('canvas'); c.width = c.height = px;
+      const x = c.getContext('2d'), w = px * 0.115, r = (px - w) / 2;
+      x.lineWidth = w; x.lineCap = 'round';
+      x.strokeStyle = '#dfe7e1'; x.beginPath(); x.arc(px / 2, px / 2, r, 0, Math.PI * 2); x.stroke();
+      const v = Math.min(100, Math.max(0, pct));
+      if(v > 0){ x.strokeStyle = '#7BD300'; x.beginPath(); x.arc(px / 2, px / 2, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * v / 100); x.stroke(); }
+      x.fillStyle = '#003100'; x.font = `800 ${Math.round(px * 0.23)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillText(pctTxt + '%', px / 2, px / 2 + px * 0.02);
+      return c.toDataURL('image/png');
+    };
+    pdf.addImage(anillo(est.pct, 300), 'PNG', margen + 2, py + 4, 24, 24);
+    const kpi = (x, valor, etiqueta, color, sub) => {
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(22); pdf.setTextColor(...(color || VERDE)); pdf.text(String(valor), x, py + 15);
+      pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text(etiqueta, x, py + 21);
+      if(sub){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(sub, x, py + 25.5); }
+    };
+    kpi(margen + 32, suminNum(est.n), 'Clientes sin suministro', COL.rojo, `de ${suminNum(d.clientes_total)} en la comuna`);
+    kpi(margen + 82, suminNum(trafos.length), 'Transformadores', null, 'sin suministro');
+    if(conAvisos) kpi(margen + 116, suminNum(avisos.length), 'Avisos de clientes', null, 'registrados en Enel');
+    kpi(margen + 150, ETQ[est.nivel], 'Estado', COL[est.nivel], 'verde hasta 5% · amarillo hasta 10%');
+    pdf.setDrawColor(219, 226, 220); pdf.line(margen + 4, py + 31, ancho - margen - 4, py + 31);
+
+    const filaTrafo = (t) => [t.n, t.numpos, suminNum(t.clientes), t.avisos ? suminNum(t.avisos) : '-', t.inicio || '-', t.reposicion || '-', t.incidencia || '-'];
+    const cabTrafo = [['N°', 'Transformador', 'Clientes', 'Avisos', 'Inicio del corte', 'Reposición est.', 'Incidencia']];
+    const estTabla = { styles: {fontSize: 7.5, cellPadding: 1.4, textColor: [30, 40, 35]}, headStyles: {fillColor: VERDE, textColor: 255, fontSize: 7.5}, alternateRowStyles: {fillColor: [244, 247, 244]} };
+    const MAXP1 = 5;
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(...VERDE);
+    pdf.text(trafos.length ? 'Transformadores más afectados (el número coincide con el mapa)' : 'No hay transformadores sin suministro en este momento.', margen + 4, py + 36.5);
+    if(trafos.length){
+      pdf.autoTable({
+        startY: py + 39, margin: {left: margen + 4, right: margen + 4}, head: cabTrafo, body: trafos.slice(0, MAXP1).map(filaTrafo), ...estTabla,
+        columnStyles: {0: {cellWidth: 9, halign: 'center'}, 2: {halign: 'right', cellWidth: 17}, 3: {halign: 'right', cellWidth: 14}}
+      });
+      if(trafos.length > MAXP1){
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris);
+        pdf.text(`y ${trafos.length - MAXP1} más en las páginas siguientes`, margen + 4, py + ph - 2.5);
+      }
+    }
+    // Leyenda del mapa (esquina del mapa, bajo el encabezado)
+    conOpacidad(0.92, () => { pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(margen - 2, 42, conAvisos ? 76 : 46, 7.5, 2, 2, 'FD'); });
+    const mini = (x, y, r, dot) => { pdf.setFillColor(38, 50, 56); pdf.triangle(x - r, y, x, y - r, x + r, y, 'F'); pdf.triangle(x - r, y, x, y + r, x + r, y, 'F'); pdf.setFillColor(255, 213, 74); pdf.circle(x, y, dot, 'F'); };
+    mini(margen + 2.5, 45.8, 2.1, 0.8); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text('Transformador', margen + 6, 46.4);
+    if(conAvisos){ mini(margen + 33, 45.8, 1.5, 0.6); pdf.text('Aviso de cliente', margen + 36, 46.4); }
+
+    // ---------- HOJAS SIGUIENTES: detalle ----------
+    pdf.addPage(); encabezado('Detalle del suministro');
+    let y = 46;
+    const titulo = (t) => { pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text(t, margen, y); y += 3; };
+    titulo(`Transformadores sin suministro (${trafos.length})`);
+    if(trafos.length){
+      pdf.autoTable({ startY: y, margin: {left: margen, right: margen, top: 14}, head: cabTrafo, body: trafos.map(filaTrafo), ...estTabla,
+        columnStyles: {0: {cellWidth: 9, halign: 'center'}, 2: {halign: 'right'}, 3: {halign: 'right'}} });
+      y = pdf.lastAutoTable.finalY + 9;
+    } else { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gris); pdf.text('Sin transformadores afectados.', margen, y + 5); y += 14; }
+    if(conAvisos){
+      if(y > alto - 40){ pdf.addPage(); y = 18; }
+      titulo(`Avisos de clientes (${avisos.length}) — datos para solicitar priorización`);
+      if(avisos.length){
+        pdf.autoTable({ startY: y, margin: {left: margen, right: margen, top: 14}, head: [['Caso', 'Aviso', 'N° cliente', 'Dirección', 'Reposición est.']],
+          body: avisos.map((a) => [a.incidencia || '-', a.cod_aviso || '-', a.numero_cliente || '-', a.direccion || '-', a.reposicion || '-']), ...estTabla,
+          columnStyles: {3: {cellWidth: 70}} });
+      } else { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gris); pdf.text('Sin avisos registrados.', margen, y + 5); }
+    }
+
+    // Pie de cada hoja
+    const total = pdf.getNumberOfPages();
+    for(let p = 1; p <= total; p++){
+      pdf.setPage(p);
+      conOpacidad(p === 1 ? 0.85 : 1, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
+      pdf.text(`Municipalidad de La Florida · Alumbrado público · Fuente: Mapa de Emergencia de Enel${conAvisos ? ' · Contiene datos de clientes: uso interno' : ''}`, margen, alto - 3.2);
+      pdf.text(`${p} / ${total}`, ancho - margen, alto - 3.2, {align: 'right'});
+    }
+    const dd = ahora.toLocaleDateString('en-CA', {timeZone: ZONA_CHILE});
+    pdf.save(`suministro_enel_${dd}.pdf`);
+  }catch(err){
+    console.error(err); alert('No se pudo generar el informe: ' + (err && err.message ? err.message : err));
+  }finally{
+    if(btn){ btn.textContent = txt0; btn.disabled = false; }
+  }
+}
+
 function iniciarSuministro(){
   if(suminCtl || !map) return;
   try{ suminVer = localStorage.getItem('fa_sum_trafos') !== '0'; suminAvisosVer = localStorage.getItem('fa_sum_avisos') !== '0'; }catch(e){}
@@ -5724,7 +5884,7 @@ async function renderMapaCanvas(items, opciones = {}){
     if(it.geom.type === 'Point') coords.push(it.geom.coordinates);
     else lineas(it.geom).forEach(l => l.forEach(c => coords.push(c)));
   });
-  if(!coords.length) return null;
+  if(!coords.length && !opciones.contorno) return null;
   // Con 'contorno' el encuadre es siempre la comuna completa (no solo las fallas)
   if(opciones.contorno){ coords.length = 0; COMUNA_CONTORNO.forEach(c => coords.push(c)); }
 
@@ -5800,6 +5960,15 @@ async function renderMapaCanvas(items, opciones = {}){
     ctx.restore();
     // Borde de la comuna
     ctx.setLineDash([]); ctx.lineWidth = 7; ctx.strokeStyle = '#1f4d3d'; trazo(COMUNA_CONTORNO); ctx.stroke();
+  }
+  // Dibujo propio (informe de suministro): recibe el contexto y la función de proyección
+  if(opciones.dibujar){
+    opciones.dibujar(ctx, P);
+    ctx.font = '15px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    const atr1 = '© OpenStreetMap contributors', tw2 = ctx.measureText(atr1).width;
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(W - tw2 - 16, H - 26, tw2 + 16, 26);
+    ctx.fillStyle = '#333333'; ctx.fillText(atr1, W - 8, H - 5);
+    return canvas;
   }
   // Mapa de calor: hexágonos completos (sobre la línea de la comuna), con el número de cada celda
   if(opciones.calor){
