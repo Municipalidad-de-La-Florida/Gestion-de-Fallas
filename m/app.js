@@ -708,8 +708,18 @@ function dibujarFallas() {
   const z = map.getZoom();
   capaFallas.clearLayers();
   const asigF = asigActiva(), subF = FO.sub;
+  // Una falla reparada (verde, visible unas horas) no se dibuja si ese punto/circuito ya tiene una falla activa nueva
+  // (reiterada, reportada...): si no, el verde semitransparente tapa el morado y se ve azulado.
+  const activasEn = new Set();
+  S.features.forEach((f) => {
+    const q = f.properties;
+    if (q.estado === 'reparada') return;
+    if (q.ref_punto_gid != null) activasEn.add('p' + q.ref_punto_gid);
+    if (q.ref_circuito_gid != null && !q.cascada) activasEn.add('c' + q.ref_circuito_gid);
+  });
   S.features.forEach((f) => {
     const p = f.properties;
+    if (p.estado === 'reparada' && ((p.ref_punto_gid != null && activasEn.has('p' + p.ref_punto_gid)) || (p.ref_circuito_gid != null && !p.cascada && activasEn.has('c' + p.ref_circuito_gid)))) return;
     // Subcontrato: los puntos de cascada se ocultan (manda el circuito); las reparadas recientes se siguen viendo
     if (subF !== 'todas') { if (p.cascada) return; if (subF === 'masivo' ? !p.masivo : !!p.masivo) return; }
     // Asignación: solo fallas activas (los puntos de cascada se ocultan; manda el circuito)
