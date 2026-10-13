@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.21.0';
+const VERSION_APP = '1.21.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -843,7 +843,7 @@ function pintarSuministro(){
   const cont = suminCtl.getContainer();
   if(!est){ cont.style.display = 'none'; if(suminLayer) suminLayer.clearLayers(); if(suminAvisosLayer) suminAvisosLayer.clearLayers(); return; }
   cont.style.display = '';
-  const etq = est.n === 0 ? 'Suministro normal' : `${suminNum(est.n)} sin luz · ${String(est.pct).replace('.', ',')}%`;
+  const etq = est.n === 0 ? 'Clientes sin suministro: 0' : `Clientes sin suministro: ${suminNum(est.n)} · ${String(est.pct).replace('.', ',')}%`;
   const d = suminDato;
   cont.innerHTML = `<button type="button" class="sum-chip sum-${est.nivel}" aria-expanded="${suminAbierto}"><span class="sum-d"></span>⚡ ${suminEsc(etq)}${est.viejo ? ' · sin dato reciente' : ''}</button>
     <div class="sum-card" ${suminAbierto ? '' : 'hidden'}>

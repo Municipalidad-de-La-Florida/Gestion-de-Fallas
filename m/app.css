@@ -328,3 +328,6 @@ textarea.campo{ min-height:70px; }
 
 .sum-av{ background:#fff; border-radius:10px; padding:9px 11px; margin-bottom:7px; font-size:13px; border:1px solid var(--linea); }
 .sum-av-l{ margin-top:10px; }
+
+/* El indicador de suministro no se muestra en la app (los puntos sí se dibujan en el mapa) */
+.sum-ctl{ display:none !important; }
