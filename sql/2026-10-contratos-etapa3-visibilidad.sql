@@ -1,5 +1,5 @@
 -- Contratos, etapa 3: cada contratista / contratista2 ve solo las fallas de SUS contratos
--- (más las que no tienen contrato, y las que él mismo creó). Admin, ITO y observador ven todo.
+-- (y las que él mismo creó; las que no tienen contrato quedan ocultas para ellos). Admin, ITO y observador ven todo.
 -- El camión sigue viendo solo las fallas que le asignaron.
 -- ANTES de ejecutar: asigna contrato a cada contratista/contratista2 (si no, solo verá fallas sin contrato).
 -- Para volver atrás: ver el bloque "REVERTIR" al final.
@@ -9,8 +9,7 @@ returns boolean
 language sql stable security definer
 set search_path = public
 as $$
-  select p_contrato is null
-      or coalesce(public.mi_rol(), '') not in ('contratista', 'contratista2')
+  select coalesce(public.mi_rol(), '') not in ('contratista', 'contratista2')
       or exists (select 1 from public.usuario_contratos uc
                  where uc.usuario_id = auth.uid() and uc.contrato_id = p_contrato);
 $$;
