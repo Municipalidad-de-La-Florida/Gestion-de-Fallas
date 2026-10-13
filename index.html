@@ -322,8 +322,8 @@
   .btn-inf.abierto .chev{transform:rotate(180deg);}
   /* Barra lateral renovada */
   .ley-toggle{display:flex;width:100%;align-items:center;justify-content:space-between;border:0;background:none;padding:0;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-soft);font-weight:700;cursor:pointer;}
-  .ley-toggle svg{transition:transform .2s;transform:rotate(180deg);}
-  .ley-toggle[aria-expanded="true"] svg{transform:none;}
+  .ley-toggle svg{transition:transform .2s;}
+  .ley-toggle[aria-expanded="true"] svg{transform:rotate(180deg);}
   #leyendaCuerpo[hidden]{display:none;}
   .lat-top{padding:0 12px 6px;flex-shrink:0;}
   .lat-tit{display:flex;align-items:center;gap:8px;margin:4px 0;}
@@ -757,6 +757,7 @@
           <div class="legend-item" style="margin-bottom:3px; cursor:pointer;" onclick="toggleFiltroPoste('ORNAMENTAL')"><svg id="swatchPosteORNAMENTAL" width="11" height="11" viewBox="0 0 10 10"><polygon points="5,0.6 9.3,4 7.6,9.2 2.4,9.2 0.7,4" fill="#5b7a68"/></svg><span style="margin-left:6px;">P. Ornamental</span></div>
         </div>
         <div class="legend-item" style="margin-top:8px;"><span class="swatch" style="background:#2563a8"></span>Del período (📊)</div>
+        <div id="leySum" hidden></div>
         </div>
       </div>
     </div>
@@ -1853,7 +1854,7 @@ function pintarSuministro(){
   const est = suminEstado();
   if(!suminCtl) return;
   const cont = suminCtl.getContainer();
-  if(!est){ cont.style.display = 'none'; if(suminLayer) suminLayer.clearLayers(); if(suminAvisosLayer) suminAvisosLayer.clearLayers(); return; }
+  if(!est){ cont.style.display = 'none'; if(suminLayer) suminLayer.clearLayers(); if(suminAvisosLayer) suminAvisosLayer.clearLayers(); pintarLeyendaSuministro(); return; }
   cont.style.display = '';
   const etq = est.n === 0 ? 'Clientes sin suministro: 0' : `Clientes sin suministro: ${suminNum(est.n)} · ${String(est.pct).replace('.', ',')}%`;
   const d = suminDato;
@@ -1883,6 +1884,27 @@ function pintarSuministro(){
   if(sl) sl.addEventListener('click', () => abrirListadoAvisos());
   pintarTrafosSuministro();
   pintarAvisosSuministro();
+  pintarLeyendaSuministro();
+}
+
+// Leyenda de las fallas de distribución (Enel) + botón para mostrarlas u ocultarlas todas juntas
+function pintarLeyendaSuministro(){
+  const c = document.getElementById('leySum'); if(!c) return;
+  if(!suminDato){ c.hidden = true; c.innerHTML = ''; return; }
+  const pa = suminPuedeAvisos();
+  const on = suminVer || (pa && suminAvisosVer);
+  const rombo = (t, dot) => `<svg width="16" height="16" viewBox="0 0 16 16" style="flex-shrink:0"><path d="M8 ${8 - t}L${8 + t} 8L8 ${8 + t}L${8 - t} 8Z" fill="#263238" stroke="#fff" stroke-width="1"/><circle cx="8" cy="8" r="${dot}" fill="#ffd54a"/></svg>`;
+  c.hidden = false;
+  c.innerHTML = `<div style="border-top:1px solid var(--line); margin-top:8px; padding-top:8px;">
+    <div class="legend-item" style="opacity:${suminVer ? 1 : .45}">${rombo(7, 2.6)}<span>Transformador sin suministro (Enel)</span></div>
+    ${pa ? `<div class="legend-item" style="opacity:${suminAvisosVer ? 1 : .45}">${rombo(5, 1.6)}<span>Aviso de cliente sin luz</span></div>` : ''}
+    <button type="button" id="leySumBtn" class="sum-btn" style="margin-top:6px;">${on ? 'Ocultar fallas de distribución' : 'Mostrar fallas de distribución'}</button></div>`;
+  document.getElementById('leySumBtn').onclick = () => {
+    const nuevo = !on;
+    suminVer = nuevo; if(pa) suminAvisosVer = nuevo;
+    try{ localStorage.setItem('fa_sum_trafos', suminVer ? '1' : '0'); if(pa) localStorage.setItem('fa_sum_avisos', suminAvisosVer ? '1' : '0'); }catch(e){}
+    pintarSuministro();
+  };
 }
 
 function suminAvisosAgrupados(){
