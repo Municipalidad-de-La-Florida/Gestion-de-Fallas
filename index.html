@@ -860,6 +860,7 @@
     <h2>Gestión de usuarios</h2>
     <div class="hint" style="margin-bottom:12px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Foto obligatoria</b> (solo contratistas) exige adjuntar al menos una fotografía al registrar una reparación, y esas reparaciones se hacen desde la app del teléfono. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). La columna <b>Contratos</b> (contratistas y camiones) indica a qué contratos pertenece cada usuario; puede ser más de uno. Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div>
     <div id="contratosAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    <div id="ajustesAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><button id="guardarUsuariosBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;" disabled>Guardar cambios</button><span id="usuariosEstado" class="hint" style="margin:0;">Sin cambios</span></div>
     <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
@@ -1872,7 +1873,10 @@ function pintarTrafosSuministro(){
   });
   if(!map.hasLayer(suminLayer)) suminLayer.addTo(map);
 }
+let suminActivo = true;   // interruptor del admin (si la tabla aún no existe, se considera encendido)
 async function cargarSuministro(){
+  try{ const c = await db.select('suministro_config', 'select=activo&id=eq.1'); suminActivo = !(c && c[0] && c[0].activo === false); }catch(err){ suminActivo = true; }
+  if(!suminActivo){ suminDato = null; suminTrafos = []; pintarSuministro(); return; }
   try{
     const [e, t] = await Promise.all([ db.select('suministro_enel', 'select=*&id=eq.1'), db.select('suministro_trafos', 'select=numpos,incidencia,clientes,avisos,inicio,reposicion,lat,lon') ]);
     suminDato = (e && e[0]) || null; suminTrafos = t || [];
@@ -7065,6 +7069,30 @@ function htmlCeldaNotificador(rol, habilitado){
     : '<span style="color:var(--ink-soft);" title="Este rol no ingresa fallas">—</span>';
 }
 
+
+// Ajustes (admin): interruptor del suministro eléctrico de Enel
+async function pintarAjustesAdmin(){
+  const cont = document.getElementById('ajustesAdmin'); if(!cont) return;
+  cont.innerHTML = '<div style="font-weight:700; margin-bottom:6px;">⚡ Suministro eléctrico (Enel)</div><div class="hint">Cargando…</div>';
+  let est = null;
+  try{ est = await db.rpc('suministro_estado', {}); }
+  catch(e){ cont.innerHTML = '<div style="font-weight:700; margin-bottom:6px;">⚡ Suministro eléctrico (Enel)</div><div class="hint">No disponible: falta ejecutar sql/2026-10-suministro-interruptor.sql.</div>'; return; }
+  const hora = (iso) => { try{ return new Date(iso).toLocaleString('es-CL', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}); }catch(e){ return '—'; } };
+  cont.innerHTML = `<div style="font-weight:700; margin-bottom:4px;">⚡ Suministro eléctrico (Enel)</div>
+    <div class="hint" style="margin:0 0 8px;">Muestra el indicador y los transformadores sin luz en el mapa, para todos los usuarios. Apagado: no se consulta a Enel y el indicador se oculta para todos.</div>
+    <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600;"><input type="checkbox" id="suminSwitch" ${est.activo ? 'checked' : ''}> Lectura de datos de Enel ${est.activo ? '<span style="color:#2e9e5b;">● Activo</span>' : '<span style="color:#8a5a00;">● Apagado</span>'}</label>
+    <div class="hint" style="margin:8px 0 0;">Última lectura: <b>${est.ultima_lectura ? hora(est.ultima_lectura) : '—'}</b> · cada ${est.cada_min} min · transformadores en La Florida: <b>${est.trafos}</b> · último error: <b>${est.error ? escHtml(est.error) : 'ninguno'}</b></div>
+    <span id="suminMsg" class="hint" style="margin:4px 0 0; display:block;"></span>`;
+  const sw = document.getElementById('suminSwitch'), msg = document.getElementById('suminMsg');
+  sw.onchange = async () => {
+    const quiere = sw.checked;
+    if(!quiere && !confirm('¿Apagar la lectura de Enel? El indicador y los transformadores se ocultarán para todos los usuarios.')){ sw.checked = true; return; }
+    sw.disabled = true; msg.textContent = 'Guardando…';
+    try{ await db.rpc('suministro_set_activo', {p_activo: quiere}); await cargarSuministro(); pintarAjustesAdmin(); }
+    catch(e){ sw.checked = !quiere; sw.disabled = false; msg.textContent = ''; alert('No se pudo cambiar: ' + e.message); }
+  };
+}
+
 async function cargarUsuarios(){
   const tbody = document.getElementById('usuariosTbody');
   tbody.innerHTML = '<tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
@@ -7078,6 +7106,7 @@ async function cargarUsuarios(){
     const contratosDe = {};
     relaciones.forEach(r => { (contratosDe[r.usuario_id] = contratosDe[r.usuario_id] || []).push(r.contrato_id); });
     pintarContratosAdmin();
+    pintarAjustesAdmin();
     if(!usuarios.length){
       tbody.innerHTML = '<tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
       return;
