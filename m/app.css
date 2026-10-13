@@ -322,3 +322,9 @@ textarea.campo{ min-height:70px; }
 .u-card-s h4{ margin:0 0 8px; font-size:15px; }
 .u-kv{ display:flex; justify-content:space-between; gap:10px; padding:5px 2px; font-size:13.5px; color:var(--tinta-2); }
 .u-kv b{ color:var(--tinta); text-align:right; }
+
+.sum-btn{display:block; width:100%; margin-top:8px; padding:8px 10px; border:1.5px solid #1d4e3d; border-radius:8px; background:#fff; color:#1d4e3d; font-weight:700; font-size:12px; cursor:pointer;}
+.sum-btn:disabled{opacity:.45; cursor:default;}
+
+.sum-av{ background:#fff; border-radius:10px; padding:9px 11px; margin-bottom:7px; font-size:13px; border:1px solid var(--linea); }
+.sum-av-l{ margin-top:10px; }
