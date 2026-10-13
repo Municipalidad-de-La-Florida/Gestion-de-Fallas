@@ -1,7 +1,7 @@
 -- =====================================================================
 -- Indicador de suministro eléctrico (Enel) + transformadores sin luz
 -- ---------------------------------------------------------------------
--- Lee dos archivos públicos del Mapa de Emergencia de Enel cada 5 min:
+-- Lee dos archivos públicos del Mapa de Emergencia de Enel cada 10 min:
 --   · me-capa-comunasAfectadas.txt  → clientes sin luz de La Florida   (~190 KB)
 --   · me-capa-trafosAfectados.txt   → transformadores sin luz de Enel  (~3,7 MB)
 -- y guarda SOLO lo de La Florida en dos tablas pequeñas. La web y la app leen
@@ -196,9 +196,9 @@ end $$;
 revoke all on function public.suministro_solicitar(), public.suministro_procesar() from public, anon, authenticated;
 
 -- ---------- 6. Programación ----------
--- Pide los archivos cada 5 min; cada minuto revisa si ya llegaron (sale al instante si no hay nada pendiente).
+-- Pide los archivos cada 10 min; cada minuto revisa si ya llegaron (sale al instante si no hay nada pendiente).
 select cron.unschedule(jobid) from cron.job where jobname in ('suministro-solicitar', 'suministro-procesar');
-select cron.schedule('suministro-solicitar', '*/5 * * * *', $$select public.suministro_solicitar()$$);
+select cron.schedule('suministro-solicitar', '*/10 * * * *', $$select public.suministro_solicitar()$$);
 select cron.schedule('suministro-procesar',  '* * * * *',   $$select public.suministro_procesar()$$);
 
 -- Primera carga inmediata (los datos aparecen en ~1 minuto)

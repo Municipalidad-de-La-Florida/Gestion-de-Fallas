@@ -130,8 +130,8 @@
   .sum-k{display:flex; justify-content:space-between; margin:3px 0; color:#444;}
   .sum-sw{display:flex; align-items:center; gap:7px; margin-top:8px; font-size:12px; color:#333;}
   .sum-f{margin-top:7px; font-size:11px; color:#778;}
-  .sum-tr{width:24px; height:24px; transform:rotate(45deg); border-radius:6px; background:#7a3fd1; border:2px solid #fff; box-shadow:0 1px 5px rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;}
-  .sum-tr b{transform:rotate(-45deg); color:#fff; font-size:13px; line-height:1;}
+  .sum-tr{width:24px; height:24px; transform:rotate(45deg); border-radius:6px; background:#263238; border:2px solid #fff; box-shadow:0 1px 5px rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;}
+  .sum-tr b{transform:rotate(-45deg); color:#ffd54a; font-size:13px; line-height:1;}
   #btnRefrescar{
     position:absolute; top:11px; z-index:800; display:none; width:44px; height:44px; padding:0; border:none; border-radius:50%;
     background:#fff; color:var(--primary); cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.18); align-items:center; justify-content:center;
@@ -1820,7 +1820,7 @@ function initMap(){
 
 
 /* ---------- Suministro eléctrico (Enel): indicador + transformadores sin luz ----------
-   Lee las tablas suministro_enel / suministro_trafos, que llena el servidor cada 5 min
+   Lee las tablas suministro_enel / suministro_trafos, que llena el servidor cada 10 min
    (sql/2026-10-suministro-enel.sql). Si las tablas no existen o no hay dato, no se muestra nada. */
 let suminDato = null, suminTrafos = [], suminVer = true, suminLayer = null, suminCtl = null, suminAbierto = false;
 const suminEsc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1829,8 +1829,8 @@ function suminEstado(){
   if(!suminDato) return null;
   const min = (Date.now() - new Date(suminDato.actualizado_en).getTime()) / 60000;
   const pct = Number(suminDato.porcentaje || 0), n = Number(suminDato.clientes_afectados || 0);
-  const viejo = min > 20;
-  const nivel = viejo ? 'gris' : (n === 0 ? 'verde' : pct < 1 ? 'ambar' : 'rojo');
+  const viejo = min > 30;
+  const nivel = viejo ? 'gris' : (pct <= 5 ? 'verde' : pct <= 10 ? 'ambar' : 'rojo');   // verde hasta 5%, amarillo hasta 10%, rojo sobre 10%
   return { nivel, n, pct, viejo, min };
 }
 function suminHora(iso){ try{ return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }); }catch(e){ return ''; } }

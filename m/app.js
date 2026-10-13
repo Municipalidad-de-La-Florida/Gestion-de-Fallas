@@ -823,7 +823,7 @@ async function cargarContratosEtiqueta() {
 const tagContrato = (id) => (id && CONTR[id] ? ` <span class="tag-ctr ${CONTR[id].masivo ? 'm' : 'n'}">${esc(CONTR[id].nombre)}</span>` : '');
 
 /* ---------- Suministro eléctrico (Enel): indicador + transformadores sin luz ----------
-   Lee las tablas suministro_enel / suministro_trafos, que llena el servidor cada 5 min
+   Lee las tablas suministro_enel / suministro_trafos, que llena el servidor cada 10 min
    (sql/2026-10-suministro-enel.sql). Si las tablas no existen o no hay dato, no se muestra nada. */
 let suminDato = null, suminTrafos = [], suminVer = true, suminLayer = null, suminCtl = null, suminAbierto = false;
 const suminEsc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -832,8 +832,8 @@ function suminEstado(){
   if(!suminDato) return null;
   const min = (Date.now() - new Date(suminDato.actualizado_en).getTime()) / 60000;
   const pct = Number(suminDato.porcentaje || 0), n = Number(suminDato.clientes_afectados || 0);
-  const viejo = min > 20;
-  const nivel = viejo ? 'gris' : (n === 0 ? 'verde' : pct < 1 ? 'ambar' : 'rojo');
+  const viejo = min > 30;
+  const nivel = viejo ? 'gris' : (pct <= 5 ? 'verde' : pct <= 10 ? 'ambar' : 'rojo');   // verde hasta 5%, amarillo hasta 10%, rojo sobre 10%
   return { nivel, n, pct, viejo, min };
 }
 function suminHora(iso){ try{ return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }); }catch(e){ return ''; } }
