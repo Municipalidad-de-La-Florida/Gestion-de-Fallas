@@ -2,7 +2,7 @@
 // - Archivos propios de la app: red primero (así las actualizaciones llegan de inmediato) y copia guardada de respaldo.
 // - Leaflet (CDN): copia guardada tras la primera carga.
 // - Supabase y mapas: siempre por red, nunca se guardan (datos siempre al día).
-const VERSION = 'fm-v24';
+const VERSION = 'fm-v25';
 const APP = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'badge-96.png'];
 
 self.addEventListener('install', (e) => {
@@ -21,6 +21,10 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
+
+  // Íconos: siempre directo a la red. Si el service worker respondiera con index.html cuando falla la descarga,
+  // iOS recibiría una "imagen" inválida y pondría un cuadro verde con una F en Inicio.
+  if (/\.(png|svg|ico)$/.test(url.pathname) && url.origin === self.location.origin) return;
 
   // Consulta de versión (app.js?v=…): directo a la red, sin guardar
   if (url.searchParams.has('v')) return;
