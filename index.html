@@ -203,6 +203,10 @@
   .calor-ley i{display:inline-block; width:22px; height:12px; border-radius:2px;}
   .calor-num{font:700 11px/1 sans-serif; text-align:center; pointer-events:none; text-shadow:0 0 2px rgba(255,255,255,.7);}
   .ana-tit{font-size:13px; font-weight:800; color:var(--primary); margin:18px 0 4px;}
+  details.ana-sec{border:1px solid var(--line, #d8e0da); border-radius:10px; margin:12px 0; padding:0 10px 8px; background:#fff;}
+  details.ana-sec > summary.ana-sec-tit{cursor:pointer; font-size:15px; font-weight:800; color:var(--primary); padding:10px 0; list-style:none;}
+  details.ana-sec > summary.ana-sec-tit::before{content:'▸ ';}
+  details.ana-sec[open] > summary.ana-sec-tit::before{content:'▾ ';}
   .ana-tabla{width:100%; border-collapse:collapse; font-size:11px; margin-top:6px; table-layout:auto;}
   .ana-tabla th{text-align:left; font-size:10px; color:var(--ink-soft); font-weight:700; padding:4px 3px; border-bottom:1.5px solid var(--line);}
   .ana-tabla td{padding:5px 3px; border-bottom:1px solid var(--line); vertical-align:top;}
@@ -823,12 +827,6 @@
           <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Medir por:</span>
           <button type="button" class="chip-estado activo" data-medir="informada" onclick="fijarFiltroEst('medir','informada')">Fecha informada</button>
           <button type="button" class="chip-estado" data-medir="reparacion" onclick="fijarFiltroEst('medir','reparacion')">Fecha de reparación</button>
-        </div>
-        <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
-          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Subcontrato:</span>
-          <button type="button" class="chip-estado morado activo" data-fmas="todas" onclick="fijarFiltroEst('masivo','todas')">Todas</button>
-          <button type="button" class="chip-estado morado" data-fmas="si" onclick="fijarFiltroEst('masivo','si')">Masivo</button>
-          <button type="button" class="chip-estado morado" data-fmas="no" onclick="fijarFiltroEst('masivo','no')">Normal</button>
         </div>
         <div id="filtrosEstAsignador" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div>
         <div id="filtrosEstItoWrap" style="display:none; align-items:center; gap:6px;">
@@ -4359,15 +4357,16 @@ function copiarRangoACompartido(idIni, idFin){
 
 // ---- Filtros de Estadísticas y Análisis: medir por fecha informada o de reparación, subcontrato, asignador, ITO ----
 const FILTROS_EST = {medir: 'informada', masivo: 'todas', asignadores: new Set(), ito: ''};
-function extraFiltrosEst(conIto){
+function extraFiltrosEst(conIto, contratoId){
   const e = {};
+  if(contratoId) e.p_contratos = [contratoId];
   if(FILTROS_EST.medir !== 'informada') e.p_medir = FILTROS_EST.medir;
   if(FILTROS_EST.masivo !== 'todas') e.p_masivo = FILTROS_EST.masivo === 'si';
   if(FILTROS_EST.asignadores.size) e.p_asignadores = [...FILTROS_EST.asignadores];
   if(conIto && FILTROS_EST.ito) e.p_ito = FILTROS_EST.ito;
   return e;
 }
-function claveFiltrosEst(conIto){ return JSON.stringify(extraFiltrosEst(conIto)); }
+function claveFiltrosEst(conIto, contratoId){ return JSON.stringify(extraFiltrosEst(conIto, contratoId)); }
 function veAsignadoresEst(){ return ['admin','contratista','contratista2','ito2'].includes(rolEfectivo()); }
 let asignadoresEst = null;   // [{id, nombre}] quienes han asignado alguna falla
 async function cargarAsignadoresEst(){
@@ -5167,10 +5166,13 @@ async function cargarAnalisis(){
   const req = ++analisisReq;
   content.innerHTML = '<div class="empty-state">Cargando...</div>';
   try{
-    const d = await rpcAnalisisFallas(ini, fin);
+    await asegurarContratos();
+    const [d, ...porC] = await Promise.all([rpcAnalisisFallas(ini, fin), ...CONTRATOS_ACTIVOS.map(c => rpcAnalisisFallas(ini, fin, c.id))]);
     if(req !== analisisReq) return;
     if(!d){ content.innerHTML = '<div class="empty-state">No tienes permiso para ver este análisis.</div>'; return; }
-    renderAnalisis(d);
+    d._cid = null; d._nombre = 'Resumen general';
+    CONTRATOS_ACTIVOS.forEach((c, i) => { if(porC[i]){ porC[i]._cid = c.id; porC[i]._nombre = c.nombre; } });
+    renderAnalisis(d, porC.filter(Boolean));
   }catch(e){
     if(req !== analisisReq) return;
     content.innerHTML = `<div class="empty-state">Error cargando el análisis: ${escHtml(e.message)}<br><br>¿Ejecutaste el script bloqueC_analisis.sql en Supabase?</div>`;
@@ -5203,11 +5205,11 @@ function fmtPctPuntos(n, total){
   return (p >= 1 ? p.toFixed(1) : p.toFixed(2)).replace('.', ',') + ' %';
 }
 // Trae el análisis y le suma los puntos lumínicos afectados (función aparte en la base).
-async function rpcAnalisisFallas(ini, fin){
-  const d = await db.rpc('analisis_fallas', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true)});
+async function rpcAnalisisFallas(ini, fin, contratoId){
+  const d = await db.rpc('analisis_fallas', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true, contratoId)});
   if(d && d.resumen){
     try{
-      const p = await db.rpc('analisis_puntos_afectados', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true)});
+      const p = await db.rpc('analisis_puntos_afectados', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true, contratoId)});
       if(p){ d.resumen.puntos_afectados = p.puntos_afectados; d.resumen.total_puntos = p.total_puntos; }
     }catch(e){ console.warn('No se pudieron obtener los puntos lumínicos afectados:', e); }
   }
@@ -5221,13 +5223,13 @@ const CALOR_RADIO_M = 290;   // centro-vértice: celda de ~500 m de ancho
 let ANA_CALOR = {on: true, modo: 'fallas', reit: true};
 let calorLayerGroup = null;
 const cacheGeojsonCalor = {};
-async function fallasGeojsonAnalisis(ini, fin){
-  const clave = ini + '|' + fin + '|' + claveFiltrosEst(false);
+async function fallasGeojsonAnalisis(ini, fin, contratoId){
+  const clave = ini + '|' + fin + '|' + claveFiltrosEst(false, contratoId);
   if(cacheGeojsonCalor[clave]) return cacheGeojsonCalor[clave];
   const g = await db.rpc('fallas_geojson_periodo', {
     fecha_inicio: fechaChileLocal(ini, 0, 0, 0).toISOString(),
     fecha_fin: fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString(),
-    ...extraFiltrosEst(false)
+    ...extraFiltrosEst(false, contratoId)
   });
   cacheGeojsonCalor[clave] = (g && g.features) || [];
   return cacheGeojsonCalor[clave];
@@ -5290,7 +5292,7 @@ async function actualizarCalorAnalisis(){
   if(!d || !d.rango) return;
   if(ley) ley.innerHTML = '<div class="hint">Calculando…</div>';
   try{
-    const feats = await fallasGeojsonAnalisis(d.rango.inicio, d.rango.fin);
+    const feats = await fallasGeojsonAnalisis(d.rango.inicio, d.rango.fin, d._cid);
     if(!ANA_CALOR.on || d !== ultimoAnalisis) return;
     const {celdas, max} = calorCeldas(calorPuntos(feats, ANA_CALOR.modo));
     celdas.forEach(c => {
@@ -5321,9 +5323,7 @@ function descripcionCodigoAnalisis(tipo, codigo){
   return descripcionCodigoFalla({tipo, tipo_falla: codigo, simb_poste: (tipo === 'punto' && (codigo === 'F02' || codigo === 'F03')) ? 'MONOPOSTE' : ''});
 }
 
-function renderAnalisis(d){
-  ultimoAnalisis = d;
-  const content = document.getElementById('statsContent');
+function htmlSeccionAnalisis(d, esGeneral){
   const r = d.resumen || {};
   const pct = r.fallas ? Math.round((r.reiteradas || 0) / r.fallas * 100) : 0;
 
@@ -5408,16 +5408,7 @@ function renderAnalisis(d){
         <tr><td>${escHtml(i.nombre)}</td><td class="n">${i.inspecciones}</td><td class="n">${i.sin_fallas}</td><td class="n">${i.fallas}</td><td class="n">${i.dias_distintos}</td></tr>`).join('')}
       </tbody></table>` : '';
 
-  content.innerHTML = `
-    <button class="popup-btn" id="anaPdfBtn" style="margin-top:10px;">📄 Descargar informe PDF</button>
-    <div class="ana-tit">Mapa de calor</div>
-    <div class="hint">Celdas de ~500 m con el número de fallas (un circuito cuenta una vez) o de puntos lumínicos afectados. Respeta los filtros de arriba. También va en el informe PDF.</div>
-    <div class="calor-ctl">
-      <label><input type="checkbox" id="calorOn"> Mostrar en el mapa</label>
-      <select id="calorModo"><option value="fallas">Nº de fallas</option><option value="puntos">Puntos lumínicos afectados</option></select>
-      <label><input type="checkbox" id="calorReit"> Marcar reiteradas</label>
-    </div>
-    <div id="calorLeyenda"></div>
+  return `
     ${tiles}
     <div class="ana-tit">Tiempo de reparación por código de falla</div>
     <div class="hint">Promedio sin el 5% más rápido ni el 5% más lento. * = menos de 20 reparaciones: promedio simple, sin recorte.</div>${porCodigo}
@@ -5426,17 +5417,66 @@ function renderAnalisis(d){
     <div class="ana-tit">Pendientes</div>
     <div class="hint">${pen.total_alguna_vez || 0} falla${pen.total_alguna_vez === 1 ? '' : 's'} quedaron pendientes alguna vez · ${pen.actuales || 0} siguen pendientes (antigüedad mediana ${fmtDias(pen.antiguedad_mediana_actuales)}).</div>
     ${motivos}
-    <div class="ana-tit">Cobertura de inspecciones</div>${porDia}
-    <div class="ana-tit">Por ITO</div>${cobIto}
+    ${esGeneral ? `<div class="ana-tit">Cobertura de inspecciones</div>${porDia}
+    <div class="ana-tit">Por ITO</div>${cobIto}` : ''}
     <div class="ana-tit">Puntos críticos</div>
     <div class="hint">Puntos con 2 o más fallas en el rango, o con alguna reiterada. El número es temporal (solo de este informe) y es el mismo que ves en el mapa. Haz clic para ubicarlo.</div>
     ${critPuntos || '<div class="hint">Ningún punto se repite en este rango.</div>'}
     <div class="ana-tit">Circuitos críticos</div>
     ${critCircuitos || '<div class="hint">Ningún circuito se repite en este rango.</div>'}
   `;
+}
 
+function tablaComparaAnalisis(g, lista){
+  const fila = (nombre, x, neg) => { const r = x.resumen || {}; return `<tr><td>${neg ? '<b>' + escHtml(nombre) + '</b>' : escHtml(nombre)}</td><td class="n">${r.fallas || 0}</td><td class="n">${r.reparadas || 0}</td><td class="n">${r.abiertas || 0}</td><td class="n">${r.reiteradas || 0}</td><td class="n">${fmtMiles(r.puntos_afectados)}</td><td class="n">${fmtProm(r.media_recortada_dias_ing, r.reparadas || 0)}</td></tr>`; };
+  const rg = g.resumen || {};
+  const suma = k => lista.reduce((t, x) => t + ((x.resumen || {})[k] || 0), 0);
+  const sin = k => (rg[k] || 0) - suma(k);
+  const hayContratos = lista.length > 0;
+  const filaSin = (hayContratos && sin('fallas') > 0) ? `<tr><td>Sin contrato</td><td class="n">${sin('fallas')}</td><td class="n">${sin('reparadas')}</td><td class="n">${sin('abiertas')}</td><td class="n">${sin('reiteradas')}</td><td class="n">—</td><td class="n">—</td></tr>` : '';
+  return `<table class="ana-tabla">
+    <thead><tr><th></th><th class="n">Fallas</th><th class="n">Rep.</th><th class="n">Abiertas</th><th class="n">Reit.</th><th class="n">Puntos</th><th class="n" title="Promedio desde el ingreso, sin el 5% de cada extremo">Prom. ing.</th></tr></thead>
+    <tbody>${fila('Total', g, true)}${lista.map(x => fila(x._nombre, x)).join('')}${filaSin}</tbody></table>`;
+}
+function renderAnalisis(d, lista){
+  lista = lista || [];
+  const content = document.getElementById('statsContent');
+  ultimoAnalisis = d; analisisGeneral = d; ultimoAnalisisContratos = lista;
+  const seccion = (x, abierta, esGeneral) => `<details class="ana-sec" data-cid="${x._cid || ''}" ${abierta ? 'open' : ''}>
+      <summary class="ana-sec-tit">${esGeneral ? 'Resumen general' : escHtml(x._nombre)}<span class="hint" style="margin:0 0 0 8px;">${(x.resumen || {}).fallas || 0} falla${((x.resumen || {}).fallas) === 1 ? '' : 's'}</span></summary>
+      ${esGeneral ? tablaComparaAnalisis(d, lista) : ''}
+      ${htmlSeccionAnalisis(x, esGeneral)}
+    </details>`;
+  content.innerHTML = `
+    <button class="popup-btn" id="anaPdfBtn" style="margin-top:10px;">📄 Descargar informe PDF</button>
+    <div class="hint">Cada contrato se analiza por separado (fallas, tiempos, puntos críticos). Abre una sección para verla; el mapa muestra la que tengas abierta.</div>
+    <div class="ana-tit">Mapa de calor <span id="anaFocoNombre" class="hint" style="margin:0;"></span></div>
+    <div class="calor-ctl">
+      <label><input type="checkbox" id="calorOn"> Mostrar en el mapa</label>
+      <select id="calorModo"><option value="fallas">Nº de fallas</option><option value="puntos">Puntos lumínicos afectados</option></select>
+      <label><input type="checkbox" id="calorReit"> Marcar reiteradas</label>
+    </div>
+    <div id="calorLeyenda"></div>
+    ${seccion(d, true, true)}
+    ${lista.map(x => seccion(x, false, false)).join('')}
+  `;
   document.getElementById('anaPdfBtn').onclick = () => generarPdfAnalisis(false);
-
+  const secs = [...content.querySelectorAll('details.ana-sec')];
+  secs.forEach(el => el.addEventListener('toggle', () => {
+    if(!el.open) return;
+    secs.forEach(o => { if(o !== el) o.open = false; });   // una sola abierta: es la que se ve en el mapa
+    enfocarAnalisis(el.dataset.cid ? lista.find(x => x._cid === el.dataset.cid) : d);
+  }));
+  enfocarAnalisis(d);
+}
+let ultimoAnalisisContratos = [];
+// Dibuja en el mapa los puntos críticos y el mapa de calor de la sección abierta.
+function enfocarAnalisis(d){
+  ultimoAnalisis = d;
+  const nom = document.getElementById('anaFocoNombre'); if(nom) nom.textContent = '· ' + (d._nombre || '');
+  const nPuntosCrit = (d.criticos_puntos || []).length;
+  const numPunto = (i) => i + 1;
+  const numCircuito = (i) => nPuntosCrit + i + 1;
   // Marcadores de críticos en el mapa
   if(!analisisLayerGroup) analisisLayerGroup = L.layerGroup().addTo(map);
   limpiarCapaAnalisis();
@@ -5454,7 +5494,7 @@ function renderAnalisis(d){
   enlazarCalorAnalisis();
   const capas = Object.values(analisisCapas);
   if(capas.length) map.fitBounds(L.featureGroup(capas).getBounds(), {padding:[50,50], maxZoom:16});
-  content.querySelectorAll('.ana-crit').forEach(el => {
+  document.querySelectorAll('#statsContent details[open] .ana-crit').forEach(el => {
     el.onclick = () => {
       const m = analisisCapas[el.dataset.k];
       if(!m) return;
@@ -5958,16 +5998,19 @@ async function generarPdfInspeccion(){
 
 // ---------- INFORME PDF DEL ANÁLISIS ----------
 // PDF con texto real (varias páginas, tablas), no una foto de la pantalla.
-let ultimoAnalisis = null;   // datos de la última consulta de Análisis
+let ultimoAnalisis = null;   // datos de la sección abierta del Análisis (la que se ve en el mapa)
+let analisisGeneral = null;  // datos del total (todos los contratos) de la última consulta
 
 async function generarPdfAnalisis(soloResumen){
-  const d = ultimoAnalisis;
+  const dGen = analisisGeneral || ultimoAnalisis;
+  const d = dGen;
   if(!d){ alert('Primero carga el análisis.'); return; }
   if(!window.jspdf || !window.jspdf.jsPDF){ alert('No se pudo cargar la librería de PDF. Revisa tu conexión y recarga la página.'); return; }
   const btn = document.getElementById('anaPdfBtn');
   const textoOriginal = btn ? btn.textContent : '';
   if(btn){ btn.textContent = 'Generando PDF…'; btn.disabled = true; }
   try{
+    await asegurarContratos();
     const pdf = new window.jspdf.jsPDF({orientation: 'portrait', unit: 'mm', format: 'a4'});
     if(typeof pdf.autoTable !== 'function'){ throw new Error('No se cargó el complemento de tablas del PDF. Recarga la página.'); }
     const ancho = pdf.internal.pageSize.getWidth();
@@ -5981,6 +6024,10 @@ async function generarPdfAnalisis(soloResumen){
     const ini = d.rango ? d.rango.inicio : '', fin = d.rango ? d.rango.fin : '';
     const fmtF = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7) + '-' + String(s).slice(0, 4);
 
+    // Un bloque completo (hojas 1 y 2, detalle y mapas) por cada conjunto de datos: el total y luego cada contrato
+    const bloque = async (d, cid, nombre, primero) => {
+    if(!primero) pdf.addPage();
+    const etiquetaContrato = (yy) => { if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10.5); pdf.setTextColor(255, 255, 255); pdf.text('CONTRATO: ' + nombre.toUpperCase(), ancho - margen - 2, yy, {align: 'right'}); } };
     // ---------- HOJA 1: mapa del período + indicadores ----------
     const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
     const rr = d.resumen || {};
@@ -6002,7 +6049,7 @@ async function generarPdfAnalisis(soloResumen){
       const g = await db.rpc('fallas_geojson_periodo', {
         fecha_inicio: fechaChileLocal(ini, 0, 0, 0).toISOString(),
         fecha_fin: fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString(),
-        ...extraFiltrosEst(false)
+        ...extraFiltrosEst(false, cid)
       });
       feats = ((g && g.features) || []).filter(f => !(f.properties && f.properties.cascada));
     }catch(e){ console.warn('No se pudieron obtener las fallas del período para el mapa:', e); }
@@ -6051,6 +6098,7 @@ async function generarPdfAnalisis(soloResumen){
     pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
     pdf.text(`Periodo: ${fmtLarga(ini)} al`, margen + 2, 29.5);
     pdf.text(fmtLarga(fin), margen + 2, 35);
+    etiquetaContrato(35);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
     pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
     pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 20, {align: 'right'});
@@ -6095,6 +6143,7 @@ async function generarPdfAnalisis(soloResumen){
     pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
     pdf.text(`Periodo: ${fmtLarga(ini)} al`, margen + 2, 29.5);
     pdf.text(fmtLarga(fin), margen + 2, 35);
+    etiquetaContrato(35);
     const tarjeta = (x, y, w, h, titulo) => {
       pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x, y, w, h, 3, 3, 'FD');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...VERDE); pdf.text(titulo, x + 5, y + 8);
@@ -6274,7 +6323,7 @@ async function generarPdfAnalisis(soloResumen){
     const sumarDias = (f, n) => new Date(Date.UTC(...f.split('-').map((v, i) => i === 1 ? v - 1 : +v)) + n * 86400000).toISOString().slice(0, 10);
     const prevFin = sumarDias(ini, -1), prevIni = sumarDias(prevFin, -(nDiasRango - 1));
     let prev = null;
-    try{ prev = await rpcAnalisisFallas(prevIni, prevFin); }catch(e){ console.warn('No se pudo obtener el período anterior:', e); }
+    try{ prev = await rpcAnalisisFallas(prevIni, prevFin, cid); }catch(e){ console.warn('No se pudo obtener el período anterior:', e); }
     const yc = 147 + hIzq + 6, hc = 40;
     tarjeta(margen, yc, ancho - margen * 2, hc, 'Comparación con el período anterior');
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
@@ -6322,6 +6371,7 @@ async function generarPdfAnalisis(soloResumen){
     pdf.addPage();
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...VERDE);
     pdf.text('Detalle del análisis', margen, 16);
+    if(nombre){ pdf.setFontSize(10); pdf.text('Contrato: ' + nombre, ancho - margen, 16, {align: 'right'}); pdf.setFontSize(14); }
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gris);
     pdf.text(`Período: ${fmtF(ini)} a ${fmtF(fin)}`, margen, 21);
     pdf.setDrawColor(219, 226, 220); pdf.line(margen, 24, ancho - margen, 24);
@@ -6403,6 +6453,7 @@ async function generarPdfAnalisis(soloResumen){
       });
     } else vacio('Ninguna falla del rango quedó pendiente con un motivo registrado.');
 
+    if(!cid){
     // 7) Cobertura
     const cob = d.cobertura || {};
     const diasCob = cob.por_dia || [];
@@ -6432,6 +6483,8 @@ async function generarPdfAnalisis(soloResumen){
         columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}}
       });
     } else vacio('Sin inspecciones registradas en este rango.');
+
+    }
 
     // 8) Críticos (al final del informe): con número temporal, el mismo que lleva el mapa siguiente
     const cPuntos = d.criticos_puntos || [], cCirc = d.criticos_circuitos || [];
@@ -6501,6 +6554,49 @@ async function generarPdfAnalisis(soloResumen){
 
     }
 
+    };
+
+    const contratosPdf = CONTRATOS_ACTIVOS.slice();
+    const datosC = [];
+    if(contratosPdf.length){
+      for(const c of contratosPdf){
+        let dc = null;
+        try{ dc = await rpcAnalisisFallas(ini, fin, c.id); }catch(e){ console.warn('No se pudo obtener el análisis del contrato ' + c.nombre + ':', e); }
+        datosC.push({c, d: dc});
+      }
+    }
+    await bloque(dGen, null, contratosPdf.length ? 'Resumen general' : null, true);
+    if(contratosPdf.length){
+      // Hoja de comparación entre contratos
+      pdf.addPage();
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...VERDE);
+      pdf.text('Comparación por contrato', margen, 16);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gris);
+      pdf.text(`Período: ${fmtF(ini)} a ${fmtF(fin)}`, margen, 21);
+      pdf.setDrawColor(219, 226, 220); pdf.line(margen, 24, ancho - margen, 24);
+      const filaC = (n, x) => { const q = (x && x.resumen) || {}; return [n, num(q.fallas || 0), num(q.reparadas || 0), num(q.abiertas || 0), num(q.reiteradas || 0), q.puntos_afectados === undefined ? '-' : fmtMiles(q.puntos_afectados), fmtProm(q.media_recortada_dias_ing, q.reparadas || 0, '-'), dias(q.antiguedad_mediana_abiertas)]; };
+      const rg0 = dGen.resumen || {};
+      const sumaC = k => datosC.reduce((t, x) => t + (((x.d || {}).resumen || {})[k] || 0), 0);
+      const sinC = k => (rg0[k] || 0) - sumaC(k);
+      const cuerpo = [filaC('Total', dGen), ...datosC.map(x => filaC(x.c.nombre, x.d))];
+      if(sinC('fallas') > 0) cuerpo.push(['Sin contrato', num(sinC('fallas')), num(sinC('reparadas')), num(sinC('abiertas')), num(sinC('reiteradas')), '-', '-', '-']);
+      pdf.autoTable({
+        margin: {left: margen, right: margen}, startY: 29,
+        styles: {fontSize: 8.5, cellPadding: 2, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1},
+        headStyles: {fillColor: VERDE, textColor: 255, fontSize: 8.5, fontStyle: 'bold'},
+        alternateRowStyles: {fillColor: [247, 248, 247]},
+        head: [['', 'Fallas', 'Reparadas', 'Abiertas', 'Reiteradas', 'Puntos afectados', 'Prom. reparación (desde ingreso)', 'Antigüedad abiertas']],
+        body: cuerpo,
+        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}, 6: {halign: 'right'}, 7: {halign: 'right'}}
+      });
+      pdf.setFontSize(7.5); pdf.setTextColor(...gris);
+      pdf.text('Cada contrato se informa por separado en las hojas siguientes. "Sin contrato" son fallas que aún no tienen contrato asignado.', margen, pdf.lastAutoTable.finalY + 6);
+      for(const x of datosC){
+        if(!x.d || !((x.d.resumen || {}).fallas)) continue;
+        await bloque(x.d, x.c.id, x.c.nombre, false);
+      }
+    }
+
     // Pie de página
     const paginas = pdf.internal.getNumberOfPages();
     for(let p = 1; p <= paginas; p++){
@@ -6517,21 +6613,12 @@ async function generarPdfAnalisis(soloResumen){
 
 // Cacheada por rango de fechas, misma razón que la capa azul de período.
 const cacheEstadisticasPorRango = {};
-async function cargarEstadisticas(fechaInicio, fechaFin){
-  const content = document.getElementById('statsContent');
-  const clave = fechaInicio + '|' + fechaFin + '|' + claveFiltrosEst(false);
-  content.innerHTML = '<div class="empty-state">Cargando...</div>';
-  try{
-    let d = cacheEstadisticasPorRango[clave];
-    if(!d){
-      d = await db.rpc('estadisticas_fallas', {fecha_inicio: fechaInicio, fecha_fin: fechaFin, ...extraFiltrosEst(false)});
-      cacheEstadisticasPorRango[clave] = d;
-    }
+function htmlEstadisticas(d, sid){
     const total = d.total_fallas || 0;
     const pct = (n) => total ? Math.round((n/total)*100) : 0;
     const entradasCodigo = Object.entries(d.por_codigo || {}).sort((a,b) => b[1]-a[1]);
 
-    content.innerHTML = `
+    return `
       <div class="stat-grid-modal">
         <div class="stat-box-modal">
           <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
@@ -6553,7 +6640,7 @@ async function cargarEstadisticas(fechaInicio, fechaFin){
       </div>
 
       <h3>Fallas por Tipo</h3>
-      <div id="graficoCircularFallas"></div>
+      <div id="graficoCircularFallas${sid}"></div>
 
       <h3>Reparaciones</h3>
       <div class="stat-grid-modal">
@@ -6571,7 +6658,31 @@ async function cargarEstadisticas(fechaInicio, fechaFin){
       <div class="stat-row"><span>Por cascada de circuito</span><span>${d.puntos_afectados_cascada||0}</span></div>
     `;
 
-    dibujarGraficoCircular(entradasCodigo, total);
+}
+
+async function cargarEstadisticas(fechaInicio, fechaFin){
+  const content = document.getElementById('statsContent');
+  content.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try{
+    await asegurarContratos();
+    const traer = async (cid) => {
+      const clave = fechaInicio + '|' + fechaFin + '|' + claveFiltrosEst(false, cid);
+      let d = cacheEstadisticasPorRango[clave];
+      if(!d){
+        d = await db.rpc('estadisticas_fallas', {fecha_inicio: fechaInicio, fecha_fin: fechaFin, ...extraFiltrosEst(false, cid)});
+        cacheEstadisticasPorRango[clave] = d;
+      }
+      return d;
+    };
+    const [g, ...porC] = await Promise.all([traer(null), ...CONTRATOS_ACTIVOS.map(c => traer(c.id))]);
+    const lista = CONTRATOS_ACTIVOS.map((c, i) => ({c, d: porC[i]}));
+    const sec = (titulo, d, sid) => `<div class="ana-tit" style="font-size:15px;border-bottom:2px solid var(--primary);padding-bottom:3px;">${escHtml(titulo)}</div>${htmlEstadisticas(d, sid)}`;
+    content.innerHTML = lista.length
+      ? sec('Resumen general', g, '') + lista.map((x, i) => sec(x.c.nombre, x.d, '_' + i)).join('')
+      : htmlEstadisticas(g, '');
+    const pie = (d, sid) => dibujarGraficoCircular(Object.entries(d.por_codigo || {}).sort((a, b) => b[1] - a[1]), d.total_fallas || 0, 'graficoCircularFallas' + sid);
+    pie(g, '');
+    lista.forEach((x, i) => pie(x.d, '_' + i));
   }catch(e){
     content.innerHTML = `<div class="empty-state">Error cargando estadísticas: ${e.message}</div>`;
   }
@@ -6598,7 +6709,7 @@ async function generarPdfPeriodo(){
   catch(e){ console.warn('No se pudo obtener el análisis del período:', e); }
   btn.textContent = textoOriginal; btn.disabled = false;
   if(!d){ return generarPdfEstadisticas(); }
-  ultimoAnalisis = d;
+  ultimoAnalisis = d; analisisGeneral = d;
   await generarPdfAnalisis(true);   // solo las dos primeras hojas; el detalle completo queda en la pestaña "Análisis"
 }
 
@@ -6688,8 +6799,8 @@ async function generarPdfEstadisticas(){
 }
 
 
-function dibujarGraficoCircular(entradas, total){
-  const cont = document.getElementById('graficoCircularFallas');
+function dibujarGraficoCircular(entradas, total, idCont){
+  const cont = document.getElementById(idCont || 'graficoCircularFallas');
   if(!cont) return;
   if(!total || !entradas.length){
     cont.innerHTML = '<div class="hint" style="margin-bottom:10px;">Sin datos para graficar.</div>';
