@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.21.6';
+const VERSION_APP = '1.21.7';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -837,8 +837,27 @@ function suminEstado(){
   return { nivel, n, pct, viejo, min };
 }
 function suminHora(iso){ try{ return new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }); }catch(e){ return ''; } }
+// Botón flotante del mapa: oculta o muestra las fallas de distribución (transformadores y avisos) en este teléfono
+function suminVisibleAhora(){ return suminVer || (suminPuedeAvisos() && suminAvisosVer); }
+function actualizarBotonDistrib(){
+  const b = document.getElementById('btnDistrib'); if(!b) return;
+  b.hidden = !suminDato;
+  const on = suminVisibleAhora();
+  b.classList.toggle('activo', on);
+  b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  b.title = on ? 'Ocultar fallas de distribución' : 'Mostrar fallas de distribución';
+}
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest && ev.target.closest('#btnDistrib'); if(!b) return;
+  const nuevo = !suminVisibleAhora();
+  suminVer = nuevo; if(suminPuedeAvisos()) suminAvisosVer = nuevo;
+  try{ localStorage.setItem('fa_sum_trafos', suminVer ? '1' : '0'); if(suminPuedeAvisos()) localStorage.setItem('fa_sum_avisos', suminAvisosVer ? '1' : '0'); }catch(e){}
+  pintarTrafosSuministro(); pintarAvisosSuministro(); actualizarBotonDistrib();
+  toast(nuevo ? 'Fallas de distribución visibles' : 'Fallas de distribución ocultas');
+});
 function pintarSuministro(){
   const est = suminEstado();
+  actualizarBotonDistrib();
   if(!suminCtl) return;
   const cont = suminCtl.getContainer();
   if(!est){ cont.style.display = 'none'; if(suminLayer) suminLayer.clearLayers(); if(suminAvisosLayer) suminAvisosLayer.clearLayers(); return; }
