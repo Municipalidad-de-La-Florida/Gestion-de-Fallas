@@ -3,12 +3,12 @@
    Fallas Alumbrado — La Florida · App móvil (PWA)
    - Misma base de datos y mismos permisos (RLS) que la página web.
    - Solo reporta fallas (punto / circuito) y registra reparaciones.
-   - Estadísticas, análisis y gestión de usuarios siguen en la web.
+   - Estadísticas y análisis siguen en la web. La gestión de usuarios (solo admin) también está aquí.
    ========================================================================= */
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.16.0';
+const VERSION_APP = '1.17.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -411,7 +411,7 @@ function ocupar(btn, fn) {
 }
 
 /* ------------------------- hoja inferior ------------------------- */
-let hojaAbierta = false;
+let hojaAbierta = false, hojaVolviendo = false;
 function abrirHoja(html) {
   $('#hojaContenido').innerHTML = html;
   $('#hoja').classList.remove('hoja-menu');
@@ -428,9 +428,9 @@ function cerrarHoja(desdePop) {
   $('#velo').hidden = true;
   $('#hojaContenido').innerHTML = '';
   if (S.borradorId) { S.borradorId = null; bdDel('cierre'); }
-  if (!desdePop && history.state && history.state.hoja) { try { history.back(); } catch (e) { /* */ } }
+  if (!desdePop && history.state && history.state.hoja) { hojaVolviendo = true; try { history.back(); } catch (e) { hojaVolviendo = false; } }
 }
-window.addEventListener('popstate', () => { if (hojaAbierta) cerrarHoja(true); });
+window.addEventListener('popstate', () => { if (hojaVolviendo) { hojaVolviendo = false; return; } if (hojaAbierta) { cerrarHoja(true); return; } if (window._usrPop) window._usrPop(); });
 $('#velo').addEventListener('click', () => cerrarHoja());
 $('#hojaCerrar').addEventListener('click', () => cerrarHoja());
 
@@ -1376,71 +1376,287 @@ async function iniciarPush() {
 }
 
 /* ------------------------- gestión de usuarios (solo admin) ------------------------- */
+// Pantalla completa con 3 pestañas (Usuarios · Contratos · Notificadores). Se edita en una hoja inferior.
 const ROLES_LISTA = ['admin', 'ito', 'ito2', 'contratista', 'contratista2', 'camion', 'observador'];
+const ROL_ETQ = { admin: 'Admin', ito: 'ITO', ito2: 'ITO 2', contratista: 'Contratista', contratista2: 'Contratista 2', camion: 'Camión', observador: 'Observador' };
+const ROL_CLASE = { admin: 'u-r-adm', ito: 'u-r-ito', ito2: 'u-r-ito', contratista: 'u-r-con', contratista2: 'u-r-con', camion: 'u-r-cam', observador: 'u-r-obs' };
 const ROLES_CON_NOTIF = ['admin', 'ito', 'ito2', 'contratista2'];
-async function formUsuarios() {
+const ROLES_CON_FOTO = ['contratista', 'contratista2', 'camion'];
+const ROLES_CON_CONTRATO = ['contratista', 'contratista2', 'camion'];
+const COLORES_AV = ['#2b6a55', '#c77a1a', '#6a5acd', '#1d4f91', '#a23b72', '#3a7d8c', '#8a5a2b'];
+const colorAv = (s) => { let h = 0; for (const c of String(s || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORES_AV[h % COLORES_AV.length]; };
+const FILTROS_USR = [
+  ['todos', 'Todos', () => true],
+  ['contratistas', 'Contratistas', (u) => u.rol === 'contratista' || u.rol === 'contratista2'],
+  ['camiones', 'Camiones', (u) => u.rol === 'camion'],
+  ['ito', 'ITO', (u) => u.rol === 'ito' || u.rol === 'ito2'],
+  ['otros', 'Otros', (u) => u.rol === 'admin' || u.rol === 'observador'],
+];
+const U = { tab: 'usuarios', usuarios: [], rel: {}, contratos: [], notifs: [], conteo: null, q: '', filtro: 'todos' };
+let usrHist = false, usrVolviendo = false;
+const normTxt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const sinContratoU = (u) => ROLES_CON_CONTRATO.includes(u.rol) && u.rol !== 'camion' && !(U.rel[u.id] || []).length;
+const msgNotif = (e) => {
+  const m = String((e && e.message) || e);
+  if (/duplicate key|notificadores_nombre_norm_uq/i.test(m)) return 'Ya existe un notificador con ese nombre. Si es la misma persona, usa «Fusionar».';
+  if (/foreign key|fallas_notificador_id_fkey/i.test(m)) return 'No se puede eliminar: tiene fallas asociadas. Desactívalo o fusiónalo.';
+  if (/notificadores_nombre_largo/i.test(m)) return 'El nombre debe tener entre 2 y 60 caracteres.';
+  return m;
+};
+const msgContrato = (e) => (/duplicate|unique|contratos_nombre/i.test(e.message) ? 'Ya existe un contrato con ese nombre.' : e.message);
+
+async function cargarUsuariosAdmin() {
+  const [us, cs, rel, ns] = await Promise.all([
+    select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc'),
+    select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc').catch(() => []),
+    select('usuario_contratos', 'select=usuario_id,contrato_id').catch(() => []),
+    select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc').catch(() => []),
+  ]);
+  U.usuarios = us; U.contratos = cs; U.rel = {};
+  rel.forEach((r) => { (U.rel[r.usuario_id] = U.rel[r.usuario_id] || []).push(r.contrato_id); });
+  U.notifs = ns.map((n) => ({ ...n, nFallas: (n.fallas && n.fallas[0] && n.fallas[0].count) || 0 }));
+  U.notifs.sort((a, b) => (a.validado - b.validado) || a.nombre.localeCompare(b.nombre, 'es'));
+}
+async function cargarConteoContratos() {
+  const m = {};
+  for (let d = 0; d < 30000; d += 1000) {
+    const f = await select('fallas', `select=contrato_id,estado&cascada=eq.false&order=id&limit=1000&offset=${d}`);
+    f.forEach((x) => { const k = x.contrato_id || 'sin'; const c = m[k] || (m[k] = { t: 0, a: 0 }); c.t++; if (x.estado !== 'reparada') c.a++; });
+    if (f.length < 1000) break;
+  }
+  U.conteo = m;
+}
+
+function abrirUsuarios() {
   if (rol() !== 'admin') return;
-  const h = abrirHoja(`<h2>Gestión de usuarios</h2>
-    <div class="hint">Para crear un usuario nuevo hazlo desde Supabase (Authentication → Add user); aquí le asignas nombre y rol. Los cambios se guardan todos juntos.</div>
-    <div id="uLista"><div class="hint">Cargando…</div></div>
-    <div class="acciones fija"><button id="uOk" class="btn btn-primario" disabled>Sin cambios</button></div>`);
-  let us;
-  try { us = await select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc'); }
-  catch (e) { $('#uLista', h).innerHTML = '<div class="aviso">No se pudo cargar la lista de usuarios.</div>'; return; }
-  if (!document.body.contains($('#uLista'))) return;
-  const estado = (d) => ({
-    nombre: $('.u-nom', d).value.trim(), rol: $('.u-rol', d).value,
-    notif: ROLES_CON_NOTIF.includes($('.u-rol', d).value) && $('.u-notif', d).checked,
-    foto: ['contratista', 'contratista2', 'camion'].includes($('.u-rol', d).value) && $('.u-foto', d).checked,
+  cerrarHoja(true);                      // el menú ya dejó una entrada en el historial: la reutiliza esta pantalla
+  usrHist = true;
+  U.tab = 'usuarios'; U.q = ''; U.filtro = 'todos'; U.conteo = null;
+  $('#pantallaUsuarios').hidden = false;
+  $('#uCuerpo').innerHTML = '<div class="u-vacio">Cargando…</div>';
+  pintarTabsU();
+  cargarUsuariosAdmin().then(() => pintarU()).catch((e) => { $('#uCuerpo').innerHTML = `<div class="u-vacio">No se pudo cargar: ${esc(e.message)}</div>`; });
+}
+function cerrarUsuarios(desdePop) {
+  if ($('#pantallaUsuarios').hidden) return;
+  $('#pantallaUsuarios').hidden = true;
+  if (!desdePop && usrHist) { usrVolviendo = true; try { history.back(); } catch (e) { usrVolviendo = false; } }
+  usrHist = false;
+}
+window._usrPop = () => { if (usrVolviendo) { usrVolviendo = false; return; } if (!$('#pantallaUsuarios').hidden) cerrarUsuarios(true); };
+const formUsuarios = abrirUsuarios;
+
+function pintarTabsU() {
+  const pend = U.notifs.filter((n) => !n.validado).length;
+  $('#uTabs').innerHTML = [['usuarios', 'Usuarios'], ['contratos', 'Contratos'], ['notificadores', 'Notificadores']]
+    .map(([k, t]) => `<button type="button" data-tab="${k}" class="${U.tab === k ? 'on' : ''}">${t}${k === 'notificadores' && pend ? `<b>${pend}</b>` : ''}</button>`).join('');
+}
+function pintarU() {
+  pintarTabsU();
+  if (U.tab === 'usuarios') pintarListaU();
+  else if (U.tab === 'contratos') pintarContratosU();
+  else pintarNotifsU();
+}
+
+/* --- Usuarios --- */
+function tarjetaUsuarioU(u) {
+  const cs = (U.rel[u.id] || []).map((id) => U.contratos.find((c) => c.id === id)).filter(Boolean);
+  const aplica = ROLES_CON_CONTRATO.includes(u.rol);
+  let cont;
+  if (!aplica) cont = '<span class="u-em">Ve todos los contratos</span>';
+  else if (!cs.length) cont = u.rol === 'camion' ? '<span class="u-em">Sin contrato asignado</span>' : '<span class="u-tg u-t-sin">⚠ Sin contrato</span>';
+  else cont = cs.map((c) => `<span class="u-tg ${c.defecto_para === 'masivo' ? 'u-t-ele' : 'u-t-enel'}">${esc(c.nombre)}</span>`).join('');
+  const ic = [ROLES_CON_NOTIF.includes(u.rol) && u.notificador_externo_habilitado ? '🔔' : '', ROLES_CON_FOTO.includes(u.rol) && u.foto_obligatoria ? '📷' : ''].filter(Boolean).join(' ');
+  return `<button type="button" class="u-card" data-uid="${esc(u.id)}"><span class="u-ini" style="background:${colorAv(u.nombre)}">${esc(iniciales(u.nombre))}</span>
+    <span class="u-mid"><span class="u-nm">${esc(u.nombre || '—')} <span class="u-rol ${ROL_CLASE[u.rol] || ''}">${esc(ROL_ETQ[u.rol] || u.rol)}</span></span>
+    <span class="u-em">${esc(u.email || '—')}</span><span>${cont}${ic ? `<span class="u-ic">${ic}</span>` : ''}</span></span><span class="u-chev">›</span></button>`;
+}
+function pintarListaU() {
+  const nSin = U.usuarios.filter(sinContratoU).length;
+  const q = normTxt(U.q);
+  const f = FILTROS_USR.find((x) => x[0] === U.filtro);
+  const lista = U.usuarios.filter((u) => (U.filtro === 'sin' ? sinContratoU(u) : f[2](u)) && (!q || normTxt(u.nombre + ' ' + (u.email || '')).includes(q)));
+  const chips = FILTROS_USR.map(([k, t, fn]) => `<button type="button" class="u-chip ${U.filtro === k ? 'on' : ''}" data-f="${k}">${t} ${U.usuarios.filter(fn).length}</button>`).join('')
+    + (nSin ? `<button type="button" class="u-chip ${U.filtro === 'sin' ? 'on' : ''}" data-f="sin">Sin contrato ${nSin}</button>` : '');
+  $('#uCuerpo').innerHTML = `${nSin && U.filtro !== 'sin' ? `<div class="u-alerta"><span>⚠️</span><span><b>${nSin} contratista${nSin > 1 ? 's' : ''} sin contrato</b>: hoy no ve${nSin > 1 ? 'n' : ''} ninguna falla.</span><button type="button" data-f="sin">Ver ›</button></div>` : ''}
+    <input id="uBuscar" class="u-buscar" type="search" placeholder="Buscar nombre o correo" autocomplete="off" value="${esc(U.q)}">
+    <div class="u-chips">${chips}</div><div id="uLista">${lista.map(tarjetaUsuarioU).join('') || '<div class="u-vacio">Sin resultados.</div>'}</div>`;
+  const b = $('#uBuscar');
+  b.addEventListener('input', () => { U.q = b.value; const q2 = normTxt(U.q); const fx = FILTROS_USR.find((x) => x[0] === U.filtro);
+    const l2 = U.usuarios.filter((u) => (U.filtro === 'sin' ? sinContratoU(u) : fx[2](u)) && (!q2 || normTxt(u.nombre + ' ' + (u.email || '')).includes(q2)));
+    $('#uLista').innerHTML = l2.map(tarjetaUsuarioU).join('') || '<div class="u-vacio">Sin resultados.</div>'; });
+}
+
+function editarUsuarioU(id) {
+  const u = U.usuarios.find((x) => x.id === id); if (!u) return;
+  const orig = { nombre: u.nombre || '', rol: u.rol, notif: !!u.notificador_externo_habilitado, foto: !!u.foto_obligatoria, contr: (U.rel[id] || []).slice().sort() };
+  const ed = { ...orig, contr: new Set(orig.contr) };
+  const estado = () => ({ nombre: ed.nombre.trim(), rol: ed.rol, notif: ROLES_CON_NOTIF.includes(ed.rol) && ed.notif, foto: ROLES_CON_FOTO.includes(ed.rol) && ed.foto, contr: ROLES_CON_CONTRATO.includes(ed.rol) ? [...ed.contr].sort() : [] });
+  const h = abrirHoja(`<div class="u-sh"><span class="u-ini" style="background:${colorAv(u.nombre)};width:46px;height:46px">${esc(iniciales(u.nombre))}</span><div><div class="u-nm" style="font-size:17px">${esc(u.nombre || '—')}</div><div class="u-em">${esc(u.email || '—')}</div></div></div>
+    <div class="u-lbl" style="margin-top:2px">Nombre</div><input id="eNom" class="campo" value="${esc(orig.nombre)}" maxlength="80" autocomplete="off">
+    <div id="eDin"></div>
+    <button type="button" id="eReset" class="btn btn-ambar" style="width:100%;margin-top:12px" ${u.email ? '' : 'disabled'}>Enviar reseteo de contraseña</button>
+    <div class="acciones fija" style="display:flex;gap:8px"><button type="button" id="eCancel" class="btn btn-secundario" style="flex:1">Cancelar</button><button type="button" id="eOk" class="btn btn-primario" style="flex:1;margin-top:0" disabled>Guardar cambios</button></div>`);
+  const pintarDin = () => {
+    const act = U.contratos.filter((c) => c.activo || ed.contr.has(c.id));
+    const aplicaC = ROLES_CON_CONTRATO.includes(ed.rol);
+    $('#eDin', h).innerHTML = `<div class="u-lbl">Rol</div><div class="u-seg">${ROLES_LISTA.map((r) => `<button type="button" data-r="${r}" class="${ed.rol === r ? 'on' : ''}">${esc(ROL_ETQ[r])}</button>`).join('')}</div>
+      ${aplicaC ? `<div class="u-lbl">Contratos <span style="text-transform:none;font-weight:500">· solo verá fallas de estos</span></div>
+        ${act.map((c) => `<button type="button" class="u-tog ${ed.contr.has(c.id) ? 'on' : ''}" data-c="${c.id}"><span class="u-cb ${ed.contr.has(c.id) ? 'on' : ''}">✓</span><span class="u-tx"><b>${esc(c.nombre)}</b><span>${c.defecto_para === 'masivo' ? 'Fallas Masivo' : c.defecto_para === 'normal' ? 'Fallas normales' : 'Sin tipo por defecto'}${c.activo ? '' : ' · inactivo'}</span></span></button>`).join('') || '<div class="u-em">Aún no hay contratos creados.</div>'}
+        ${ed.rol !== 'camion' && act.length && !ed.contr.size ? '<div class="u-aviso">Sin contratos no verá ninguna falla.</div>' : ''}` : '<div class="u-em" style="margin-top:12px">Este rol ve todos los contratos.</div>'}
+      ${ROLES_CON_NOTIF.includes(ed.rol) ? `<button type="button" class="u-tog ${ed.notif ? 'on' : ''}" data-s="notif" style="margin-top:10px"><span class="u-tx"><b>🔔 Notificador externo y fecha</b><span>Puede informar fallas a nombre de otras personas</span></span><span class="u-sw ${ed.notif ? 'on' : ''}"></span></button>` : ''}
+      ${ROLES_CON_FOTO.includes(ed.rol) ? `<button type="button" class="u-tog ${ed.foto ? 'on' : ''}" data-s="foto" style="margin-top:10px"><span class="u-tx"><b>📷 Foto obligatoria al reparar</b></span><span class="u-sw ${ed.foto ? 'on' : ''}"></span></button>` : ''}`;
+    const ok = $('#eOk', h), cambios = JSON.stringify(estado()) !== JSON.stringify({ nombre: orig.nombre.trim(), rol: orig.rol, notif: ROLES_CON_NOTIF.includes(orig.rol) && orig.notif, foto: ROLES_CON_FOTO.includes(orig.rol) && orig.foto, contr: ROLES_CON_CONTRATO.includes(orig.rol) ? orig.contr : [] });
+    ok.disabled = !cambios;
+  };
+  pintarDin();
+  $('#eNom', h).addEventListener('input', (e) => { ed.nombre = e.target.value; pintarDin(); });
+  ed.nombre = orig.nombre;
+  $('#eDin', h).addEventListener('click', (ev) => {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.dataset.r) ed.rol = b.dataset.r;
+    else if (b.dataset.c) { if (ed.contr.has(b.dataset.c)) ed.contr.delete(b.dataset.c); else ed.contr.add(b.dataset.c); }
+    else if (b.dataset.s) ed[b.dataset.s] = !ed[b.dataset.s];
+    pintarDin();
   });
-  $('#uLista', h).innerHTML = us.map((u) => `<div class="tarjeta-u" data-id="${esc(u.id)}" style="border:1px solid #d6ddd9;border-radius:12px;padding:10px;margin:10px 0">
-      <input class="campo u-nom" value="${esc(u.nombre || '')}" aria-label="Nombre">
-      <div class="hint" style="margin:4px 0">${esc(u.email || '—')}</div>
-      <select class="campo u-rol" aria-label="Rol">${ROLES_LISTA.map((r) => `<option value="${r}" ${r === u.rol ? 'selected' : ''}>${r}</option>`).join('')}</select>
-      <label class="u-notifl" style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" class="u-notif" ${u.notificador_externo_habilitado ? 'checked' : ''}> Notificadores</label>
-      <label class="u-fotol" style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" class="u-foto" ${u.foto_obligatoria ? 'checked' : ''}> Foto obligatoria al reparar</label>
-      <button class="btn btn-secundario u-reset" style="height:40px" ${u.email ? '' : 'disabled'}>Enviar reseteo de clave</button>
-    </div>`).join('') || '<div class="vacio">No hay usuarios.</div>';
-  const ok = $('#uOk', h);
-  const filas = $$('.tarjeta-u', h);
-  filas.forEach((d, i) => {
-    d._orig = JSON.stringify(estado(d));
-    const refrescar = () => {
-      const habil = ROLES_CON_NOTIF.includes($('.u-rol', d).value);
-      $('.u-notifl', d).style.display = habil ? 'flex' : 'none';
-      $('.u-fotol', d).style.display = ['contratista', 'contratista2', 'camion'].includes($('.u-rol', d).value) ? 'flex' : 'none';
-      const n = filas.filter((x) => JSON.stringify(estado(x)) !== x._orig).length;
-      filas.forEach((x) => { x.style.background = JSON.stringify(estado(x)) !== x._orig ? '#fff8e1' : ''; });
-      ok.disabled = n === 0;
-      ok.textContent = n ? `Guardar cambios (${n})` : 'Sin cambios';
-    };
-    d.addEventListener('input', refrescar); d.addEventListener('change', refrescar); refrescar();
-    $('.u-reset', d).addEventListener('click', ocupar($('.u-reset', d), async () => {
-      const email = us[i].email;
-      if (!confirm(`¿Enviar un correo de recuperación de clave a ${email}?`)) return;
-      const r = await fetch(`${SUPABASE_URL}/auth/v1/recover`, { method: 'POST', headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
-      if (!r.ok) throw new Error('No se pudo enviar el reseteo.');
-      toast('Correo de recuperación enviado', 'ok');
-    }));
-  });
+  $('#eCancel', h).addEventListener('click', () => cerrarHoja());
+  const rs = $('#eReset', h);
+  rs.addEventListener('click', ocupar(rs, async () => {
+    if (!confirm(`¿Enviar un correo de recuperación de clave a ${u.email}?`)) return;
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/recover`, { method: 'POST', headers: { apikey: SUPABASE_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: u.email }) });
+    if (!r.ok) throw new Error('No se pudo enviar el reseteo.');
+    toast('Correo de recuperación enviado', 'ok');
+  }));
+  const ok = $('#eOk', h);
   ok.addEventListener('click', ocupar(ok, async () => {
-    const mod = filas.filter((x) => JSON.stringify(estado(x)) !== x._orig);
-    if (mod.some((x) => !estado(x).nombre)) { toast('Hay un usuario con el nombre vacío.', 'error'); return; }
+    const e = estado();
+    if (!e.nombre) { toast('El nombre no puede quedar vacío.', 'error'); return; }
     ok.textContent = 'Guardando…';
-    const errores = []; let n = 0;
-    for (const d of mod) {
-      const e = estado(d);
-      try {
-        const r = await api(`/rest/v1/usuarios?id=eq.${d.dataset.id}`, { method: 'PATCH', prefer: 'return=representation', body: { nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto } });
-        if (!r || !r.length) throw new Error('sin permiso');
-        n++; d._orig = JSON.stringify(e);
-        if (d.dataset.id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = e.rol; S.perfil.foto_obligatoria = e.foto; $('#barraNombre').textContent = e.nombre; $('#barraAvatar').textContent = iniciales(e.nombre); $('#barraRol').textContent = rolVisible(); }
-      } catch (err) { errores.push(`${e.nombre}: ${err.message}`); }
-    }
-    if (errores.length) toast(`Guardados ${n}. Error: ${errores.join('; ')}`, 'error');
-    else { cerrarHoja(); toast(`${n} usuario(s) guardado(s)`, 'ok'); }
+    const r = await api(`/rest/v1/usuarios?id=eq.${id}`, { method: 'PATCH', prefer: 'return=representation', body: { nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto } });
+    if (!r || !r.length) throw new Error('No se guardó (¿sin permiso?)');
+    Object.assign(u, { nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto });
+    const antes = ROLES_CON_CONTRATO.includes(orig.rol) ? orig.contr : [];
+    if (JSON.stringify(antes) !== JSON.stringify(e.contr)) { await rpc('set_contratos_usuario', { p_usuario: id, p_contratos: e.contr }); U.rel[id] = e.contr; }
+    if (id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = e.rol; S.perfil.foto_obligatoria = e.foto; $('#barraNombre').textContent = e.nombre; $('#barraAvatar').textContent = iniciales(e.nombre); $('#barraRol').textContent = rolVisible(); }
+    cerrarHoja(); pintarU(); toast('Usuario guardado', 'ok');
   }));
 }
+
+/* --- Contratos --- */
+function pintarContratosU() {
+  const cn = U.conteo;
+  const usrDe = (id) => U.usuarios.filter((u) => (U.rel[u.id] || []).includes(id)).length;
+  $('#uCuerpo').innerHTML = `<div class="u-nota">El contrato «por defecto» se asigna solo a las fallas nuevas. Uno para Masivo y otro para las normales. Un contrato inactivo deja de ofrecerse al asignar.</div>
+    ${U.contratos.map((c) => { const k = cn && (cn[c.id] || { t: 0, a: 0 }); return `<div class="u-ctr" data-id="${c.id}">
+      <h4>${esc(c.nombre)} ${c.defecto_para ? `<span class="u-tg ${c.defecto_para === 'masivo' ? 'u-t-ele' : 'u-t-enel'}" style="margin:0">${c.defecto_para === 'masivo' ? 'Masivo' : 'Normales'}</span>` : ''}<button type="button" class="u-mini" data-a="ren" style="margin-left:auto">Renombrar</button></h4>
+      <div class="u-kpis"><div><b>${usrDe(c.id)}</b>usuarios</div><div><b>${k ? k.t : '…'}</b>fallas</div><div><b>${k ? k.a : '…'}</b>abiertas</div></div>
+      <label class="u-sel"><span>Por defecto para:</span><select data-a="def"><option value="" ${!c.defecto_para ? 'selected' : ''}>Ninguno</option><option value="masivo" ${c.defecto_para === 'masivo' ? 'selected' : ''}>Fallas Masivo</option><option value="normal" ${c.defecto_para === 'normal' ? 'selected' : ''}>Fallas normales</option></select></label>
+      <button type="button" class="u-tog ${c.activo ? 'on' : ''}" data-a="act" style="margin:10px 0 0"><span class="u-tx"><b>Activo</b></span><span class="u-sw ${c.activo ? 'on' : ''}"></span></button></div>`; }).join('') || '<div class="u-vacio">Todavía no hay contratos.</div>'}
+    <button type="button" class="u-fab" data-a="nuevo">＋ Nuevo contrato</button>`;
+  if (!cn) cargarConteoContratos().then(() => { if (U.tab === 'contratos' && !$('#pantallaUsuarios').hidden) pintarContratosU(); }).catch(() => { U.conteo = {}; });
+}
+function hojaTextoU(titulo, valor, boton, ph, fn) {
+  const h = abrirHoja(`<h2>${esc(titulo)}</h2><input id="tTxt" class="campo" style="margin-top:12px" value="${esc(valor)}" placeholder="${esc(ph)}" maxlength="60" autocomplete="off">
+    <div class="acciones fija"><button type="button" id="tOk" class="btn btn-primario" style="width:100%;margin-top:0">${esc(boton)}</button></div>`);
+  const ok = $('#tOk', h);
+  ok.addEventListener('click', ocupar(ok, async () => { const v = $('#tTxt', h).value.trim().replace(/\s+/g, ' '); if (v.length < 2) { toast('Escribe al menos 2 letras.', 'error'); return; } await fn(v); }));
+  setTimeout(() => { const t = $('#tTxt', h); if (t) t.focus(); }, 250);
+}
+async function cambiarContratoU(c, cambios) {
+  const r = await api(`/rest/v1/contratos?id=eq.${c.id}`, { method: 'PATCH', prefer: 'return=representation', body: cambios });
+  if (!r || !r.length) throw new Error('No se guardó (¿sin permiso?)');
+  Object.assign(c, cambios);
+}
+function nuevoContratoU() {
+  hojaTextoU('Nuevo contrato', '', 'Crear contrato', 'Nombre del contrato', async (nombre) => {
+    try {
+      const r = await api('/rest/v1/contratos', { method: 'POST', prefer: 'return=representation', body: { nombre } });
+      U.contratos.push(r[0]); U.contratos.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+      cerrarHoja(); pintarU(); toast('Contrato creado', 'ok');
+    } catch (e) { throw new Error(msgContrato(e)); }
+  });
+}
+
+/* --- Notificadores --- */
+function pintarNotifsU() {
+  const nomU = Object.fromEntries(U.usuarios.map((u) => [u.id, u.nombre]));
+  $('#uCuerpo').innerHTML = `<div class="u-sh" style="gap:6px;margin-bottom:10px"><input id="nNuevo" class="u-buscar" style="margin:0;flex:1" maxlength="60" placeholder="Nombre y apellido…" autocomplete="off"><button type="button" class="u-mini g" data-a="add" style="padding:0 14px">Agregar</button></div>
+    ${U.notifs.map((n) => `<div class="u-nrow ${n.validado ? '' : 'sin'}" data-id="${n.id}"><div class="u-top"><b>${esc(n.nombre)}</b>
+      ${n.usuario_id ? `<span class="u-tg u-t-ok">Vinculada · ${esc(nomU[n.usuario_id] || 'usuario')}</span>` : n.validado ? '<span class="u-tg u-t-ok">Validado</span>' : '<span class="u-tg u-t-sin">Sin validar</span>'}${n.activo ? '' : '<span class="u-tg u-t-off">Desactivado</span>'}
+      <span class="u-n">${n.nFallas} falla${n.nFallas === 1 ? '' : 's'}</span></div>
+      <div class="u-acts">${n.validado ? '' : '<button type="button" class="u-mini g" data-a="val">Validar</button>'}
+      ${n.usuario_id ? '' : '<button type="button" class="u-mini" data-a="vinc">Vincular a usuario</button>'}
+      ${U.notifs.length > 1 ? '<button type="button" class="u-mini" data-a="fus">Fusionar</button>' : ''}
+      <button type="button" class="u-mini" data-a="ren">Renombrar</button>
+      <button type="button" class="u-mini a" data-a="act">${n.activo ? 'Desactivar' : 'Reactivar'}</button>
+      <button type="button" class="u-mini r" data-a="del" ${n.nFallas ? 'disabled' : ''}>Eliminar</button></div></div>`).join('') || '<div class="u-vacio">Aún no hay notificadores. Agrega el primero arriba.</div>'}`;
+}
+async function accionNotifU(fn, ok) {
+  try { await fn(); } catch (e) { toast(msgNotif(e), 'error'); return; }
+  try { await cargarUsuariosAdmin(); } catch (e) { /* */ }
+  cerrarHojaSiAbierta(); pintarU(); if (ok) toast(ok, 'ok');
+}
+function cerrarHojaSiAbierta() { if (hojaAbierta) cerrarHoja(); }
+function hojaSelectU(titulo, texto, opciones, boton, fn) {
+  const h = abrirHoja(`<h2>${esc(titulo)}</h2><div class="hint" style="margin:4px 0 10px">${esc(texto)}</div>
+    <select id="sSel" class="campo"><option value="">Elige…</option>${opciones.map((o) => `<option value="${esc(o[0])}">${esc(o[1])}</option>`).join('')}</select>
+    <div class="acciones fija"><button type="button" id="sOk" class="btn btn-primario" style="width:100%;margin-top:0">${esc(boton)}</button></div>`);
+  const ok = $('#sOk', h);
+  ok.addEventListener('click', ocupar(ok, async () => { const v = $('#sSel', h).value; if (!v) { toast('Elige una opción.', 'error'); return; } await fn(v, $('#sSel', h).selectedOptions[0].textContent); }));
+}
+
+/* --- eventos de la pantalla --- */
+$('#uAtras').addEventListener('click', () => cerrarUsuarios());
+$('#uMas').addEventListener('click', () => {
+  if (U.tab === 'contratos') nuevoContratoU();
+  else if (U.tab === 'notificadores') { const i = $('#nNuevo'); if (i) i.focus(); }
+  else toast('Los usuarios nuevos se crean en Supabase (Authentication → Add user).', '');
+});
+$('#uTabs').addEventListener('click', (ev) => { const b = ev.target.closest('button[data-tab]'); if (!b) return; U.tab = b.dataset.tab; pintarU(); $('#uCuerpo').scrollTop = 0; });
+$('#uCuerpo').addEventListener('click', async (ev) => {
+  const t = ev.target;
+  const f = t.closest('[data-f]'); if (f) { U.filtro = f.dataset.f; pintarListaU(); return; }
+  const card = t.closest('.u-card'); if (card) { editarUsuarioU(card.dataset.uid); return; }
+  const b = t.closest('[data-a]'); if (!b || b.tagName === 'SELECT') return;
+  const fila = b.closest('[data-id]'); const id = fila ? fila.dataset.id : null;
+  const a = b.dataset.a;
+  if (a === 'nuevo') return nuevoContratoU();
+  if (U.tab === 'contratos') {
+    const c = U.contratos.find((x) => x.id === id); if (!c) return;
+    if (a === 'act') { try { await cambiarContratoU(c, { activo: !c.activo }); pintarU(); } catch (e) { toast(msgContrato(e), 'error'); } }
+    if (a === 'ren') hojaTextoU('Renombrar contrato', c.nombre, 'Guardar nombre', 'Nombre del contrato', async (v) => { try { await cambiarContratoU(c, { nombre: v }); cerrarHoja(); pintarU(); toast('Nombre guardado', 'ok'); } catch (e) { throw new Error(msgContrato(e)); } });
+    return;
+  }
+  if (U.tab === 'notificadores') {
+    if (a === 'add') {
+      const inp = $('#nNuevo'); const nombre = inp.value.trim().replace(/\s+/g, ' ');
+      if (nombre.length < 2) { toast('Escribe el nombre (mínimo 2 letras).', 'error'); return; }
+      return accionNotifU(() => api('/rest/v1/notificadores', { method: 'POST', body: { nombre, validado: true, creado_por: S.perfil.id } }), 'Notificador agregado');
+    }
+    const n = U.notifs.find((x) => x.id === id); if (!n) return;
+    if (a === 'val') return accionNotifU(() => api(`/rest/v1/notificadores?id=eq.${id}`, { method: 'PATCH', body: { validado: true } }), 'Validado');
+    if (a === 'act') return accionNotifU(() => api(`/rest/v1/notificadores?id=eq.${id}`, { method: 'PATCH', body: { activo: !n.activo } }), n.activo ? 'Desactivado' : 'Reactivado');
+    if (a === 'del') { if (!confirm(`¿Eliminar al notificador «${n.nombre}»?`)) return; return accionNotifU(() => api(`/rest/v1/notificadores?id=eq.${id}`, { method: 'DELETE' }), 'Eliminado'); }
+    if (a === 'ren') return hojaTextoU('Renombrar notificador', n.nombre, 'Guardar nombre', 'Nombre y apellido', (v) => accionNotifU(() => api(`/rest/v1/notificadores?id=eq.${id}`, { method: 'PATCH', body: { nombre: v } }), 'Nombre guardado'));
+    if (a === 'vinc') return hojaSelectU('Vincular a usuario', `«${n.nombre}» pasará a figurar como ese usuario y quedará validado.`,
+      U.usuarios.filter((u) => ['ito', 'ito2', 'contratista', 'contratista2', 'admin'].includes(u.rol)).map((u) => [u.id, u.nombre]), 'Vincular',
+      (uid, nom) => { if (!confirm(`¿Vincular «${n.nombre}» con «${nom}»?`)) return; return accionNotifU(() => rpc('vincular_notificador_usuario', { p_notif: id, p_usuario: uid }), 'Vinculado'); });
+    if (a === 'fus') return hojaSelectU('Fusionar con…', `Las ${n.nFallas} falla(s) de «${n.nombre}» pasarán al notificador que elijas y «${n.nombre}» se eliminará.`,
+      U.notifs.filter((o) => o.id !== id).map((o) => [o.id, o.nombre]), 'Fusionar',
+      (did, nom) => { if (!confirm(`¿Fusionar «${n.nombre}» en «${nom}»?`)) return; return accionNotifU(() => rpc('fusionar_notificadores', { p_origen: id, p_destino: did }), 'Fusionados'); });
+  }
+});
+$('#uCuerpo').addEventListener('change', async (ev) => {
+  const s = ev.target; if (!(s.tagName === 'SELECT' && s.dataset.a === 'def')) return;
+  const c = U.contratos.find((x) => x.id === s.closest('[data-id]').dataset.id); if (!c) return;
+  const nuevo = s.value || null;
+  try {
+    if (nuevo) await api(`/rest/v1/contratos?defecto_para=eq.${nuevo}&id=neq.${c.id}`, { method: 'PATCH', body: { defecto_para: null } });   // cada tipo tiene un solo contrato por defecto
+    await cambiarContratoU(c, { defecto_para: nuevo });
+    U.contratos.forEach((x) => { if (nuevo && x.id !== c.id && x.defecto_para === nuevo) x.defecto_para = null; });
+    pintarU(); toast('Guardado', 'ok');
+  } catch (e) { toast(msgContrato(e), 'error'); pintarU(); }
+});
 
 /* ------------------------- inspección (ITO, ITO2, admin) ------------------------- */
 function pintarModo() {
@@ -1617,7 +1833,7 @@ $('#btnMenu').addEventListener('click', () => {
     mp.insertAdjacentHTML('afterend', '<div class="aviso">Para recibir avisos en iPhone, primero instala la app con <b>Añadir a pantalla de inicio</b>.</div>');
   }
   const mu = $('#mUsuarios', h);
-  if (mu) mu.addEventListener('click', () => formUsuarios());
+  if (mu) mu.addEventListener('click', () => abrirUsuarios());
   $('#mActualizar', h).addEventListener('click', () => { $('#mActualizar', h).querySelector('.t').textContent = 'Actualizando…'; forzarActualizacion(); });
   $('#mSalir', h).addEventListener('click', async () => { try { await desactivarPush(); } catch (e) { /* */ } salir(); });
 });
