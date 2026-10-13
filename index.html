@@ -598,6 +598,7 @@
               <th style="padding:8px 10px;">N° Llave</th>
               <th style="padding:8px 10px;">Puntos afectados</th>
               <th style="padding:8px 10px;">Estado</th>
+              <th style="padding:8px 10px;">Fecha reparación</th>
               <th style="padding:8px 10px; display:none;" id="thContrato">Contrato</th>
               <th style="padding:8px 10px; display:none;" id="thAsignacion">Asignación</th>
               <th style="padding:8px 10px;">Fotos</th>
@@ -605,7 +606,7 @@
             </tr>
           </thead>
           <tbody id="todasFallasTbody">
-            <tr><td colspan="15" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+            <tr><td colspan="16" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
           </tbody>
         </table>
         <div id="cargarMasTodasWrap" style="display:none; text-align:center; padding:10px 0 4px;">
@@ -3928,7 +3929,7 @@ async function cargarTodasFallas(){
     if(!conteoFotosTodas) cargarConteoFotosTodas();
     return;
   }
-  tbody.innerHTML = '<tr><td colspan="15" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="16" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
     const todas = await db.rpc('resumen_todas_fallas', {limite: PAGINA_TODAS_FALLAS, desplazamiento: 0});
     ultimosTodasFallas = todas || [];
@@ -3940,7 +3941,7 @@ async function cargarTodasFallas(){
     cargarConteoFotosTodas();
     if(textoBusquedaTodasFallas.trim()) evaluarBusquedaServidor(); // había texto escrito: volver a buscar
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="15" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="16" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
   }
 }
 
@@ -4088,7 +4089,7 @@ function renderTodasFallasTabla(){
   actualizarChipsAsignacionTodas();
 
   if(!ultimosTodasFallas.length){
-    tbody.innerHTML = '<tr><td colspan="15" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="16" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
     return;
   }
 
@@ -4149,7 +4150,7 @@ function renderTodasFallasTabla(){
     const msj = terminos.length
       ? `No hay fallas que coincidan con la búsqueda ${donde}.`
       : `No hay fallas con el estado seleccionado ${donde}.`;
-    tbody.innerHTML = `<tr><td colspan="15" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="16" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
     return;
   }
 
@@ -4201,6 +4202,7 @@ function renderTodasFallasTabla(){
       <td>${f.tipo === 'punto' ? (f.llave ?? '—') : '—'}</td>
       <td>${f.puntos_afectados}</td>
       <td><span class="badge ${f.estado}" ${tooltipEstado ? `title="${tooltipEstado.replace(/"/g,'&quot;')}"` : ''} style="${tooltipEstado ? 'cursor:help;' : ''}">${f.estado.replace('_',' ')}</span></td>
+      <td style="white-space:nowrap;">${f.fecha_reparacion ? new Date(f.fecha_reparacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
       ${CONTRATOS_ACTIVOS.length ? `<td style="font-size:11.5px;">${f.contrato_nombre ? escHtml(f.contrato_nombre) : '—'}</td>` : ''}
       ${verAsignacionTodas() ? `<td style="font-size:11.5px; line-height:1.3;">${celdaAsignacionTodas(f)}</td>` : ''}
       <td>${celdaFotosTodas(f.id)}</td>
