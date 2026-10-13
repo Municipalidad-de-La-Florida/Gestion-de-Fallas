@@ -17,7 +17,7 @@
 -- =====================================================================
 
 create table if not exists public.suministro_avisos (
-  cod_aviso      bigint primary key,
+  cod_aviso      text primary key,   -- Enel a veces trae códigos con letras (ej. I1064299388)
   incidencia     text,            -- N.° de caso (ej. DF202671833584)
   direccion      text,
   numero_cliente text,
@@ -29,6 +29,9 @@ create table if not exists public.suministro_avisos (
   lat            double precision not null,
   actualizado_en timestamptz not null default now()
 );
+
+-- Por si la tabla ya se creó con otro tipo (se reemplaza completa en cada lectura, así que no se pierde nada)
+alter table public.suministro_avisos alter column cod_aviso type text using cod_aviso::text;
 
 alter table public.suministro_peticiones add column if not exists req_avisos bigint;
 
@@ -68,6 +71,7 @@ declare
   rc record; rt record; ra record;
   jc jsonb; jt jsonb; ja jsonb;
   fl jsonb; geom jsonb;
+  err_avisos text;
   x0 double precision := -180; x1 double precision := 180; y0 double precision := -90; y1 double precision := 90;
 begin
   select * into p from public.suministro_peticiones where id = 1;
@@ -134,13 +138,15 @@ begin
       and public.suministro_en_poligono(lon, lat, geom);
 
     -- Avisos de clientes dentro de La Florida (se reemplaza todo en cada lectura; sin historial)
+    -- Aislado: si los avisos fallan, el resumen y los transformadores igual se actualizan
     if p.req_avisos is not null then
+     begin
       ja := ra.content::jsonb;
       delete from public.suministro_avisos;
       insert into public.suministro_avisos (cod_aviso, incidencia, direccion, numero_cliente, falla, inicio, reposicion, alimentador, lon, lat)
       select distinct on (cod_aviso) cod_aviso, incidencia, direccion, numero_cliente, falla, inicio, reposicion, alimentador, lon, lat
       from (
-        select nullif(f->'properties'->>'COD_AVISO', '')::bigint as cod_aviso,
+        select nullif(trim(f->'properties'->>'COD_AVISO'), '') as cod_aviso,
                nullif(trim(f->'properties'->>'CODIGO'), '') as incidencia,
                nullif(trim(f->'properties'->>'DIRECCION'), '') as direccion,
                nullif(trim(f->'properties'->>'numero_cliente'), '') as numero_cliente,
@@ -155,10 +161,13 @@ begin
       ) t
       where cod_aviso is not null and lon between x0 and x1 and lat between y0 and y1
         and public.suministro_en_poligono(lon, lat, geom);
+     exception when others then
+      err_avisos := 'Avisos: ' || left(sqlerrm, 250);
+     end;
     end if;
 
     update public.suministro_enel set hora_enel = to_char(now() at time zone 'America/Santiago', 'DD/MM HH24:MI') where id = 1;
-    update public.suministro_peticiones set procesado = true, error = null where id = 1;
+    update public.suministro_peticiones set procesado = true, error = err_avisos where id = 1;
   exception when others then
     update public.suministro_peticiones set procesado = true, error = left(sqlerrm, 300) where id = 1;
   end;
