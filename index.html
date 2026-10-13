@@ -196,6 +196,11 @@
   .ana-rango-btn{border:1.5px solid var(--line); background:#fff; padding:6px 9px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer;}
   .ana-rango-btn.active{border-color:var(--primary); background:var(--primary); color:#fff;}
   #selectorAnalisis input[type=date]{border:1.5px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12.5px; background:#fff; font-family:inherit;}
+  .calor-ctl{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; margin:6px 0; font-size:12.5px;}
+  .calor-ctl select{font-size:12.5px; padding:3px 6px;}
+  .calor-ley{display:flex; align-items:center; gap:3px; font-size:11px; color:#55665c; margin:4px 0 2px; flex-wrap:wrap;}
+  .calor-ley i{display:inline-block; width:22px; height:12px; border-radius:2px;}
+  .calor-num{font:700 11px/1 sans-serif; text-align:center; pointer-events:none; text-shadow:0 0 2px rgba(255,255,255,.7);}
   .ana-tit{font-size:13px; font-weight:800; color:var(--primary); margin:18px 0 4px;}
   .ana-tabla{width:100%; border-collapse:collapse; font-size:11px; margin-top:6px; table-layout:auto;}
   .ana-tabla th{text-align:left; font-size:10px; color:var(--ink-soft); font-weight:700; padding:4px 3px; border-bottom:1.5px solid var(--line);}
@@ -5042,6 +5047,7 @@ function salirTabAnalisis(){
 
 function limpiarCapaAnalisis(){
   if(analisisLayerGroup) analisisLayerGroup.clearLayers();
+  if(typeof calorLayerGroup !== 'undefined' && calorLayerGroup) calorLayerGroup.clearLayers();
   analisisCapas = {};
 }
 
@@ -5119,6 +5125,108 @@ async function rpcAnalisisFallas(ini, fin){
     }catch(e){ console.warn('No se pudieron obtener los puntos lumínicos afectados:', e); }
   }
   return d;
+}
+
+// ---------- MAPA DE CALOR (hexágonos de ~500 m) ----------
+// Se calcula con las mismas fallas del período (capa azul): no necesita datos nuevos en la base.
+const CALOR_COLORES = ['#ffffb2', '#fed976', '#feb24c', '#fd8d3c', '#f03b20', '#bd0026'];
+const CALOR_RADIO_M = 290;   // centro-vértice: celda de ~500 m de ancho
+let ANA_CALOR = {on: false, modo: 'fallas', reit: true};
+let calorLayerGroup = null;
+const cacheGeojsonCalor = {};
+async function fallasGeojsonAnalisis(ini, fin){
+  const clave = ini + '|' + fin + '|' + claveFiltrosEst(false);
+  if(cacheGeojsonCalor[clave]) return cacheGeojsonCalor[clave];
+  const g = await db.rpc('fallas_geojson_periodo', {
+    fecha_inicio: fechaChileLocal(ini, 0, 0, 0).toISOString(),
+    fecha_fin: fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString(),
+    ...extraFiltrosEst(false)
+  });
+  cacheGeojsonCalor[clave] = (g && g.features) || [];
+  return cacheGeojsonCalor[clave];
+}
+// Cada falla cuenta una vez (un circuito, en su centro) o, en modo "puntos", cada luminaria afectada en su lugar.
+function calorPuntos(feats, modo){
+  const out = [];
+  (feats || []).forEach(f => {
+    const g = f.geometry, pr = f.properties || {};
+    if(!g) return;
+    const reit = !pr.cascada && pr.estado === 'reiterada';
+    if(g.type === 'Point'){
+      if(modo === 'puntos' || !pr.cascada) out.push({lon: g.coordinates[0], lat: g.coordinates[1], reit});
+    } else if(modo !== 'puntos'){
+      const ls = g.type === 'LineString' ? [g.coordinates] : (g.type === 'MultiLineString' ? g.coordinates : []);
+      if(ls.length && ls[0].length){ const c = ls[0][Math.floor(ls[0].length / 2)]; out.push({lon: c[0], lat: c[1], reit}); }
+    }
+  });
+  return out;
+}
+function calorCeldas(pts){
+  const lat0 = -33.54, lon0 = -70.58, kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110574, R = CALOR_RADIO_M, S3 = Math.sqrt(3);
+  const aMetros = (lon, lat) => [(lon - lon0) * kx, (lat - lat0) * ky];
+  const aGrados = (x, y) => [x / kx + lon0, y / ky + lat0];
+  const mapa = {};
+  pts.forEach(pt => {
+    const [x, y] = aMetros(pt.lon, pt.lat);
+    let q = (S3 / 3 * x - y / 3) / R, r = (2 / 3 * y) / R, s = -q - r;
+    let rq = Math.round(q), rr = Math.round(r), rs = Math.round(s);
+    const dq = Math.abs(rq - q), dr = Math.abs(rr - r), ds = Math.abs(rs - s);
+    if(dq > dr && dq > ds) rq = -rr - rs; else if(dr > ds) rr = -rq - rs;
+    const k = rq + ',' + rr;
+    const c = mapa[k] || (mapa[k] = {q: rq, r: rr, v: 0, reit: 0});
+    c.v++; if(pt.reit) c.reit++;
+  });
+  const celdas = Object.values(mapa).map(c => {
+    const cx = R * S3 * (c.q + c.r / 2), cy = R * 1.5 * c.r;
+    const anillo = [];
+    for(let i = 0; i < 6; i++){ const a = (60 * i - 30) * Math.PI / 180; anillo.push(aGrados(cx + R * Math.cos(a), cy + R * Math.sin(a))); }
+    const [lon, lat] = aGrados(cx, cy);
+    return {lon, lat, anillo, v: c.v, reit: c.reit};
+  });
+  return {celdas, max: celdas.reduce((m, c) => Math.max(m, c.v), 0)};
+}
+function colorCalor(v, max){
+  return CALOR_COLORES[Math.min(CALOR_COLORES.length - 1, Math.max(0, Math.ceil(v / Math.max(1, max) * CALOR_COLORES.length) - 1))];
+}
+function leyendaCalorHtml(max, modo){
+  const n = CALOR_COLORES.length;
+  const rango = (i) => { const a = Math.floor(max * i / n) + 1, b = Math.round(max * (i + 1) / n); return a >= b ? String(b) : a + '–' + b; };
+  return `<div class="calor-ley">${modo === 'puntos' ? 'Puntos afectados' : 'Fallas'} por celda:` +
+    CALOR_COLORES.map((c, i) => `<i style="background:${c};"></i>${rango(i)}`).join(' ') + '</div>';
+}
+async function actualizarCalorAnalisis(){
+  if(!calorLayerGroup){ map.createPane('calorPane'); map.getPane('calorPane').style.zIndex = 450; calorLayerGroup = L.layerGroup().addTo(map); }
+  calorLayerGroup.clearLayers();
+  const ley = document.getElementById('calorLeyenda');
+  if(!ANA_CALOR.on){ if(ley) ley.innerHTML = ''; return; }
+  const d = ultimoAnalisis;
+  if(!d || !d.rango) return;
+  if(ley) ley.innerHTML = '<div class="hint">Calculando…</div>';
+  try{
+    const feats = await fallasGeojsonAnalisis(d.rango.inicio, d.rango.fin);
+    if(!ANA_CALOR.on || d !== ultimoAnalisis) return;
+    const {celdas, max} = calorCeldas(calorPuntos(feats, ANA_CALOR.modo));
+    celdas.forEach(c => {
+      const col = colorCalor(c.v, max);
+      const pol = L.polygon(c.anillo.map(a => [a[1], a[0]]), {pane: 'calorPane', color: (ANA_CALOR.reit && c.reit) ? '#7f0000' : '#ffffff', weight: (ANA_CALOR.reit && c.reit) ? 3 : 0.8, fillColor: col, fillOpacity: 0.62});
+      pol.bindTooltip(`${c.v} ${ANA_CALOR.modo === 'puntos' ? 'punto' + (c.v === 1 ? '' : 's') + ' afectado' + (c.v === 1 ? '' : 's') : 'falla' + (c.v === 1 ? '' : 's')}${c.reit ? ' · ' + c.reit + ' reiterada' + (c.reit === 1 ? '' : 's') : ''}`);
+      pol.addTo(calorLayerGroup);
+      L.marker([c.lat, c.lon], {pane: 'calorPane', interactive: false, icon: L.divIcon({className: '', iconSize: [30, 14], iconAnchor: [15, 7], html: `<div class="calor-num" style="color:${c.v / max > 0.55 ? '#fff' : '#3a2a00'};">${c.v}</div>`})}).addTo(calorLayerGroup);
+    });
+    if(ley) ley.innerHTML = celdas.length ? leyendaCalorHtml(max, ANA_CALOR.modo) + (ANA_CALOR.reit ? '<div class="calor-ley"><span style="display:inline-block;width:18px;height:10px;border:3px solid #7f0000;border-radius:2px;"></span> celda con alguna falla reiterada</div>' : '') : '<div class="hint">Sin fallas con ubicación en este rango.</div>';
+  }catch(e){
+    console.warn('No se pudo dibujar el mapa de calor:', e);
+    if(ley) ley.innerHTML = '<div class="hint">No se pudo calcular el mapa de calor.</div>';
+  }
+}
+function enlazarCalorAnalisis(){
+  const on = document.getElementById('calorOn'), modo = document.getElementById('calorModo'), reit = document.getElementById('calorReit');
+  if(!on) return;
+  on.checked = ANA_CALOR.on; modo.value = ANA_CALOR.modo; reit.checked = ANA_CALOR.reit;
+  on.onchange = () => { ANA_CALOR.on = on.checked; actualizarCalorAnalisis(); };
+  modo.onchange = () => { ANA_CALOR.modo = modo.value; actualizarCalorAnalisis(); };
+  reit.onchange = () => { ANA_CALOR.reit = reit.checked; actualizarCalorAnalisis(); };
+  actualizarCalorAnalisis();
 }
 const DIAS_SEM_CORTO = ['dom','lun','mar','mié','jue','vie','sáb'];
 
@@ -5216,6 +5324,14 @@ function renderAnalisis(d){
   content.innerHTML = `
     <button class="popup-btn" id="anaPdfBtn" style="margin-top:10px;">📄 Descargar informe PDF</button>
     ${tiles}
+    <div class="ana-tit">Mapa de calor</div>
+    <div class="hint">Celdas de ~500 m con el número de fallas (un circuito cuenta una vez) o de puntos lumínicos afectados. Respeta los filtros de arriba. También va en el informe PDF.</div>
+    <div class="calor-ctl">
+      <label><input type="checkbox" id="calorOn"> Mostrar en el mapa</label>
+      <select id="calorModo"><option value="fallas">Nº de fallas</option><option value="puntos">Puntos lumínicos afectados</option></select>
+      <label><input type="checkbox" id="calorReit"> Marcar reiteradas</label>
+    </div>
+    <div id="calorLeyenda"></div>
     <div class="ana-tit">Tiempo de reparación por código de falla</div>
     <div class="hint">Promedio sin el 5% más rápido ni el 5% más lento. * = menos de 20 reparaciones: promedio simple, sin recorte.</div>${porCodigo}
     <div class="ana-tit">Por ITO que informa</div>${porIto}
@@ -5248,6 +5364,7 @@ function renderAnalisis(d){
   });
   dibujar(d.criticos_puntos, 'p-', x => `Llave ${x.llave ?? '—'} · ${x.fallas} falla${x.fallas === 1 ? '' : 's'}`, numPunto, '#8e44ad');
   dibujar(d.criticos_circuitos, 'c-', x => `Circuito ${x.circuito ?? '—'} · ${x.fallas} falla${x.fallas === 1 ? '' : 's'}`, numCircuito, '#2563a8');
+  enlazarCalorAnalisis();
   const capas = Object.values(analisisCapas);
   if(capas.length) map.fitBounds(L.featureGroup(capas).getBounds(), {padding:[50,50], maxZoom:16});
   content.querySelectorAll('.ana-crit').forEach(el => {
@@ -5375,6 +5492,29 @@ async function renderMapaCanvas(items, opciones = {}){
     ctx.restore();
     // Borde de la comuna
     ctx.setLineDash([]); ctx.lineWidth = 7; ctx.strokeStyle = '#1f4d3d'; trazo(COMUNA_CONTORNO); ctx.stroke();
+  }
+  // Mapa de calor: hexágonos recortados a la comuna, con el número de cada celda
+  if(opciones.calor){
+    const {celdas, max, reit} = opciones.calor;
+    ctx.save();
+    ctx.beginPath(); COMUNA_CONTORNO.forEach((c, i) => { const [x, y] = P(c[0], c[1]); if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.closePath(); ctx.clip();
+    celdas.forEach(c => {
+      ctx.beginPath(); c.anillo.forEach((a, i) => { const [x, y] = P(a[0], a[1]); if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.closePath();
+      ctx.globalAlpha = 0.72; ctx.fillStyle = colorCalor(c.v, max); ctx.fill(); ctx.globalAlpha = 1;
+      const marca = reit && c.reit;
+      ctx.lineWidth = marca ? 6 : 1.5; ctx.strokeStyle = marca ? '#7f0000' : '#ffffff'; ctx.stroke();
+      const [x, y] = P(c.lon, c.lat);
+      ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = c.v / max > 0.55 ? '#ffffff' : '#3a2a00'; ctx.fillText(String(c.v), x, y + 1);
+    });
+    ctx.restore();
+    ctx.setLineDash([]); ctx.lineWidth = 7; ctx.strokeStyle = '#1f4d3d';
+    ctx.beginPath(); COMUNA_CONTORNO.forEach((c, i) => { const [x, y] = P(c[0], c[1]); if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.closePath(); ctx.stroke();
+    ctx.font = '15px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+    const atr0 = '© OpenStreetMap contributors', tw1 = ctx.measureText(atr0).width;
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.fillRect(W - tw1 - 16, H - 26, tw1 + 16, 26);
+    ctx.fillStyle = '#333333'; ctx.fillText(atr0, W - 8, H - 5);
+    return canvas;
   }
   // Circuitos primero (debajo de los puntos)
   validos.forEach(it => {
@@ -6187,6 +6327,33 @@ async function generarPdfAnalisis(soloResumen){
         pdf.addImage(canvasMapa.toDataURL('image/jpeg', 0.85), 'JPEG', margen, 26, w, h);
       }
     }catch(e){ console.warn('No se pudo incluir el mapa en el PDF:', e); }
+
+    // 10) Mapa de calor (hexágonos de ~500 m sobre la comuna)
+    try{
+      const gf = await fallasGeojsonAnalisis(ini, fin);
+      const modoC = ANA_CALOR.modo, reitC = ANA_CALOR.reit;
+      const {celdas, max} = calorCeldas(calorPuntos(gf, modoC));
+      if(celdas.length){
+        const cvC = await renderMapaCanvas([{geom: {type: 'Point', coordinates: [-70.58, -33.53]}, color: '#000', label: ''}],
+          {w: 1400, h: 1800, padding: 100, zMax: 17, contorno: true, calor: {celdas, max, reit: reitC}});
+        if(cvC){
+          pdf.addPage();
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text('Mapa de calor de fallas', margen, 16);
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...gris);
+          pdf.text(`Celdas de ~500 m. El número es la cantidad de ${modoC === 'puntos' ? 'puntos lumínicos afectados' : 'fallas (un circuito cuenta una vez)'} en la celda.`, margen, 21.5);
+          const n6 = CALOR_COLORES.length; let lx = margen;
+          CALOR_COLORES.forEach((c, i) => {
+            const a = Math.floor(max * i / n6) + 1, b = Math.round(max * (i + 1) / n6);
+            pdf.setFillColor(...hexAPdf(c)); pdf.rect(lx, 24, 6, 3.5, 'F');
+            const t = a >= b ? String(b) : a + '-' + b; pdf.text(t, lx + 7.5, 27); lx += 8.5 + pdf.getTextWidth(t) + 3;
+          });
+          if(reitC){ pdf.setDrawColor(127, 0, 0); pdf.setLineWidth(0.8); pdf.rect(lx + 2, 24, 6, 3.5); pdf.text('con alguna reiterada', lx + 10, 27); }
+          const w = ancho - margen * 2;
+          const h = Math.min((cvC.height * w) / cvC.width, alto - 38);
+          pdf.addImage(cvC.toDataURL('image/jpeg', 0.85), 'JPEG', margen, 31, w, h);
+        }
+      }
+    }catch(e){ console.warn('No se pudo incluir el mapa de calor en el PDF:', e); }
 
     }
 
