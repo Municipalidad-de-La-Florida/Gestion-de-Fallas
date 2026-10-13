@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.21.1';
+const VERSION_APP = '1.21.2';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -883,7 +883,7 @@ function pintarAvisosSuministro(){
   suminAvisosAgrupados().forEach((g) => {
     const lista = g.items.slice(0, 6).map((a) => `<div style="margin-top:5px;border-top:1px solid #eee;padding-top:4px"><b>Caso ${suminEsc(a.incidencia || '—')}</b> · Aviso ${suminEsc(a.cod_aviso)}<br>Cliente N.° <b>${suminEsc(a.numero_cliente || '—')}</b><br>${suminEsc(a.direccion || '')}${a.reposicion ? '<br>Reposición est.: ' + suminEsc(a.reposicion) : ''}</div>`).join('');
     const mas = g.items.length > 6 ? `<div style="margin-top:5px"><small>y ${g.items.length - 6} aviso(s) más en este punto</small></div>` : '';
-    L.circleMarker([g.lat, g.lon], { radius: 6, color: '#fff', weight: 2, fillColor: '#f08c00', fillOpacity: 1 })
+    L.marker([g.lat, g.lon], { icon: L.divIcon({ className: '', iconSize: [19, 19], iconAnchor: [9.5, 9.5], html: '<div class="sum-ad"><i></i></div>' }) })
       .bindPopup(`<b>${g.items.length} aviso${g.items.length === 1 ? '' : 's'} de clientes</b>${lista}${mas}<div style="margin-top:5px"><small>Fuente: Enel</small></div>`).addTo(suminAvisosLayer);
   });
   if(!map.hasLayer(suminAvisosLayer)) suminAvisosLayer.addTo(map);
