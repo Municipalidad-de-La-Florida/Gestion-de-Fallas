@@ -1835,7 +1835,7 @@ function initMap(){
 }
 
 
-/* ---------- Suministro eléctrico (Enel): indicador + transformadores sin luz ----------
+/* ---------- Suministro eléctrico (Enel): indicador + transformadores sin suministro ----------
    Lee las tablas suministro_enel / suministro_trafos, que llena el servidor cada 10 min
    (sql/2026-10-suministro-enel.sql). Si las tablas no existen o no hay dato, no se muestra nada. */
 let suminDato = null, suminTrafos = [], suminVer = true, suminLayer = null, suminCtl = null, suminAbierto = false;
@@ -1861,10 +1861,10 @@ function pintarSuministro(){
   cont.innerHTML = `<button type="button" class="sum-chip sum-${est.nivel}" aria-expanded="${suminAbierto}"><span class="sum-d"></span>⚡ ${suminEsc(etq)}${est.viejo ? ' · sin dato reciente' : ''}</button>
     <div class="sum-card" ${suminAbierto ? '' : 'hidden'}>
       <h4>⚡ Suministro eléctrico · ${suminEsc(d.comuna || 'La Florida')}</h4>
-      <div class="sum-k"><span>Clientes sin luz</span><b>${suminNum(est.n)}</b></div>
+      <div class="sum-k"><span>Clientes sin suministro</span><b>${suminNum(est.n)}</b></div>
       <div class="sum-k"><span>Clientes de la comuna</span><span>${suminNum(d.clientes_total)}</span></div>
       <div class="sum-k"><span>Porcentaje afectado</span><b>${suminEsc(String(est.pct).replace('.', ','))}%</b></div>
-      <div class="sum-k"><span>Transformadores sin luz</span><b>${suminTrafos.length}</b></div>
+      <div class="sum-k"><span>Transformadores sin suministro</span><b>${suminTrafos.length}</b></div>
       ${suminPuedeAvisos() ? `<div class="sum-k"><span>Avisos de clientes</span><b>${suminAvisos.length}</b></div>` : ''}
       <label class="sum-sw"><input type="checkbox" id="sumVer" ${suminVer ? 'checked' : ''}> Mostrar transformadores en el mapa</label>
       ${suminPuedeAvisos() ? `<label class="sum-sw"><input type="checkbox" id="sumAv" ${suminAvisosVer ? 'checked' : ''}> Mostrar avisos de clientes en el mapa</label>
@@ -1900,7 +1900,7 @@ function pintarLeyendaSuministro(){
   c.hidden = false;
   c.innerHTML = `<div style="border-top:1px solid var(--line); margin-top:8px; padding-top:8px;">
     <div class="legend-item" style="opacity:${suminVer ? 1 : .45}">${rombo(7, 2.6)}<span>Transformador sin suministro (Enel)</span></div>
-    ${pa ? `<div class="legend-item" style="opacity:${suminAvisosVer ? 1 : .45}">${rombo(5, 1.6)}<span>Aviso de cliente sin luz</span></div>` : ''}
+    ${pa ? `<div class="legend-item" style="opacity:${suminAvisosVer ? 1 : .45}">${rombo(5, 1.6)}<span>Aviso de cliente sin suministro</span></div>` : ''}
     <button type="button" id="leySumBtn" class="sum-btn" style="margin-top:6px;">${on ? 'Ocultar fallas de distribución' : 'Mostrar fallas de distribución'}</button></div>`;
   document.getElementById('leySumBtn').onclick = () => {
     const nuevo = !on;
@@ -1977,7 +1977,7 @@ function pintarTrafosSuministro(){
   suminTrafos.forEach((t) => {
     const ic = L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13], html: '<div class="sum-tr"><b>⚡</b></div>' });
     L.marker([t.lat, t.lon], { icon: ic, zIndexOffset: -500 }).bindPopup(
-      `<b>⚡ Transformador ${suminEsc(t.numpos)}</b><br>Clientes sin luz: <b>${suminEsc(t.clientes ?? '—')}</b>${t.avisos ? '<br>Cantidad de avisos: <b>' + suminEsc(t.avisos) + '</b>' : ''}` +
+      `<b>⚡ Transformador ${suminEsc(t.numpos)}</b><br>Clientes sin suministro: <b>${suminEsc(t.clientes ?? '—')}</b>${t.avisos ? '<br>Cantidad de avisos: <b>' + suminEsc(t.avisos) + '</b>' : ''}` +
       `${t.inicio ? '<br>Corte desde: ' + suminEsc(t.inicio) : ''}${t.reposicion ? '<br>Reposición estimada: ' + suminEsc(t.reposicion) : ''}` +
       `${t.incidencia ? '<br>Incidencia: ' + suminEsc(t.incidencia) : ''}<br><small>Fuente: Enel</small>`).addTo(suminLayer);
   });
@@ -2026,7 +2026,7 @@ async function generarPdfSuministro(btn){
     const horaLect = new Date(d.actualizado_en).toLocaleTimeString('es-CL', {timeZone: ZONA_CHILE, hour: '2-digit', minute: '2-digit', hour12: false});
 
     // Geometría de la hoja: encabezado, mapa a todo el ancho, barra de indicadores abajo, pie
-    const hEnc = 28, hPie = 8, hBarra = 40;
+    const hEnc = 28, hPie = 8, hBarra = 44;
     const xMapa = 0, yMapa = hEnc, wMapa = ancho, hMapa = alto - hEnc - hPie - hBarra;
     const yBarra = yMapa + hMapa;
 
@@ -2069,11 +2069,12 @@ async function generarPdfSuministro(btn){
     }catch(e){ console.warn('No se pudo incluir el mapa del informe de suministro:', e); }
 
     // Leyenda sobre el mapa
-    pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(xMapa + 4, yMapa + 4, conAvisos ? 76 : 46, 7.5, 2, 2, 'FD');
+    const wLey = conAvisos ? 76 : 46, xLey = xMapa + wMapa - 4 - wLey, yLey = yMapa + hMapa - 4 - 7.5 - 4.5;   // esquina inferior derecha, sobre la atribución de OSM
+    pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(xLey, yLey, wLey, 7.5, 2, 2, 'FD');
     const mini = (x, y, r, dot) => { pdf.setFillColor(38, 50, 56); pdf.triangle(x - r, y, x, y - r, x + r, y, 'F'); pdf.triangle(x - r, y, x, y + r, x + r, y, 'F'); pdf.setFillColor(255, 213, 74); pdf.circle(x, y, dot, 'F'); };
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35);
-    mini(xMapa + 9, yMapa + 7.8, 2.1, 0.8); pdf.text('Transformador', xMapa + 12.5, yMapa + 8.4);
-    if(conAvisos){ mini(xMapa + 39.5, yMapa + 7.8, 1.5, 0.6); pdf.text('Aviso de cliente', xMapa + 42.5, yMapa + 8.4); }
+    mini(xLey + 5, yLey + 3.8, 2.1, 0.8); pdf.text('Transformador', xLey + 8.5, yLey + 4.4);
+    if(conAvisos){ mini(xLey + 35.5, yLey + 3.8, 1.5, 0.6); pdf.text('Aviso de cliente', xLey + 38.5, yLey + 4.4); }
 
     // Barra inferior de indicadores
     pdf.setFillColor(255, 255, 255); pdf.rect(0, yBarra, ancho, hBarra + hPie, 'F');
@@ -2101,25 +2102,33 @@ async function generarPdfSuministro(btn){
     kpi(110, suminNum(trafos.length), 'Transformadores', 'sin suministro');
     if(conAvisos) kpi(138, suminNum(avisos.length), 'Avisos de clientes', 'registrados en Enel');
 
-    // Barras: clientes sin luz por transformador (hasta 9, en 3 columnas; el número coincide con el mapa)
-    const xb = 174, wb = ancho - margen - xb, colW = (wb - 8) / 3;
+    // Listado de transformadores sin suministro (hasta 8, en 2 columnas; el número coincide con el mapa) con la dirección si hay aviso
+    const xb = 174, wb = ancho - margen - xb, colW = (wb - 6) / 2;
     pdf.setDrawColor(219, 226, 220); pdf.line(xb - 6, yBarra + 6, xb - 6, yBarra + hBarra - 4);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(...VERDE);
-    pdf.text(trafos.length ? 'Clientes sin luz por transformador' : 'No hay transformadores sin suministro.', xb, yBarra + 9);
-    const maxCl = Math.max(1, ...trafos.map((t) => t.clientes || 0));
-    trafos.slice(0, 9).forEach((t, i) => {
-      const col = Math.floor(i / 3), fila = i % 3, x = xb + col * (colW + 4), yy = yBarra + 16 + fila * 7.5;
+    pdf.text(trafos.length ? 'Transformadores sin suministro' : 'No hay transformadores sin suministro.', xb, yBarra + 9);
+    const dirDe = (t) => {   // [dirección, "(+N)"]
+      if(!conAvisos || !t.incidencia) return ['', ''];
+      const ds = [...new Set(avisos.filter((a) => a.incidencia === t.incidencia && a.direccion).map((a) => String(a.direccion).replace(/,?\s*La Florida\s*$/i, '').trim()))];
+      return ds.length ? [ds[0], ds.length > 1 ? ` (+${ds.length - 1})` : ''] : ['', ''];
+    };
+    const MAXL = 8;
+    trafos.slice(0, MAXL).forEach((t, i) => {
+      const col = Math.floor(i / 4), fila = i % 4, x = xb + col * (colW + 6), yy = yBarra + 16 + fila * 7;
       pdf.setFillColor(38, 50, 56); pdf.triangle(x, yy, x + 2.4, yy - 2.4, x + 4.8, yy, 'F'); pdf.triangle(x, yy, x + 2.4, yy + 2.4, x + 4.8, yy, 'F');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(5.5); pdf.setTextColor(255, 213, 74); pdf.text(String(t.n), x + 2.4, yy + 0.8, {align: 'center'});
-      let nom = String(t.numpos); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(30, 40, 35);
-      while(nom.length > 3 && pdf.getTextWidth(nom) > 9.5) nom = nom.slice(0, -1);
-      pdf.text(nom, x + 5.8, yy + 0.9);
-      const bx = x + 16.5, bw = colW - 16.5 - 7.5;
-      pdf.setFillColor(238, 242, 238); pdf.roundedRect(bx, yy - 1.4, bw, 2.8, 1, 1, 'F');
-      pdf.setFillColor(217, 58, 58); pdf.roundedRect(bx, yy - 1.4, Math.max(1.2, bw * (t.clientes || 0) / maxCl), 2.8, 1, 1, 'F');
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(30, 40, 35); pdf.text(suminNum(t.clientes), x + colW, yy + 0.9, {align: 'right'});
+      let nom = String(t.numpos); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(30, 40, 35);
+      while(nom.length > 3 && pdf.getTextWidth(nom) > 11.5) nom = nom.slice(0, -1);
+      pdf.text(nom, x + 6.2, yy + 0.9);
+      let [dir, mas] = dirDe(t);
+      if(dir){
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris);
+        const maxW = colW - 19 - (mas ? pdf.getTextWidth(mas) : 0);
+        if(pdf.getTextWidth(dir) > maxW){ while(dir.length > 4 && pdf.getTextWidth(dir + '…') > maxW) dir = dir.slice(0, -1); dir = dir.trimEnd() + '…'; }
+        pdf.text(dir + mas, x + 19, yy + 0.9);
+      }
     });
-    if(trafos.length > 9){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text(`y ${trafos.length - 9} más (ver en el mapa de la aplicación)`, xb, yBarra + hBarra - 1.5); }
+    if(trafos.length > MAXL){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text(`y ${trafos.length - MAXL} más (ver en el mapa de la aplicación)`, xb, yBarra + hBarra - 1.5); }
 
     // Pie
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
@@ -7336,7 +7345,7 @@ async function pintarAjustesAdmin(){
   catch(e){ cont.innerHTML = '<div style="font-weight:700; margin-bottom:6px;">⚡ Suministro eléctrico (Enel)</div><div class="hint">No disponible: falta ejecutar sql/2026-10-suministro-interruptor.sql.</div>'; return; }
   const hora = (iso) => { try{ return new Date(iso).toLocaleString('es-CL', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}); }catch(e){ return '—'; } };
   cont.innerHTML = `<div style="font-weight:700; margin-bottom:4px;">⚡ Suministro eléctrico (Enel)</div>
-    <div class="hint" style="margin:0 0 8px;">Muestra el indicador y los transformadores sin luz en el mapa, para todos los usuarios. Apagado: no se consulta a Enel y el indicador se oculta para todos.</div>
+    <div class="hint" style="margin:0 0 8px;">Muestra el indicador y los transformadores sin suministro en el mapa, para todos los usuarios. Apagado: no se consulta a Enel y el indicador se oculta para todos.</div>
     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600;"><input type="checkbox" id="suminSwitch" ${est.activo ? 'checked' : ''}> Lectura de datos de Enel ${est.activo ? '<span style="color:#2e9e5b;">● Activo</span>' : '<span style="color:#8a5a00;">● Apagado</span>'}</label>
     <div class="hint" style="margin:8px 0 0;">Última lectura: <b>${est.ultima_lectura ? hora(est.ultima_lectura) : '—'}</b> · cada ${est.cada_min} min · transformadores en La Florida: <b>${est.trafos}</b> · avisos de clientes: <b>${est.avisos ?? 0}</b> · último error: <b>${est.error ? escHtml(est.error) : 'ninguno'}</b></div>
     <span id="suminMsg" class="hint" style="margin:4px 0 0; display:block;"></span>`;
