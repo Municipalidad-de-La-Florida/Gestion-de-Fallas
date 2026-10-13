@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.18.0';
+const VERSION_APP = '1.18.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -584,8 +584,11 @@ function expandir(b, f) {
 }
 const contenido = (c, b) => c && b[0] >= c[0] && b[1] >= c[1] && b[2] <= c[2] && b[3] <= c[3];
 
+// Reintenta una vez una consulta de capa (red móvil inestable)
+const rpcReint = async (fn, args) => { try { return await rpc(fn, args); } catch (e) { if (e.name === 'SesionExpirada') throw e; await new Promise((r) => setTimeout(r, 600)); return rpc(fn, args); } };
+let _areaSeq = 0;
 async function cargarArea(forzar) {
-  if (!map) return;
+  if (!map) return true;
   const z = map.getZoom();
   const visible = z >= ZOOM_DATOS;
   $('#zoomAviso').hidden = visible || S.vista !== 'mapa';
@@ -598,15 +601,21 @@ async function cargarArea(forzar) {
   if (!visible) return;
   const b = map.getBounds();
   const bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()];
-  if (z >= ZOOM_EMPALMES) cargarEmpalmes(bbox, forzar === true);
-  else if (map.hasLayer(capaEmpalmes)) map.removeLayer(capaEmpalmes);
-  if (forzar !== true && contenido(cacheBbox, bbox)) return;
+  let ok = true;
+  const pEmp = z >= ZOOM_EMPALMES ? cargarEmpalmes(bbox, forzar === true) : (map.hasLayer(capaEmpalmes) && map.removeLayer(capaEmpalmes), true);
+  if (forzar !== true && contenido(cacheBbox, bbox)) return pEmp;
   const grande = expandir(bbox, 0.4);
+  const seq = ++_areaSeq;
   try {
     const args = { min_lon: grande[0], min_lat: grande[1], max_lon: grande[2], max_lat: grande[3] };
-    const [circ, pts] = await Promise.all([rpc('circuitos_en_area', args), rpc('puntos_en_area', args)]);
-    capaCircuitos.clearLayers();
-    capaPuntos.clearLayers();
+    // Cada capa por separado: si una falla, la otra igual se dibuja
+    const [rc, rp] = await Promise.allSettled([rpcReint('circuitos_en_area', args), rpcReint('puntos_en_area', args)]);
+    if (seq !== _areaSeq) return true;   // llegó otra carga más nueva
+    [rc, rp].forEach((r) => { if (r.status === 'rejected' && r.reason && r.reason.name === 'SesionExpirada') throw r.reason; });
+    const circ = rc.status === 'fulfilled' ? rc.value : null, pts = rp.status === 'fulfilled' ? rp.value : null;
+    if (rc.status === 'fulfilled') capaCircuitos.clearLayers();
+    if (rp.status === 'fulfilled') capaPuntos.clearLayers();
+    if (rc.status === 'rejected' || rp.status === 'rejected') { ok = false; cacheBbox = null; if (forzar === true) toast('Algunas capas no cargaron. Toca actualizar de nuevo.', 'error'); }
     if (circ) {
       L.geoJSON(circ, {
         renderer: rend,
@@ -620,20 +629,22 @@ async function cargarArea(forzar) {
         onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirPunto(f.properties, f.geometry); }),
       }).eachLayer((l) => capaPuntos.addLayer(l));
     }
-    cacheBbox = grande;
+    if (ok) cacheBbox = grande;
     capaFallas.bringToFront && capaFallas.bringToFront();
   } catch (e) {
     if (e.name === 'SesionExpirada') salir(e.message); else toast(e.message, 'error');
+    return false;
   }
+  return (await pEmp) && ok;
 }
 
 // Empalmes (medidores): estrella roja bajo los puntos, solo con mucho zoom; al tocarla muestra medidor y cliente.
 async function cargarEmpalmes(bbox, forzar) {
   if (!map.hasLayer(capaEmpalmes)) capaEmpalmes.addTo(map);
-  if (!forzar && contenido(cacheEmp, bbox)) return;
+  if (!forzar && contenido(cacheEmp, bbox)) return true;
   const grande = expandir(bbox, 0.4);
   try {
-    const emp = await rpc('empalmes_en_area', { min_lon: grande[0], min_lat: grande[1], max_lon: grande[2], max_lat: grande[3] });
+    const emp = await rpcReint('empalmes_en_area', { min_lon: grande[0], min_lat: grande[1], max_lon: grande[2], max_lat: grande[3] });
     capaEmpalmes.clearLayers();
     if (emp) {
       L.geoJSON(emp, {
@@ -643,8 +654,11 @@ async function cargarEmpalmes(bbox, forzar) {
     }
     capaEmpalmes.eachLayer((l) => l.bringToBack && l.bringToBack());
     cacheEmp = grande;
+    return true;
   } catch (e) {
-    if (e.name === 'SesionExpirada') salir(e.message); else toast(e.message, 'error');
+    cacheEmp = null;
+    if (e.name === 'SesionExpirada') salir(e.message); else if (forzar) toast(e.message, 'error');
+    return false;
   }
 }
 function abrirEmpalme(p) {
@@ -827,7 +841,11 @@ async function cargarFallas(manual) {
   } finally { btn.classList.remove('girando'); }
 }
 $('#btnActualizar').addEventListener('click', () => {
-  cargarFallas(true); cacheEmp = null; cargarArea(true);
+  const btn = $('#btnActualizar');
+  cacheEmp = null; cacheBbox = null;
+  cargarFallas(true);
+  btn.classList.add('girando');
+  Promise.resolve(cargarArea(true)).finally(() => setTimeout(() => btn.classList.remove('girando'), 400));
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration().then((r) => r && r.update()).catch(() => {});
 });
 
