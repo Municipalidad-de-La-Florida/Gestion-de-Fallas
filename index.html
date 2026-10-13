@@ -120,16 +120,28 @@
   /* Botón refrescar (junto al indicador): anillo = tiempo hasta el próximo refresco automático */
 
   /* Suministro eléctrico (Enel) */
-  .sum-ctl{position:relative; margin:0 0 6px 10px !important; font-family:inherit;}
+  .sum-ctl{position:relative; margin:16px 0 0 16px !important; font-family:inherit;}
   .sum-chip{display:inline-flex; align-items:center; gap:7px; border:1px solid #cfd8d2; border-radius:16px; padding:6px 12px; font-size:12.5px; font-weight:700; background:#fff; color:#25312b; box-shadow:0 2px 8px rgba(0,0,0,.22); cursor:pointer;}
   .sum-d{width:10px; height:10px; border-radius:50%; background:#2e9e5b;}
   .sum-ambar .sum-d{background:#f0a500;} .sum-rojo .sum-d{background:#d93a3a;} .sum-gris .sum-d{background:#9aa5a0;}
-  .sum-card{position:absolute; left:0; bottom:38px; width:260px; background:#fff; border-radius:10px; padding:11px 13px; font-size:12.5px; box-shadow:0 4px 16px rgba(0,0,0,.3);}
+  .sum-card{position:absolute; left:0; top:38px; width:260px; background:#fff; border-radius:10px; padding:11px 13px; font-size:12.5px; box-shadow:0 4px 16px rgba(0,0,0,.3);}
   .sum-card[hidden]{display:none;}
   .sum-card h4{margin:0 0 7px; font-size:13.5px;}
   .sum-k{display:flex; justify-content:space-between; margin:3px 0; color:#444;}
   .sum-sw{display:flex; align-items:center; gap:7px; margin-top:8px; font-size:12px; color:#333;}
   .sum-f{margin-top:7px; font-size:11px; color:#778;}
+
+  .sum-btn{display:block; width:100%; margin-top:8px; padding:8px 10px; border:1.5px solid #1d4e3d; border-radius:8px; background:#fff; color:#1d4e3d; font-weight:700; font-size:12px; cursor:pointer;}
+  .sum-btn:disabled{opacity:.45; cursor:default;}
+
+  .sum-modal{position:fixed; inset:0; z-index:5000; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; padding:16px;}
+  .sum-modal-c{background:#fff; border-radius:12px; width:min(880px,100%); max-height:86vh; display:flex; flex-direction:column; padding:14px 16px; box-shadow:0 8px 30px rgba(0,0,0,.4);}
+  .sum-modal-h{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap;}
+  .sum-modal-h .sum-btn{display:inline-block; width:auto;}
+  .sum-modal-t{overflow:auto; border:1px solid #e1e7e3; border-radius:8px;}
+  .sum-modal-t table{width:100%; border-collapse:collapse; font-size:12px;}
+  .sum-modal-t th{position:sticky; top:0; background:#003100; color:#fff; text-align:left; padding:6px 8px;}
+  .sum-modal-t td{padding:5px 8px; border-bottom:1px solid #eef2ef;}
   .sum-tr{width:24px; height:24px; transform:rotate(45deg); border-radius:6px; background:#263238; border:2px solid #fff; box-shadow:0 1px 5px rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;}
   .sum-tr b{transform:rotate(-45deg); color:#ffd54a; font-size:13px; line-height:1;}
   #btnRefrescar{
@@ -1839,9 +1851,9 @@ function pintarSuministro(){
   const est = suminEstado();
   if(!suminCtl) return;
   const cont = suminCtl.getContainer();
-  if(!est){ cont.style.display = 'none'; if(suminLayer) suminLayer.clearLayers(); return; }
+  if(!est){ cont.style.display = 'none'; if(suminLayer) suminLayer.clearLayers(); if(suminAvisosLayer) suminAvisosLayer.clearLayers(); return; }
   cont.style.display = '';
-  const etq = est.n === 0 ? 'Suministro normal' : `${suminNum(est.n)} sin luz · ${String(est.pct).replace('.', ',')}%`;
+  const etq = est.n === 0 ? 'Clientes sin suministro: 0' : `Clientes sin suministro: ${suminNum(est.n)} · ${String(est.pct).replace('.', ',')}%`;
   const d = suminDato;
   cont.innerHTML = `<button type="button" class="sum-chip sum-${est.nivel}" aria-expanded="${suminAbierto}"><span class="sum-d"></span>⚡ ${suminEsc(etq)}${est.viejo ? ' · sin dato reciente' : ''}</button>
     <div class="sum-card" ${suminAbierto ? '' : 'hidden'}>
@@ -1850,15 +1862,66 @@ function pintarSuministro(){
       <div class="sum-k"><span>Clientes de la comuna</span><span>${suminNum(d.clientes_total)}</span></div>
       <div class="sum-k"><span>Porcentaje afectado</span><b>${suminEsc(String(est.pct).replace('.', ','))}%</b></div>
       <div class="sum-k"><span>Transformadores sin luz</span><b>${suminTrafos.length}</b></div>
+      ${suminPuedeAvisos() ? `<div class="sum-k"><span>Avisos de clientes</span><b>${suminAvisos.length}</b></div>` : ''}
       <label class="sum-sw"><input type="checkbox" id="sumVer" ${suminVer ? 'checked' : ''}> Mostrar transformadores en el mapa</label>
+      ${suminPuedeAvisos() ? `<label class="sum-sw"><input type="checkbox" id="sumAv" ${suminAvisosVer ? 'checked' : ''}> Mostrar avisos de clientes en el mapa</label>
+      <button type="button" id="sumLista" class="sum-btn" ${suminAvisos.length ? '' : 'disabled'}>Ver listado de avisos (caso, cliente, dirección)</button>` : ''}
       <div class="sum-f">Fuente: Mapa de Emergencia de Enel · actualizado ${suminEsc(suminHora(d.actualizado_en))}${est.viejo ? ' (dato antiguo)' : ''}</div>
     </div>`;
   const chip = cont.querySelector('.sum-chip');
   chip.addEventListener('click', () => { suminAbierto = !suminAbierto; pintarSuministro(); });
   const sw = cont.querySelector('#sumVer');
   if(sw) sw.addEventListener('change', () => { suminVer = sw.checked; try{ localStorage.setItem('fa_sum_trafos', suminVer ? '1' : '0'); }catch(e){} pintarTrafosSuministro(); });
+  const sa = cont.querySelector('#sumAv');
+  if(sa) sa.addEventListener('change', () => { suminAvisosVer = sa.checked; try{ localStorage.setItem('fa_sum_avisos', suminAvisosVer ? '1' : '0'); }catch(e){} pintarAvisosSuministro(); });
+  const sl = cont.querySelector('#sumLista');
+  if(sl) sl.addEventListener('click', () => abrirListadoAvisos());
   pintarTrafosSuministro();
+  pintarAvisosSuministro();
 }
+
+function suminAvisosAgrupados(){
+  const g = new Map();
+  suminAvisos.forEach((a) => { const k = a.lat.toFixed(6) + ',' + a.lon.toFixed(6); if(!g.has(k)) g.set(k, { lat: a.lat, lon: a.lon, items: [] }); g.get(k).items.push(a); });
+  return [...g.values()];
+}
+function pintarAvisosSuministro(){
+  if(!map) return;
+  if(!suminAvisosLayer) suminAvisosLayer = L.layerGroup();
+  suminAvisosLayer.clearLayers();
+  if(!suminAvisosVer || !suminDato || !suminPuedeAvisos() || !suminAvisos.length){ if(map.hasLayer(suminAvisosLayer)) map.removeLayer(suminAvisosLayer); return; }
+  suminAvisosAgrupados().forEach((g) => {
+    const lista = g.items.slice(0, 6).map((a) => `<div style="margin-top:5px;border-top:1px solid #eee;padding-top:4px"><b>Caso ${suminEsc(a.incidencia || '—')}</b> · Aviso ${suminEsc(a.cod_aviso)}<br>Cliente N.° <b>${suminEsc(a.numero_cliente || '—')}</b><br>${suminEsc(a.direccion || '')}${a.reposicion ? '<br>Reposición est.: ' + suminEsc(a.reposicion) : ''}</div>`).join('');
+    const mas = g.items.length > 6 ? `<div style="margin-top:5px"><small>y ${g.items.length - 6} aviso(s) más en este punto</small></div>` : '';
+    L.circleMarker([g.lat, g.lon], { radius: 6, color: '#fff', weight: 2, fillColor: '#f08c00', fillOpacity: 1 })
+      .bindPopup(`<b>${g.items.length} aviso${g.items.length === 1 ? '' : 's'} de clientes</b>${lista}${mas}<div style="margin-top:5px"><small>Fuente: Enel</small></div>`).addTo(suminAvisosLayer);
+  });
+  if(!map.hasLayer(suminAvisosLayer)) suminAvisosLayer.addTo(map);
+}
+function suminTextoAvisos(){
+  return ['Caso\tAviso\tN° cliente\tDirección\tReposición estimada']
+    .concat(suminAvisos.map((a) => [a.incidencia, a.cod_aviso, a.numero_cliente, a.direccion, a.reposicion].map((v) => String(v ?? '').replace(/[\t\n]/g, ' ')).join('\t'))).join('\n');
+}
+async function suminCopiarAvisos(btn){
+  const txt = suminTextoAvisos();
+  try{ await navigator.clipboard.writeText(txt); if(btn){ const t = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => { btn.textContent = t; }, 1600); } }
+  catch(e){ window.prompt('Copia el listado (Ctrl+C):', txt); }
+}
+
+
+function abrirListadoAvisos(){
+  const ant = document.getElementById('sumListado'); if(ant) ant.remove();
+  const filas = suminAvisos.map((a) => `<tr><td>${suminEsc(a.incidencia || '—')}</td><td>${suminEsc(a.cod_aviso)}</td><td>${suminEsc(a.numero_cliente || '—')}</td><td>${suminEsc(a.direccion || '')}</td><td>${suminEsc(a.reposicion || '—')}</td></tr>`).join('');
+  const d = document.createElement('div'); d.id = 'sumListado'; d.className = 'sum-modal';
+  d.innerHTML = `<div class="sum-modal-c"><div class="sum-modal-h"><b>Avisos de clientes · La Florida (${suminAvisos.length})</b><span><button type="button" id="sumCopiar" class="sum-btn" style="margin:0">Copiar tabla</button> <button type="button" id="sumCerrar" class="sum-btn" style="margin:0">Cerrar</button></span></div>
+    <div class="sum-modal-t"><table><thead><tr><th>Caso</th><th>Aviso</th><th>N.° cliente</th><th>Dirección</th><th>Reposición est.</th></tr></thead><tbody>${filas}</tbody></table></div>
+    <div class="sum-f">Datos de clientes: uso interno para solicitar priorización a Enel. Fuente: Mapa de Emergencia de Enel. Se reemplazan en cada lectura (no hay historial).</div></div>`;
+  document.body.appendChild(d);
+  d.addEventListener('click', (e) => { if(e.target === d) d.remove(); });
+  d.querySelector('#sumCerrar').onclick = () => d.remove();
+  d.querySelector('#sumCopiar').onclick = (e) => suminCopiarAvisos(e.currentTarget);
+}
+
 function pintarTrafosSuministro(){
   if(!map) return;
   if(!suminLayer) suminLayer = L.layerGroup();
@@ -1873,6 +1936,8 @@ function pintarTrafosSuministro(){
   });
   if(!map.hasLayer(suminLayer)) suminLayer.addTo(map);
 }
+let suminAvisos = [], suminAvisosVer = true, suminAvisosLayer = null;
+const suminPuedeAvisos = () => ['admin', 'ito', 'ito2'].includes(rolEfectivo());   // datos de clientes: solo admin e ITO (la base también lo exige)
 let suminActivo = true;   // interruptor del admin (si la tabla aún no existe, se considera encendido)
 async function cargarSuministro(){
   try{ const c = await db.select('suministro_config', 'select=activo&id=eq.1'); suminActivo = !(c && c[0] && c[0].activo === false); }catch(err){ suminActivo = true; }
@@ -1881,12 +1946,16 @@ async function cargarSuministro(){
     const [e, t] = await Promise.all([ db.select('suministro_enel', 'select=*&id=eq.1'), db.select('suministro_trafos', 'select=numpos,incidencia,clientes,avisos,inicio,reposicion,lat,lon') ]);
     suminDato = (e && e[0]) || null; suminTrafos = t || [];
   }catch(err){ suminDato = null; suminTrafos = []; }
+  suminAvisos = [];
+  if(suminDato && suminPuedeAvisos()){
+    try{ suminAvisos = (await db.select('suministro_avisos', 'select=cod_aviso,incidencia,direccion,numero_cliente,falla,inicio,reposicion,lat,lon&order=incidencia.asc,cod_aviso.asc&limit=2000')) || []; }catch(err){ suminAvisos = []; }
+  }
   pintarSuministro();
 }
 function iniciarSuministro(){
   if(suminCtl || !map) return;
-  try{ suminVer = localStorage.getItem('fa_sum_trafos') !== '0'; }catch(e){}
-  const Ctl = L.Control.extend({ options: { position: 'bottomleft' }, onAdd(){ const d = L.DomUtil.create('div', 'sum-ctl'); d.style.display = 'none'; L.DomEvent.disableClickPropagation(d); return d; } });
+  try{ suminVer = localStorage.getItem('fa_sum_trafos') !== '0'; suminAvisosVer = localStorage.getItem('fa_sum_avisos') !== '0'; }catch(e){}
+  const Ctl = L.Control.extend({ options: { position: 'topleft' }, onAdd(){ const d = L.DomUtil.create('div', 'sum-ctl'); d.style.display = 'none'; L.DomEvent.disableClickPropagation(d); return d; } });
   suminCtl = new Ctl().addTo(map);
   cargarSuministro();
 }
@@ -7081,7 +7150,7 @@ async function pintarAjustesAdmin(){
   cont.innerHTML = `<div style="font-weight:700; margin-bottom:4px;">⚡ Suministro eléctrico (Enel)</div>
     <div class="hint" style="margin:0 0 8px;">Muestra el indicador y los transformadores sin luz en el mapa, para todos los usuarios. Apagado: no se consulta a Enel y el indicador se oculta para todos.</div>
     <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600;"><input type="checkbox" id="suminSwitch" ${est.activo ? 'checked' : ''}> Lectura de datos de Enel ${est.activo ? '<span style="color:#2e9e5b;">● Activo</span>' : '<span style="color:#8a5a00;">● Apagado</span>'}</label>
-    <div class="hint" style="margin:8px 0 0;">Última lectura: <b>${est.ultima_lectura ? hora(est.ultima_lectura) : '—'}</b> · cada ${est.cada_min} min · transformadores en La Florida: <b>${est.trafos}</b> · último error: <b>${est.error ? escHtml(est.error) : 'ninguno'}</b></div>
+    <div class="hint" style="margin:8px 0 0;">Última lectura: <b>${est.ultima_lectura ? hora(est.ultima_lectura) : '—'}</b> · cada ${est.cada_min} min · transformadores en La Florida: <b>${est.trafos}</b> · avisos de clientes: <b>${est.avisos ?? 0}</b> · último error: <b>${est.error ? escHtml(est.error) : 'ninguno'}</b></div>
     <span id="suminMsg" class="hint" style="margin:4px 0 0; display:block;"></span>`;
   const sw = document.getElementById('suminSwitch'), msg = document.getElementById('suminMsg');
   sw.onchange = async () => {

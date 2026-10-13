@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.20.0';
+const VERSION_APP = '1.21.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -841,9 +841,9 @@ function pintarSuministro(){
   const est = suminEstado();
   if(!suminCtl) return;
   const cont = suminCtl.getContainer();
-  if(!est){ cont.style.display = 'none'; if(suminLayer) suminLayer.clearLayers(); return; }
+  if(!est){ cont.style.display = 'none'; if(suminLayer) suminLayer.clearLayers(); if(suminAvisosLayer) suminAvisosLayer.clearLayers(); return; }
   cont.style.display = '';
-  const etq = est.n === 0 ? 'Suministro normal' : `${suminNum(est.n)} sin luz · ${String(est.pct).replace('.', ',')}%`;
+  const etq = est.n === 0 ? 'Clientes sin suministro: 0' : `Clientes sin suministro: ${suminNum(est.n)} · ${String(est.pct).replace('.', ',')}%`;
   const d = suminDato;
   cont.innerHTML = `<button type="button" class="sum-chip sum-${est.nivel}" aria-expanded="${suminAbierto}"><span class="sum-d"></span>⚡ ${suminEsc(etq)}${est.viejo ? ' · sin dato reciente' : ''}</button>
     <div class="sum-card" ${suminAbierto ? '' : 'hidden'}>
@@ -852,15 +852,61 @@ function pintarSuministro(){
       <div class="sum-k"><span>Clientes de la comuna</span><span>${suminNum(d.clientes_total)}</span></div>
       <div class="sum-k"><span>Porcentaje afectado</span><b>${suminEsc(String(est.pct).replace('.', ','))}%</b></div>
       <div class="sum-k"><span>Transformadores sin luz</span><b>${suminTrafos.length}</b></div>
+      ${suminPuedeAvisos() ? `<div class="sum-k"><span>Avisos de clientes</span><b>${suminAvisos.length}</b></div>` : ''}
       <label class="sum-sw"><input type="checkbox" id="sumVer" ${suminVer ? 'checked' : ''}> Mostrar transformadores en el mapa</label>
+      ${suminPuedeAvisos() ? `<label class="sum-sw"><input type="checkbox" id="sumAv" ${suminAvisosVer ? 'checked' : ''}> Mostrar avisos de clientes en el mapa</label>
+      <button type="button" id="sumLista" class="sum-btn" ${suminAvisos.length ? '' : 'disabled'}>Ver listado de avisos (caso, cliente, dirección)</button>` : ''}
       <div class="sum-f">Fuente: Mapa de Emergencia de Enel · actualizado ${suminEsc(suminHora(d.actualizado_en))}${est.viejo ? ' (dato antiguo)' : ''}</div>
     </div>`;
   const chip = cont.querySelector('.sum-chip');
   chip.addEventListener('click', () => { suminAbierto = !suminAbierto; pintarSuministro(); });
   const sw = cont.querySelector('#sumVer');
   if(sw) sw.addEventListener('change', () => { suminVer = sw.checked; try{ localStorage.setItem('fa_sum_trafos', suminVer ? '1' : '0'); }catch(e){} pintarTrafosSuministro(); });
+  const sa = cont.querySelector('#sumAv');
+  if(sa) sa.addEventListener('change', () => { suminAvisosVer = sa.checked; try{ localStorage.setItem('fa_sum_avisos', suminAvisosVer ? '1' : '0'); }catch(e){} pintarAvisosSuministro(); });
+  const sl = cont.querySelector('#sumLista');
+  if(sl) sl.addEventListener('click', () => abrirListadoAvisos());
   pintarTrafosSuministro();
+  pintarAvisosSuministro();
 }
+
+function suminAvisosAgrupados(){
+  const g = new Map();
+  suminAvisos.forEach((a) => { const k = a.lat.toFixed(6) + ',' + a.lon.toFixed(6); if(!g.has(k)) g.set(k, { lat: a.lat, lon: a.lon, items: [] }); g.get(k).items.push(a); });
+  return [...g.values()];
+}
+function pintarAvisosSuministro(){
+  if(!map) return;
+  if(!suminAvisosLayer) suminAvisosLayer = L.layerGroup();
+  suminAvisosLayer.clearLayers();
+  if(!suminAvisosVer || !suminDato || !suminPuedeAvisos() || !suminAvisos.length){ if(map.hasLayer(suminAvisosLayer)) map.removeLayer(suminAvisosLayer); return; }
+  suminAvisosAgrupados().forEach((g) => {
+    const lista = g.items.slice(0, 6).map((a) => `<div style="margin-top:5px;border-top:1px solid #eee;padding-top:4px"><b>Caso ${suminEsc(a.incidencia || '—')}</b> · Aviso ${suminEsc(a.cod_aviso)}<br>Cliente N.° <b>${suminEsc(a.numero_cliente || '—')}</b><br>${suminEsc(a.direccion || '')}${a.reposicion ? '<br>Reposición est.: ' + suminEsc(a.reposicion) : ''}</div>`).join('');
+    const mas = g.items.length > 6 ? `<div style="margin-top:5px"><small>y ${g.items.length - 6} aviso(s) más en este punto</small></div>` : '';
+    L.circleMarker([g.lat, g.lon], { radius: 6, color: '#fff', weight: 2, fillColor: '#f08c00', fillOpacity: 1 })
+      .bindPopup(`<b>${g.items.length} aviso${g.items.length === 1 ? '' : 's'} de clientes</b>${lista}${mas}<div style="margin-top:5px"><small>Fuente: Enel</small></div>`).addTo(suminAvisosLayer);
+  });
+  if(!map.hasLayer(suminAvisosLayer)) suminAvisosLayer.addTo(map);
+}
+function suminTextoAvisos(){
+  return ['Caso\tAviso\tN° cliente\tDirección\tReposición estimada']
+    .concat(suminAvisos.map((a) => [a.incidencia, a.cod_aviso, a.numero_cliente, a.direccion, a.reposicion].map((v) => String(v ?? '').replace(/[\t\n]/g, ' ')).join('\t'))).join('\n');
+}
+async function suminCopiarAvisos(btn){
+  const txt = suminTextoAvisos();
+  try{ await navigator.clipboard.writeText(txt); if(btn){ const t = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => { btn.textContent = t; }, 1600); } }
+  catch(e){ window.prompt('Copia el listado (Ctrl+C):', txt); }
+}
+
+
+function abrirListadoAvisos(){
+  const filas = suminAvisos.map((a) => `<div class="sum-av"><b>Caso ${suminEsc(a.incidencia || '—')}</b> · Aviso ${suminEsc(a.cod_aviso)}<br>Cliente N.° <b>${suminEsc(a.numero_cliente || '—')}</b><br>${suminEsc(a.direccion || '')}${a.reposicion ? '<br><small>Reposición est.: ' + suminEsc(a.reposicion) + '</small>' : ''}</div>`).join('');
+  const h = abrirHoja(`<h2>Avisos de clientes (${suminAvisos.length})</h2><div class="hint">La Florida · uso interno para pedir priorización a Enel.</div>
+    <div class="acciones"><button type="button" id="sumCopiar" class="btn btn-secundario">Copiar listado</button></div>
+    <div class="sum-av-l">${filas || '<div class="hint">Sin avisos.</div>'}</div>`);
+  const b = $('#sumCopiar', h); if (b) b.addEventListener('click', () => suminCopiarAvisos(b));
+}
+
 function pintarTrafosSuministro(){
   if(!map) return;
   if(!suminLayer) suminLayer = L.layerGroup();
@@ -875,6 +921,8 @@ function pintarTrafosSuministro(){
   });
   if(!map.hasLayer(suminLayer)) suminLayer.addTo(map);
 }
+let suminAvisos = [], suminAvisosVer = true, suminAvisosLayer = null;
+const suminPuedeAvisos = () => ['admin', 'ito', 'ito2'].includes(rol());   // datos de clientes: solo admin e ITO (la base también lo exige)
 let suminActivo = true;   // interruptor del admin (si la tabla aún no existe, se considera encendido)
 async function cargarSuministro(){
   try{ const c = await select('suministro_config', 'select=activo&id=eq.1'); suminActivo = !(c && c[0] && c[0].activo === false); }catch(err){ suminActivo = true; }
@@ -883,11 +931,15 @@ async function cargarSuministro(){
     const [e, t] = await Promise.all([ select('suministro_enel', 'select=*&id=eq.1'), select('suministro_trafos', 'select=numpos,incidencia,clientes,avisos,inicio,reposicion,lat,lon') ]);
     suminDato = (e && e[0]) || null; suminTrafos = t || [];
   }catch(err){ suminDato = null; suminTrafos = []; }
+  suminAvisos = [];
+  if(suminDato && suminPuedeAvisos()){
+    try{ suminAvisos = (await select('suministro_avisos', 'select=cod_aviso,incidencia,direccion,numero_cliente,falla,inicio,reposicion,lat,lon&order=incidencia.asc,cod_aviso.asc&limit=2000')) || []; }catch(err){ suminAvisos = []; }
+  }
   pintarSuministro();
 }
 function iniciarSuministro(){
   if(suminCtl || !map) return;
-  try{ suminVer = localStorage.getItem('fa_sum_trafos') !== '0'; }catch(e){}
+  try{ suminVer = localStorage.getItem('fa_sum_trafos') !== '0'; suminAvisosVer = localStorage.getItem('fa_sum_avisos') !== '0'; }catch(e){}
   const Ctl = L.Control.extend({ options: { position: 'bottomleft' }, onAdd(){ const d = L.DomUtil.create('div', 'sum-ctl'); d.style.display = 'none'; L.DomEvent.disableClickPropagation(d); return d; } });
   suminCtl = new Ctl().addTo(map);
   cargarSuministro();
@@ -1572,6 +1624,7 @@ async function pintarAjustesU() {
       <div class="u-kv"><span>Última lectura</span><b>${est.ultima_lectura ? esc(horaU(est.ultima_lectura)) : '—'}</b></div>
       <div class="u-kv"><span>Se consulta cada</span><b>${esc(est.cada_min)} min</b></div>
       <div class="u-kv"><span>Transformadores en La Florida</span><b>${esc(est.trafos)}</b></div>
+      <div class="u-kv"><span>Avisos de clientes en La Florida</span><b>${esc(est.avisos ?? 0)}</b></div>
       <div class="u-kv"><span>Último error</span><b>${est.error ? esc(est.error) : 'Ninguno'}</b></div></div>`;
 }
 
