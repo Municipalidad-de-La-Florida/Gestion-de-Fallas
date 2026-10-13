@@ -86,6 +86,7 @@
   }
   .btn-masivo.on{background:#7c3aed; color:#fff; box-shadow:0 0 0 3px rgba(124,58,237,.25);}
   .report-panel:has(.btn-masivo) > b:first-of-type{display:block; padding-right:105px;}
+  .tag-contrato{display:inline-block; background:#e6eefb; color:#2a5db0; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:1px;}
   .tag-masivo{display:inline-block; background:#7c3aed; color:#fff; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:middle;}
   .chip-estado.morado:hover{border-color:#7c3aed;}
   .chip-estado.morado.activo{border-color:#7c3aed; background:#f3edff; color:#7c3aed;}
@@ -564,6 +565,7 @@
           <button type="button" class="chip-estado morado" data-masivo="si" onclick="filtrarTodasFallasPorMasivo('si')">Masivo</button>
           <button type="button" class="chip-estado morado" data-masivo="no" onclick="filtrarTodasFallasPorMasivo('no')">Normal</button>
         </div>
+        <div id="todasFiltroContrato" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div>
         <div id="todasFiltroAsignacion" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;">
           <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Asignación:</span>
           <button type="button" class="chip-estado activo" data-asig="todas" onclick="filtrarTodasFallasPorAsignacion('todas')">Todas</button>
@@ -592,13 +594,14 @@
               <th style="padding:8px 10px;">N° Llave</th>
               <th style="padding:8px 10px;">Puntos afectados</th>
               <th style="padding:8px 10px;">Estado</th>
+              <th style="padding:8px 10px; display:none;" id="thContrato">Contrato</th>
               <th style="padding:8px 10px; display:none;" id="thAsignacion">Asignación</th>
               <th style="padding:8px 10px;">Fotos</th>
               <th style="padding:8px 10px;"></th>
             </tr>
           </thead>
           <tbody id="todasFallasTbody">
-            <tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+            <tr><td colspan="15" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
           </tbody>
         </table>
         <div id="cargarMasTodasWrap" style="display:none; text-align:center; padding:10px 0 4px;">
@@ -696,6 +699,10 @@
             <button type="button" class="fchip fchip-sel on" data-sub="todas">Todas</button>
             <button type="button" class="fchip fchip-sel" data-sub="masivo">Masivo <span class="n" id="masivoN"></span></button>
             <button type="button" class="fchip fchip-sel" data-sub="normal">Normal <span class="n" id="normalN"></span></button>
+          </div>
+          <div id="filtroContratoGrupo" hidden>
+            <div class="lat-pt" style="margin-top:5px;">Contrato</div>
+            <div class="lat-chips" id="chipsContrato"></div>
           </div>
           <div class="lat-pie"><button type="button" id="filtrosLimpiar" class="lat-link">Limpiar filtros</button><span id="filtrosResumen"></span></div>
         </div>
@@ -2275,6 +2282,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     ${htmlBotonMasivo(false)}
     <b>Falla individual - Pto. Lumínico Llave N.° ${llave}</b>
     <div class="hint" style="margin-top:2px;">N.° Municipal: <b>${nroMun ?? '—'}</b></div>
+    ${htmlSelectContrato(null, false)}
     ${htmlNotificador()}
     <div style="display:flex; gap:14px; margin-top:10px;">
       <div style="flex-shrink:0; width:110px;">
@@ -2315,7 +2323,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     const ordenExterna = oe.valor;
     const notif = puedeNotificadorExterno() ? await leerNotificador(panel) : null;
     if(notif && notif.error){ alert(notif.error); return; }
-    const ok = await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna, notif && notif.extra, leerMasivo(panel));
+    const ok = await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna, notif && notif.extra, leerMasivo(panel), leerMasivo(panel) ? leerContrato(panel) : null);
     if(ok) recordarNotificador(notif);
     cerrarPanel();
   };
@@ -2345,6 +2353,7 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
   const panel = mostrarPanel(`
     ${htmlBotonMasivo(false)}
     <b>Falla de circuito ${idOriginal||''}</b>
+    ${htmlSelectContrato(null, false)}
     ${htmlNotificador()}
     <div style="margin-top:10px;">
       ${filasCatalogo}
@@ -2367,7 +2376,7 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
     const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
     const notif = puedeNotificadorExterno() ? await leerNotificador(panel) : null;
     if(notif && notif.error){ alert(notif.error); return; }
-    const ok = await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna, notif && notif.extra, leerMasivo(panel));
+    const ok = await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna, notif && notif.extra, leerMasivo(panel), leerMasivo(panel) ? leerContrato(panel) : null);
     if(ok) recordarNotificador(notif);
     cerrarPanel();
   };
@@ -2486,6 +2495,12 @@ function renderFallasDesdeCache(){
         if(feat.properties.cascada) return;
         if(subFiltro === 'masivo' ? !feat.properties.masivo : !!feat.properties.masivo) return;
       }
+      // Contrato: igual que Subcontrato, manda el circuito
+      if(filtroContrato !== 'todos'){
+        if(feat.properties.cascada) return;
+        const cid = feat.properties.contrato_id || null;
+        if(filtroContrato === 'sin' ? cid : cid !== filtroContrato) return;
+      }
       // Asignación: solo fallas activas (los puntos de cascada se ocultan; manda el circuito)
       if(asigFiltro !== 'todas'){
         if(estado === 'reparada' || feat.properties.cascada) return;
@@ -2557,7 +2572,7 @@ function partesChile(iso){
 async function abrirEditorFalla(p){
   let fila;
   try{
-    const filas = await db.select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,fecha_falla,notificador_id,inspeccion_id,masivo`);
+    const filas = await db.select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,fecha_falla,notificador_id,inspeccion_id,masivo,contrato_id`);
     fila = filas && filas[0];
   }catch(e){ alert('No se pudo cargar la falla: ' + e.message); return; }
   if(!fila){ alert('No se encontró la falla.'); return; }
@@ -2592,6 +2607,7 @@ async function abrirEditorFalla(p){
     ${htmlBotonMasivo(!!fila.masivo)}
     <b>✏️ Editar falla · OS ${escHtml(p.ot || '—')}</b>
     <div class="hint" style="margin-top:2px;">${esCircuito ? 'Circuito' : 'Punto lumínico'} · la ubicación no se puede cambiar (si está mal, elimina la falla y créala de nuevo).${esCircuito ? ' Los cambios también se aplican a sus puntos afectados.' : ''}</div>
+    ${puedeEditarContrato() ? htmlSelectContrato(fila.contrato_id || null, true) : ''}
     ${bloqueNotif}
     <div style="margin-top:10px;">${filasCatalogo}</div>
     <textarea class="popup-input" id="edDesc" placeholder="Comentario (opcional; obligatorio si eliges OTRO)" style="margin-top:8px;"></textarea>
@@ -2638,6 +2654,7 @@ async function abrirEditorFalla(p){
     if(desc !== (fila.descripcion_otro || '')) cambios.descripcion_otro = desc;
     if((oe.valor || null) !== (fila.orden_externa || null)) cambios.orden_externa = oe.valor;
     if(leerMasivo(panel) !== !!fila.masivo) cambios.masivo = leerMasivo(panel);
+    if(panel.querySelector('.sel-contrato-sel') && (leerContrato(panel) || null) !== (fila.contrato_id || null)) cambios.contrato_id = leerContrato(panel);
 
     if(permisoNotif){
       const sel = panel.querySelector('#edNotifSelect');
@@ -3064,13 +3081,36 @@ async function enfocarFalla(fallaId, abrirPopup){
   if(feat.properties._vistaHistorica || abrirPopup) abrirPopupFalla(feat);
 }
 window.enfocarFalla = enfocarFalla;
+// ---- Contratos de una falla ----
+let CONTRATOS_ACTIVOS = [], CONTRATOS_MAPA = {}, _contratosPromesa = null;
+function asegurarContratos(forzar){
+  if(_contratosPromesa && !forzar) return _contratosPromesa;
+  _contratosPromesa = db.select('contratos', 'select=id,nombre,activo&order=nombre.asc').then(l => {
+    CONTRATOS_MAPA = {}; l.forEach(c => { CONTRATOS_MAPA[c.id] = c.nombre; });
+    CONTRATOS_ACTIVOS = l.filter(c => c.activo);
+  }).catch(e => { console.warn('No se pudieron cargar los contratos (¿ejecutaste el SQL de contratos?):', e); _contratosPromesa = null; });
+  return _contratosPromesa;
+}
+function contratoTag(id){
+  return (id && CONTRATOS_MAPA[id]) ? `<span class="tag-contrato" title="Contrato">${escHtml(CONTRATOS_MAPA[id])}</span>` : '';
+}
+// Roles que NO pueden cambiar el contrato de una falla ya creada (la base también lo exige)
+function puedeEditarContrato(){ return !['contratista', 'camion', 'observador'].includes(rolEfectivo()); }
+// Al crear: el selector aparece solo cuando la falla es Masivo. Al editar: siempre visible.
+function htmlSelectContrato(valor, siempre){
+  if(!CONTRATOS_ACTIVOS.length && !valor) return '';
+  let ops = `<option value="">${siempre ? 'Sin contrato' : 'Automático'}</option>` + CONTRATOS_ACTIVOS.map(c => `<option value="${c.id}" ${c.id === valor ? 'selected' : ''}>${escHtml(c.nombre)}</option>`).join('');
+  if(valor && !CONTRATOS_ACTIVOS.some(c => c.id === valor)) ops += `<option value="${valor}" selected>${escHtml(CONTRATOS_MAPA[valor] || 'Contrato')} (inactivo)</option>`;
+  return `<div class="sel-contrato" ${siempre ? 'data-siempre="1"' : 'hidden'} style="margin-top:6px; font-size:12.5px;">Contrato <select class="sel-contrato-sel" style="padding:4px 6px; border:1.5px solid var(--line); border-radius:6px; font-size:12.5px;">${ops}</select></div>`;
+}
+function leerContrato(panel){ const sel = panel.querySelector('.sel-contrato-sel'); return sel && sel.value ? sel.value : null; }
 function htmlBotonMasivo(on){
-  return `<button type="button" class="btn-masivo${on ? ' on' : ''}" title="Marcar como falla masiva" aria-pressed="${on ? 'true' : 'false'}" onclick="this.classList.toggle('on'); this.setAttribute('aria-pressed', this.classList.contains('on'))">Masivo</button>`;
+  return `<button type="button" class="btn-masivo${on ? ' on' : ''}" title="Marcar como falla masiva" aria-pressed="${on ? 'true' : 'false'}" onclick="this.classList.toggle('on'); this.setAttribute('aria-pressed', this.classList.contains('on')); var sc = this.parentElement.querySelector('.sel-contrato'); if(sc && !sc.dataset.siempre) sc.hidden = !this.classList.contains('on')">Masivo</button>`;
 }
 function leerMasivo(panel){ return !!panel.querySelector('.btn-masivo.on'); }
 
 // extra (opcional): {fechaISO, notificadorId} elegidos en la ventana de "Agregar falla" (usuarios con el permiso)
-async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna, extra, masivo){
+async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna, extra, masivo, contratoId){
   try{
     const fila = {
       tipo:'punto', ref_punto_gid:puntoGid, tipo_falla:tipoFalla,
@@ -3079,6 +3119,7 @@ async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtr
     };
     if(ordenExterna) fila.orden_externa = ordenExterna;
     if(masivo) fila.masivo = true;
+    if(contratoId) fila.contrato_id = contratoId;
     if(fechaCustom) fila.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
     if(extra && extra.fechaISO) fila.fecha_falla = extra.fechaISO;
     if(extra && extra.notificadorId) fila.notificador_id = extra.notificadorId;
@@ -3093,7 +3134,7 @@ async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtr
   }catch(e){ alert('Error al crear la falla: ' + e.message); return false; }
 }
 
-async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripcionOtro, ordenExterna, extra, masivo){
+async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripcionOtro, ordenExterna, extra, masivo, contratoId){
   try{
     const filaLineaObj = {
       tipo:'linea', ref_circuito_gid:circuitoGid, tipo_falla:tipoFalla,
@@ -3102,6 +3143,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
     };
     if(ordenExterna) filaLineaObj.orden_externa = ordenExterna;
     if(masivo) filaLineaObj.masivo = true;
+    if(contratoId) filaLineaObj.contrato_id = contratoId;
     if(fechaCustom) filaLineaObj.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
     if(extra && extra.fechaISO) filaLineaObj.fecha_falla = extra.fechaISO;
     if(extra && extra.notificadorId) filaLineaObj.notificador_id = extra.notificadorId;
@@ -3123,6 +3165,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
         };
         if(ordenExterna) f.orden_externa = ordenExterna;
         if(masivo) f.masivo = true;
+        if(contratoId) f.contrato_id = contratoId;
         if(fechaCustom) f.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
         if(extra && extra.fechaISO) f.fecha_falla = extra.fechaISO;
         if(extra && extra.notificadorId) f.notificador_id = extra.notificadorId;
@@ -3140,8 +3183,9 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
 // ---------- LISTA Y REPARACIÓN (contratista) ----------
 async function cargarFallasDelArea(){
   try{
+    await asegurarContratos();
     const query = 'select=id,ot,orden_externa,tipo,tipo_falla,estado,cascada,asignado_camion_id,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
-      + ',masivo'
+      + ',masivo,contrato_id'
       + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=1000';
     fallasEnArea = await db.select('fallas', query);
     renderFallasList();
@@ -3165,7 +3209,7 @@ function resaltarTexto(texto, terminos){
 function normalizarFilaLateral(f){
   const esBusqueda = 'nombre_creador' in f;
   return {
-    id: f.id, ot: f.ot, masivo: !!f.masivo, asignado: f.asignado_camion_id || null, orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
+    id: f.id, ot: f.ot, masivo: !!f.masivo, contrato_id: f.contrato_id || null, asignado: f.asignado_camion_id || null, orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
     fecha: f.fecha_creacion, creado_en: f.creado_en, creado_por: f.creado_por,
     quien: esBusqueda ? (f.nombre_creador || '—') : (f.notificadores ? f.notificadores.nombre : (f.usuarios ? f.usuarios.nombre : '—')),
     llave: esBusqueda ? f.llave : (f.puntos_luminarios ? f.puntos_luminarios.llave : null)
@@ -3194,16 +3238,19 @@ const ROLES_FILTRO_ASIGNAR = ['admin','contratista','contratista2'];
 function puedeFiltrarSinAsignar(){ return ROLES_FILTRO_ASIGNAR.includes(rolEfectivo()); }
 let filtroAsignacion = 'todas';    // 'todas' | 'sin' | 'asignadas'
 let filtroSubcontrato = 'todas';   // 'todas' | 'masivo' | 'normal'
+let filtroContrato = 'todos';      // 'todos' | 'sin' | id de contrato
 function asignacionActiva(){ return puedeFiltrarSinAsignar() ? filtroAsignacion : 'todas'; }
 function filtroSinAsignarActivo(){ return asignacionActiva() === 'sin'; }
 function soloMasivoActivo(){ return filtroSubcontrato === 'masivo'; }
 // ¿Una falla de la lista pasa los filtros de Asignación y Subcontrato?
-function pasaFiltrosOtros(masivo, asignadoCamionId){
+function pasaFiltrosOtros(masivo, asignadoCamionId, contratoId){
   const a = asignacionActiva();
   if(a === 'sin' && asignadoCamionId) return false;
   if(a === 'asignadas' && !asignadoCamionId) return false;
   if(filtroSubcontrato === 'masivo' && !masivo) return false;
   if(filtroSubcontrato === 'normal' && masivo) return false;
+  if(filtroContrato === 'sin' && contratoId) return false;
+  if(filtroContrato !== 'todos' && filtroContrato !== 'sin' && contratoId !== filtroContrato) return false;
   return true;
 }
 function actualizarFiltrosOtrosUI(){
@@ -3217,7 +3264,21 @@ function actualizarFiltrosOtrosUI(){
   poner('masivoN', nMas); poner('normalN', base.length - nMas);
   document.querySelectorAll('#chipsAsignacion .fchip').forEach(c => c.classList.toggle('on', c.dataset.asig === filtroAsignacion));
   document.querySelectorAll('#chipsSubcontrato .fchip').forEach(c => c.classList.toggle('on', c.dataset.sub === filtroSubcontrato));
+  // Contrato: solo aparece si hay contratos creados
+  const gC = document.getElementById('filtroContratoGrupo'), chC = document.getElementById('chipsContrato');
+  if(gC && chC){
+    gC.hidden = !CONTRATOS_ACTIVOS.length;
+    if(CONTRATOS_ACTIVOS.length){
+      const cuenta = (id) => base.filter(f => id === 'sin' ? !f.contrato_id : f.contrato_id === id).length;
+      const chip = (id, nombre, n) => `<button type="button" class="fchip fchip-sel${filtroContrato === id ? ' on' : ''}" data-con="${id}">${escHtml(nombre)}${n === undefined ? '' : ' <span class="n">(' + n + ')</span>'}</button>`;
+      chC.innerHTML = chip('todos', 'Todos') + CONTRATOS_ACTIVOS.map(c => chip(c.id, c.nombre, cuenta(c.id))).join('') + chip('sin', 'Sin contrato', cuenta('sin'));
+    }
+  }
 }
+document.getElementById('chipsContrato').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-con]'); if(!b) return;
+  filtroContrato = b.dataset.con; renderFallasList(); renderFallasDesdeCache();
+});
 document.querySelectorAll('#chipsAsignacion .fchip').forEach(c => c.addEventListener('click', () => {
   filtroAsignacion = c.dataset.asig; renderFallasList(); renderFallasDesdeCache();
 }));
@@ -3231,6 +3292,7 @@ function contarFiltrosActivos(){
   let n = Object.values(filtrosEstadoVisible).filter(v => v === false).length;
   if(asignacionActiva() !== 'todas') n++;
   if(filtroSubcontrato !== 'todas') n++;
+  if(filtroContrato !== 'todos') n++;
   return n;
 }
 function actualizarFiltrosUI(nMostrando){
@@ -3253,7 +3315,7 @@ document.getElementById('btnFiltros').addEventListener('click', () => {
 });
 document.getElementById('filtrosLimpiar').addEventListener('click', () => {
   Object.keys(filtrosEstadoVisible).forEach(e => { if(filtrosEstadoVisible[e] === false) toggleFiltroEstado(e); });
-  filtroAsignacion = 'todas'; filtroSubcontrato = 'todas';
+  filtroAsignacion = 'todas'; filtroSubcontrato = 'todas'; filtroContrato = 'todos';
   renderFallasList();
   renderFallasDesdeCache();
 });
@@ -3269,7 +3331,7 @@ function renderFallasList(){
     filas = (busquedaLateral.filas || []).map(normalizarFilaLateral);
   } else {
     filas = fallasEnArea.map(normalizarFilaLateral);
-    filas = filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado));
+    filas = filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id));
     filas = filas.filter(f => filtrosEstadoVisible[f.estado] !== false);
   }
   actualizarFiltrosOtrosUI();
@@ -3296,7 +3358,7 @@ function renderFallasList(){
     const lineaLlave = (buscando && f.llave != null && terminos.some(t => String(f.llave).toLowerCase().includes(t.toLowerCase())))
       ? `<div class="fi-nom" style="margin-top:1px;">Llave ${resaltarTexto(f.llave, terminos)}</div>` : '';
     return `<div class="fi fi-est-${f.estado}" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
-      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
+      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}${contratoTag(f.contrato_id)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
       <div class="fi-nom">${escHtml(nombreFalla)}</div>
       <div class="fi-2"><span class="fi-q">${resaltarTexto(f.quien, terminos)}</span><span class="fi-oe${f.orden_externa ? '' : ' vacio'}">OE: ${f.orden_externa ? resaltarTexto(f.orden_externa, terminos) : '—'}</span><span class="fi-fh">${fechaTxt}</span></div>
       ${lineaLlave}
@@ -3499,6 +3561,7 @@ document.getElementById('toggleExportBtn').onclick = () => {
   const partes = [];
   if(filtroEstadoTodasFallas.size) partes.push('estado: ' + [...filtroEstadoTodasFallas].join(', '));
   if(filtroMasivoTodasFallas !== 'todas') partes.push('subcontrato: ' + (filtroMasivoTodasFallas === 'si' ? 'masivo' : 'normal'));
+  if(filtroContratoTodasFallas !== 'todos') partes.push('contrato: ' + (filtroContratoTodasFallas === 'sin' ? 'sin contrato' : (CONTRATOS_MAPA[filtroContratoTodasFallas] || '')));
   if(ver && filtroAsignTodasFallas !== 'todas') partes.push(filtroAsignTodasFallas === 'sin' ? 'sin asignar' : 'asignadas');
   if(ver && filtroAsignadoresTodasFallas.size) partes.push(filtroAsignadoresTodasFallas.size + ' asignador(es)');
   panel.querySelector('#exportResumenFiltros').textContent = partes.length ? 'Se aplican los filtros de la tabla: ' + partes.join(' · ') : 'Sin filtros de la tabla: se exporta todo el período.';
@@ -3747,6 +3810,20 @@ function filtrarTodasFallasPorMasivo(v){
 }
 window.filtrarTodasFallasPorMasivo = filtrarTodasFallasPorMasivo;
 
+let filtroContratoTodasFallas = 'todos';
+function filtrarTodasFallasPorContrato(v){
+  filtroContratoTodasFallas = v;
+  renderTodasFallasTabla();
+}
+window.filtrarTodasFallasPorContrato = filtrarTodasFallasPorContrato;
+function pintarChipsContratoTodas(){
+  const cont = document.getElementById('todasFiltroContrato'); if(!cont) return;
+  if(!CONTRATOS_ACTIVOS.length){ cont.style.display = 'none'; return; }
+  cont.style.display = 'flex';
+  const chip = (id, nombre) => `<button type="button" class="chip-estado morado${filtroContratoTodasFallas === id ? ' activo' : ''}" onclick="filtrarTodasFallasPorContrato('${id}')">${escHtml(nombre)}</button>`;
+  cont.innerHTML = '<span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Contrato:</span>' + chip('todos', 'Todos') + CONTRATOS_ACTIVOS.map(c => chip(c.id, c.nombre)).join('') + chip('sin', 'Sin contrato');
+}
+
 // ---- Filtros de asignación en "Todas las fallas" (solo admin / contratista / contratista2) ----
 function verAsignacionTodas(){ return ['admin','contratista','contratista2'].includes(rolEfectivo()); }
 let filtroAsignTodasFallas = 'todas';           // 'todas' | 'sin' | 'asignadas'
@@ -3831,6 +3908,7 @@ function invalidarCacheTodasFallas(){
 
 async function cargarTodasFallas(){
   const tbody = document.getElementById('todasFallasTbody');
+  await asegurarContratos();
   const esAdmin = rolEfectivo() === 'admin';
   document.getElementById('thFechaReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
   document.getElementById('thIngresadoPorReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
@@ -3840,7 +3918,7 @@ async function cargarTodasFallas(){
     if(!conteoFotosTodas) cargarConteoFotosTodas();
     return;
   }
-  tbody.innerHTML = '<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="15" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
     const todas = await db.rpc('resumen_todas_fallas', {limite: PAGINA_TODAS_FALLAS, desplazamiento: 0});
     ultimosTodasFallas = todas || [];
@@ -3852,7 +3930,7 @@ async function cargarTodasFallas(){
     cargarConteoFotosTodas();
     if(textoBusquedaTodasFallas.trim()) evaluarBusquedaServidor(); // había texto escrito: volver a buscar
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
   }
 }
 
@@ -4000,7 +4078,7 @@ function renderTodasFallasTabla(){
   actualizarChipsAsignacionTodas();
 
   if(!ultimosTodasFallas.length){
-    tbody.innerHTML = '<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
     return;
   }
 
@@ -4028,7 +4106,11 @@ function renderTodasFallasTabla(){
     : datosOrdenados;
   if(filtroMasivoTodasFallas === 'si') porEstado = porEstado.filter(f => f.masivo);
   else if(filtroMasivoTodasFallas === 'no') porEstado = porEstado.filter(f => !f.masivo);
+  if(filtroContratoTodasFallas === 'sin') porEstado = porEstado.filter(f => !f.contrato_id);
+  else if(filtroContratoTodasFallas !== 'todos') porEstado = porEstado.filter(f => f.contrato_id === filtroContratoTodasFallas);
   porEstado = porEstado.filter(pasaFiltrosAsignacionTodas);
+  pintarChipsContratoTodas();
+  const thC = document.getElementById('thContrato'); if(thC) thC.style.display = CONTRATOS_ACTIVOS.length ? 'table-cell' : 'none';
 
   // Buscador: todas las palabras escritas deben aparecer en alguna columna de la fila.
   // Si ya se buscó en toda la base (enServidor), esas filas ya vienen filtradas.
@@ -4040,7 +4122,7 @@ function renderTodasFallasTabla(){
   if(contador){
     if(enServidor) contador.textContent = `${datosFiltrados.length}${busquedaServidor.hayMas ? '+' : ''} en toda la base`;
     else if(busquedaServidor.pendiente && terminos.length) contador.textContent = 'Buscando en toda la base…';
-    else contador.textContent = (terminos.length || filtroEstadoTodasFallas.size || filtroMasivoTodasFallas !== 'todas' || (verAsignacionTodas() && (filtroAsignTodasFallas !== 'todas' || filtroAsignadoresTodasFallas.size))) ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
+    else contador.textContent = (terminos.length || filtroEstadoTodasFallas.size || filtroMasivoTodasFallas !== 'todas' || filtroContratoTodasFallas !== 'todos' || (verAsignacionTodas() && (filtroAsignTodasFallas !== 'todas' || filtroAsignadoresTodasFallas.size))) ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
   }
   const pista = document.getElementById('panelInferiorPista');
   if(pista) pista.textContent = `${enServidor ? 'Resultados de la búsqueda' : 'Mostrando ' + ultimosTodasFallas.length + (hayMasTodasFallas ? ' (las más recientes)' : '')} · clic en una fila para ubicarla en el mapa`;
@@ -4057,7 +4139,7 @@ function renderTodasFallasTabla(){
     const msj = terminos.length
       ? `No hay fallas que coincidan con la búsqueda ${donde}.`
       : `No hay fallas con el estado seleccionado ${donde}.`;
-    tbody.innerHTML = `<tr><td colspan="14" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="15" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
     return;
   }
 
@@ -4109,6 +4191,7 @@ function renderTodasFallasTabla(){
       <td>${f.tipo === 'punto' ? (f.llave ?? '—') : '—'}</td>
       <td>${f.puntos_afectados}</td>
       <td><span class="badge ${f.estado}" ${tooltipEstado ? `title="${tooltipEstado.replace(/"/g,'&quot;')}"` : ''} style="${tooltipEstado ? 'cursor:help;' : ''}">${f.estado.replace('_',' ')}</span></td>
+      ${CONTRATOS_ACTIVOS.length ? `<td style="font-size:11.5px;">${f.contrato_nombre ? escHtml(f.contrato_nombre) : '—'}</td>` : ''}
       ${verAsignacionTodas() ? `<td style="font-size:11.5px; line-height:1.3;">${celdaAsignacionTodas(f)}</td>` : ''}
       <td>${celdaFotosTodas(f.id)}</td>
       <td>${boton}</td>
@@ -4150,6 +4233,7 @@ async function exportarCsv(){
     filas = (filas || []).filter(f =>
       (!filtroEstadoTodasFallas.size || filtroEstadoTodasFallas.has(f.estado)) &&
       (filtroMasivoTodasFallas === 'todas' || (filtroMasivoTodasFallas === 'si' ? !!f.masivo : !f.masivo)) &&
+      (filtroContratoTodasFallas === 'todos' || (filtroContratoTodasFallas === 'sin' ? !f.contrato_id : f.contrato_id === filtroContratoTodasFallas)) &&
       (!ver || filtroAsignTodasFallas === 'todas' || (filtroAsignTodasFallas === 'sin' ? !f.asignado_camion_nombre : !!f.asignado_camion_nombre)));
     if(!filas || !filas.length){ alert('No hay fallas con esos filtros y ese período.'); return; }
 
@@ -4157,7 +4241,7 @@ async function exportarCsv(){
     const encabezados = ['OS','Orden Externa','Tipo','Código','Estado','Fecha reporte','Reportado por','N° Cliente',
       'N° Llave','N° Municipal','Tipo de poste','Puntos afectados',
       'Reparado por','Fecha reparación','Descripción reparación',
-      'Dejado pendiente por','Fecha pendiente','Motivo pendiente','Subcontrato'
+      'Dejado pendiente por','Fecha pendiente','Motivo pendiente','Subcontrato','Contrato'
       ].concat(ver ? ['Asignada por','Camión asignado','Fecha asignación'] : []).concat(esAdmin ? ['Fecha real','Ingresado por (real)'] : []);
     const escapar = (v) => `"${String(v ?? '').replace(/\r?\n/g, ' | ').replace(/"/g,'""')}"`;
     const filasCsv = filas.map(f => {
@@ -4173,7 +4257,8 @@ async function exportarCsv(){
         f.pendiente_por_nombre || '',
         f.fecha_pendiente ? new Date(f.fecha_pendiente).toLocaleString('es-CL') : '',
         f.motivo_pendiente || '',
-        f.masivo ? 'Masivo' : 'Normal'
+        f.masivo ? 'Masivo' : 'Normal',
+        f.contrato_nombre || ''
       ];
       if(ver){
         base.push(f.asignado_por_nombre || '', f.asignado_camion_nombre || '',
@@ -6689,10 +6774,11 @@ function pintarContratosAdmin(){
   const cont = document.getElementById('contratosAdmin');
   if(!cont) return;
   cont.innerHTML = `<div style="font-weight:700; margin-bottom:6px;">Contratos</div>
-    <div class="hint" style="margin:0 0 8px;">Un contrato inactivo deja de ofrecerse al asignar, pero sigue visible donde ya estaba. Aún no restringe lo que ve cada usuario.</div>
+    <div class="hint" style="margin:0 0 8px;">El contrato "por defecto" se asigna solo a las fallas nuevas: uno para las Masivo y otro para las normales. Un contrato inactivo deja de ofrecerse al asignar, pero sigue visible donde ya estaba. Aún no restringe lo que ve cada usuario.</div>
     ${CONTRATOS_LISTA.map(c => `<div class="contrato-fila" data-id="${c.id}" style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
       <input type="text" class="popup-input contrato-nombre" value="${escAttr(c.nombre)}" style="margin:0; padding:6px 8px; max-width:280px;">
       <label style="display:flex; align-items:center; gap:5px; cursor:pointer; font-size:12px;"><input type="checkbox" class="contrato-activo" ${c.activo ? 'checked' : ''}> Activo</label>
+      <label style="display:flex; align-items:center; gap:5px; font-size:12px;" title="Contrato que se asigna solo a las fallas nuevas">Por defecto para <select class="contrato-defecto" style="padding:4px 6px; border:1.5px solid var(--line); border-radius:6px; font-size:12px;"><option value="">—</option><option value="masivo" ${c.defecto_para === 'masivo' ? 'selected' : ''}>fallas Masivo</option><option value="normal" ${c.defecto_para === 'normal' ? 'selected' : ''}>fallas normales</option></select></label>
       <span class="contrato-msg hint" style="margin:0;"></span></div>`).join('') || '<div class="hint">Todavía no hay contratos.</div>'}
     <div style="display:flex; gap:8px; margin-top:8px;"><input type="text" id="contratoNuevoNombre" class="popup-input" placeholder="Nombre del nuevo contrato" style="margin:0; padding:6px 8px; max-width:280px;"><button type="button" id="contratoNuevoBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer;">＋ Crear contrato</button></div>`;
   cont.querySelectorAll('.contrato-fila').forEach(f => {
@@ -6714,6 +6800,20 @@ function pintarContratosAdmin(){
       if(nuevo !== antes) guardar({nombre: nuevo}, () => { inp.value = antes; });
     };
     chk.onchange = () => guardar({activo: chk.checked}, () => { chk.checked = !chk.checked; });
+    const selDef = f.querySelector('.contrato-defecto');
+    selDef.onchange = async () => {
+      const nuevo = selDef.value || null, antes = CONTRATOS_LISTA.find(x => x.id === id).defecto_para || '';
+      msg.textContent = 'Guardando…';
+      try{
+        // Cada tipo tiene un solo contrato por defecto: primero se libera el que lo tenía
+        if(nuevo) await db.update('contratos', `defecto_para=eq.${nuevo}&id=neq.${id}`, {defecto_para: null});
+        const r = await db.update('contratos', `id=eq.${id}`, {defecto_para: nuevo});
+        if(!Array.isArray(r) || !r.length) throw new Error('no se guardó (¿sin permiso?)');
+        CONTRATOS_LISTA.forEach(x => { if(nuevo && x.id !== id && x.defecto_para === nuevo) x.defecto_para = null; });
+        CONTRATOS_LISTA.find(x => x.id === id).defecto_para = nuevo;
+        pintarContratosAdmin();
+      }catch(e){ msg.textContent = ''; selDef.value = antes; alert('No se pudo guardar: ' + e.message); }
+    };
   });
   document.getElementById('contratoNuevoBtn').onclick = async () => {
     const inp = document.getElementById('contratoNuevoNombre'), nombre = inp.value.trim();
@@ -6727,6 +6827,7 @@ function pintarContratosAdmin(){
 }
 // Vuelve a dibujar la columna Contratos de cada fila, conservando lo marcado en pantalla
 function refrescarCeldasContratos(){
+  asegurarContratos(true);
   document.querySelectorAll('#usuariosTbody tr[data-id]').forEach(tr => {
     const celda = tr.querySelector('.contratos-celda'); if(!celda) return;
     celda.innerHTML = htmlCeldaContratos(tr.querySelector('.rol-select').value, JSON.parse(tr.dataset.contr || '[]'));
@@ -6752,7 +6853,7 @@ async function cargarUsuarios(){
     const usuarios = await db.select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc');
     let relaciones = [];
     try{
-      CONTRATOS_LISTA = await db.select('contratos', 'select=id,nombre,activo&order=nombre.asc');
+      CONTRATOS_LISTA = await db.select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc');
       relaciones = await db.select('usuario_contratos', 'select=usuario_id,contrato_id');
     }catch(e){ CONTRATOS_LISTA = []; console.warn('No se pudieron cargar los contratos (¿ejecutaste el SQL de contratos?):', e); }
     const contratosDe = {};
