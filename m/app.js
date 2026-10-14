@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.24.0';
+const VERSION_APP = '1.24.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -503,7 +503,7 @@ function trazarForma(ctx, forma, x, y, r) {
     case 'ACERO': poli([[0, -1.05], [1.05, .85], [-1.05, .85]]); break;                                            // triángulo
     case 'MONOPOSTE': poli([[0, -1.1], [.95, -.55], [.95, .55], [0, 1.1], [-.95, .55], [-.95, -.55]]); break;      // hexágono
     case 'ORNAMENTAL': poli([[0, -1.05], [1, -.32], [.62, .85], [-.62, .85], [-1, -.32]]); break;                 // pentágono
-    case 'EMPALME': poli([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => { const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? .48 : 1.2; return [Math.cos(a) * k, Math.sin(a) * k]; })); break; // estrella
+    case 'EMPALME': poli([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => { const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? .65 : 1.2; return [Math.cos(a) * k, Math.sin(a) * k]; })); break; // estrella (gorda: asoma como halo bajo el poste)
     case 'FACHADA': ctx.arc(x, y + r * .45, r * 1.05, Math.PI, 0); ctx.closePath(); break;                        // semicírculo
     default: ctx.arc(x, y, r, 0, Math.PI * 2);                                                                     // círculo
   }
@@ -648,7 +648,7 @@ async function cargarEmpalmes(bbox, forzar) {
     capaEmpalmes.clearLayers();
     if (emp) {
       L.geoJSON(emp, {
-        pointToLayer: (f, ll) => new MarcadorForma(ll, { renderer: rend, forma: 'EMPALME', radius: 9, weight: 1, color: '#7a232f', fillColor: '#b23a48', fillOpacity: 1 }),
+        pointToLayer: (f, ll) => new MarcadorForma(ll, { renderer: rend, forma: 'EMPALME', radius: 20, weight: 1, color: '#7a232f', fillColor: '#b23a48', fillOpacity: 1 }),
         onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirEmpalme(f.properties); }),
       }).eachLayer((l) => capaEmpalmes.addLayer(l));
     }
