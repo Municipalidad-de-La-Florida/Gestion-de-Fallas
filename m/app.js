@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.21.7';
+const VERSION_APP = '1.21.8';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1179,6 +1179,27 @@ async function reportarNuevaSobre(p) {
   formReportePunto({ gid, llave: p.llave, nro_mun: p.nro_mun, simb_poste: p.simb_poste });
 }
 
+// Elimina una falla recién ingresada (dentro de 15 min) o cualquiera si eres admin. La base vuelve a validar el permiso.
+async function eliminarFallaApp(p) {
+  if (!confirm('¿Eliminar esta falla? Esta acción no se puede deshacer.')) return;
+  let inspId = null;
+  try { const r = await select('fallas', `id=eq.${p.id}&select=inspeccion_id`); inspId = (r && r[0]) ? r[0].inspeccion_id : null; } catch (e) { /* sin inspección conocida */ }
+  const borradas = await api(`/rest/v1/fallas?id=eq.${p.id}`, { method: 'DELETE', prefer: 'return=representation' });
+  if (!borradas || !borradas.length) throw new Error('No se eliminó la falla: ya pasaron los 15 minutos o no tienes permiso.');
+  cerrarHoja();
+  toast('Falla eliminada', 'ok');
+  cargarFallas();
+  if (!inspId) return;
+  // Si era la última falla de su inspección, se pregunta si se deja registrada «sin fallas» (misma regla de la web)
+  try {
+    const info = await rpc('inspeccion_info', { p_id: inspId });
+    if (!info || info.fallas !== 0) return;
+    const dejarla = confirm(`Eliminaste la última falla de la inspección del ${String(info.fecha).slice(0, 10).split('-').reverse().join('-')} de ${info.ito_nombre}.\n\nACEPTAR = dejarla registrada como inspección SIN fallas.\nCANCELAR = quitar la inspección (como si no se hubiera hecho).`);
+    if (dejarla) return;
+    await rpc('eliminar_inspeccion_vacia', { p_id: inspId });
+    if (S.modo && S.modo.inspId === inspId) S.modo.inspId = null;
+  } catch (e) { console.error('No se pudo revisar la inspección vacía:', e); }
+}
 async function abrirFalla(p, geom) {
   const c = centroGeom(geom);
   const desc = DESC_CODIGO[p.tipo_falla];
@@ -1204,6 +1225,9 @@ async function abrirFalla(p, geom) {
   const puedeCerrarEsta = puedeCerrar() && !p.cascada && p.estado !== 'reparada';
   const puedeNuevaAqui = puedeReportar() && p.estado === 'reparada';
   const puedeAsignarEsta = puedeAsignar() && !p.cascada && p.estado !== 'reparada';
+  // Eliminar: el creador su propia falla (no reparada) dentro de 15 min desde que la ingresó; el admin cualquiera (la base lo exige igual)
+  const minDesdeIngreso = p.fecha_falla_real ? (Date.now() - new Date(p.fecha_falla_real).getTime()) / 60000 : Infinity;
+  const puedeEliminarEsta = !p.cascada && !!S.perfil && (rol() === 'admin' || (p.creado_por === S.perfil.id && p.estado !== 'reparada' && minDesdeIngreso <= 15));
   const h = abrirHoja(`
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
@@ -1223,6 +1247,7 @@ async function abrirFalla(p, geom) {
       ${puedeNuevaAqui ? `<button id="bNueva" class="btn btn-secundario">Reportar falla nueva en ${p.tipo === 'linea' ? 'este circuito' : 'este punto'}</button>` : ''}
       ${puedeAsignarEsta ? `<button id="bAsignar" class="btn btn-secundario">${p.asignado_camion_id ? 'Cambiar camión asignado' : 'Asignar a camión'}</button>` : ''}
       <a class="btn btn-secundario" style="display:flex;align-items:center;justify-content:center;text-decoration:none" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">Cómo llegar</a>
+      ${puedeEliminarEsta ? `<button id="bEliminar" class="btn btn-peligro">Eliminar falla${rol() === 'admin' ? '' : ` (quedan ${Math.max(1, Math.ceil(15 - minDesdeIngreso))} min)`}</button>` : ''}
     </div>
     <h3>Historial</h3>
     <ul class="linea-tiempo" id="histFalla"><li class="hint">Cargando…</li></ul>`);
@@ -1232,6 +1257,8 @@ async function abrirFalla(p, geom) {
   if (bn) bn.addEventListener('click', ocupar(bn, () => reportarNuevaSobre(p)));
   const ba = $('#bAsignar', h);
   if (ba) ba.addEventListener('click', () => formAsignar(p));
+  const be = $('#bEliminar', h);
+  if (be) be.addEventListener('click', ocupar(be, () => eliminarFallaApp(p)));
   if (p.estado === 'reparada') {
     select('fallas_fotos', `falla_id=eq.${p.id}&select=ruta,archivada_en,respaldo&order=creado_en.asc`).then(async (fs) => {
       const box = $('#fotosFalla'); if (!box || !document.body.contains(box) || !fs || !fs.length) return;
