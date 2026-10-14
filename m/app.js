@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.22.1';
+const VERSION_APP = '1.22.2';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1470,13 +1470,13 @@ function renderLista() {
     });
   }
   items = items.map((f) => ({ f, d: S.pos ? distanciaM([S.pos.lat, S.pos.lng], f._c) : null }));
-  // Solo el admin elige el orden; los demás: cercanía si hay GPS, si no recientes.
-  const orden = rol() === 'admin' ? ordenLista() : 'cerca';
+  // Todos los usuarios eligen el orden (por defecto cercanía; sin GPS cae a recientes).
+  const orden = ordenLista();
   const porCerca = orden === 'cerca' && !!S.pos;
   if (porCerca) items.sort((a, b) => a.d - b.d);
   else items.sort((a, b) => (Date.parse(b.f.properties.fecha_falla) || 0) - (Date.parse(a.f.properties.fecha_falla) || 0) || String(b.f.properties.ot).localeCompare(String(a.f.properties.ot)));
   asegurarOrdenUI();
-  $('#listaOrdenGrupo').hidden = rol() !== 'admin';
+  $('#listaOrdenGrupo').hidden = false;
   $$('#listaOrden .fchip').forEach((c) => c.classList.toggle('on', c.dataset.orden === orden));
   $('#listaResumen').textContent = `${items.length} de ${total} fallas activas · ${porCerca ? 'ordenadas por cercanía' : (orden === 'cerca' ? 'más recientes primero (activa el GPS para ordenar por cercanía)' : 'más recientes primero')}`;
   $('#listaItems').innerHTML = items.length ? items.map(({ f, d }, i) => {
