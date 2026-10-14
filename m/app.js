@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.23.0';
+const VERSION_APP = '1.23.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -757,7 +757,6 @@ function dibujarFallas() {
     // Asignación: solo fallas activas (los puntos de cascada se ocultan; manda el circuito)
     if (asigF !== 'todas') { if (p.estado === 'reparada' || p.cascada) return; if (asigF === 'sin' ? p.asignado_camion_id : !p.asignado_camion_id) return; }
     if (S.estadosOff[p.estado]) return;
-    if (p.estado === 'reparada' && !repVisible()) return;
     const reparada = p.estado === 'reparada';
     if (p.cascada && z < ZOOM_DATOS) return;
     const color = COLOR_ESTADO[p.estado] || '#d33a2c';
@@ -984,34 +983,22 @@ function iniciarSuministro(){
 }
 
 
-/* ---- Reparadas en el mapa (solo admin): botón flotante + plazo elegible ---- */
-const REP_PLAZOS = [['off', 'Ocultas'], ['16', 'Últimas 16 horas'], ['24', 'Últimas 24 horas'], ['72', 'Últimos 3 días'], ['168', 'Últimos 7 días']];
-function repPlazo() {
-  if (rol() !== 'admin') return '16';
-  let v = '16'; try { v = localStorage.getItem('fm_rep_plazo') || '16'; } catch (e) { /* sin almacenamiento */ }
-  return REP_PLAZOS.some((x) => x[0] === v) ? v : '16';
+/* ---- Reparadas: solo se buscan desde el buscador de Activas (admin), hasta 10 días atrás ---- */
+const REP_BUSQ_HORAS = 240;
+const repBusq = { ts: 0, features: [], cargando: false };
+async function cargarRepBusq() {
+  if (rol() !== 'admin' || repBusq.cargando || Date.now() - repBusq.ts < 5 * 60e3) return;
+  repBusq.cargando = true;
+  try {
+    const rep = await rpc('fallas_geojson_reparadas', { p_horas: REP_BUSQ_HORAS });
+    repBusq.features = ((rep && rep.features) || []).map((f) => { f._c = centroGeom(f.geometry); return f; });
+    repBusq.ts = Date.now();
+  } catch (e) {
+    if (e.name === 'SesionExpirada') { salir(e.message); return; }
+    toast('No se pudieron cargar las reparadas.', 'error');
+  } finally { repBusq.cargando = false; }
+  if (S.vista === 'lista' && S.busqueda.trim()) renderLista();
 }
-const repVisible = () => repPlazo() !== 'off';
-function actualizarBotonRep() {
-  const b = document.getElementById('btnRep'); if (!b) return;
-  b.hidden = rol() !== 'admin';
-  const p = repPlazo();
-  b.classList.toggle('activo', p !== 'off');
-  b.title = 'Fallas reparadas: ' + (REP_PLAZOS.find((x) => x[0] === p) || [0, ''])[1].toLowerCase();
-}
-document.addEventListener('click', (ev) => {
-  const b = ev.target.closest && ev.target.closest('#btnRep'); if (!b || rol() !== 'admin') return;
-  const act = repPlazo();
-  const h = abrirHoja(`<h2>Fallas reparadas en el mapa</h2>
-    <div class="hint">Se ven en verde, más tenues. Solo tú (admin) ves esta opción.</div>
-    <div class="codigos">${REP_PLAZOS.map(([k, t]) => `<button type="button" class="codigo${k === act ? ' sel' : ''}" data-k="${k}"><b>${k === 'off' ? '✕' : '●'}</b><span>${esc(t)}</span></button>`).join('')}</div>`);
-  $$('.codigo', h).forEach((c) => c.addEventListener('click', () => {
-    try { localStorage.setItem('fm_rep_plazo', c.dataset.k); } catch (e) { /* sin almacenamiento */ }
-    cerrarHoja();
-    actualizarBotonRep();
-    cargarFallas();
-  }));
-});
 
 async function cargarFallas(manual) {
   cargarSuministro();
@@ -1021,19 +1008,6 @@ async function cargarFallas(manual) {
   try {
     const geo = await rpc('fallas_geojson', {});
     S.features = ((geo && geo.features) || []).map((f) => { f._c = centroGeom(f.geometry); return f; });
-    // Admin con plazo mayor a 16 h: se piden las reparadas del período elegido y reemplazan a las de 16 h.
-    const horas = Number(repPlazo());
-    if (horas > 16) {
-      try {
-        const rep = await rpc('fallas_geojson_reparadas', { p_horas: horas });
-        const ext = ((rep && rep.features) || []).map((f) => { f._c = centroGeom(f.geometry); return f; });
-        S.features = S.features.filter((f) => f.properties.estado !== 'reparada').concat(ext);
-      } catch (e) {
-        if (e.name === 'SesionExpirada') throw e;
-        toast('No se pudieron cargar las reparadas del período (¿falta actualizar la base?).', 'error');
-      }
-    }
-    actualizarBotonRep();
     S.activas = S.features.filter((f) => f.properties.estado !== 'reparada');
     actualizarFiltrosOtrosUI();
     dibujarFallas();
@@ -1513,6 +1487,22 @@ function renderLista() {
       return [p.ot, p.orden_externa, p.tipo_falla, DESC_CODIGO[p.tipo_falla], p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q));
     });
   }
+  // Admin: al buscar, se suman las reparadas de los últimos 10 días (sin búsqueda no aparecen)
+  let nRep = 0;
+  if (q && rol() === 'admin') {
+    cargarRepBusq();
+    const idsMostradas = new Set(items.map((f) => f.properties.id));
+    const rep = repBusq.features.filter((f) => {
+      const p = f.properties;
+      if (p.cascada || idsMostradas.has(p.id)) return false;
+      if (asigActiva() !== 'todas') return false;
+      if (FO.sub === 'masivo' && !p.masivo) return false;
+      if (FO.sub === 'normal' && p.masivo) return false;
+      return [p.ot, p.orden_externa, p.tipo_falla, DESC_CODIGO[p.tipo_falla], p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q));
+    });
+    nRep = rep.length;
+    items = items.concat(rep);
+  }
   items = items.map((f) => ({ f, d: S.pos ? distanciaM([S.pos.lat, S.pos.lng], f._c) : null }));
   // Todos los usuarios eligen el orden (por defecto cercanía; sin GPS cae a recientes).
   const orden = ordenLista();
@@ -1522,7 +1512,7 @@ function renderLista() {
   asegurarOrdenUI();
   $('#listaOrdenGrupo').hidden = false;
   $$('#listaOrden .fchip').forEach((c) => c.classList.toggle('on', c.dataset.orden === orden));
-  $('#listaResumen').textContent = `${items.length} de ${total} fallas activas · ${porCerca ? 'ordenadas por cercanía' : (orden === 'cerca' ? 'más recientes primero (activa el GPS para ordenar por cercanía)' : 'más recientes primero')}`;
+  $('#listaResumen').textContent = `${items.length - nRep} de ${total} fallas activas${nRep ? ` + ${nRep} reparada${nRep > 1 ? 's' : ''} (últimos 10 días)` : ''} · ${porCerca ? 'ordenadas por cercanía' : (orden === 'cerca' ? 'más recientes primero (activa el GPS para ordenar por cercanía)' : 'más recientes primero')}`;
   $('#listaItems').innerHTML = items.length ? items.map(({ f, d }, i) => {
     const p = f.properties;
     return `<button class="tarjeta est-${esc(p.estado)}" data-i="${i}">
