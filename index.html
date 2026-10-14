@@ -3247,7 +3247,7 @@ async function abrirPopupFalla(feat){
       <div id="cierrePreview" style="margin-top:8px; font-size:11.5px; color:var(--ink); font-weight:600; line-height:1.5;"></div>
       <div class="hint" style="margin-top:8px;">Información adicional:</div>
       <textarea class="popup-input" id="cierreDesc" placeholder="Ej: Información adicional" style="width:100%; min-height:120px; box-sizing:border-box;"></textarea>
-      <div class="hint" style="margin-top:8px;">Fotografías (opcional, hasta ${MAX_FOTOS_CIERRE}):</div>
+      <div class="hint" style="margin-top:8px;">Fotografías <b style="color:var(--red);">(obligatorio: al menos 1, hasta ${MAX_FOTOS_CIERRE})</b>:</div>
       <div id="cierreFotos" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;"></div>
       <button type="button" class="popup-btn" id="cierreFotoBtn" style="margin-top:6px; background:#fff; color:var(--ink); border:1.5px solid var(--line);">🖼 Agregar fotos</button>
       <input type="file" id="cierreFotoIn" accept="image/*" multiple hidden>
@@ -3355,7 +3355,7 @@ async function abrirPopupFalla(feat){
     return partes.join('\n');
   }
 
-  // Fotos opcionales desde el computador (en la app del teléfono siguen siendo obligatorias para quien lo tenga activado).
+  // Fotos obligatorias (mínimo 1) para cerrar una falla, igual que en la app. La base también lo exige.
   const fotosCierre = [];   // { blob, url }
   const pintarFotosCierre = () => {
     const c = panel.querySelector('#cierreFotos'); if(!c) return;
@@ -3384,6 +3384,7 @@ async function abrirPopupFalla(feat){
     btn.onclick = async () => {
       const desc = obtenerDescripcionCompleta();
       if(!desc){ alert('Describe la reparación realizada.'); return; }
+      if(!fotosCierre.length){ alert('Esta reparación exige al menos una fotografía. Agrega una con el botón "Agregar fotos".'); return; }
       btn.disabled = true;
       const textoBtn = btn.textContent;
       try{
@@ -3857,42 +3858,10 @@ async function preguntarSiInspeccionQuedoVacia(inspId){
 }
 window.eliminarFallaPropia = eliminarFallaPropia;
 
-function abrirFormularioReparacion(fallaId){
-  const f = (fallasEnArea || []).find(x => x.id === fallaId);
-  const infoComentario = (f && f.descripcion_otro)
-    ? `<div class="hint" style="margin-top:8px;">Comentario del inspector:</div>
-       <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink); background:#f7f8f7; border-radius:6px; padding:8px;">${f.descripcion_otro}</div>`
-    : '';
-  const panel = mostrarPanel(`
-    <b>Registrar reparación</b>
-    ${f ? `<div class="hint" style="margin-top:2px;">${f.tipo === 'punto' ? 'Punto lumínico' : 'Circuito'} · Código ${f.tipo_falla}</div>` : ''}
-    ${(f && f.tipo === 'punto' && f.puntos_luminarios) ? `<div class="hint" style="margin-top:2px;">N.° de Llave: <b>${escHtml(f.puntos_luminarios.llave ?? '—')}</b> · N.° Municipal: <b>${escHtml(f.puntos_luminarios.nro_mun ?? '—')}</b></div>` : ''}
-    ${infoComentario}
-    <textarea class="popup-input" id="descReparacion" placeholder="Describe la reparación realizada" style="margin-top:10px; min-height:80px;"></textarea>
-    <button class="popup-btn" id="confirmarReparacionBtn" style="margin-top:10px;">Confirmar reparación</button>
-  `);
-  panel.querySelector('#confirmarReparacionBtn').onclick = async () => {
-    const desc = panel.querySelector('#descReparacion').value.trim();
-    if(!desc){ alert('La descripción no puede estar vacía.'); return; }
-    await registrarReparacion(fallaId, desc);
-    cerrarPanel();
-  };
-  protegerClick(panel.querySelector('#confirmarReparacionBtn'));
-}
-
 async function registrarReparacion(fallaId, descripcion){
   try{
-    if(currentUser.foto_obligatoria){
-      // Quien exige foto en el teléfono puede cerrar desde el computador con fotos opcionales (la base lo permite por esta vía).
-      await db.rpc('registrar_reparacion_web', {p_falla_id: fallaId, p_descripcion: descripcion});
-    } else {
-      await db.insert('reparaciones', { falla_id: fallaId, reparado_por: currentUser.id, descripcion });
-      // Aseguramos que la fila quede marcada como reparada (por si no hay trigger que lo haga en la BD).
-      await db.update('fallas', `id=eq.${fallaId}`, { estado: 'reparada' });
-      // Si era una falla de circuito, cerramos también los puntos individuales creados en cascada por ese circuito.
-      await db.update('fallas', `circuito_origen_id=eq.${fallaId}`, { estado: 'reparada' });
-      await guardarComentarioFalla(fallaId, 'reparacion', descripcion);
-    }
+    // La RPC valida que haya al menos una foto subida, cierra la falla (y sus puntos de cascada) y deja el comentario.
+    await db.rpc('registrar_reparacion', {p_falla_id: fallaId, p_descripcion: descripcion});
     cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
     return true;
   }catch(e){ alert('Error al registrar la reparación: ' + e.message); return false; }
@@ -3932,7 +3901,6 @@ async function subirFotoReparacion(fallaId, blob){
   if(!res.ok) throw new Error('No se pudo subir la foto (' + res.status + ').');
   await db.rpc('registrar_foto_falla', {p_falla_id: fallaId, p_ruta: ruta, p_bytes: blob.size});
 }
-window.abrirFormularioReparacion = abrirFormularioReparacion;
 
 // ---------- ESTADÍSTICAS (panel lateral) ----------
 document.getElementById('statsBtn').onclick = () => mostrarSidebarStats();
