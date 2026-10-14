@@ -57,6 +57,7 @@ main{ flex:1 1 auto; position:relative; min-height:0; }
 .fab.activo{ background:var(--verde); color:#fff; }
 .fab2{ bottom:calc(var(--safe-b) + 140px); }
 .fab3{ bottom:calc(var(--safe-b) + 196px); }
+.fab4{ bottom:calc(var(--safe-b) + 252px); }
 .fab[hidden]{ display:none; }
 
 #navInferior{ position:absolute; z-index:800; left:14px; right:14px; bottom:calc(var(--safe-b) + 12px); height:58px; display:flex; align-items:center; gap:4px; padding:0 6px; background:#fff; border-radius:20px; box-shadow:0 6px 22px rgba(0,0,0,.2); }
