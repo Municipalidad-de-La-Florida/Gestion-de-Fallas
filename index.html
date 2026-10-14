@@ -3249,7 +3249,6 @@ async function abrirPopupFalla(feat){
       </div>
     `).join('');
     const columnaIzquierda = `
-      ${tituloConEliminar}
       ${infoCardinalidad}
       ${infoGeneral}
       ${infoReparacion}
@@ -3263,6 +3262,7 @@ async function abrirPopupFalla(feat){
       <input type="file" id="cierreFotoIn" accept="image/*" multiple hidden>
     `;
     contenidoPanel = `
+      ${tituloConEliminar}
       <div style="display:flex; gap:14px;">
         <div style="flex:1; min-width:0;">${columnaIzquierda}</div>
         <div style="flex:1; min-width:0;">${filasCierre}</div>
