@@ -3222,7 +3222,7 @@ async function abrirPopupFalla(feat){
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   let contenidoPanel;
-  if(['contratista','contratista2','camion'].includes(rolEfectivo()) && !p.cascada && p.estado !== 'reparada'){
+  if(['contratista','contratista2','camion','admin'].includes(rolEfectivo()) && !p.cascada && p.estado !== 'reparada'){
     const filasCierre = CATALOGO_CIERRES.map(item => `
       <div class="falla-opcion-row">
         <button class="codigo-btn cierre-btn" data-desc="${(item.c + ' ' + item.d).replace(/"/g,'&quot;')}">${item.c}</button>
@@ -3238,6 +3238,10 @@ async function abrirPopupFalla(feat){
       <div id="cierrePreview" style="margin-top:8px; font-size:11.5px; color:var(--ink); font-weight:600; line-height:1.5;"></div>
       <div class="hint" style="margin-top:8px;">Información adicional:</div>
       <textarea class="popup-input" id="cierreDesc" placeholder="Ej: Información adicional" style="width:100%; min-height:120px; box-sizing:border-box;"></textarea>
+      <div class="hint" style="margin-top:8px;">Fotografías (opcional, hasta ${MAX_FOTOS_CIERRE}):</div>
+      <div id="cierreFotos" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;"></div>
+      <button type="button" class="popup-btn" id="cierreFotoBtn" style="margin-top:6px; background:#fff; color:var(--ink); border:1.5px solid var(--line);">🖼 Agregar fotos</button>
+      <input type="file" id="cierreFotoIn" accept="image/*" multiple hidden>
     `;
     contenidoPanel = `
       <div style="display:flex; gap:14px;">
@@ -3342,15 +3346,48 @@ async function abrirPopupFalla(feat){
     return partes.join('\n');
   }
 
+  // Fotos opcionales desde el computador (en la app del teléfono siguen siendo obligatorias para quien lo tenga activado).
+  const fotosCierre = [];   // { blob, url }
+  const pintarFotosCierre = () => {
+    const c = panel.querySelector('#cierreFotos'); if(!c) return;
+    c.innerHTML = fotosCierre.map((f, i) => `<div style="position:relative;"><img src="${f.url}" alt="Foto ${i+1}" style="width:64px; height:64px; object-fit:cover; border-radius:6px; border:1px solid var(--line);"><span data-i="${i}" class="quitar-foto-cierre" style="position:absolute; top:-6px; right:-6px; background:var(--red); color:#fff; border-radius:50%; width:18px; height:18px; text-align:center; line-height:18px; font-size:12px; cursor:pointer;">×</span></div>`).join('');
+    c.querySelectorAll('.quitar-foto-cierre').forEach(x => x.onclick = () => { const f = fotosCierre.splice(+x.dataset.i, 1)[0]; URL.revokeObjectURL(f.url); pintarFotosCierre(); });
+    const b = panel.querySelector('#cierreFotoBtn'); if(b) b.disabled = fotosCierre.length >= MAX_FOTOS_CIERRE;
+  };
+  const inFoto = panel.querySelector('#cierreFotoIn');
+  const btnFoto = panel.querySelector('#cierreFotoBtn');
+  if(btnFoto && inFoto){
+    btnFoto.onclick = () => inFoto.click();
+    inFoto.onchange = async (e) => {
+      const archivos = Array.from(e.target.files || []);
+      e.target.value = '';
+      const libres = MAX_FOTOS_CIERRE - fotosCierre.length;
+      if(archivos.length > libres) alert(`Máximo ${MAX_FOTOS_CIERRE} fotos.`);
+      for(const a of archivos.slice(0, libres)){
+        try{ const blob = await comprimirFotoWeb(a); fotosCierre.push({blob, url: URL.createObjectURL(blob)}); }
+        catch(err){ alert(err.message); }
+      }
+      pintarFotosCierre();
+    };
+  }
   const btn = panel.querySelector('#confirmarCierreBtn');
-  if(btn && currentUser.foto_obligatoria){
-    btn.disabled = true;
-    btn.textContent = '📷 Este usuario repara desde la app (exige foto)';
-  } else if(btn){
+  if(btn){
     btn.onclick = async () => {
       const desc = obtenerDescripcionCompleta();
       if(!desc){ alert('Describe la reparación realizada.'); return; }
-      await registrarReparacion(p.id, desc);
+      btn.disabled = true;
+      const textoBtn = btn.textContent;
+      try{
+        for(let i = 0; i < fotosCierre.length; i++){
+          btn.textContent = `Subiendo foto ${i+1} de ${fotosCierre.length}…`;
+          await subirFotoReparacion(p.id, fotosCierre[i].blob);
+        }
+        btn.textContent = 'Guardando…';
+      }catch(err){
+        alert(err.message); btn.disabled = false; btn.textContent = textoBtn; return;
+      }
+      const ok = await registrarReparacion(p.id, desc);
+      if(ok === false){ btn.disabled = false; btn.textContent = textoBtn; return; }
       cerrarPanel();
     };
     protegerClick(btn);
@@ -3836,14 +3873,55 @@ function abrirFormularioReparacion(fallaId){
 
 async function registrarReparacion(fallaId, descripcion){
   try{
-    await db.insert('reparaciones', { falla_id: fallaId, reparado_por: currentUser.id, descripcion });
-    // Aseguramos que la fila quede marcada como reparada (por si no hay trigger que lo haga en la BD).
-    await db.update('fallas', `id=eq.${fallaId}`, { estado: 'reparada' });
-    // Si era una falla de circuito, cerramos también los puntos individuales creados en cascada por ese circuito.
-    await db.update('fallas', `circuito_origen_id=eq.${fallaId}`, { estado: 'reparada' });
-    await guardarComentarioFalla(fallaId, 'reparacion', descripcion);
+    if(currentUser.foto_obligatoria){
+      // Quien exige foto en el teléfono puede cerrar desde el computador con fotos opcionales (la base lo permite por esta vía).
+      await db.rpc('registrar_reparacion_web', {p_falla_id: fallaId, p_descripcion: descripcion});
+    } else {
+      await db.insert('reparaciones', { falla_id: fallaId, reparado_por: currentUser.id, descripcion });
+      // Aseguramos que la fila quede marcada como reparada (por si no hay trigger que lo haga en la BD).
+      await db.update('fallas', `id=eq.${fallaId}`, { estado: 'reparada' });
+      // Si era una falla de circuito, cerramos también los puntos individuales creados en cascada por ese circuito.
+      await db.update('fallas', `circuito_origen_id=eq.${fallaId}`, { estado: 'reparada' });
+      await guardarComentarioFalla(fallaId, 'reparacion', descripcion);
+    }
     cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
-  }catch(e){ alert('Error al registrar la reparación: ' + e.message); }
+    return true;
+  }catch(e){ alert('Error al registrar la reparación: ' + e.message); return false; }
+}
+
+// ----- Fotos de reparación desde el computador (opcionales) -----
+const MAX_FOTOS_CIERRE = 3, FOTO_LADO_WEB = 1280, FOTO_CALIDAD_WEB = 0.7, FOTO_MAX_BYTES_WEB = 400 * 1024;
+async function comprimirFotoWeb(file){
+  let img;
+  try{ img = await createImageBitmap(file, {imageOrientation: 'from-image'}); }
+  catch(e){
+    img = await new Promise((ok, mal) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => mal(new Error('No se pudo leer la foto.')); im.src = URL.createObjectURL(file); });
+  }
+  const w0 = img.width || img.naturalWidth, h0 = img.height || img.naturalHeight;
+  const k = Math.min(1, FOTO_LADO_WEB / Math.max(w0, h0));
+  const cv = document.createElement('canvas');
+  cv.width = Math.max(1, Math.round(w0 * k)); cv.height = Math.max(1, Math.round(h0 * k));
+  cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+  if(img.close) img.close();
+  let q = FOTO_CALIDAD_WEB, blob;
+  for(;;){
+    blob = await new Promise(ok => cv.toBlob(ok, 'image/jpeg', q));
+    if(!blob) throw new Error('No se pudo procesar la foto.');
+    if(blob.size <= FOTO_MAX_BYTES_WEB || q <= 0.4) break;
+    q -= 0.1;
+  }
+  return blob;
+}
+async function subirFotoReparacion(fallaId, blob){
+  const ruta = `${fallaId}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2))}.jpg`;
+  let res;
+  try{
+    res = await fetch(`${SUPABASE_URL}/storage/v1/object/fotos-reparacion/${ruta}`, {
+      method: 'POST', headers: {...db.headers(), 'Content-Type': 'image/jpeg', 'x-upsert': 'false'}, body: blob
+    });
+  }catch(e){ throw new Error('Sin conexión al subir la foto. Intenta de nuevo.'); }
+  if(!res.ok) throw new Error('No se pudo subir la foto (' + res.status + ').');
+  await db.rpc('registrar_foto_falla', {p_falla_id: fallaId, p_ruta: ruta, p_bytes: blob.size});
 }
 window.abrirFormularioReparacion = abrirFormularioReparacion;
 
