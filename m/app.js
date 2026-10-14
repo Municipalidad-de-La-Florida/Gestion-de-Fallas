@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.21.9';
+const VERSION_APP = '1.22.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -696,7 +696,12 @@ function actualizarFiltrosOtrosUI() {
   const poner = (id, n) => { $(id).textContent = '(' + n + ')'; };
   poner('#listaSinAsignarN', nSin); poner('#listaAsignadasN', base.length - nSin);
   poner('#listaMasivoN', nMas); poner('#listaNormalN', base.length - nMas);
-  $$('#listaAsig .fchip').forEach((c) => c.classList.toggle('on', c.dataset.asig === FO.asig));
+  function ordenLista() { try { return localStorage.getItem('fm_orden_lista') === 'recientes' ? 'recientes' : 'cerca'; } catch (e) { return 'cerca'; } }
+$$('#listaOrden .fchip').forEach((c) => c.addEventListener('click', () => {
+  try { localStorage.setItem('fm_orden_lista', c.dataset.orden); } catch (e) { /* sin almacenamiento */ }
+  renderLista();
+}));
+$$('#listaAsig .fchip').forEach((c) => c.classList.toggle('on', c.dataset.asig === FO.asig));
   $$('#listaSub .fchip').forEach((c) => c.classList.toggle('on', c.dataset.sub === FO.sub));
   // Aviso sobre el mapa mientras haya filtros de Asignación o Subcontrato puestos
   const partes = [];
@@ -1452,9 +1457,14 @@ function renderLista() {
     });
   }
   items = items.map((f) => ({ f, d: S.pos ? distanciaM([S.pos.lat, S.pos.lng], f._c) : null }));
-  if (S.pos) items.sort((a, b) => a.d - b.d);
-  else items.sort((a, b) => String(b.f.properties.ot).localeCompare(String(a.f.properties.ot)));
-  $('#listaResumen').textContent = `${items.length} de ${total} fallas activas · ${S.pos ? 'ordenadas por cercanía' : 'más recientes primero (activa el GPS para ordenar por cercanía)'}`;
+  // Solo el admin elige el orden; los demás: cercanía si hay GPS, si no recientes.
+  const orden = rol() === 'admin' ? ordenLista() : 'cerca';
+  const porCerca = orden === 'cerca' && !!S.pos;
+  if (porCerca) items.sort((a, b) => a.d - b.d);
+  else items.sort((a, b) => (Date.parse(b.f.properties.fecha_falla) || 0) - (Date.parse(a.f.properties.fecha_falla) || 0) || String(b.f.properties.ot).localeCompare(String(a.f.properties.ot)));
+  $('#listaOrdenGrupo').hidden = rol() !== 'admin';
+  $$('#listaOrden .fchip').forEach((c) => c.classList.toggle('on', c.dataset.orden === orden));
+  $('#listaResumen').textContent = `${items.length} de ${total} fallas activas · ${porCerca ? 'ordenadas por cercanía' : (orden === 'cerca' ? 'más recientes primero (activa el GPS para ordenar por cercanía)' : 'más recientes primero')}`;
   $('#listaItems').innerHTML = items.length ? items.map(({ f, d }, i) => {
     const p = f.properties;
     return `<button class="tarjeta est-${esc(p.estado)}" data-i="${i}">
