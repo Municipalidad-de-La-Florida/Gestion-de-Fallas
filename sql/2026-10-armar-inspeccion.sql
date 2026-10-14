@@ -82,7 +82,8 @@ begin
   -- Los puntos en cascada de las fallas de circuito quedan en la misma inspección
   update public.fallas
      set inspeccion_id = v_id
-   where circuito_origen_id = any(p_fallas) and inspeccion_id is null;
+   where inspeccion_id is null
+     and circuito_origen_id in (select id from public.fallas where id = any(p_fallas) and inspeccion_id = v_id);
   get diagnostics v_c = row_count;
 
   return jsonb_build_object('inspeccion_id', v_id, 'creada', v_creada, 'fallas', v_n, 'cascada', v_c,
