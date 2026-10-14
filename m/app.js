@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.23.1';
+const VERSION_APP = '1.24.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1215,6 +1215,50 @@ async function reportarNuevaSobre(p) {
   formReportePunto({ gid, llave: p.llave, nro_mun: p.nro_mun, simb_poste: p.simb_poste });
 }
 
+// Edita una falla recién ingresada (dentro de 15 min) o cualquiera si eres admin. La base valida el permiso (editar_falla).
+// Se puede cambiar código, comentario, orden externa y masivo. La ubicación no: si está mal, se elimina y se vuelve a informar.
+async function editarFallaApp(p) {
+  let fila;
+  try { const r = await select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,masivo`); fila = r && r[0]; }
+  catch (e) { toast('No se pudo cargar la falla: ' + e.message, 'error'); return; }
+  if (!fila) { toast('No se encontró la falla.', 'error'); return; }
+  const esCircuito = fila.tipo === 'linea';
+  const cat = esCircuito ? CAT_CIRCUITO : (['F02', 'F03'].includes(fila.tipo_falla) ? CAT_MONOPOSTE : CAT_PUNTO);
+  let codigo = fila.tipo_falla;
+  const h = abrirHoja(`
+    ${htmlBotonMasivo()}
+    <h2>Editar falla · OS ${esc(p.ot || '—')}</h2>
+    <div class="hint">${esc(tipoLabel(p))}${p.tipo === 'punto' ? ` · llave ${esc(p.llave ?? '—')}` : ''}. La ubicación no se puede cambiar: si está mal, elimina la falla y vuelve a informarla.${esCircuito ? ' Los cambios también se aplican a sus puntos afectados.' : ''}</div>
+    <h3>Código de falla</h3>${htmlCodigos(cat)}
+    <h3>Comentario</h3>
+    <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+    <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
+    <div class="acciones fija"><button id="fGuardar" class="btn btn-primario">Guardar cambios</button></div>`);
+  $$('.codigo', h).forEach((b) => {
+    if (b.dataset.c === codigo) b.classList.add('sel');
+    b.addEventListener('click', () => { $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c; });
+  });
+  $('#fDesc', h).value = fila.descripcion_otro || '';
+  const m = /^([SE])-(.*)$/.exec(fila.orden_externa || '');
+  if (m) { $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
+  const bm = $('#fMasivo', h);
+  if (fila.masivo) { bm.classList.add('on'); bm.setAttribute('aria-pressed', 'true'); }
+  activarBotonMasivo(h);
+  const gu = $('#fGuardar', h);
+  gu.addEventListener('click', ocupar(gu, async () => {
+    if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
+    const desc = $('#fDesc', h).value.trim();
+    if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
+    const oe = leerOrdenExterna(h);
+    if (oe.error) { toast(oe.error, 'error'); return; }
+    gu.textContent = 'Guardando…';
+    await rpc('editar_falla', { p_id: p.id, p_cambios: { tipo_falla: codigo, descripcion_otro: desc || null, orden_externa: oe.valor, masivo: leerMasivo(h) } });
+    cerrarHoja();
+    toast('Falla actualizada', 'ok');
+    cargarFallas();
+  }));
+}
+
 // Elimina una falla recién ingresada (dentro de 15 min) o cualquiera si eres admin. La base vuelve a validar el permiso.
 async function eliminarFallaApp(p) {
   if (!confirm('¿Eliminar esta falla? Esta acción no se puede deshacer.')) return;
@@ -1264,6 +1308,8 @@ async function abrirFalla(p, geom) {
   // Eliminar: el creador su propia falla (no reparada) dentro de 15 min desde que la ingresó; el admin cualquiera (la base lo exige igual)
   const minDesdeIngreso = p.fecha_falla_real ? (Date.now() - new Date(p.fecha_falla_real).getTime()) / 60000 : Infinity;
   const puedeEliminarEsta = !p.cascada && !!S.perfil && (rol() === 'admin' || (p.creado_por === S.perfil.id && p.estado !== 'reparada' && minDesdeIngreso <= 15));
+  const puedeEditarEsta = puedeEliminarEsta && p.estado !== 'reparada';
+  const minRestantes = Math.max(1, Math.ceil(15 - minDesdeIngreso));
   const h = abrirHoja(`
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
@@ -1279,16 +1325,19 @@ async function abrirFalla(p, geom) {
     </div>` : ''}
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
+      ${puedeEditarEsta ? `<button id="bEditar" class="btn ${puedeCerrarEsta ? 'btn-secundario' : 'btn-primario'}">Editar falla${rol() === 'admin' ? '' : ` (quedan ${minRestantes} min)`}</button>` : ''}
       ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario">Registrar reparación</button>` : ''}
       ${puedeNuevaAqui ? `<button id="bNueva" class="btn btn-secundario">Reportar falla nueva en ${p.tipo === 'linea' ? 'este circuito' : 'este punto'}</button>` : ''}
       ${puedeAsignarEsta ? `<button id="bAsignar" class="btn btn-secundario">${p.asignado_camion_id ? 'Cambiar camión asignado' : 'Asignar a camión'}</button>` : ''}
       <a class="btn btn-secundario" style="display:flex;align-items:center;justify-content:center;text-decoration:none" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">Cómo llegar</a>
-      ${puedeEliminarEsta ? `<button id="bEliminar" class="btn btn-peligro">Eliminar falla${rol() === 'admin' ? '' : ` (quedan ${Math.max(1, Math.ceil(15 - minDesdeIngreso))} min)`}</button>` : ''}
     </div>
+    ${puedeEliminarEsta ? `<div style="text-align:center;margin-top:2px"><button id="bEliminar" class="btn-link" style="color:var(--rojo);font-weight:600">Eliminar falla${rol() === 'admin' ? '' : ` (quedan ${minRestantes} min)`}</button></div>` : ''}
     <h3>Historial</h3>
     <ul class="linea-tiempo" id="histFalla"><li class="hint">Cargando…</li></ul>`);
   const bc = $('#bCerrar', h);
   if (bc) bc.addEventListener('click', () => formCierre(p));
+  const bed = $('#bEditar', h);
+  if (bed) bed.addEventListener('click', () => editarFallaApp(p));
   const bn = $('#bNueva', h);
   if (bn) bn.addEventListener('click', ocupar(bn, () => reportarNuevaSobre(p)));
   const ba = $('#bAsignar', h);
