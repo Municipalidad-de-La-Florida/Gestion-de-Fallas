@@ -819,6 +819,7 @@
           <select id="inspItoSelect" style="width:100%; margin-top:4px;">
             <option value="">Todos los ITOs</option>
           </select>
+          <button type="button" id="armarInspBtn" class="sum-btn" style="display:none; margin-top:10px;">＋ Armar inspección con fallas sueltas</button>
           <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:10px;">
             <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Resultado:</span>
             <button type="button" class="chip-estado activo" data-ires="todas" onclick="fijarFiltroInsp('res','todas')">Todas</button>
@@ -4914,6 +4915,7 @@ document.getElementById('tabInspecciones').onclick = () => {
   document.getElementById('selectorDia').style.display = 'none';
   document.getElementById('selectorPeriodo').style.display = 'none';
   document.getElementById('selectorInspecciones').style.display = 'block';
+  document.getElementById('armarInspBtn').style.display = (rolEfectivo() === 'admin') ? '' : 'none';   // herramienta solo del administrador
   document.getElementById('descargarPdfBtn').style.display = 'none'; // el PDF es solo del panel de estadísticas
   // Esta pestaña muestra solo las fallas de la inspección abierta: se ocultan las otras capas de fallas.
   ocultarCapaActivas();
@@ -4940,6 +4942,78 @@ function salirTabInspecciones(){
   limpiarCapaInspeccion();
   if(document.getElementById('inspeccionContenido').style.display === 'block') cerrarModalTodas();
 }
+
+// ---------- Armar una inspección con fallas sueltas (solo admin) ----------
+// Para fallas que un ITO ingresó con «Agregar falla» sin crear la inspección del día.
+// Usa las funciones SQL fallas_sueltas_ito y asignar_fallas_a_inspeccion (sql/2026-10-armar-inspeccion.sql).
+async function abrirArmarInspeccion(){
+  if(rolEfectivo() !== 'admin') return;
+  const ant = document.getElementById('armarInspModal'); if(ant) ant.remove();
+  const d = document.createElement('div'); d.id = 'armarInspModal'; d.className = 'sum-modal';
+  d.innerHTML = `<div class="sum-modal-c"><div class="sum-modal-h"><b>Armar inspección con fallas sueltas</b><button type="button" id="aiCerrar" class="sum-btn" style="margin:0">Cerrar</button></div>
+    <div class="hint" style="margin-bottom:8px;">Para fallas que un ITO ingresó con «Agregar falla» sin crear la inspección. No cambia la fecha, el estado ni quién ingresó cada falla: solo las agrupa en la inspección.</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:end; margin-bottom:8px;">
+      <div><div class="hint" style="margin:0 0 3px">ITO</div><select id="aiIto" style="min-width:200px"></select></div>
+      <div><div class="hint" style="margin:0 0 3px">Fecha de la inspección</div><input type="date" id="aiFecha"></div>
+      <button type="button" id="aiBuscar" class="sum-btn" style="margin:0; width:auto">Buscar fallas sueltas</button>
+    </div>
+    <div id="aiNota" class="hint" style="display:none; background:#eef6ff; border:1px solid #b9d4f0; border-radius:8px; padding:7px 10px; margin-bottom:8px;"></div>
+    <div id="aiTabla" class="sum-modal-t" style="display:none"></div>
+    <div id="aiPie" style="display:none; justify-content:space-between; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap;">
+      <span id="aiResumen" class="hint" style="margin:0"></span>
+      <button type="button" id="aiCrear" class="sum-btn" style="margin:0; width:auto; background:#1d4e3d; color:#fff">Crear inspección y asociar fallas</button></div></div>`;
+  document.body.appendChild(d);
+  d.addEventListener('click', (e) => { if(e.target === d) d.remove(); });
+  d.querySelector('#aiCerrar').onclick = () => d.remove();
+  const selIto = d.querySelector('#aiIto'), inpF = d.querySelector('#aiFecha');
+  const hoy = hoyChileStr(); inpF.max = hoy; inpF.value = sumarDiasStr(hoy, -1);
+  try{ (await db.rpc('listar_itos', {})).forEach((u) => { const o = document.createElement('option'); o.value = u.id; o.textContent = u.nombre; selIto.appendChild(o); }); }
+  catch(e){ selIto.innerHTML = '<option value="">No se pudo cargar la lista de ITOs</option>'; }
+  let filas = [];
+  const marcadas = () => [...d.querySelectorAll('.aiChk:checked')].map((x) => x.value);
+  const actualizarResumen = () => {
+    const n = marcadas().length, fecha = fechaChileLocal(inpF.value, 12, 0, 0).toLocaleDateString('es-CL');
+    d.querySelector('#aiResumen').textContent = `${n} marcada${n === 1 ? '' : 's'} · la fecha y hora de cada falla no cambia`;
+    const b = d.querySelector('#aiCrear'); b.disabled = n === 0; b.textContent = `Asociar ${n} falla${n === 1 ? '' : 's'} a la inspección del ${fecha}`;
+  };
+  d.querySelector('#aiBuscar').onclick = async () => {
+    const ito = selIto.value, fecha = inpF.value;
+    if(!ito || !fecha){ alert('Elige el ITO y la fecha.'); return; }
+    if(fecha > hoyChileStr()){ alert('La fecha de la inspección no puede ser futura.'); return; }
+    const tabla = d.querySelector('#aiTabla'), nota = d.querySelector('#aiNota'), pie = d.querySelector('#aiPie');
+    tabla.style.display = 'block'; tabla.innerHTML = '<div class="hint" style="padding:10px">Buscando…</div>'; pie.style.display = 'none'; nota.style.display = 'none';
+    try{
+      filas = await db.rpc('fallas_sueltas_ito', {p_ito: ito, p_fecha: fecha, p_dias: 7});
+      filas = Array.isArray(filas) ? filas : [];
+      let ex = null; try{ ex = await db.rpc('inspeccion_existente', {p_fecha: fecha, p_ito: ito}); }catch(e){}
+      const nombre = selIto.selectedOptions[0].textContent, fl = fechaChileLocal(fecha, 12, 0, 0).toLocaleDateString('es-CL');
+      nota.innerHTML = (ex && ex.existe)
+        ? `ℹ️ ${escHtml(nombre)} <b>ya tiene</b> una inspección el ${fl} (${ex.fallas || 0} falla${ex.fallas === 1 ? '' : 's'}): las fallas marcadas se agregarán a esa.`
+        : `ℹ️ ${escHtml(nombre)} <b>no tiene</b> inspección el ${fl}: se creará una nueva con las fallas marcadas.`;
+      nota.style.display = 'block';
+      if(!filas.length){ tabla.innerHTML = '<div class="hint" style="padding:10px">No hay fallas sueltas de este ITO cerca de esa fecha (±7 días).</div>'; return; }
+      const etiqueta = (f) => (typeof descripcionCodigoFalla === 'function' && descripcionCodigoFalla({tipo: f.tipo, tipo_falla: f.tipo_falla, simb_poste: f.simb_poste})) || f.tipo_falla;
+      const ubic = (f) => f.tipo === 'linea' ? `Circuito ${escHtml(f.circuito_id ?? '—')} <small>(+${f.puntos_afectados} punto${f.puntos_afectados === 1 ? '' : 's'})</small>` : `Llave ${escHtml(f.llave ?? '—')} · N.° ${escHtml(f.nro_mun ?? '—')}${f.direccion ? '<br><small>' + escHtml(f.direccion) + '</small>' : ''}`;
+      tabla.innerHTML = `<table><thead><tr><th></th><th>OT</th><th>Ubicación</th><th>Falla</th><th>Estado</th><th>Ingresada</th></tr></thead><tbody>${filas.map((f) =>
+        `<tr><td><input type="checkbox" class="aiChk" value="${escHtml(f.id)}" ${f.mismo_dia ? 'checked' : ''}></td><td>${escHtml(f.ot || '—')}</td><td>${ubic(f)}</td><td>${escHtml(etiqueta(f))}</td><td><span class="badge ${escHtml(f.estado)}">${escHtml(f.estado)}</span></td><td>${escHtml(fmtFechaHoraChile(f.fecha_ingreso))}${f.mismo_dia ? '' : '<br><small>(otro día)</small>'}</td></tr>`).join('')}</tbody></table>`;
+      tabla.querySelectorAll('.aiChk').forEach((c) => c.onchange = actualizarResumen);
+      pie.style.display = 'flex'; actualizarResumen();
+    }catch(e){ tabla.innerHTML = `<div class="hint" style="padding:10px">No se pudo buscar: ${escHtml(e.message)}<br>¿Ejecutaste sql/2026-10-armar-inspeccion.sql en Supabase?</div>`; }
+  };
+  d.querySelector('#aiCrear').onclick = async () => {
+    const ids = marcadas(); if(!ids.length) return;
+    const nombre = selIto.selectedOptions[0].textContent, fl = fechaChileLocal(inpF.value, 12, 0, 0).toLocaleDateString('es-CL');
+    if(!confirm(`¿Asociar ${ids.length} falla${ids.length === 1 ? '' : 's'} a la inspección del ${fl} de ${nombre}?`)) return;
+    const b = d.querySelector('#aiCrear'); b.disabled = true;
+    try{
+      const r = await db.rpc('asignar_fallas_a_inspeccion', {p_ito: selIto.value, p_fecha: inpF.value, p_fallas: ids});
+      alert(`${r.creada ? 'Inspección creada' : 'Inspección existente actualizada'}: ${r.fallas} falla${r.fallas === 1 ? '' : 's'} asociada${r.fallas === 1 ? '' : 's'}${r.omitidas ? ` (${r.omitidas} omitida${r.omitidas === 1 ? '' : 's'}: ya tenían inspección)` : ''}.`);
+      d.remove();
+      if(typeof cargarListadoInspecciones === 'function') cargarListadoInspecciones();
+    }catch(e){ b.disabled = false; alert('No se pudo asociar: ' + e.message); }
+  };
+}
+document.getElementById('armarInspBtn').onclick = () => abrirArmarInspeccion();
 
 let inspeccionesModoRecientes = true;   // true = últimas 6, sin fechas elegidas; false = rango de fechas buscado
 function seleccionarRangoInspecciones(periodo, cargar = true){
