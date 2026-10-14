@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.22.2';
+const VERSION_APP = '1.22.3';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -696,7 +696,17 @@ function actualizarFiltrosOtrosUI() {
   const poner = (id, n) => { $(id).textContent = '(' + n + ')'; };
   poner('#listaSinAsignarN', nSin); poner('#listaAsignadasN', base.length - nSin);
   poner('#listaMasivoN', nMas); poner('#listaNormalN', base.length - nMas);
-  function ordenLista() { try { return localStorage.getItem('fm_orden_lista') === 'recientes' ? 'recientes' : 'cerca'; } catch (e) { return 'cerca'; } }
+  $$('#listaAsig .fchip').forEach((c) => c.classList.toggle('on', c.dataset.asig === FO.asig));
+  $$('#listaSub .fchip').forEach((c) => c.classList.toggle('on', c.dataset.sub === FO.sub));
+  // Aviso sobre el mapa mientras haya filtros de Asignación o Subcontrato puestos
+  const partes = [];
+  if (asigActiva() === 'sin') partes.push('sin asignar'); else if (asigActiva() === 'asignadas') partes.push('asignadas');
+  if (FO.sub === 'masivo') partes.push('masivo'); else if (FO.sub === 'normal') partes.push('normal');
+  const b = $('#badgeSinAsignar');
+  b.hidden = !partes.length;
+  b.textContent = 'Solo ' + partes.join(' · ') + ' ✕';
+}
+function ordenLista() { try { return localStorage.getItem('fm_orden_lista') === 'recientes' ? 'recientes' : 'cerca'; } catch (e) { return 'cerca'; } }
 // Si el teléfono tiene un index.html antiguo en caché, el selector se crea aquí (así la lista nunca se rompe).
 function asegurarOrdenUI() {
   if ($('#listaOrdenGrupo')) return;
@@ -714,16 +724,6 @@ document.addEventListener('click', (e) => {
   try { localStorage.setItem('fm_orden_lista', c.dataset.orden); } catch (err) { /* sin almacenamiento */ }
   renderLista();
 });
-$$('#listaAsig .fchip').forEach((c) => c.classList.toggle('on', c.dataset.asig === FO.asig));
-  $$('#listaSub .fchip').forEach((c) => c.classList.toggle('on', c.dataset.sub === FO.sub));
-  // Aviso sobre el mapa mientras haya filtros de Asignación o Subcontrato puestos
-  const partes = [];
-  if (asigActiva() === 'sin') partes.push('sin asignar'); else if (asigActiva() === 'asignadas') partes.push('asignadas');
-  if (FO.sub === 'masivo') partes.push('masivo'); else if (FO.sub === 'normal') partes.push('normal');
-  const b = $('#badgeSinAsignar');
-  b.hidden = !partes.length;
-  b.textContent = 'Solo ' + partes.join(' · ') + ' ✕';
-}
 function fijarFiltroOtros(k, v) {
   FO[k] = v;
   actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista();
