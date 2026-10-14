@@ -64,11 +64,10 @@
   .um-out{color:var(--red);}
   #map{width:100%;height:100%;position:relative;z-index:600;}
   .report-panel{
-    display:none; position:absolute; top:16px; left:16px; z-index:900;   /* sube a la esquina; baja solo si hay chip de suministro (body.con-sum) */
+    display:none; position:absolute; top:16px; left:16px; z-index:900;
     background:#fff; border-radius:12px; padding:16px 16px 14px; width:600px;
     max-height:min(75vh, calc(100% - 32px)); overflow-y:auto; box-shadow:0 10px 34px rgba(0,0,0,0.2);
   }
-  body.con-sum .report-panel{top:62px; max-height:min(75vh, calc(100% - 78px));}
   .report-panel.visible{display:block;}
   .falla-opcion-row{
     display:flex; align-items:center; gap:10px;
@@ -98,8 +97,16 @@
   .chip-estado.morado:hover{border-color:#7c3aed;}
   .chip-estado.morado.activo{border-color:#7c3aed; background:#f3edff; color:#7c3aed;}
 
+  /* Columna superior derecha: [indicador de fallas + actualizar] · chip de distribución · buscador de direcciones */
+  #colSuperior{position:absolute; top:16px; right:16px; z-index:800; display:flex; flex-direction:column; align-items:flex-end; gap:8px; pointer-events:none;}
+  #colSuperior > *{pointer-events:auto;}
+  #filaIndicador{display:flex; align-items:center; gap:10px; pointer-events:none;}
+  #filaIndicador > *{pointer-events:auto;}
+  #slotSuministro .sum-ctl{margin:0 !important;}
+  #colSuperior .search-box{position:static;}
+  /* Desplegable de comuna / zonas: abajo a la derecha, sobre los botones de fondo y zonas */
   #controlesMapaSuperiores{
-    position:absolute; top:16px; right:16px; z-index:800;
+    position:absolute; bottom:76px; right:16px; z-index:800;
     display:flex; flex-direction:column; align-items:flex-end; gap:8px;
   }
   #controlesMapaSuperiores .fit-comuna-btn{position:static;}
@@ -112,7 +119,7 @@
 
   /* Indicador de fallas arriba al centro del mapa */
   #indicadorFallas{
-    position:absolute; top:16px; left:50%; transform:translateX(-50%); z-index:800; display:none;
+    position:static; z-index:800; display:none;
     background:#fff; border:1.5px solid var(--line); border-radius:10px; padding:9px 14px;
     font-size:12.5px; font-weight:700; color:var(--ink); box-shadow:0 4px 14px rgba(0,0,0,0.12); white-space:nowrap;
     cursor:default; user-select:none;
@@ -123,15 +130,15 @@
   #indicadorFallas .sp{color:#b3beb7; margin:0 8px; font-weight:400;}
   #indicadorFallas .t-md,#indicadorFallas .t-sm{display:none;}
   #indicadorFallas.ind-md{padding:8px 11px; font-size:12px;} #indicadorFallas.ind-md .t-lg{display:none;} #indicadorFallas.ind-md .t-md{display:inline;} #indicadorFallas.ind-md .sp{margin:0 6px;}
-  #indicadorFallas.ind-sm{left:12px; top:12px; transform:none; padding:8px 10px; font-size:11.5px;} #indicadorFallas.ind-sm .t-lg,#indicadorFallas.ind-sm .t-md{display:none;} #indicadorFallas.ind-sm .t-sm{display:none;} #indicadorFallas.ind-sm .sp{margin:0 5px;}
+  #indicadorFallas.ind-sm{padding:8px 10px; font-size:11.5px;} #indicadorFallas.ind-sm .t-lg,#indicadorFallas.ind-sm .t-md{display:none;} #indicadorFallas.ind-sm .t-sm{display:none;} #indicadorFallas.ind-sm .sp{margin:0 5px;}
   /* Botón refrescar (junto al indicador): anillo = tiempo hasta el próximo refresco automático */
 
   /* Suministro eléctrico (Enel) */
-  .sum-ctl{position:relative; margin:16px 0 0 16px !important; font-family:inherit;}
+  .sum-ctl{position:relative; font-family:inherit;}
   .sum-chip{display:inline-flex; align-items:center; gap:7px; border:1px solid #cfd8d2; border-radius:16px; padding:6px 12px; font-size:12.5px; font-weight:700; background:#fff; color:#25312b; box-shadow:0 2px 8px rgba(0,0,0,.22); cursor:pointer;}
   .sum-d{width:10px; height:10px; border-radius:50%; background:#2e9e5b;}
   .sum-ambar .sum-d{background:#f0a500;} .sum-rojo .sum-d{background:#d93a3a;} .sum-gris .sum-d{background:#9aa5a0;}
-  .sum-card{position:absolute; left:0; top:38px; width:260px; background:#fff; border-radius:10px; padding:11px 13px; font-size:12.5px; box-shadow:0 4px 16px rgba(0,0,0,.3);}
+  .sum-card{position:absolute; right:0; top:38px; width:260px; background:#fff; border-radius:10px; padding:11px 13px; font-size:12.5px; box-shadow:0 4px 16px rgba(0,0,0,.3);}
   .sum-card[hidden]{display:none;}
   .sum-card h4{margin:0 0 7px; font-size:13.5px;}
   .sum-k{display:flex; justify-content:space-between; margin:3px 0; color:#444;}
@@ -154,7 +161,7 @@
   .sum-ad{width:15px; height:15px; transform:rotate(45deg); border-radius:4px; background:#263238; border:2px solid #fff; box-shadow:0 1px 4px rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;}
   .sum-ad i{width:5px; height:5px; border-radius:50%; background:#ffd54a; display:block;}
   #btnRefrescar{
-    position:absolute; top:11px; z-index:800; display:none; width:44px; height:44px; padding:0; border:none; border-radius:50%;
+    position:relative; z-index:800; display:none; width:44px; height:44px; flex:none; padding:0; border:none; border-radius:50%;
     background:#fff; color:var(--primary); cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,0.18); align-items:center; justify-content:center;
   }
   #btnRefrescar:hover{box-shadow:0 4px 14px rgba(0,0,0,0.28);}
@@ -464,7 +471,8 @@
   /* Panel de reporte de falla y controles del mapa: ancho ajustado a la pantalla */
   body.modo-movil .report-panel{ width:calc(100vw - 24px); max-width:520px; left:12px; right:12px; top:56px; max-height:min(70vh, calc(100% - 68px)); }
   body.modo-movil .report-panel > div[style*="display:flex"]{ flex-wrap:wrap; }
-  body.modo-movil #controlesMapaSuperiores{ top:12px; right:12px; max-width:60vw; }
+  body.modo-movil #controlesMapaSuperiores{ bottom:76px; right:12px; max-width:60vw; }
+  body.modo-movil #colSuperior{ top:12px; right:12px; }
   body.modo-movil #controlesMapaSuperiores .fit-comuna-btn{ font-size:11.5px; padding:8px 10px; }
   body.modo-movil .search-box{ top:auto; bottom:12px; right:12px; left:12px; width:auto; }
 
@@ -562,11 +570,11 @@
           <option value="zona7">Zona 7 — Pablo Alvarado</option>
         </select>
       </div>
-      <div id="indicadorFallas" title=""></div>
+      <div id="colSuperior"><div id="filaIndicador"><div id="indicadorFallas" title=""></div>
       <button id="btnRefrescar" type="button" title="Actualizar ahora (se actualiza solo cada 2 min)" aria-label="Actualizar fallas">
         <svg class="ring" viewBox="0 0 50 50"><circle class="anillo-bg" cx="25" cy="25" r="22"/><circle class="anillo" id="btnRefrescarAnillo" cx="25" cy="25" r="22"/></svg>
         <svg class="ic" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 3v6h-6"/></svg>
-      </button>
+      </button></div><div id="slotSuministro"></div></div>
       <div id="toastRefrescar">✓ Actualizado</div>
       <div id="searchBox" class="search-box" style="display:none;">
         <div style="position:relative;">
@@ -1586,6 +1594,7 @@ function mostrarPanel(innerHtml){
   const panel = document.getElementById('reportPanel');
   panel.innerHTML = '<button class="close-x" onclick="cerrarPanel()">×</button>' + innerHtml;
   panel.classList.add('visible');
+  ajustarIndicadorFallas();
   return panel;
 }
 // Evita envíos dobles: mientras el guardado está en curso, el botón se ignora y se deshabilita.
@@ -1603,6 +1612,7 @@ function protegerClick(btn){
 
 function cerrarPanel(){
   document.getElementById('reportPanel').classList.remove('visible');
+  ajustarIndicadorFallas();
   quitarResaltadoConsulta();
   quitarFallaHistorica();
 }
@@ -1687,6 +1697,7 @@ function iconoFalla(simbPoste, color, radio){
 
 // ---------- MAPA ----------
 function initMap(){
+  { const sb = document.getElementById('searchBox'), col = document.getElementById('colSuperior'); if(sb && col) col.appendChild(sb); }
   map = L.map('map', {minZoom:12, maxZoom:19, zoomControl:false}).setView([-33.5384, -70.5973], 14);
   map.createPane('fallasPane');
   map.getPane('fallasPane').style.zIndex = 650; // por encima del markerPane (600), donde viven los símbolos de postes
@@ -1873,7 +1884,6 @@ function pintarSuministro(){
   const est = suminEstado();
   if(!suminCtl) return;
   const cont = suminCtl.getContainer();
-  document.body.classList.toggle('con-sum', !!est);
   if(!est){ cont.style.display = 'none'; if(suminLayer) suminLayer.clearLayers(); if(suminAvisosLayer) suminAvisosLayer.clearLayers(); pintarLeyendaSuministro(); return; }
   cont.style.display = '';
   const etq = est.n === 0 ? 'Clientes sin suministro: 0' : `Clientes sin suministro: ${suminNum(est.n)} · ${String(est.pct).replace('.', ',')}%`;
@@ -2163,8 +2173,10 @@ async function generarPdfSuministro(btn){
 function iniciarSuministro(){
   if(suminCtl || !map) return;
   try{ suminVer = localStorage.getItem('fa_sum_trafos') !== '0'; suminAvisosVer = localStorage.getItem('fa_sum_avisos') !== '0'; }catch(e){}
-  const Ctl = L.Control.extend({ options: { position: 'topleft' }, onAdd(){ const d = L.DomUtil.create('div', 'sum-ctl'); d.style.display = 'none'; L.DomEvent.disableClickPropagation(d); return d; } });
-  suminCtl = new Ctl().addTo(map);
+  const d = document.createElement('div'); d.className = 'sum-ctl'; d.style.display = 'none';
+  L.DomEvent.disableClickPropagation(d);
+  document.getElementById('slotSuministro').appendChild(d);
+  suminCtl = { getContainer: () => d };
   cargarSuministro();
 }
 
@@ -2842,15 +2854,11 @@ function ajustarIndicadorFallas(){
   const el = document.getElementById('indicadorFallas'), mapaEl = document.getElementById('map');
   if(!el || !mapaEl) return;
   const w = mapaEl.clientWidth;
-  el.classList.toggle('ind-md', w < 1000 && w >= 700);
+  const panelAbierto = document.getElementById('reportPanel').classList.contains('visible');
+  el.classList.toggle('ind-md', (w < 1000 && w >= 700) || (panelAbierto && w >= 700));
   el.classList.toggle('ind-sm', w < 700);
   const b = document.getElementById('btnRefrescar');
-  if(b){
-    b.style.display = el.style.display === 'block' ? 'flex' : 'none';
-    const r = el.getBoundingClientRect(), m = mapaEl.getBoundingClientRect();
-    b.style.left = Math.round(r.right - m.left + 10) + 'px';
-    b.style.top = Math.round(r.top - m.top + (r.height - 44) / 2) + 'px';
-  }
+  if(b) b.style.display = el.style.display === 'block' ? 'flex' : 'none';
 }
 window.addEventListener('resize', ajustarIndicadorFallas);
 if(window.ResizeObserver) new ResizeObserver(ajustarIndicadorFallas).observe(document.getElementById('map'));
