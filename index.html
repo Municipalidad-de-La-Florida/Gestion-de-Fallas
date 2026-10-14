@@ -814,6 +814,13 @@
             <span class="hint" style="margin:0;">a</span>
             <input type="date" id="fechaFinRango" class="popup-input" style="flex:1;" title="Hasta">
           </div>
+          <div class="hint" style="margin-top:8px;">Horario (opcional): desde esa hora del primer día hasta esa hora del último</div>
+          <div style="display:flex; gap:6px; margin-top:6px; align-items:center;">
+            <input type="time" id="horaInicioRango" class="popup-input" style="flex:1;" value="00:00" title="Desde las">
+            <span class="hint" style="margin:0;">a</span>
+            <input type="time" id="horaFinRango" class="popup-input" style="flex:1;" value="23:59" title="Hasta las">
+          </div>
+          <div id="horaRangoNota" class="hint" style="display:none; margin-top:4px; color:#8a5200;">El PDF y la pestaña Análisis usan días completos.</div>
         </div>
         <div id="selectorInspecciones" style="display:none;">
           <div class="periodo-row" style="margin-bottom:6px;">
@@ -4776,6 +4783,7 @@ document.getElementById('tabPeriodo').onclick = () => {
   else actualizarEstadisticasYMapa();
 };
 document.getElementById('fechaDiaEspecifico').onchange = actualizarEstadisticasYMapa;
+['horaInicioRango', 'horaFinRango'].forEach(id => document.getElementById(id).onchange = () => actualizarEstadisticasYMapa());
 document.getElementById('fechaInicioRango').onchange = () => {
   document.querySelectorAll(BOTONES_RANGO).forEach(x=>x.classList.remove('active'));
   const ini = document.getElementById('fechaInicioRango'), fin = document.getElementById('fechaFinRango');
@@ -4892,6 +4900,7 @@ function pintarFiltrosEst(){
 function actualizarBarraFiltrosEst(){ pintarFiltrosEst(); cargarAsignadoresEst(); if(document.getElementById('tabAnalisis').classList.contains('active')) cargarItosEst(); }
 
 function seleccionarPeriodoRapido(periodo){
+  { const hi = document.getElementById('horaInicioRango'), hf = document.getElementById('horaFinRango'); if(hi) hi.value = '00:00'; if(hf) hf.value = '23:59'; }
   const r = rangoDePreset(periodo);
   fijarRangoCompartido(r.ini, r.fin, periodo);
   actualizarEstadisticasYMapa();
@@ -4913,9 +4922,17 @@ function obtenerRangoSeleccionado(){
     const fin = document.getElementById('fechaFinRango').value;
     if(!ini || !fin) return null;
     if(ini > fin){ alert('La fecha de inicio no puede ser posterior a la de fin.'); return null; }
+    // Horario opcional: el fin incluye el minuto elegido (rango semiabierto: se suma 1 minuto)
+    const hi = (document.getElementById('horaInicioRango').value || '00:00').split(':').map(Number);
+    const hf = (document.getElementById('horaFinRango').value || '23:59').split(':').map(Number);
+    if(ini === fin && (hi[0] * 60 + hi[1]) > (hf[0] * 60 + hf[1])){ alert('La hora de inicio no puede ser posterior a la de fin.'); return null; }
+    const conHorario = !(hi[0] === 0 && hi[1] === 0 && hf[0] === 23 && hf[1] === 59);
+    const nota = document.getElementById('horaRangoNota'); if(nota) nota.style.display = conHorario ? 'block' : 'none';
     return {
-      inicio: fechaChileLocal(ini, 0, 0, 0).toISOString(),
-      fin: fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString()
+      inicio: fechaChileLocal(ini, hi[0], hi[1], 0).toISOString(),
+      fin: conHorario
+        ? new Date(fechaChileLocal(fin, hf[0], hf[1], 0).getTime() + 60000).toISOString()
+        : fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString()
     };
   }
 }
