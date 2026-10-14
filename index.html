@@ -3231,7 +3231,7 @@ async function abrirPopupFalla(feat){
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
-  const tituloConEliminar = `<div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">${botonEditarHtml}${botonEliminarHtml}<b>${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</b>${insigniaEstado}${p.masivo ? '<span class="tag-masivo" style="margin-left:0; flex-shrink:0;">Masivo</span>' : ''}${contratoTag(p.contrato_id)}</div>
+  const tituloConEliminar = `<div style="display:flex; align-items:flex-start; gap:8px; margin-bottom:2px;">${botonEditarHtml}${botonEliminarHtml}<div style="flex:1; min-width:0; line-height:1.3;"><b>${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</b>${p.masivo ? ' <span class="tag-masivo" style="margin-left:2px; white-space:nowrap;">Masivo</span>' : ''}${contratoTag(p.contrato_id)}</div>${insigniaEstado}</div>
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   let contenidoPanel;
