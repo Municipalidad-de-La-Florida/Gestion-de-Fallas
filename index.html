@@ -3778,10 +3778,7 @@ function renderFallasList(){
   filasLateralPorId = {};
   list.innerHTML = filas.map(f => {
     filasLateralPorId[f.id] = f;
-    const gestionable = puedeGestionarFallaLateral(f);
-    const botones = gestionable
-      ? `<button type="button" class="fi-acc" title="Editar falla" onclick="event.stopPropagation(); editarFallaLateral('${f.id}')">✏️</button><button type="button" class="fi-acc fi-del" title="Eliminar falla" onclick="event.stopPropagation(); eliminarFallaPropia('${f.id}')">🗑️</button>`
-      : '';
+    const botones = '';   // editar y eliminar ya no se ofrecen en la barra lateral: se hacen desde la ventana de la falla
     let fechaTxt = '';
     if(f.fecha){ const pc = partesChile(f.fecha); fechaTxt = `${pc.fecha.slice(8)}/${pc.fecha.slice(5, 7)} · ${pc.hora}`; }
     const nombreFalla = descripcionCodigoAnalisis(f.tipo, f.tipo_falla) || '';
