@@ -271,7 +271,8 @@
   .modal-card.modal-card-wide{width:min(920px, 92vw);}
   #todasFallasTabla tbody tr{border-bottom:1px solid var(--line); cursor:pointer;}
   #todasFallasTabla tbody tr:hover{background:#f7f8f7;}
-  #todasFallasTabla td{padding:5px 10px; vertical-align:middle;}
+  #todasFallasTabla td{padding:5px 6px; vertical-align:middle;}
+  #todasFallasTabla td.col-os, #todasFallasTabla th.col-os{width:1%; white-space:nowrap; padding-left:8px !important; padding-right:4px !important;}
   .cam-fotos{display:inline-flex; gap:4px; align-items:center; background:#eef5f1; border:1.5px solid #b9d3c3; border-radius:14px; padding:2px 9px; font-weight:700; color:var(--primary); cursor:pointer; white-space:nowrap;}
   .cam-fotos:hover{background:#dcece3;} .cam-fotos.arch{opacity:.55;}
   #todasFallasTabla td.mono{font-variant-numeric:tabular-nums; color:var(--ink-soft); font-size:11px;}
@@ -303,7 +304,7 @@
     padding:5px 16px; border-bottom:1px solid var(--line); flex-shrink:0;
   }
   .bottom-panel-body{flex:1; overflow:auto; padding:6px 16px 8px;}
-  #todasFallasTabla th{padding:5px 10px !important; font-size:12px;}
+  #todasFallasTabla th{padding:5px 6px !important; font-size:12px;}
   #sidebar{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column;position:relative;}
   .sidebar-resize-handle{
     position:absolute; top:0; left:0; width:6px; height:100%; cursor:ew-resize; z-index:900;
@@ -615,26 +616,27 @@
         <table id="todasFallasTabla" style="width:100%; border-collapse:collapse; font-size:12.5px;">
           <thead>
             <tr style="text-align:left; border-bottom:2px solid var(--line);">
-              <th style="padding:8px 10px;">OS <button class="sort-btn" onclick="ordenarTodasFallas('ot')" title="Ordenar por OS">⇅</button></th>
-              <th style="padding:8px 10px;">Orden Externa</th>
+              <th class="col-os" style="padding:8px 10px;">OS <button class="sort-btn" onclick="ordenarTodasFallas('ot')" title="Ordenar por OS">⇅</button></th>
+              <th style="padding:8px 10px;" title="Orden Externa">Ord. Ext.</th>
               <th style="padding:8px 10px;">Fecha informada <button class="sort-btn" onclick="ordenarTodasFallas('fecha_creacion')" title="Ordenar por fecha informada">⇅</button></th>
               <th style="padding:8px 10px; display:none;" id="thFechaReal">Fecha real <button class="sort-btn" onclick="ordenarTodasFallas('creado_en')" title="Ordenar por fecha real">⇅</button></th>
               <th style="padding:8px 10px;">Reportado por</th>
               <th style="padding:8px 10px; display:none;" id="thIngresadoPorReal">Ingresado por (real)</th>
-              <th style="padding:8px 10px;">Código</th>
+              <th style="padding:8px 10px;" title="Código de falla">Cód.</th>
               <th style="padding:8px 10px;">N° Cliente</th>
-              <th style="padding:8px 10px;">N° Llave</th>
-              <th style="padding:8px 10px;">Puntos afectados</th>
+              <th style="padding:8px 10px;" title="N° de llave">Llave</th>
+              <th style="padding:8px 10px;" title="Puntos afectados">Pts.</th>
               <th style="padding:8px 10px;">Estado</th>
-              <th style="padding:8px 10px;">Fecha reparación</th>
+              <th style="padding:8px 10px;" title="Fecha de reparación">F. reparación</th>
               <th style="padding:8px 10px; display:none;" id="thContrato">Contrato</th>
               <th style="padding:8px 10px; display:none;" id="thAsignacion">Asignación</th>
+              <th style="padding:8px 10px; display:none;" id="thResponde" title="Quién registró la reparación o dejó la falla pendiente">Responde</th>
               <th style="padding:8px 10px;">Fotos</th>
               <th style="padding:8px 10px;"></th>
             </tr>
           </thead>
           <tbody id="todasFallasTbody">
-            <tr><td colspan="16" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+            <tr><td colspan="17" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
           </tbody>
         </table>
         <div id="cargarMasTodasWrap" style="display:none; text-align:center; padding:10px 0 4px;">
@@ -4282,6 +4284,7 @@ let filtroAsignTodasFallas = 'todas';           // 'todas' | 'sin' | 'asignadas'
 const filtroAsignadoresTodasFallas = new Set();  // ids de quienes asignaron; vacío = todos
 function filtrarTodasFallasPorAsignacion(v){
   filtroAsignTodasFallas = v;
+  if(v !== 'asignadas') filtroAsignadoresTodasFallas.clear();   // la fila "Asignada por" solo existe con "Asignadas"
   renderTodasFallasTabla();
 }
 window.filtrarTodasFallasPorAsignacion = filtrarTodasFallasPorAsignacion;
@@ -4297,6 +4300,13 @@ function celdaAsignacionTodas(f){
   const fecha = f.fecha_asignacion ? new Date(f.fecha_asignacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
   return `<b>${escHtml(f.asignado_por_nombre || '—')}</b>${f.asignado_camion_nombre ? `<br>→ ${escHtml(f.asignado_camion_nombre)}` : ''}${fecha ? `<br><span style="color:var(--ink-soft);">${fecha}</span>` : ''}`;
 }
+// Quién respondió: reparó (falla reparada) o la dejó pendiente. Si respondió sin que nadie la asignara, se marca.
+function celdaRespondeTodas(f){
+  const quien = f.estado === 'reparada' ? f.reparado_por_nombre : (f.estado === 'pendiente' ? f.pendiente_por_nombre : null);
+  if(!quien) return '<span style="color:var(--ink-soft);">—</span>';
+  const asignada = !!f.asignado_camion_id || !!f.asignado_camion_nombre;
+  return `<b>${escHtml(quien)}</b>${asignada ? '' : '<br><span style="color:#b87100;">sin asignación</span>'}`;
+}
 function pasaFiltrosAsignacionTodas(f){
   if(!verAsignacionTodas()) return true;
   const asignada = !!f.asignado_camion_id || !!f.asignado_camion_nombre;
@@ -4311,7 +4321,7 @@ function actualizarChipsAsignacionTodas(){
   if(!contAsig || !contPor) return;
   const ver = verAsignacionTodas();
   contAsig.style.display = ver ? 'flex' : 'none';
-  contPor.style.display = ver ? 'flex' : 'none';
+  contPor.style.display = (ver && filtroAsignTodasFallas === 'asignadas') ? 'flex' : 'none';
   if(!ver) return;
   contAsig.querySelectorAll('.chip-estado').forEach(c => c.classList.toggle('activo', c.dataset.asig === filtroAsignTodasFallas));
   const conteo = new Map();
@@ -4365,12 +4375,13 @@ async function cargarTodasFallas(){
   document.getElementById('thFechaReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
   document.getElementById('thIngresadoPorReal').style.display = (esAdmin && !ocultarReales) ? 'table-cell' : 'none';
   document.getElementById('thAsignacion').style.display = verAsignacionTodas() ? 'table-cell' : 'none';
+  document.getElementById('thResponde').style.display = verAsignacionTodas() ? 'table-cell' : 'none';
   if(todasFallasCacheVigente){
     renderTodasFallasTabla();
     if(!conteoFotosTodas) cargarConteoFotosTodas();
     return;
   }
-  tbody.innerHTML = '<tr><td colspan="16" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="17" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
     const todas = await db.rpc('resumen_todas_fallas', {limite: PAGINA_TODAS_FALLAS, desplazamiento: 0});
     ultimosTodasFallas = todas || [];
@@ -4382,7 +4393,7 @@ async function cargarTodasFallas(){
     cargarConteoFotosTodas();
     if(textoBusquedaTodasFallas.trim()) evaluarBusquedaServidor(); // había texto escrito: volver a buscar
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="16" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="17" style="padding:20px; text-align:center; color:var(--ink-soft);">Error cargando fallas: ${e.message}</td></tr>`;
   }
 }
 
@@ -4530,7 +4541,7 @@ function renderTodasFallasTabla(){
   actualizarChipsAsignacionTodas();
 
   if(!ultimosTodasFallas.length){
-    tbody.innerHTML = '<tr><td colspan="16" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="17" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay fallas registradas todavía.</td></tr>';
     return;
   }
 
@@ -4591,12 +4602,12 @@ function renderTodasFallasTabla(){
     const msj = terminos.length
       ? `No hay fallas que coincidan con la búsqueda ${donde}.`
       : `No hay fallas con el estado seleccionado ${donde}.`;
-    tbody.innerHTML = `<tr><td colspan="16" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="17" style="padding:20px; text-align:center; color:var(--ink-soft);">${msj}</td></tr>`;
     return;
   }
 
   tbody.innerHTML = datosFiltrados.map(f => {
-    const fecha = new Date(f.fecha_creacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const fecha = new Date(f.fecha_creacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
     const fechaCelda = esAdmin
       ? `<input type="datetime-local" class="popup-input" style="margin:0; padding:4px 6px; font-size:11.5px; width:170px;" value="${toDatetimeLocalValue(f.fecha_creacion)}" onclick="event.stopPropagation();" onchange="event.stopPropagation(); actualizarFechaFalla('${f.id}', this.value)">`
       : fecha;
@@ -4632,7 +4643,7 @@ function renderTodasFallasTabla(){
     }
 
     return `<tr onclick="enfocarFalla('${f.id}')">
-      <td class="mono">${f.ot || '—'}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}</td>
+      <td class="mono col-os">${f.ot || '—'}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}</td>
       <td class="mono">${f.orden_externa ? escHtml(f.orden_externa) : '—'}</td>
       <td>${fechaCelda}</td>
       ${fechaReal}
@@ -4643,9 +4654,9 @@ function renderTodasFallasTabla(){
       <td>${f.tipo === 'punto' ? (f.llave ?? '—') : '—'}</td>
       <td>${f.puntos_afectados}</td>
       <td><span class="badge ${f.estado}" ${tooltipEstado ? `title="${tooltipEstado.replace(/"/g,'&quot;')}"` : ''} style="${tooltipEstado ? 'cursor:help;' : ''}">${f.estado.replace('_',' ')}</span></td>
-      <td style="white-space:nowrap;">${f.fecha_reparacion ? new Date(f.fecha_reparacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
+      <td style="white-space:nowrap;">${f.fecha_reparacion ? new Date(f.fecha_reparacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
       ${CONTRATOS_ACTIVOS.length ? `<td style="font-size:11.5px;">${f.contrato_nombre ? escHtml(f.contrato_nombre) : '—'}</td>` : ''}
-      ${verAsignacionTodas() ? `<td style="font-size:11.5px; line-height:1.3;">${celdaAsignacionTodas(f)}</td>` : ''}
+      ${verAsignacionTodas() ? `<td style="font-size:11.5px; line-height:1.3;">${celdaAsignacionTodas(f)}</td><td style="font-size:11.5px; line-height:1.3;">${celdaRespondeTodas(f)}</td>` : ''}
       <td>${celdaFotosTodas(f.id)}</td>
       <td>${boton}</td>
     </tr>`;
