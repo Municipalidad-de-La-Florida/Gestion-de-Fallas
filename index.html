@@ -1318,7 +1318,7 @@ async function cargarListaItos(){
 // El modo "Informar inspección" (fecha + ITO) se recuerda en este navegador para que, si cambias de
 // ventana o se recarga la página, la app vuelva sola al mismo modo. Se borra al salir con "Listo".
 const CLAVE_SESION_INSPECCION = 'inspeccion_sesion_v1';
-const DIAS_MAX_CONTINUAR_INSPECCION = 3;   // misma regla que en la base (admin sin límite)
+const DIAS_MAX_CONTINUAR_INSPECCION = 7;   // misma regla que en la base (admin sin límite)
 function guardarSesionInspeccion(){
   try{
     if(!currentUser || modoIngreso !== 'inspeccion' || !fechaInspeccionSesion) return;
@@ -2409,7 +2409,7 @@ function leerOrdenExterna(panel){
 // ingresar fallas, al pulsar "Limpiar" o al cerrar sesión.
 const CLAVE_NOTIFICADOR_SESION = 'notificador_sesion_v1';
 const MINUTOS_VIGENCIA_NOTIFICADOR = 120;
-const DIAS_MAX_FECHA_FALLA = 3;          // igual que en la base; el admin no tiene límite
+const DIAS_MAX_FECHA_FALLA = 7;          // igual que en la base; el admin no tiene límite
 let listaNotificadores = [];
 
 function puedeNotificadorExterno(){

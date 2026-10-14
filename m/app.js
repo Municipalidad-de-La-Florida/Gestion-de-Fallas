@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.21.8';
+const VERSION_APP = '1.21.9';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -16,7 +16,7 @@ const LS_PERFIL = 'fm_perfil_v1';
 const ZOOM_EMPALMES = 19;     // desde este zoom se dibujan los empalmes (igual que en el escritorio)
 const ZOOM_DATOS = 17;          // desde este zoom se cargan y se pueden tocar puntos y circuitos
 const REFRESCO_MS = 60000;      // actualización automática de fallas
-const DIAS_MAX_INSPECCION = 3;  // misma regla que la base (admin sin límite)
+const DIAS_MAX_INSPECCION = 7;  // misma regla que la base (admin sin límite)
 
 const PUEDE_REPORTAR = ['ito', 'ito2', 'admin', 'contratista2'];
 const PUEDE_CERRAR = ['contratista', 'contratista2', 'camion', 'admin'];
