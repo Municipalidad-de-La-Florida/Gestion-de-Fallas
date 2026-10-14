@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.22.0';
+const VERSION_APP = '1.22.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -697,10 +697,23 @@ function actualizarFiltrosOtrosUI() {
   poner('#listaSinAsignarN', nSin); poner('#listaAsignadasN', base.length - nSin);
   poner('#listaMasivoN', nMas); poner('#listaNormalN', base.length - nMas);
   function ordenLista() { try { return localStorage.getItem('fm_orden_lista') === 'recientes' ? 'recientes' : 'cerca'; } catch (e) { return 'cerca'; } }
-$$('#listaOrden .fchip').forEach((c) => c.addEventListener('click', () => {
-  try { localStorage.setItem('fm_orden_lista', c.dataset.orden); } catch (e) { /* sin almacenamiento */ }
+// Si el teléfono tiene un index.html antiguo en caché, el selector se crea aquí (así la lista nunca se rompe).
+function asegurarOrdenUI() {
+  if ($('#listaOrdenGrupo')) return;
+  const g = document.createElement('div');
+  g.id = 'listaOrdenGrupo'; g.hidden = true;
+  g.innerHTML = '<div class="lf-t">Ordenar por</div><div class="lf-chips" id="listaOrden">'
+    + '<button type="button" class="fchip fchip-sel on" data-orden="cerca">Cercanía</button>'
+    + '<button type="button" class="fchip fchip-sel" data-orden="recientes">Más recientes</button></div>';
+  const panel = $('#filtrosListaPanel');
+  panel.insertBefore(g, panel.querySelector('.lf-t'));
+}
+document.addEventListener('click', (e) => {
+  const c = e.target.closest && e.target.closest('#listaOrden .fchip');
+  if (!c) return;
+  try { localStorage.setItem('fm_orden_lista', c.dataset.orden); } catch (err) { /* sin almacenamiento */ }
   renderLista();
-}));
+});
 $$('#listaAsig .fchip').forEach((c) => c.classList.toggle('on', c.dataset.asig === FO.asig));
   $$('#listaSub .fchip').forEach((c) => c.classList.toggle('on', c.dataset.sub === FO.sub));
   // Aviso sobre el mapa mientras haya filtros de Asignación o Subcontrato puestos
@@ -1462,6 +1475,7 @@ function renderLista() {
   const porCerca = orden === 'cerca' && !!S.pos;
   if (porCerca) items.sort((a, b) => a.d - b.d);
   else items.sort((a, b) => (Date.parse(b.f.properties.fecha_falla) || 0) - (Date.parse(a.f.properties.fecha_falla) || 0) || String(b.f.properties.ot).localeCompare(String(a.f.properties.ot)));
+  asegurarOrdenUI();
   $('#listaOrdenGrupo').hidden = rol() !== 'admin';
   $$('#listaOrden .fchip').forEach((c) => c.classList.toggle('on', c.dataset.orden === orden));
   $('#listaResumen').textContent = `${items.length} de ${total} fallas activas · ${porCerca ? 'ordenadas por cercanía' : (orden === 'cerca' ? 'más recientes primero (activa el GPS para ordenar por cercanía)' : 'más recientes primero')}`;
