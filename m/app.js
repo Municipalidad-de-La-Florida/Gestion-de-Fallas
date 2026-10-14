@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.25.0';
+const VERSION_APP = '1.24.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1417,7 +1417,7 @@ async function formAsignar(p) {
 
 function formCierre(p, borr) {
   let sel = [];
-  const exigeFoto = true;   // toda reparación exige al menos 1 foto (la base también lo valida)
+  const exigeFoto = !!(S.perfil && S.perfil.foto_obligatoria);
   const fotos = [];   // { blob, url, subida }
   if (borr) { sel = (borr.sel || []).slice(); (borr.fotos || []).forEach((b) => fotos.push({ blob: b, url: URL.createObjectURL(b), subida: false })); }
   const h = abrirHoja(`
