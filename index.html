@@ -1619,10 +1619,17 @@ function quitarResaltadoConsulta(){
 
 // ---------- SIMBOLOGÍA DE PUNTOS SEGÚN TIPO DE POSTE (simb_poste) ----------
 function iconoEstrellaEmpalme(){
-  const svg = `<svg width="26" height="26" viewBox="0 0 24 24">
-    <polygon points="12,1 15,9 23,9 17,14 19,22 12,17 5,22 7,14 1,9 9,9" fill="#b23a48" stroke="#7a232f" stroke-width="1"/>
+  // Estrella grande y "gorda": queda detrás del poste (que mide 12 px) y asoma como halo alrededor, para que se vea
+  // aunque el empalme esté justo bajo el poste. Las puntas son clicables; el centro es del poste.
+  const pts = [];
+  for(let i = 0; i < 10; i++){
+    const a = -Math.PI / 2 + i * Math.PI / 5, k = i % 2 ? 0.65 : 1;
+    pts.push((20 + Math.cos(a) * 19 * k).toFixed(1) + ',' + (20 + Math.sin(a) * 19 * k).toFixed(1));
+  }
+  const svg = `<svg width="40" height="40" viewBox="0 0 40 40">
+    <polygon points="${pts.join(' ')}" fill="#b23a48" stroke="#7a232f" stroke-width="1" stroke-linejoin="round"/>
   </svg>`;
-  return L.divIcon({html: svg, className: '', iconSize: [26,26], iconAnchor: [13,13]});
+  return L.divIcon({html: svg, className: '', iconSize: [40,40], iconAnchor: [20,20]});
 }
 
 function iconoParaPunto(simbPoste, colorRelleno, colorBorde){
