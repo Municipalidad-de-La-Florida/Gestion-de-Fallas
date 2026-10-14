@@ -65,7 +65,7 @@
   #map{width:100%;height:100%;position:relative;z-index:600;}
   .report-panel{
     display:none; position:absolute; top:16px; left:16px; z-index:900;   /* sube a la esquina; baja solo si hay chip de suministro (body.con-sum) */
-    background:#fff; border-radius:12px; padding:16px 16px 14px; width:520px;
+    background:#fff; border-radius:12px; padding:16px 16px 14px; width:600px;
     max-height:min(75vh, calc(100% - 32px)); overflow-y:auto; box-shadow:0 10px 34px rgba(0,0,0,0.2);
   }
   body.con-sum .report-panel{top:62px; max-height:min(75vh, calc(100% - 78px));}
@@ -81,6 +81,12 @@
     color:var(--ink-soft); background:none; border:none; font-size:16px; line-height:1;
   }
   .report-panel .close-x:hover{color:var(--ink);}
+  /* Editar / eliminar: arriba a la derecha, justo a la izquierda de la X */
+  .panel-acciones{position:absolute; top:5px; right:34px; display:flex; gap:6px;}
+  .panel-titulo{padding-right:76px; margin-bottom:2px; line-height:1.45; font-size:13px;}
+  .panel-titulo .pt-nom{font-weight:700;}
+  .panel-titulo .tag-contrato,.panel-titulo .tag-masivo,.panel-titulo .badge{white-space:nowrap; vertical-align:middle;}
+  .panel-titulo .badge{margin-left:6px;}
   .btn-masivo{
     position:absolute; top:6px; right:34px; cursor:pointer; font-weight:700; font-size:11.5px; line-height:1.3;
     color:#7c3aed; background:#fff; border:2px solid #7c3aed; border-radius:8px; padding:1px 10px;
@@ -3231,7 +3237,7 @@ async function abrirPopupFalla(feat){
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
-  const tituloConEliminar = `<div style="display:flex; align-items:flex-start; gap:8px; margin-bottom:2px;">${botonEditarHtml}${botonEliminarHtml}<div style="flex:1; min-width:0; line-height:1.3;"><b>${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</b>${p.masivo ? ' <span class="tag-masivo" style="margin-left:2px; white-space:nowrap;">Masivo</span>' : ''}${contratoTag(p.contrato_id)}</div>${insigniaEstado}</div>
+  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${p.masivo ? ' <span class="tag-masivo">Masivo</span>' : ''}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   let contenidoPanel;
@@ -3243,7 +3249,6 @@ async function abrirPopupFalla(feat){
       </div>
     `).join('');
     const columnaIzquierda = `
-      ${tituloConEliminar}
       ${infoCardinalidad}
       ${infoGeneral}
       ${infoReparacion}
@@ -3257,6 +3262,7 @@ async function abrirPopupFalla(feat){
       <input type="file" id="cierreFotoIn" accept="image/*" multiple hidden>
     `;
     contenidoPanel = `
+      ${tituloConEliminar}
       <div style="display:flex; gap:14px;">
         <div style="flex:1; min-width:0;">${columnaIzquierda}</div>
         <div style="flex:1; min-width:0;">${filasCierre}</div>
