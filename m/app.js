@@ -1427,15 +1427,15 @@ function formCierre(p, borr) {
     <div class="codigos">${CAT_CIERRES.map((x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>
     <h3>Información adicional</h3>
     <textarea id="cDesc" class="campo" placeholder="Ej: detalle de lo realizado. Obligatorio si dejas la falla pendiente."></textarea>
-    ${exigeFoto ? `<h3>Fotografías <span class="req">obligatoria</span></h3>
-    <div class="hint">Sube al menos 1 foto de la reparación (máximo ${MAX_FOTOS}). Se reducen solas para ocupar poco espacio.</div>
+    <h3>Fotografías ${exigeFoto ? '<span class="req">obligatoria</span>' : '<span class="hint" style="font-weight:400;">(opcional)</span>'}</h3>
+    <div class="hint">${exigeFoto ? 'Sube al menos 1 foto de la reparación' : 'Puedes subir fotos de la reparación'} (máximo ${MAX_FOTOS}). Se reducen solas para ocupar poco espacio.</div>
     <div id="cFotos" class="fotos"></div>
     <div class="fila-btns">
       <button type="button" id="cBtnCam" class="btn btn-secundario">📷 Tomar foto</button>
       <button type="button" id="cBtnGal" class="btn btn-secundario">🖼 Galería</button>
     </div>
     <input id="cInCam" type="file" accept="image/*" capture="environment" hidden>
-    <input id="cInGal" type="file" accept="image/*" multiple hidden>` : ''}
+    <input id="cInGal" type="file" accept="image/*" multiple hidden>
     <div class="acciones fija">
       <button id="cOk" class="btn btn-primario">Registrar reparación y cerrar falla</button>
       <button id="cPend" class="btn btn-ambar">Dejar pendiente</button>
@@ -1462,7 +1462,7 @@ function formCierre(p, borr) {
     $('#cBtnCam', h).disabled = $('#cBtnGal', h).disabled = fotos.length >= MAX_FOTOS;
     if (S.borradorId === p.id) guardarBorrador();
   };
-  if (exigeFoto) {
+  {
     const agregar = async (files) => {
       const libres = MAX_FOTOS - fotos.length;
       const lista = Array.from(files || []).slice(0, libres);
@@ -1487,7 +1487,7 @@ function formCierre(p, borr) {
     const d = texto();
     if (!d) { toast('Elige el trabajo realizado o describe la reparación.', 'error'); return; }
     if (exigeFoto && !fotos.length) { toast('Esta reparación exige al menos una fotografía.', 'error'); return; }
-    if (exigeFoto) {
+    {
       const pend_ = fotos.filter((f) => !f.subida);
       for (let i = 0; i < pend_.length; i++) {
         ok.textContent = `Subiendo foto ${i + 1} de ${pend_.length}…`;
