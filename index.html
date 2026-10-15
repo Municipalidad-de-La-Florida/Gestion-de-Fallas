@@ -7198,16 +7198,19 @@ async function generarPdfAnalisis(soloResumen, opciones){
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(30, 40, 35); pdf.text(String(c.fallas), margen + wIzq - 5, yy, {align: 'right'});
     });
     const hIzq = 12 + top.length * 10.5 + 2;
-    const itos = [...(d.por_ito || [])].sort((a, b) => b.fallas - a.fallas).slice(0, 5);
-    tarjeta(margen + wIzq + 6, 147, wDer, Math.max(30, 12 + itos.length * 8 + 4), 'Quién informa');
+    // Todos los informadores del período: la tarjeta se ajusta a la cantidad (filas más compactas si son muchas)
+    const itos = [...(d.por_ito || [])].sort((a, b) => b.fallas - a.fallas);
+    const pasoIto = itos.length ? Math.min(8, Math.max(3.8, (hIzq - 16) / itos.length)) : 8;
+    const hDer = Math.max(30, 12 + itos.length * pasoIto + 4);
+    tarjeta(margen + wIzq + 6, 147, wDer, hDer, itos.length > 5 ? `Quién informa (${itos.length})` : 'Quién informa');
     const maxIto = Math.max(1, ...itos.map(i => i.fallas));
     itos.forEach((it, i) => {
-      const yy = 160 + i * 8;
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35);
+      const yy = 160 + i * pasoIto;
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(Math.min(7.5, pasoIto * 1.9)); pdf.setTextColor(30, 40, 35);
       pdf.text(pdf.splitTextToSize(String(it.nombre || '-'), 30)[0], margen + wIzq + 11, yy);
-      const bx = margen + wIzq + 42, bwMax = wDer - 36 - 18;
-      pdf.setFillColor(238, 242, 238); pdf.roundedRect(bx, yy - 2.8, bwMax, 3.2, 1.2, 1.2, 'F');
-      pdf.setFillColor(...VERDE); pdf.roundedRect(bx, yy - 2.8, Math.max(1.2, it.fallas / maxIto * bwMax), 3.2, 1.2, 1.2, 'F');
+      const bx = margen + wIzq + 42, bwMax = wDer - 36 - 18, bh = Math.min(3.2, pasoIto * 0.42);
+      pdf.setFillColor(238, 242, 238); pdf.roundedRect(bx, yy - bh + 0.4, bwMax, bh, 1.2, 1.2, 'F');
+      pdf.setFillColor(...VERDE); pdf.roundedRect(bx, yy - bh + 0.4, Math.max(1.2, it.fallas / maxIto * bwMax), bh, 1.2, 1.2, 'F');
       pdf.setFont('helvetica', 'bold'); pdf.text(String(it.fallas), margen + wIzq + wDer - 4, yy, {align: 'right'});
     });
 
@@ -7216,7 +7219,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     const prevFin = sumarDias(ini, -1), prevIni = sumarDias(prevFin, -(nDiasRango - 1));
     let prev = null;
     try{ prev = await rpcAnalisisFallas(prevIni, prevFin, cid); }catch(e){ console.warn('No se pudo obtener el período anterior:', e); }
-    const yc = 147 + hIzq + 6, hc = 40;
+    const yc = 147 + Math.max(hIzq, hDer) + 6, hc = 40;
     tarjeta(margen, yc, ancho - margen * 2, hc, 'Comparación con el período anterior');
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
     pdf.text(`Anterior: ${fmtF(prevIni)} al ${fmtF(prevFin)}  ·  Actual: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen - 5, yc + 8, {align: 'right'});
