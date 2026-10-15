@@ -2296,7 +2296,7 @@ window.addEventListener('focus', () => setTimeout(recogerAvisoPendiente, 400));
       if (!habiaControlador || S.recargando) return;
       S.recargando = true;
       const recargar = () => { if (!hojaAbierta) location.reload(); else setTimeout(recargar, 3000); };
-      toast('Nueva versión instalada. Actualizando…', 'ok'); setTimeout(recargar, 1200);
+      setTimeout(recargar, 1200);   // recarga en silencio (si hay una hoja abierta, espera a que la cierren)
     });
   }
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { /* sin SW: la app funciona igual */ });
