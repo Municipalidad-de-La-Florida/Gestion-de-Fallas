@@ -18,11 +18,11 @@ const ZOOM_DATOS = 17;          // desde este zoom se cargan y se pueden tocar p
 const REFRESCO_MS = 60000;      // actualización automática de fallas
 const DIAS_MAX_INSPECCION = 7;  // misma regla que la base (admin sin límite)
 
-const PUEDE_REPORTAR = ['ito', 'ito2', 'admin', 'contratista2'];
-const PUEDE_CERRAR = ['contratista', 'contratista2', 'camion', 'admin'];
+const PUEDE_REPORTAR = ['ito', 'ito2', 'admin', 'contratista2', 'contratista3'];
+const PUEDE_CERRAR = ['contratista', 'contratista2', 'contratista3', 'camion', 'admin'];
 const LS_MODO = 'fm_modo_v1';
 const PUEDE_MODO_INSPECCION = ['ito', 'ito2', 'admin'];
-const PUEDE_ASIGNAR = ['contratista', 'contratista2', 'admin'];
+const PUEDE_ASIGNAR = ['contratista', 'contratista2', 'contratista3', 'admin'];
 
 const CAT_PUNTO = [
   { c: 'F01', d: 'Luminaria vial apagada' },
@@ -395,7 +395,7 @@ const S = {
   instalar: null,
 };
 const rol = () => (S.perfil ? S.perfil.rol : null);
-const rolVisible = () => (rol() === 'contratista2' ? 'contratista' : rol());
+const rolVisible = () => (rol() === 'contratista2' || rol() === 'contratista3' ? 'contratista' : rol());
 const puedeReportar = () => PUEDE_REPORTAR.includes(rol());
 const puedeAsignar = () => PUEDE_ASIGNAR.includes(rol());
 const puedeCerrar = () => PUEDE_CERRAR.includes(rol());
@@ -675,7 +675,7 @@ function abrirEmpalme(p) {
    No se guardan: se reinician al abrir la app. Los contadores muestran el estado actual de la comuna,
    sin importar los filtros puestos. */
 try { localStorage.removeItem('fa_sin_asignar'); localStorage.removeItem('fa_solo_masivo'); } catch (e) { /* */ }
-const puedeFiltrarSinAsignar = () => ['admin', 'contratista', 'contratista2'].includes(rol());
+const puedeFiltrarSinAsignar = () => ['admin', 'contratista', 'contratista2', 'contratista3'].includes(rol());
 const FO = { asig: 'todas', sub: 'todas' };   // asig: todas | sin | asignadas · sub: todas | masivo | normal
 const asigActiva = () => (puedeFiltrarSinAsignar() ? FO.asig : 'todas');
 const cuentaFiltrosOtros = () => (asigActiva() !== 'todas' ? 1 : 0) + (FO.sub !== 'todas' ? 1 : 0);
@@ -1605,12 +1605,78 @@ function cambiarVista(v) {
   S.vista = v;
   $('#vistaMapa').hidden = v !== 'mapa';
   $('#vistaLista').hidden = v !== 'lista';
+  $('#vistaInsp').hidden = v !== 'insp';
   $$('.nav-btn[data-vista]').forEach((b) => b.classList.toggle('sel', b.dataset.vista === v));
   if (v === 'mapa' && map) { setTimeout(() => { map.invalidateSize(); cargarArea(); }, 50); }
   if (v === 'lista') renderLista();
+  if (v === 'insp') cargarInspC3();
   $('#zoomAviso').hidden = v !== 'mapa' || (map && map.getZoom() >= ZOOM_DATOS);
 }
 $$('.nav-btn[data-vista]').forEach((b) => b.addEventListener('click', () => cambiarVista(b.dataset.vista)));
+
+/* ------------------- Contratista3: inspecciones de todos los ITOs + asignación rápida ------------------- */
+const hoyISO = () => new Date().toISOString().slice(0, 10);
+async function cargarInspC3() {
+  const cont = $('#inspC3Items');
+  cont.innerHTML = '<div class="vacio">Cargando…</div>';
+  try {
+    const ini = new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10);
+    const filas = await rpc('inspecciones_listado', { p_inicio: ini, p_fin: hoyISO(), p_ito: null });
+    $('#inspC3Resumen').textContent = `Inspecciones de los últimos 7 días (todos los ITOs). Las cifras consideran solo tu contrato.`;
+    if (!filas || !filas.length) { cont.innerHTML = '<div class="vacio">No hay inspecciones en los últimos 7 días.</div>'; return; }
+    cont.innerHTML = filas.map((i) => `<div class="tarjeta insp-c3" data-id="${esc(i.inspeccion_id)}">
+      <div class="tarjeta-top"><b>${esc(i.ito_nombre)}</b><span class="dist">${esc(fmtFechaCorta(i.fecha))}</span></div>
+      <div class="sub">${i.fallas ? `${i.fallas} falla${i.fallas > 1 ? 's' : ''} · ${i.puntos_afectados} punto${i.puntos_afectados === 1 ? '' : 's'} afectado${i.puntos_afectados === 1 ? '' : 's'}` : 'Sin fallas de tu contrato'}</div>
+      <div class="sub">${[['reportada', i.reportadas], ['pendiente', i.pendientes], ['reiterada', i.reiteradas], ['reparada', i.reparadas]].filter((x) => x[1]).map((x) => `<span class="insignia ${x[0]}">${x[1]} ${ETIQUETA_ESTADO[x[0]] || x[0]}</span>`).join(' ')}</div>
+      <div class="acciones" style="margin-top:8px;"><button class="btn btn-secundario" data-det="${esc(i.inspeccion_id)}">Ver detalle</button>${(i.fallas - i.reparadas) > 0 ? `<button class="btn btn-primario" data-asig="${esc(i.inspeccion_id)}">🚚 Asignar a camión</button>` : ''}</div>
+    </div>`).join('');
+    cont.querySelectorAll('[data-det]').forEach((b) => b.addEventListener('click', () => detalleInspC3(b.dataset.det)));
+    cont.querySelectorAll('[data-asig]').forEach((b) => b.addEventListener('click', () => asignarInspC3(b.dataset.asig)));
+  } catch (e) { cont.innerHTML = `<div class="vacio">No se pudo cargar: ${esc(e.message)}</div>`; }
+}
+async function detalleInspC3(id) {
+  const h = abrirHoja('<div class="vacio">Cargando…</div>');
+  try {
+    const det = await rpc('inspeccion_detalle', { p_inspeccion: id });
+    if (!det) { h.innerHTML = '<div class="vacio">No se encontró la inspección.</div>'; return; }
+    const fs = det.fallas || [];
+    h.innerHTML = `<h2>${esc(det.inspeccion.ito_nombre)} · ${esc(fmtFechaCorta(det.inspeccion.fecha))}</h2>
+      <div class="hint">${fs.length} falla${fs.length === 1 ? '' : 's'} en total. Las de otros contratos se ven en gris.</div>
+      ${fs.map((f) => `<div class="tarjeta est-${esc(f.estado)}" style="margin-top:8px;${f.mi_contrato ? '' : ' opacity:.45; filter:grayscale(1);'}">
+        <div class="tarjeta-top"><b>${esc(f.tipo_falla)} · ${esc(DESC_CODIGO[f.tipo_falla] || '')}</b></div>
+        <div class="sub">OS ${esc(f.ot || '—')} · ${f.tipo === 'linea' ? 'Circuito ' + esc(f.circuito_id ?? '—') : 'Llave ' + esc(f.llave ?? '—')} · <span class="insignia ${esc(f.estado)}">${esc(ETIQUETA_ESTADO[f.estado] || f.estado)}</span></div>
+        ${f.contrato_nombre ? `<div class="sub">${esc(f.contrato_nombre)}${f.asignado_camion ? ' · Asignada a ' + esc(f.asignado_camion) : ''}</div>` : ''}
+      </div>`).join('')}`;
+  } catch (e) { h.innerHTML = `<div class="vacio">Error: ${esc(e.message)}</div>`; }
+}
+async function asignarInspC3(id) {
+  const h = abrirHoja('<div class="vacio">Cargando…</div>');
+  try {
+    const [det, camiones] = await Promise.all([rpc('inspeccion_detalle', { p_inspeccion: id }), rpc('listar_camiones_contrato', {})]);
+    const propias = ((det && det.fallas) || []).filter((f) => f.mi_contrato && f.estado !== 'reparada');
+    const sin = propias.filter((f) => !f.asignado_camion_id).length, ya = propias.length - sin;
+    if (!propias.length) { h.innerHTML = '<div class="vacio">No hay fallas de tu contrato por asignar en esta inspección.</div>'; return; }
+    if (!camiones || !camiones.length) { h.innerHTML = '<div class="vacio">No hay camiones asociados a tu contrato.</div>'; return; }
+    h.innerHTML = `<h2>🚚 Asignar a camión</h2>
+      <div class="hint">${esc(det.inspeccion.ito_nombre)} · ${esc(fmtFechaCorta(det.inspeccion.fecha))}<br>${propias.length} falla${propias.length === 1 ? '' : 's'} de tu contrato sin reparar: ${sin} sin asignar, ${ya} ya asignada${ya === 1 ? '' : 's'}.</div>
+      <label class="hint" for="icCamion">Camión</label>
+      <select id="icCamion" style="width:100%; padding:10px; margin-bottom:10px;">${camiones.map((c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')}</select>
+      ${ya ? `<div class="hint"><b>${ya} ya ${ya === 1 ? 'tiene' : 'tienen'} camión. ¿Volver a asignar?</b></div>
+        <label style="display:flex; gap:6px; margin:6px 0;"><input type="radio" name="icModo" value="vacias" checked> No, solo las que están sin camión (${sin})</label>
+        <label style="display:flex; gap:6px; margin:6px 0;"><input type="radio" name="icModo" value="todas"> Sí, reasignar todas (${propias.length})</label>` : ''}
+      <div class="acciones"><button class="btn btn-primario" id="icOk">Asignar</button></div>`;
+    $('#icOk').addEventListener('click', async () => {
+      const btn = $('#icOk'); btn.disabled = true;
+      const r = h.querySelector('input[name="icModo"]:checked');
+      try {
+        const n = await rpc('asignar_camion_inspeccion', { p_inspeccion: id, p_camion: $('#icCamion').value, p_sobrescribir: !!r && r.value === 'todas' });
+        cerrarHoja(); toast(`${n} falla${n === 1 ? '' : 's'} asignada${n === 1 ? '' : 's'}`);
+        if (typeof cargarArea === 'function') cargarArea();
+      } catch (e) { btn.disabled = false; toast('No se pudo asignar: ' + e.message, 'error'); }
+    });
+  } catch (e) { h.innerHTML = `<div class="vacio">Error: ${esc(e.message)}</div>`; }
+}
+$('#navInspC3').addEventListener('click', () => cambiarVista('insp'));
 
 /* ------------------------- notificaciones push ------------------------- */
 const LS_PUSH_NO = 'fm_push_no_v1';
@@ -1679,17 +1745,17 @@ async function iniciarPush() {
 
 /* ------------------------- gestión de usuarios (solo admin) ------------------------- */
 // Pantalla completa con 3 pestañas (Usuarios · Contratos · Notificadores). Se edita en una hoja inferior.
-const ROLES_LISTA = ['admin', 'ito', 'ito2', 'contratista', 'contratista2', 'camion', 'observador'];
-const ROL_ETQ = { admin: 'Admin', ito: 'ITO', ito2: 'ITO 2', contratista: 'Contratista', contratista2: 'Contratista 2', camion: 'Camión', observador: 'Observador' };
-const ROL_CLASE = { admin: 'u-r-adm', ito: 'u-r-ito', ito2: 'u-r-ito', contratista: 'u-r-con', contratista2: 'u-r-con', camion: 'u-r-cam', observador: 'u-r-obs' };
-const ROLES_CON_NOTIF = ['admin', 'ito', 'ito2', 'contratista2'];
-const ROLES_CON_FOTO = ['contratista', 'contratista2', 'camion'];
-const ROLES_CON_CONTRATO = ['contratista', 'contratista2', 'camion'];
+const ROLES_LISTA = ['admin', 'ito', 'ito2', 'contratista', 'contratista2', 'contratista3', 'camion', 'observador'];
+const ROL_ETQ = { admin: 'Admin', ito: 'ITO', ito2: 'ITO 2', contratista: 'Contratista', contratista2: 'Contratista 2', contratista3: 'Contratista 3', camion: 'Camión', observador: 'Observador' };
+const ROL_CLASE = { admin: 'u-r-adm', ito: 'u-r-ito', ito2: 'u-r-ito', contratista: 'u-r-con', contratista2: 'u-r-con', contratista3: 'u-r-con', camion: 'u-r-cam', observador: 'u-r-obs' };
+const ROLES_CON_NOTIF = ['admin', 'ito', 'ito2', 'contratista2', 'contratista3'];
+const ROLES_CON_FOTO = ['contratista', 'contratista2', 'contratista3', 'camion'];
+const ROLES_CON_CONTRATO = ['contratista', 'contratista2', 'contratista3', 'camion'];
 const COLORES_AV = ['#2b6a55', '#c77a1a', '#6a5acd', '#1d4f91', '#a23b72', '#3a7d8c', '#8a5a2b'];
 const colorAv = (s) => { let h = 0; for (const c of String(s || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORES_AV[h % COLORES_AV.length]; };
 const FILTROS_USR = [
   ['todos', 'Todos', () => true],
-  ['contratistas', 'Contratistas', (u) => u.rol === 'contratista' || u.rol === 'contratista2'],
+  ['contratistas', 'Contratistas', (u) => u.rol === 'contratista' || u.rol === 'contratista2' || u.rol === 'contratista3'],
   ['camiones', 'Camiones', (u) => u.rol === 'camion'],
   ['ito', 'ITO', (u) => u.rol === 'ito' || u.rol === 'ito2'],
   ['otros', 'Otros', (u) => u.rol === 'admin' || u.rol === 'observador'],
@@ -1990,7 +2056,7 @@ $('#uCuerpo').addEventListener('click', async (ev) => {
     if (a === 'del') { if (!confirm(`¿Eliminar al notificador «${n.nombre}»?`)) return; return accionNotifU(() => api(`/rest/v1/notificadores?id=eq.${id}`, { method: 'DELETE' }), 'Eliminado'); }
     if (a === 'ren') return hojaTextoU('Renombrar notificador', n.nombre, 'Guardar nombre', 'Nombre y apellido', (v) => accionNotifU(() => api(`/rest/v1/notificadores?id=eq.${id}`, { method: 'PATCH', body: { nombre: v } }), 'Nombre guardado'));
     if (a === 'vinc') return hojaSelectU('Vincular a usuario', `«${n.nombre}» pasará a figurar como ese usuario y quedará validado.`,
-      U.usuarios.filter((u) => ['ito', 'ito2', 'contratista', 'contratista2', 'admin'].includes(u.rol)).map((u) => [u.id, u.nombre]), 'Vincular',
+      U.usuarios.filter((u) => ['ito', 'ito2', 'contratista', 'contratista2', 'contratista3', 'admin'].includes(u.rol)).map((u) => [u.id, u.nombre]), 'Vincular',
       (uid, nom) => { if (!confirm(`¿Vincular «${n.nombre}» con «${nom}»?`)) return; return accionNotifU(() => rpc('vincular_notificador_usuario', { p_notif: id, p_usuario: uid }), 'Vinculado'); });
     if (a === 'fus') return hojaSelectU('Fusionar con…', `Las ${n.nFallas} falla(s) de «${n.nombre}» pasarán al notificador que elijas y «${n.nombre}» se eliminará.`,
       U.notifs.filter((o) => o.id !== id).map((o) => [o.id, o.nombre]), 'Fusionar',
@@ -2011,6 +2077,7 @@ $('#uCuerpo').addEventListener('change', async (ev) => {
 
 /* ------------------------- inspección (ITO, ITO2, admin) ------------------------- */
 function pintarModo() {
+  $('#navInspC3').hidden = rol() !== 'contratista3';
   const puede = PUEDE_MODO_INSPECCION.includes(rol());
   const c = $('#chipModo'), n = $('#navInsp');
   n.hidden = !puede;
