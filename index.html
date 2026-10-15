@@ -622,6 +622,7 @@
           <button type="button" class="chip-estado morado" data-masivo="no" onclick="filtrarTodasFallasPorMasivo('no')">Normal</button>
         </div>
         <div id="todasFiltroContrato" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div>
+        <div id="todasFiltroCodigo" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div>
         <div id="todasFiltroAsignacion" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;">
           <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Asignación:</span>
           <button type="button" class="chip-estado activo" data-asig="todas" onclick="filtrarTodasFallasPorAsignacion('todas')">Todas</button>
@@ -761,6 +762,10 @@
           <div id="filtroContratoGrupo" hidden>
             <div class="lat-pt" style="margin-top:5px;">Contrato</div>
             <div class="lat-chips" id="chipsContrato"></div>
+          </div>
+          <div id="filtroCodigoGrupo">
+            <div class="lat-pt" style="margin-top:5px;">Código de falla</div>
+            <div class="lat-chips" id="chipsCodigo"></div>
           </div>
           <div class="lat-pie"><button type="button" id="filtrosLimpiar" class="lat-link">Limpiar filtros</button><span id="filtrosResumen"></span></div>
         </div>
@@ -2917,6 +2922,11 @@ function renderFallasDesdeCache(){
         const cid = feat.properties.contrato_id || null;
         if(filtroContrato === 'sin' ? cid : cid !== filtroContrato) return;
       }
+      // Código de falla: igual que Subcontrato, manda el circuito
+      if(filtroCodigos.size){
+        if(feat.properties.cascada) return;
+        if(!filtroCodigos.has(feat.properties.tipo_falla)) return;
+      }
       // Asignación: solo fallas activas (los puntos de cascada se ocultan; manda el circuito)
       if(asigFiltro !== 'todas'){
         if(estado === 'reparada' || feat.properties.cascada) return;
@@ -3693,12 +3703,14 @@ function puedeFiltrarSinAsignar(){ return ROLES_FILTRO_ASIGNAR.includes(rolEfect
 let filtroAsignacion = 'todas';    // 'todas' | 'sin' | 'asignadas'
 let filtroSubcontrato = 'todas';   // 'todas' | 'masivo' | 'normal'
 let filtroContrato = 'todos';      // 'todos' | 'sin' | id de contrato
+const filtroCodigos = new Set();  // códigos de falla marcados (F01, F04…); vacío = todos
 function asignacionActiva(){ return puedeFiltrarSinAsignar() ? filtroAsignacion : 'todas'; }
 function filtroSinAsignarActivo(){ return asignacionActiva() === 'sin'; }
 function soloMasivoActivo(){ return filtroSubcontrato === 'masivo'; }
 // ¿Una falla de la lista pasa los filtros de Asignación y Subcontrato?
-function pasaFiltrosOtros(masivo, asignadoCamionId, contratoId){
+function pasaFiltrosOtros(masivo, asignadoCamionId, contratoId, tipoFalla){
   const a = asignacionActiva();
+  if(filtroCodigos.size && !filtroCodigos.has(tipoFalla)) return false;
   if(a === 'sin' && asignadoCamionId) return false;
   if(a === 'asignadas' && !asignadoCamionId) return false;
   if(filtroSubcontrato === 'masivo' && !masivo) return false;
@@ -3716,6 +3728,7 @@ function actualizarFiltrosOtrosUI(){
   const poner = (id, n) => { const el = document.getElementById(id); if(el) el.textContent = '(' + n + ')'; };
   poner('sinAsignarN', nSin); poner('asignadasN', base.length - nSin);
   poner('masivoN', nMas); poner('normalN', base.length - nMas);
+  pintarChipsCodigo(base);
   document.querySelectorAll('#chipsAsignacion .fchip').forEach(c => c.classList.toggle('on', c.dataset.asig === filtroAsignacion));
   document.querySelectorAll('#chipsSubcontrato .fchip').forEach(c => c.classList.toggle('on', c.dataset.sub === filtroSubcontrato));
   // Contrato: solo aparece si hay contratos creados
@@ -3729,6 +3742,25 @@ function actualizarFiltrosOtrosUI(){
     }
   }
 }
+function descCodigoSimple(c){ return descripcionCodigoAnalisis(c !== 'OTRO' && CATALOGO_FALLAS_CIRCUITO.some(x => x.c === c) ? 'linea' : 'punto', c) || ''; }
+// Chips de código de falla (selección múltiple). Solo aparecen los códigos presentes en el área, con su cantidad.
+function pintarChipsCodigo(base){
+  const cont = document.getElementById('chipsCodigo'); if(!cont) return;
+  const cuenta = {};
+  base.forEach(f => { if(f.tipo_falla) cuenta[f.tipo_falla] = (cuenta[f.tipo_falla] || 0) + 1; });
+  filtroCodigos.forEach(c => { if(!(c in cuenta)) cuenta[c] = 0; });   // un código marcado se mantiene visible aunque ya no haya fallas
+  const codigos = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a] || a.localeCompare(b));
+  document.getElementById('filtroCodigoGrupo').hidden = !codigos.length;
+  cont.innerHTML = '<button type="button" class="fchip fchip-sel' + (filtroCodigos.size ? '' : ' on') + '" data-cod="__todos">Todos</button>' +
+    codigos.map(c => `<button type="button" class="fchip fchip-sel${filtroCodigos.has(c) ? ' on' : ''}" data-cod="${escHtml(c)}" title="${escHtml(descCodigoSimple(c))}">${escHtml(c)} <span class="n">(${cuenta[c]})</span></button>`).join('');
+}
+document.getElementById('chipsCodigo').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-cod]'); if(!b) return;
+  if(b.dataset.cod === '__todos') filtroCodigos.clear();
+  else if(filtroCodigos.has(b.dataset.cod)) filtroCodigos.delete(b.dataset.cod);
+  else filtroCodigos.add(b.dataset.cod);
+  renderFallasList(); renderFallasDesdeCache();
+});
 document.getElementById('chipsContrato').addEventListener('click', (e) => {
   const b = e.target.closest('[data-con]'); if(!b) return;
   filtroContrato = b.dataset.con; renderFallasList(); renderFallasDesdeCache();
@@ -3747,6 +3779,7 @@ function contarFiltrosActivos(){
   if(asignacionActiva() !== 'todas') n++;
   if(filtroSubcontrato !== 'todas') n++;
   if(filtroContrato !== 'todos') n++;
+  if(filtroCodigos.size) n++;
   return n;
 }
 function actualizarFiltrosUI(nMostrando){
@@ -3769,7 +3802,7 @@ document.getElementById('btnFiltros').addEventListener('click', () => {
 });
 document.getElementById('filtrosLimpiar').addEventListener('click', () => {
   Object.keys(filtrosEstadoVisible).forEach(e => { if(filtrosEstadoVisible[e] === false) toggleFiltroEstado(e); });
-  filtroAsignacion = 'todas'; filtroSubcontrato = 'todas'; filtroContrato = 'todos';
+  filtroAsignacion = 'todas'; filtroSubcontrato = 'todas'; filtroContrato = 'todos'; filtroCodigos.clear();
   renderFallasList();
   renderFallasDesdeCache();
 });
@@ -3785,13 +3818,13 @@ function renderFallasList(){
     filas = (busquedaLateral.filas || []).map(normalizarFilaLateral);
   } else {
     filas = fallasEnArea.map(normalizarFilaLateral);
-    filas = filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id));
+    filas = filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id, f.tipo_falla));
     filas = filas.filter(f => filtrosEstadoVisible[f.estado] !== false);
   }
   actualizarFiltrosOtrosUI();
   actualizarFiltrosUI(filas.length);
   estado.style.display = (buscando && filas.length) ? 'block' : 'none';
-  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${asignacionActiva() === 'sin' ? ' sin asignar' : (asignacionActiva() === 'asignadas' ? ' asignadas' : '')}${filtroSubcontrato === 'masivo' ? ' · masivo' : (filtroSubcontrato === 'normal' ? ' · normal' : '')}`;
+  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${asignacionActiva() === 'sin' ? ' sin asignar' : (asignacionActiva() === 'asignadas' ? ' asignadas' : '')}${filtroSubcontrato === 'masivo' ? ' · masivo' : (filtroSubcontrato === 'normal' ? ' · normal' : '')}${filtroCodigos.size ? ' · ' + [...filtroCodigos].join(', ') : ''}`;
   if(!filas.length){
     list.innerHTML = buscando
       ? `<div class="empty-state">Sin resultados para «${escHtml(busquedaLateral.texto)}».</div>`
@@ -4031,6 +4064,7 @@ document.getElementById('toggleExportBtn').onclick = () => {
   if(filtroEstadoTodasFallas.size) partes.push('estado: ' + [...filtroEstadoTodasFallas].join(', '));
   if(filtroMasivoTodasFallas !== 'todas') partes.push('subcontrato: ' + (filtroMasivoTodasFallas === 'si' ? 'masivo' : 'normal'));
   if(filtroContratoTodasFallas !== 'todos') partes.push('contrato: ' + (filtroContratoTodasFallas === 'sin' ? 'sin contrato' : (CONTRATOS_MAPA[filtroContratoTodasFallas] || '')));
+  if(filtroCodigosTodasFallas.size) partes.push('código: ' + [...filtroCodigosTodasFallas].join(', '));
   if(ver && filtroAsignTodasFallas !== 'todas') partes.push(filtroAsignTodasFallas === 'sin' ? 'sin asignar' : 'asignadas');
   if(ver && filtroAsignadoresTodasFallas.size) partes.push(filtroAsignadoresTodasFallas.size + ' asignador(es)');
   panel.querySelector('#exportResumenFiltros').textContent = partes.length ? 'Se aplican los filtros de la tabla: ' + partes.join(' · ') : 'Sin filtros de la tabla: se exporta todo el período.';
@@ -4280,6 +4314,26 @@ function filtrarTodasFallasPorMasivo(v){
 window.filtrarTodasFallasPorMasivo = filtrarTodasFallasPorMasivo;
 
 let filtroContratoTodasFallas = 'todos';
+const filtroCodigosTodasFallas = new Set();   // varios a la vez; vacío = todos
+function filtrarTodasFallasPorCodigo(c){
+  if(c === '__todos') filtroCodigosTodasFallas.clear();
+  else if(filtroCodigosTodasFallas.has(c)) filtroCodigosTodasFallas.delete(c);
+  else filtroCodigosTodasFallas.add(c);
+  renderTodasFallasTabla();
+}
+window.filtrarTodasFallasPorCodigo = filtrarTodasFallasPorCodigo;
+function pintarChipsCodigoTodas(fuente){
+  const cont = document.getElementById('todasFiltroCodigo'); if(!cont) return;
+  const cuenta = {};
+  (fuente || []).forEach(f => { if(f.tipo_falla) cuenta[f.tipo_falla] = (cuenta[f.tipo_falla] || 0) + 1; });
+  filtroCodigosTodasFallas.forEach(c => { if(!(c in cuenta)) cuenta[c] = 0; });
+  const codigos = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a] || a.localeCompare(b));
+  if(!codigos.length){ cont.style.display = 'none'; return; }
+  cont.style.display = 'flex';
+  const chip = (id, txt, act, tit) => `<button type="button" class="chip-estado morado${act ? ' activo' : ''}" title="${escHtml(tit || '')}" onclick="filtrarTodasFallasPorCodigo('${escHtml(id)}')">${txt}</button>`;
+  cont.innerHTML = '<span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Código:</span>' + chip('__todos', 'Todos', !filtroCodigosTodasFallas.size) +
+    codigos.map(c => chip(c, `${escHtml(c)} <span class="n">(${cuenta[c]})</span>`, filtroCodigosTodasFallas.has(c), descCodigoSimple(c))).join('');
+}
 function filtrarTodasFallasPorContrato(v){
   filtroContratoTodasFallas = v;
   renderTodasFallasTabla();
@@ -4602,8 +4656,10 @@ function renderTodasFallasTabla(){
   else if(filtroMasivoTodasFallas === 'no') porEstado = porEstado.filter(f => !f.masivo);
   if(filtroContratoTodasFallas === 'sin') porEstado = porEstado.filter(f => !f.contrato_id);
   else if(filtroContratoTodasFallas !== 'todos') porEstado = porEstado.filter(f => f.contrato_id === filtroContratoTodasFallas);
+  if(filtroCodigosTodasFallas.size) porEstado = porEstado.filter(f => filtroCodigosTodasFallas.has(f.tipo_falla));
   porEstado = porEstado.filter(pasaFiltrosAsignacionTodas);
   pintarChipsContratoTodas();
+  pintarChipsCodigoTodas((busquedaServidor.activa && textoBusquedaTodasFallas.trim()) ? busquedaServidor.filas : ultimosTodasFallas);
   const thC = document.getElementById('thContrato'); if(thC) thC.style.display = CONTRATOS_ACTIVOS.length ? 'table-cell' : 'none';
 
   // Buscador: todas las palabras escritas deben aparecer en alguna columna de la fila.
@@ -4616,7 +4672,7 @@ function renderTodasFallasTabla(){
   if(contador){
     if(enServidor) contador.textContent = `${datosFiltrados.length}${busquedaServidor.hayMas ? '+' : ''} en toda la base`;
     else if(busquedaServidor.pendiente && terminos.length) contador.textContent = 'Buscando en toda la base…';
-    else contador.textContent = (terminos.length || filtroEstadoTodasFallas.size || filtroMasivoTodasFallas !== 'todas' || filtroContratoTodasFallas !== 'todos' || (verAsignacionTodas() && (filtroAsignTodasFallas !== 'todas' || filtroAsignadoresTodasFallas.size))) ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
+    else contador.textContent = (terminos.length || filtroEstadoTodasFallas.size || filtroMasivoTodasFallas !== 'todas' || filtroContratoTodasFallas !== 'todos' || filtroCodigosTodasFallas.size || (verAsignacionTodas() && (filtroAsignTodasFallas !== 'todas' || filtroAsignadoresTodasFallas.size))) ? `${datosFiltrados.length} de ${ultimosTodasFallas.length}` : '';
   }
   const pista = document.getElementById('panelInferiorPista');
   if(pista) pista.textContent = `${enServidor ? 'Resultados de la búsqueda' : 'Mostrando ' + ultimosTodasFallas.length + (hayMasTodasFallas ? ' (las más recientes)' : '')} · clic en una fila para ubicarla en el mapa`;
@@ -4729,6 +4785,7 @@ async function exportarCsv(){
       (!filtroEstadoTodasFallas.size || filtroEstadoTodasFallas.has(f.estado)) &&
       (filtroMasivoTodasFallas === 'todas' || (filtroMasivoTodasFallas === 'si' ? !!f.masivo : !f.masivo)) &&
       (filtroContratoTodasFallas === 'todos' || (filtroContratoTodasFallas === 'sin' ? !f.contrato_id : f.contrato_id === filtroContratoTodasFallas)) &&
+      (!filtroCodigosTodasFallas.size || filtroCodigosTodasFallas.has(f.tipo_falla)) &&
       (!ver || filtroAsignTodasFallas === 'todas' || (filtroAsignTodasFallas === 'sin' ? !f.asignado_camion_nombre : !!f.asignado_camion_nombre)));
     if(!filas || !filas.length){ alert('No hay fallas con esos filtros y ese período.'); return; }
 
