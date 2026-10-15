@@ -65,13 +65,13 @@ main{ flex:1 1 auto; position:relative; min-height:0; }
 .cuenta{ min-width:20px; height:20px; padding:0 6px; border-radius:10px; background:var(--rojo); color:#fff; font-style:normal; font-size:11px; display:flex; align-items:center; justify-content:center; }
 
 /* ---------- Lista ---------- */
-#vistaLista{ overflow-y:auto; -webkit-overflow-scrolling:touch; background:var(--fondo); }
+#vistaLista, #vistaInsp{ overflow-y:auto; -webkit-overflow-scrolling:touch; background:var(--fondo); }
 .lista-filtros{ position:sticky; top:0; z-index:5; background:var(--fondo); padding:10px 12px 6px; border-bottom:1px solid var(--linea); }
 .lista-filtros input{ width:100%; height:44px; border:1.5px solid var(--linea); border-radius:12px; padding:0 14px; background:#fff; }
 .chips{ display:flex; gap:8px; margin:8px 0 4px; flex-wrap:wrap; }
 .chip{ border:1.5px solid var(--linea); background:#fff; border-radius:20px; padding:6px 14px; font-size:14px; font-weight:600; color:var(--tinta-2); }
 .chip.sel{ background:var(--verde); border-color:var(--verde); color:#fff; }
-#listaItems{ padding:10px 12px 96px; display:flex; flex-direction:column; gap:10px; }
+#listaItems, #inspC3Items{ padding:10px 12px 96px; display:flex; flex-direction:column; gap:10px; }
 .tarjeta{ background:#fff; border-radius:var(--radio); padding:12px 14px; border:1px solid var(--linea); border-left:6px solid var(--rojo); text-align:left; width:100%; }
 .tarjeta.est-pendiente{ border-left-color:var(--ambar); }
 .tarjeta.est-reiterada{ border-left-color:var(--violeta); }
