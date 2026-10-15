@@ -676,16 +676,40 @@ function abrirEmpalme(p) {
    sin importar los filtros puestos. */
 try { localStorage.removeItem('fa_sin_asignar'); localStorage.removeItem('fa_solo_masivo'); } catch (e) { /* */ }
 const puedeFiltrarSinAsignar = () => ['admin', 'contratista', 'contratista2', 'contratista3'].includes(rol());
-const FO = { asig: 'todas', sub: 'todas' };   // asig: todas | sin | asignadas · sub: todas | masivo | normal
+const FO = { asig: 'todas', sub: 'todas', cod: new Set() };   // asig: todas | sin | asignadas · sub: todas | masivo | normal · cod: códigos de falla marcados (vacío = todos)
 const asigActiva = () => (puedeFiltrarSinAsignar() ? FO.asig : 'todas');
-const cuentaFiltrosOtros = () => (asigActiva() !== 'todas' ? 1 : 0) + (FO.sub !== 'todas' ? 1 : 0);
-function pasaFiltrosOtros(masivo, asignadoId) {
+const cuentaFiltrosOtros = () => (asigActiva() !== 'todas' ? 1 : 0) + (FO.sub !== 'todas' ? 1 : 0) + (FO.cod.size ? 1 : 0);
+function pasaFiltrosOtros(masivo, asignadoId, tipoFalla) {
   const a = asigActiva();
+  if (FO.cod.size && !FO.cod.has(tipoFalla)) return false;
   if (a === 'sin' && asignadoId) return false;
   if (a === 'asignadas' && !asignadoId) return false;
   if (FO.sub === 'masivo' && !masivo) return false;
   if (FO.sub === 'normal' && masivo) return false;
   return true;
+}
+/* Filtro por código de falla (varios a la vez). Solo aparecen los códigos presentes, con su cantidad.
+   El grupo se crea aquí, así funciona aunque el teléfono tenga un index.html antiguo en caché. */
+function pintarChipsCodigo(base) {
+  let g = $('#listaCodGrupo');
+  if (!g) {
+    const pie = $('#filtrosListaPanel .lf-pie'); if (!pie) return;
+    g = document.createElement('div'); g.id = 'listaCodGrupo';
+    g.innerHTML = '<div class="lf-t" style="margin-top:12px">Código de falla</div><div class="lf-chips" id="listaCod"></div>';
+    pie.parentNode.insertBefore(g, pie);
+    g.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-cod]'); if (!b) return;
+      if (b.dataset.cod === '__todos') FO.cod.clear(); else if (FO.cod.has(b.dataset.cod)) FO.cod.delete(b.dataset.cod); else FO.cod.add(b.dataset.cod);
+      actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista();
+    });
+  }
+  const cuenta = {};
+  base.forEach((f) => { const c = f.properties.tipo_falla; if (c) cuenta[c] = (cuenta[c] || 0) + 1; });
+  FO.cod.forEach((c) => { if (!(c in cuenta)) cuenta[c] = 0; });
+  const codigos = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a] || a.localeCompare(b));
+  g.hidden = !codigos.length;
+  $('#listaCod').innerHTML = `<button type="button" class="fchip fchip-sel${FO.cod.size ? '' : ' on'}" data-cod="__todos">Todos</button>` +
+    codigos.map((c) => `<button type="button" class="fchip fchip-sel${FO.cod.has(c) ? ' on' : ''}" data-cod="${esc(c)}"><b>${esc(c)}</b> <span class="n">(${cuenta[c]})</span></button>`).join('');
 }
 function actualizarFiltrosOtrosUI() {
   const grupo = $('#listaAsigGrupo'); if (!grupo) return;
@@ -698,10 +722,12 @@ function actualizarFiltrosOtrosUI() {
   poner('#listaMasivoN', nMas); poner('#listaNormalN', base.length - nMas);
   $$('#listaAsig .fchip').forEach((c) => c.classList.toggle('on', c.dataset.asig === FO.asig));
   $$('#listaSub .fchip').forEach((c) => c.classList.toggle('on', c.dataset.sub === FO.sub));
+  pintarChipsCodigo(base);
   // Aviso sobre el mapa mientras haya filtros de Asignación o Subcontrato puestos
   const partes = [];
   if (asigActiva() === 'sin') partes.push('sin asignar'); else if (asigActiva() === 'asignadas') partes.push('asignadas');
   if (FO.sub === 'masivo') partes.push('masivo'); else if (FO.sub === 'normal') partes.push('normal');
+  if (FO.cod.size) partes.push([...FO.cod].join(', '));
   const b = $('#badgeSinAsignar');
   b.hidden = !partes.length;
   b.textContent = 'Solo ' + partes.join(' · ') + ' ✕';
@@ -754,6 +780,8 @@ function dibujarFallas() {
     if (p.estado === 'reparada' && ((p.ref_punto_gid != null && activasEn.has('p' + p.ref_punto_gid)) || (p.ref_circuito_gid != null && !p.cascada && activasEn.has('c' + p.ref_circuito_gid)))) return;
     // Subcontrato: los puntos de cascada se ocultan (manda el circuito); las reparadas recientes se siguen viendo
     if (subF !== 'todas') { if (p.cascada) return; if (subF === 'masivo' ? !p.masivo : !!p.masivo) return; }
+    // Código de falla: igual que Subcontrato, manda el circuito
+    if (FO.cod.size) { if (p.cascada) return; if (!FO.cod.has(p.tipo_falla)) return; }
     // Asignación: solo fallas activas (los puntos de cascada se ocultan; manda el circuito)
     if (asigF !== 'todas') { if (p.estado === 'reparada' || p.cascada) return; if (asigF === 'sin' ? p.asignado_camion_id : !p.asignado_camion_id) return; }
     if (S.estadosOff[p.estado]) return;
@@ -1526,7 +1554,7 @@ function renderLista() {
   const q = S.busqueda.trim().toLowerCase();
   actualizarFiltrosOtrosUI();
   let items = S.activas.filter((f) => !f.properties.cascada);
-  items = items.filter((f) => pasaFiltrosOtros(!!f.properties.masivo, f.properties.asignado_camion_id));
+  items = items.filter((f) => pasaFiltrosOtros(!!f.properties.masivo, f.properties.asignado_camion_id, f.properties.tipo_falla));
   const total = items.length;
   items = items.filter((f) => !S.estadosOff[f.properties.estado]);
   actualizarFiltrosListaUI();
@@ -1579,7 +1607,7 @@ function renderLista() {
 }
 $$('#listaAsig .fchip').forEach((c) => c.addEventListener('click', () => fijarFiltroOtros('asig', c.dataset.asig)));
 $$('#listaSub .fchip').forEach((c) => c.addEventListener('click', () => fijarFiltroOtros('sub', c.dataset.sub)));
-$('#badgeSinAsignar').addEventListener('click', () => { FO.asig = 'todas'; FO.sub = 'todas'; actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista(); });
+$('#badgeSinAsignar').addEventListener('click', () => { FO.asig = 'todas'; FO.sub = 'todas'; FO.cod.clear(); actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista(); });
 $('#listaBuscar').addEventListener('input', (e) => { S.busqueda = e.target.value; renderLista(); });
 /* Panel de filtros (estado, sin asignar, masivo): afecta a la lista y al mapa */
 function cuentaFiltrosLista() { return Object.values(S.estadosOff).filter(Boolean).length + cuentaFiltrosOtros(); }
@@ -1597,7 +1625,7 @@ $$('#listaChips .fchip').forEach((b) => b.addEventListener('click', () => {
 }));
 $('#filtrosListaLimpiar').addEventListener('click', () => {
   S.estadosOff = {};
-  FO.asig = 'todas'; FO.sub = 'todas';
+  FO.asig = 'todas'; FO.sub = 'todas'; FO.cod.clear();
   actualizarFiltrosOtrosUI(); dibujarFallas(); renderLista();
 });
 
