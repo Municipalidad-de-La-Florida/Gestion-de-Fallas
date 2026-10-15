@@ -797,7 +797,8 @@
       <div class="section">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
           <button class="mode-btn" id="backFromStats" style="margin-bottom:0;">← Volver</button>
-          <div style="position:relative;">
+          <div style="position:relative; display:flex; gap:8px; align-items:center;">
+            <button type="button" id="armarInspBtn" title="Editar inspecciones: soltar fallas de una inspección" style="display:none; height:30px; padding:0 10px; border:1.5px solid #000; border-radius:8px; background:#fff; color:var(--ink); font-size:12px; font-weight:600; cursor:pointer; align-items:center; gap:5px;">✏️ Editar inspecciones</button>
             <button id="descargarPdfBtn" title="Descargar PDF" style="width:30px; height:30px; padding:0; border:1.5px solid #000; border-radius:8px; background:#2563a8; color:#fff; font-size:14px; cursor:pointer; display:flex; align-items:center; justify-content:center;">📄</button>
             <div id="menuPdfPeriodo" hidden style="position:absolute; right:0; top:36px; z-index:30; width:250px; background:#fff; border:1.5px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.18); padding:6px;">
               <button type="button" class="um-item" data-resumido="0" style="height:auto; padding:8px 10px; border-radius:8px; flex-direction:column; align-items:flex-start; gap:2px;"><b style="font-size:12.5px;">Informe completo</b><span class="hint" style="margin:0;">Con comparación y hojas por contrato</span></button>
@@ -863,14 +864,14 @@
           <select id="inspItoSelect" style="width:100%; margin-top:4px;">
             <option value="">Todos los ITOs</option>
           </select>
-          <button type="button" id="armarInspBtn" class="sum-btn" style="display:none; margin-top:10px;">＋ Armar inspección con fallas sueltas</button>
-          <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:10px;">
+          <!-- Filtros "Resultado" y "Sus fallas" ocultos: siempre se consideran todas (FILTRO_INSP por defecto) -->
+          <div hidden style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:10px;">
             <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Resultado:</span>
             <button type="button" class="chip-estado activo" data-ires="todas" onclick="fijarFiltroInsp('res','todas')">Todas</button>
             <button type="button" class="chip-estado" data-ires="con" onclick="fijarFiltroInsp('res','con')">Con fallas</button>
             <button type="button" class="chip-estado" data-ires="sin" onclick="fijarFiltroInsp('res','sin')">Sin fallas</button>
           </div>
-          <div style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:8px;">
+          <div hidden style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:8px;">
             <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Sus fallas:</span>
             <button type="button" class="chip-estado" data-iest="abiertas" onclick="fijarFiltroInsp('est','abiertas')">Con abiertas</button>
             <button type="button" class="chip-estado" data-iest="reiteradas" onclick="fijarFiltroInsp('est','reiteradas')">Con reiteradas</button>
@@ -5222,7 +5223,8 @@ function pintarFiltrosEst(){
   if(!bar) return;
   const enAna = document.getElementById('tabAnalisis').classList.contains('active');
   const enInsp = document.getElementById('tabInspecciones').classList.contains('active');
-  bar.style.display = enInsp ? 'none' : 'flex';
+  // Filtros «Medir por», «Asignada por» e «ITO» ocultos: se usa siempre fecha informada, todas las asignaciones y todos los ITO
+  bar.style.display = 'none';
   bar.querySelectorAll('[data-medir]').forEach(c => c.classList.toggle('activo', c.dataset.medir === FILTROS_EST.medir));
   bar.querySelectorAll('[data-fmas]').forEach(c => c.classList.toggle('activo', c.dataset.fmas === FILTROS_EST.masivo));
   const cont = document.getElementById('filtrosEstAsignador');
@@ -5368,7 +5370,7 @@ document.getElementById('tabInspecciones').onclick = () => {
   document.getElementById('selectorDia').style.display = 'none';
   document.getElementById('selectorPeriodo').style.display = 'none';
   document.getElementById('selectorInspecciones').style.display = 'block';
-  document.getElementById('armarInspBtn').style.display = (rolEfectivo() === 'admin') ? '' : 'none';   // herramienta solo del administrador
+  document.getElementById('armarInspBtn').style.display = (rolEfectivo() === 'admin') ? 'flex' : 'none';   // herramienta solo del administrador
   document.getElementById('descargarPdfBtn').style.display = 'none'; // el PDF es solo del panel de estadísticas
   // Esta pestaña muestra solo las fallas de la inspección abierta: se ocultan las otras capas de fallas.
   ocultarCapaActivas();
@@ -5390,6 +5392,7 @@ function salirTabInspecciones(){
   tab.classList.remove('active');
   document.getElementById('selectorInspecciones').style.display = 'none';
   document.getElementById('descargarPdfBtn').style.display = 'flex';
+  document.getElementById('armarInspBtn').style.display = 'none';
   inspListadoReq++; inspDetalleReq++; // descarta respuestas pendientes
   inspeccionSeleccionadaId = null;
   limpiarCapaInspeccion();
@@ -6240,7 +6243,7 @@ async function rpcAnalisisFallas(ini, fin, contratoId){
 // Se calcula con las mismas fallas del período (capa azul): no necesita datos nuevos en la base.
 const CALOR_COLORES = ['#ffffb2', '#fed976', '#feb24c', '#fd8d3c', '#f03b20', '#bd0026'];
 const CALOR_RADIO_M = 290;   // centro-vértice: celda de ~500 m de ancho
-let ANA_CALOR = {on: true, modo: 'fallas', reit: true};
+let ANA_CALOR = {on: false, modo: 'fallas', reit: true};   // on = el mapa muestra el calor; si no, los puntos/circuitos críticos (nunca los dos juntos)
 let calorLayerGroup = null;
 const cacheGeojsonCalor = {};
 async function fallasGeojsonAnalisis(ini, fin, contratoId){
@@ -6329,10 +6332,22 @@ async function actualizarCalorAnalisis(){
   }
 }
 function enlazarCalorAnalisis(){
-  const on = document.getElementById('calorOn'), modo = document.getElementById('calorModo'), reit = document.getElementById('calorReit');
-  if(!on) return;
-  on.checked = ANA_CALOR.on; modo.value = ANA_CALOR.modo; reit.checked = ANA_CALOR.reit;
-  on.onchange = () => { ANA_CALOR.on = on.checked; actualizarCalorAnalisis(); };
+  const bCrit = document.getElementById('vistaCriticas'), bCalor = document.getElementById('vistaCalor');
+  const modo = document.getElementById('calorModo'), reit = document.getElementById('calorReit');
+  if(!bCrit) return;
+  modo.value = ANA_CALOR.modo; reit.checked = ANA_CALOR.reit;
+  const pintarVista = () => {
+    bCrit.classList.toggle('activo', !ANA_CALOR.on); bCalor.classList.toggle('activo', ANA_CALOR.on);
+    document.getElementById('calorOpts').style.display = ANA_CALOR.on ? 'flex' : 'none';
+    // Solo una capa a la vez en el mapa: así no se dibujan una encima de la otra
+    if(analisisLayerGroup){
+      if(ANA_CALOR.on) map.removeLayer(analisisLayerGroup);
+      else if(!map.hasLayer(analisisLayerGroup)) analisisLayerGroup.addTo(map);
+    }
+  };
+  bCrit.onclick = () => { ANA_CALOR.on = false; pintarVista(); actualizarCalorAnalisis(); };
+  bCalor.onclick = () => { ANA_CALOR.on = true; pintarVista(); actualizarCalorAnalisis(); };
+  pintarVista();
   modo.onchange = () => { ANA_CALOR.modo = modo.value; actualizarCalorAnalisis(); };
   reit.onchange = () => { ANA_CALOR.reit = reit.checked; actualizarCalorAnalisis(); };
   actualizarCalorAnalisis();
@@ -6471,9 +6486,12 @@ function renderAnalisis(d, lista){
   content.innerHTML = `
     <button class="popup-btn" id="anaPdfBtn" style="margin-top:10px;">📄 Descargar informe PDF</button>
     <div class="hint">Cada contrato se analiza por separado (fallas, tiempos, puntos críticos). Abre una sección para verla; el mapa muestra la que tengas abierta.</div>
-    <div class="ana-tit">Mapa de calor <span id="anaFocoNombre" class="hint" style="margin:0;"></span></div>
-    <div class="calor-ctl">
-      <label><input type="checkbox" id="calorOn"> Mostrar en el mapa</label>
+    <div class="ana-tit">Vista del mapa <span id="anaFocoNombre" class="hint" style="margin:0;"></span></div>
+    <div style="display:flex; gap:6px; margin:6px 0;">
+      <button type="button" class="chip-estado" id="vistaCriticas">📍 Fallas críticas</button>
+      <button type="button" class="chip-estado" id="vistaCalor">🔥 Mapa de calor</button>
+    </div>
+    <div class="calor-ctl" id="calorOpts">
       <select id="calorModo"><option value="fallas">Nº de fallas</option><option value="puntos">Puntos lumínicos afectados</option></select>
       <label><input type="checkbox" id="calorReit"> Marcar reiteradas</label>
     </div>
@@ -6519,6 +6537,7 @@ function enfocarAnalisis(d){
     el.onclick = () => {
       const m = analisisCapas[el.dataset.k];
       if(!m) return;
+      if(ANA_CALOR.on){ const b = document.getElementById('vistaCriticas'); if(b) b.click(); }   // para ver el punto hay que volver a la vista de críticas
       map.setView(m.getLatLng(), 18);
       m.openTooltip();
     };
