@@ -5716,7 +5716,8 @@ function renderDetalleInspeccion(det){
       </tbody>
     </table>`;
   cont.querySelectorAll('#inspeccionTabla tbody tr').forEach(tr => {
-    tr.onclick = () => enfocarFallaInspeccion(tr.dataset.id);
+    // Contratista3: en las fallas de su contrato (las que no están en gris) se acerca el mapa y se abre la falla completa
+    tr.onclick = () => (esC3 && !tr.dataset.ajena) ? (resaltarFilaInspeccion(tr.dataset.id), enfocarFalla(tr.dataset.id, true)) : enfocarFallaInspeccion(tr.dataset.id);
   });
   // Filtro por estado dentro del detalle (varios a la vez; ninguno marcado = todas)
   const estDetalle = new Set();
@@ -5919,6 +5920,10 @@ function dibujarFallasInspeccionEnMapa(fallas){
     capa.bindTooltip(tip);
     capa.bindPopup(() => htmlPopupFallaInspeccion(f), {maxWidth: 340, maxHeight: 360, pane: 'popupPane'});
     capa.on('click', (e) => { L.DomEvent.stopPropagation(e); resaltarFilaInspeccion(f.id); });
+    if(rolEfectivo() === 'contratista3' && f.mi_contrato){ // su propia falla: abre la falla completa en vez de la ficha
+      capa.unbindPopup();
+      capa.on('click', () => enfocarFalla(f.id, true));
+    }
     capa.addTo(fallasInspeccionLayerGroup);
     if(capa.bringToFront) capa.bringToFront();
     capasInspeccionPorFalla[f.id] = capa;
