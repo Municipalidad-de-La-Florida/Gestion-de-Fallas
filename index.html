@@ -5822,13 +5822,25 @@ function abrirModalEditarInspeccion(det){
   m.id = 'editarInspModal';
   m.className = 'modal-overlay visible';
   m.innerHTML = `
-    <div class="modal-card" style="max-width:520px;">
+    <div class="modal-card" style="max-width:600px; max-height:92vh; overflow:auto;">
       <button class="close-x" id="editInspCerrar" aria-label="Cerrar">×</button>
       <h3 style="margin-top:0;">✏️ Editar inspección</h3>
       <div style="margin-bottom:12px;">
         <b>${escHtml(insp.ito_nombre)}</b> · ${escHtml(fmtDiaInspeccion(insp.fecha))}
         <div class="insp-pills" style="margin:6px 0 0;">${pillsEstadoHtml({reparadas:cuenta.reparada, pendientes:cuenta.pendiente, reiteradas:cuenta.reiterada, reportadas:cuenta.reportada})}</div>
       </div>
+      ${fallas.length ? `<div style="border:1.5px solid #2563a8; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <b>Dejar sueltas solo algunas fallas</b>
+        <div class="hint">Marca las fallas que no corresponden a esta inspección. Quedan sueltas (con su OS, fecha, hora y estado) y la inspección sigue con las demás. Luego puedes agruparlas con «Armar inspección».</div>
+        <div id="editInspLista" style="max-height:240px; overflow:auto; margin-top:8px; border:1px solid var(--line); border-radius:6px;">
+          ${fallas.map(f => `<label style="display:flex; gap:8px; align-items:flex-start; padding:6px 8px; border-bottom:1px solid var(--line); cursor:pointer; font-size:12.5px;">
+            <input type="checkbox" class="editInspChk" value="${escHtml(f.id)}" style="margin-top:3px;">
+            <span><b class="mono">${escHtml(f.ot || '—')}</b> · ${escHtml(f.tipo_falla)} · ${f.tipo === 'linea' ? 'Circuito ' + escHtml(f.circuito_id ?? '—') + ' (' + (f.puntos_afectados || 0) + ' pts)' : 'Llave ' + escHtml(f.llave ?? '—')}
+              <span class="badge ${escHtml(f.estado)}">${escHtml(String(f.estado).replace('_',' '))}</span>
+              <div class="hint" style="margin:0;">Ingresada ${escHtml(fmtFechaHoraChile(f.fecha_ingreso))}</div></span></label>`).join('')}
+        </div>
+        <button class="popup-btn" id="editInspSoltarSel" disabled style="margin-top:8px; background:#2563a8; opacity:.5;">Dejar sueltas las marcadas</button>
+      </div>` : ''}
       <div style="border:1.5px solid #1f8a4c; border-radius:8px; padding:12px; margin-bottom:12px;">
         <b>Quitar la inspección y dejar las fallas sueltas</b>
         <div class="hint">Se borra solo el registro de la inspección. Las ${fallas.length} falla${fallas.length===1?'':'s'} se conservan con su OS, fecha y hora, como si se hubieran ingresado una a una.</div>
@@ -5863,6 +5875,35 @@ function abrirModalEditarInspeccion(det){
     cerrarModalEditarInspeccion();
     await tras_editar_inspeccion(insp.id);
   };
+  // Dejar sueltas solo las fallas marcadas (la inspección se mantiene)
+  const bSel = $('editInspSoltarSel');
+  if(bSel){
+    const marcadas = () => [...m.querySelectorAll('.editInspChk:checked')].map(x => x.value);
+    const refrescar = () => {
+      const n = marcadas().length;
+      bSel.disabled = n === 0; bSel.style.opacity = n ? '1' : '.5';
+      bSel.textContent = n ? `Dejar sueltas ${n} falla${n === 1 ? '' : 's'}` : 'Dejar sueltas las marcadas';
+    };
+    m.querySelectorAll('.editInspChk').forEach(c => c.onchange = refrescar);
+    bSel.onclick = async () => {
+      const ids = marcadas(); if(!ids.length) return;
+      if(!confirm(`¿Dejar sueltas ${ids.length} falla${ids.length === 1 ? '' : 's'} de esta inspección? Conservan su OS, fecha, hora y estado.`)) return;
+      bSel.disabled = true;
+      const err = $('editInspError'); err.style.display = 'none';
+      try{
+        await db.rpc('soltar_fallas_de_inspeccion', {p_inspeccion: insp.id, p_fallas: ids});
+      }catch(e){
+        err.textContent = 'No se pudo: ' + e.message + ' ¿Ejecutaste sql/2026-10-soltar-fallas-de-inspeccion.sql en Supabase?'; err.style.display = 'block';
+        refrescar(); return;
+      }
+      cerrarModalEditarInspeccion();
+      if(inspeccionCache && inspeccionCache.id === insp.id) inspeccionCache = {clave:null, id:null};
+      invalidarCacheTodasFallas();
+      await cargarListadoInspecciones();
+      await abrirDetalleInspeccion(insp.id);
+      cargarFallasDelArea().then(() => renderFallasOnMap());
+    };
+  }
   bSue.onclick = () => ejecutar('sueltas');
   bComp.onclick = () => { if(inp.value.trim() === 'ELIMINAR') ejecutar('completa'); };
 }
