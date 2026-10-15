@@ -761,14 +761,14 @@ function activarBotonMasivo(h) {
 }
 const leerMasivo = (h) => !!$('#fMasivo.on', h);
 
-// Parpadeo de los puntos reiterados (el canvas no admite animación CSS): se alterna la opacidad cada 0,55 s
+// Parpadeo de los puntos reiterados (puntos y circuitos): se alterna la opacidad por JS cada 0,55 s, sin depender de animaciones CSS
 let _parpadeoTimer = null, _parpadeoOn = true;
 function iniciarParpadeo() {
-  if (_parpadeoTimer || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+  if (_parpadeoTimer) return;
   _parpadeoTimer = setInterval(() => {
     if (document.hidden || !S.parpadeo || !S.parpadeo.length) return;
     _parpadeoOn = !_parpadeoOn;
-    S.parpadeo.forEach((l) => l.setStyle({ fillOpacity: _parpadeoOn ? 0.95 : 0.25, opacity: _parpadeoOn ? 1 : 0.35 }));
+    S.parpadeo.forEach((l) => l.setStyle(l.options.forma !== undefined ? { fillOpacity: _parpadeoOn ? 0.95 : 0.25, opacity: _parpadeoOn ? 1 : 0.35 } : { opacity: _parpadeoOn ? 0.9 : 0.2 }));
   }, 550);
 }
 
@@ -812,6 +812,7 @@ function dibujarFallas() {
         // Circuito reportado o reiterado: parpadea (como en el escritorio). El parpadeo es CSS sobre SVG;
         // debajo va una línea ancha invisible para que sea fácil tocarla con el dedo.
         const base = L.geoJSON(f.geometry, { renderer: rendSvg, style: { color, weight: 7, opacity: 0.9, className: 'falla-reportada' }, interactive: false });
+        S.parpadeo.push(base); // el parpadeo se hace por JS (en iPhone la animación CSS sobre SVG no siempre corre)
         capaFallas.addLayer(base);
         capa = L.geoJSON(f.geometry, { renderer: rendSvg, style: { color: '#000', weight: 20, opacity: 0, className: 'falla-toque' }, interactive: true });
       } else {
