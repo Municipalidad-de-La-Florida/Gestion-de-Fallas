@@ -5905,7 +5905,7 @@ function renderDetalleInspeccion(det){
     </table>`;
   cont.querySelectorAll('#inspeccionTabla tbody tr').forEach(tr => {
     // Contratista3: en las fallas de su contrato (las que no están en gris) se acerca el mapa y se abre la falla completa
-    tr.onclick = () => (esC3 && !tr.dataset.ajena) ? (resaltarFilaInspeccion(tr.dataset.id), enfocarFalla(tr.dataset.id, true)) : enfocarFallaInspeccion(tr.dataset.id);
+    tr.onclick = () => ((esC3 && !tr.dataset.ajena) || puedeEditarDesdeInspeccion()) ? (resaltarFilaInspeccion(tr.dataset.id), enfocarFalla(tr.dataset.id, true)) : enfocarFallaInspeccion(tr.dataset.id);
   });
   // Filtro por estado dentro del detalle (varios a la vez; ninguno marcado = todas)
   const estDetalle = new Set();
@@ -6131,8 +6131,28 @@ function enlazarContinuarInspeccion(insp){
   };
 }
 
-function dibujarFallasInspeccionEnMapa(fallas){
+// Quienes pueden editar fallas abren la falla completa al seleccionarla en una inspección (el popup aplica los permisos de cada rol)
+function puedeEditarDesdeInspeccion(){ return ['admin','ito','ito2'].includes(rolEfectivo()); }
+
+// Tras editar una falla desde la inspección, al cerrar su ventana se recarga el detalle (sin mover el mapa) si algo cambió
+let _refrescoInspEditReq = 0;
+async function refrescarDetalleInspeccionTrasEditar(){
+  const id = inspeccionSeleccionadaId;
+  if(!id || !document.getElementById('tabInspecciones').classList.contains('active')) return;
+  const req = ++_refrescoInspEditReq;
+  try{
+    const det = await db.rpc('inspeccion_detalle', {p_inspeccion: id});
+    if(req !== _refrescoInspEditReq || id !== inspeccionSeleccionadaId || !det) return;
+    if(ultimoDetalleInspeccion && JSON.stringify(det.fallas) === JSON.stringify(ultimoDetalleInspeccion.fallas)) return;
+    renderDetalleInspeccion(det);
+    dibujarFallasInspeccionEnMapa(det.fallas || [], true);
+    cargarListadoInspecciones();
+  }catch(e){ /* sin cambios visibles */ }
+}
+
+function dibujarFallasInspeccionEnMapa(fallas, sinZoom){
   if(!window._popupFotosOk){ window._popupFotosOk = true; map.on('popupopen', (e) => llenarFotos(e.popup.getElement())); }
+  if(!window._popupCierreInspOk){ window._popupCierreInspOk = true; map.on('popupclose', () => setTimeout(refrescarDetalleInspeccionTrasEditar, 600)); }
   if(!fallasInspeccionLayerGroup) fallasInspeccionLayerGroup = L.layerGroup().addTo(map);
   fallasInspeccionLayerGroup.clearLayers();
   capasInspeccionPorFalla = {};
@@ -6150,7 +6170,7 @@ function dibujarFallasInspeccionEnMapa(fallas){
     capa.bindTooltip(tip);
     capa.bindPopup(() => htmlPopupFallaInspeccion(f), {maxWidth: 340, maxHeight: 360, pane: 'popupPane'});
     capa.on('click', (e) => { L.DomEvent.stopPropagation(e); resaltarFilaInspeccion(f.id); });
-    if(rolEfectivo() === 'contratista3' && f.mi_contrato){ // su propia falla: abre la falla completa en vez de la ficha
+    if((rolEfectivo() === 'contratista3' && f.mi_contrato) || puedeEditarDesdeInspeccion()){ // abre la falla completa (editable) en vez de la ficha
       capa.unbindPopup();
       capa.on('click', () => enfocarFalla(f.id, true));
     }
@@ -6159,7 +6179,7 @@ function dibujarFallasInspeccionEnMapa(fallas){
     capasInspeccionPorFalla[f.id] = capa;
   });
   const capas = fallasInspeccionLayerGroup.getLayers();
-  if(capas.length){
+  if(capas.length && !sinZoom){
     map.fitBounds(L.featureGroup(capas).getBounds(), {padding:[50,50], maxZoom:18});
   }
 }
