@@ -141,9 +141,7 @@ pre.texto{ white-space:pre-wrap; font:inherit; margin:0; }
 
 /* Circuito recién reportado: parpadea igual que en el escritorio */
 @keyframes pulseFalla{ 0%,100%{ opacity:1; } 50%{ opacity:.25; } }
-path.falla-reportada{ animation: pulseFalla 1.1s ease-in-out infinite; }
 path.falla-toque{ cursor:pointer; }
-@media (prefers-reduced-motion: reduce){ path.falla-reportada{ animation:none; } }
 
 /* Formulario de reporte más compacto (opción B2) */
 .codigos{ gap:5px; }
