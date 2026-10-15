@@ -493,6 +493,8 @@
   body.modo-movil header button.logout{ padding:8px 10px; font-size:12px; }
   body.modo-movil .login-box{ width:calc(100vw - 48px); padding:24px; }
 
+  .gu-tab{ background:none; border:none; border-bottom:3px solid transparent; padding:9px 14px; font-size:13px; font-weight:600; color:var(--ink-soft); cursor:pointer; white-space:nowrap; margin-bottom:-2px; }
+  .gu-tab.on{ color:var(--primary); border-bottom-color:var(--primary); background:#eaf1fc; border-radius:8px 8px 0 0; }
 </style>
 </head>
 <body>
@@ -918,12 +920,20 @@
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeUsuariosBtn">×</button>
     <h2>Gestión de usuarios</h2>
-    <div class="hint" style="margin-bottom:12px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Foto obligatoria</b> (solo contratistas) exige adjuntar al menos una fotografía al registrar una reparación, y esas reparaciones se hacen desde la app del teléfono. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). La columna <b>Contratos</b> (contratistas y camiones) indica a qué contratos pertenece cada usuario; puede ser más de uno. Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div>
-    <div id="contratosAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
-    <div id="ajustesAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
-    <div id="pautaAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
-    <div id="operativoAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    <div id="gestionTabs" style="display:flex; gap:4px; border-bottom:2px solid var(--line); margin:4px 0 12px; overflow-x:auto;">
+      <button type="button" class="gu-tab" data-tab="usuarios">👥 Usuarios</button>
+      <button type="button" class="gu-tab" data-tab="pauta">📅 Pauta inspecciones <span class="gu-dot" id="guDotPauta" style="display:none; color:#e08a00;">●</span></button>
+      <button type="button" class="gu-tab" data-tab="contratos">📄 Contratos</button>
+      <button type="button" class="gu-tab" data-tab="ajustes">⚙️ Ajustes</button>
+    </div>
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><button id="guardarUsuariosBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;" disabled>Guardar cambios</button><span id="usuariosEstado" class="hint" style="margin:0;">Sin cambios</span></div>
+    <div class="gu-pane" data-pane="usuarios">
+    <details class="hint" style="margin-bottom:12px;"><summary style="cursor:pointer; font-weight:600;">ℹ️ Cómo funciona esta pantalla (crear usuarios, casillas y columnas)</summary><div style="margin-top:6px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Foto obligatoria</b> (solo contratistas) exige adjuntar al menos una fotografía al registrar una reparación, y esas reparaciones se hacen desde la app del teléfono. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). La columna <b>Contratos</b> (contratistas y camiones) indica a qué contratos pertenece cada usuario; puede ser más de uno. Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div></details>
+      <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px;">
+        <input type="search" id="usuariosBuscar" placeholder="🔍 Buscar nombre o email…" style="font-size:12.5px; padding:6px 10px; width:260px; border:1.5px solid var(--line); border-radius:6px;">
+        <select id="usuariosFiltroRol" style="font-size:12.5px; padding:6px 8px; border:1.5px solid var(--line); border-radius:6px;"><option value="">Rol: todos</option></select>
+        <span id="usuariosContador" class="hint" style="margin:0;"></span>
+      </div>
     <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
         <thead>
@@ -941,6 +951,17 @@
           <tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
         </tbody>
       </table>
+    </div>
+    </div>
+    <div class="gu-pane" data-pane="pauta" style="display:none;">
+    <div id="pautaAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    <div id="operativoAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    </div>
+    <div class="gu-pane" data-pane="contratos" style="display:none;">
+    <div id="contratosAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    </div>
+    <div class="gu-pane" data-pane="ajustes" style="display:none;">
+    <div id="ajustesAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     </div>
   </div>
 </div>
@@ -7941,8 +7962,36 @@ document.getElementById('usuariosModal').addEventListener('click', (e) => {
   if(e.target.id === 'usuariosModal') document.getElementById('usuariosModal').classList.remove('visible');
 });
 
+// Pestañas de la gestión de usuarios
+function elegirPestanaGestion(tab){
+  document.querySelectorAll('#gestionTabs .gu-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  document.querySelectorAll('#usuariosModal .gu-pane').forEach(p => p.style.display = p.dataset.pane === tab ? '' : 'none');
+}
+document.querySelectorAll('#gestionTabs .gu-tab').forEach(b => b.onclick = () => elegirPestanaGestion(b.dataset.tab));
+// Buscador + filtro por rol de la tabla de usuarios
+function aplicarFiltroUsuarios(){
+  const q = (document.getElementById('usuariosBuscar').value || '').trim().toLowerCase();
+  const rolF = document.getElementById('usuariosFiltroRol').value;
+  const filas = [...document.querySelectorAll('#usuariosTbody tr[data-id]')];
+  let n = 0;
+  filas.forEach(tr => {
+    const txt = (tr.querySelector('.nombre-input').value + ' ' + (tr.children[1] ? tr.children[1].textContent : '')).toLowerCase();
+    const ok = (!q || txt.includes(q)) && (!rolF || tr.querySelector('.rol-select').value === rolF);
+    tr.style.display = ok ? '' : 'none';
+    if(ok) n++;
+  });
+  document.getElementById('usuariosContador').textContent = filas.length ? `${n} de ${filas.length}` : '';
+}
+(function(){
+  const sel = document.getElementById('usuariosFiltroRol');
+  ['admin','ito','ito2','contratista','contratista2','contratista3','camion','observador'].forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o); });
+  sel.onchange = aplicarFiltroUsuarios;
+  document.getElementById('usuariosBuscar').oninput = aplicarFiltroUsuarios;
+})();
+
 function mostrarModalUsuarios(){
   document.getElementById('usuariosModal').classList.add('visible');
+  elegirPestanaGestion('usuarios');
   cargarUsuarios();
 }
 
@@ -8140,6 +8189,7 @@ async function cargarUsuarios(){
     });
     pintarPautaInspecciones();
     pintarOperativos();
+    aplicarFiltroUsuarios();
     refrescarCambiosUsuarios();
   }catch(e){
     tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
@@ -8237,6 +8287,8 @@ function refrescarCambiosUsuarios(){
     tr.style.background = (tr.dataset.orig && JSON.stringify(estadoFilaUsuario(tr)) !== tr.dataset.orig) ? '#fff8e1' : '';
   });
   const n = filasUsuariosModificadas().length;
+  const dot = document.getElementById('guDotPauta');
+  if(dot) dot.style.display = filasUsuariosModificadas().some(tr => { try{ return JSON.stringify(JSON.parse(tr.dataset.orig).dias) !== JSON.stringify(estadoFilaUsuario(tr).dias); }catch(e){ return false; } }) ? '' : 'none';
   document.getElementById('guardarUsuariosBtn').disabled = n === 0;
   document.getElementById('usuariosEstado').textContent = n ? `${n} usuario${n>1?'s':''} con cambios sin guardar` : 'Sin cambios';
 }
