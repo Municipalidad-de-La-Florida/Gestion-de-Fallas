@@ -520,6 +520,7 @@
     <div class="brand"><div class="brand-t">Gestión de Fallas</div><div class="brand-s">Alumbrado Público</div></div>
     <div class="userinfo">
       <button type="button" class="hb" id="statsBtn"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span class="bt">Estadísticas</span></button>
+      <button type="button" class="hb" id="inspC3Btn" style="display:none;"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="bt">Inspecciones</span></button>
       <button type="button" class="hb" id="todasBtn" style="display:none;"><span class="hb-chip" style="background:#e6eefb;color:#2a5db0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg></span><span class="bt">Todas las fallas</span></button>
       <button type="button" class="hb" id="toggleSearchBtn"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span><span class="bt">Buscador</span></button>
       <span class="hb-sep"></span>
@@ -1250,7 +1251,9 @@ async function cargarPerfilYIniciar(userId){
 
 function rolEfectivo(){ return modoVista || currentUser.rol; }
 // Contratista2 se muestra como "contratista" en el recuadro de rol del perfil
-function rolVisible(r){ return r === 'contratista2' ? 'contratista' : r; }
+function rolVisible(r){ return (r === 'contratista2' || r === 'contratista3') ? 'contratista' : r; }
+// Contratista2 y Contratista3 comparten las mismas capacidades base
+const esContratista2o3 = r => r === 'contratista2' || r === 'contratista3';
 
 function actualizarVisibilidadPorRol(){
   const rol = rolEfectivo();
@@ -1258,12 +1261,13 @@ function actualizarVisibilidadPorRol(){
   // real no vería este botón, así que tampoco debe verse al simular esos roles)
   document.getElementById('usuariosBtn').style.display = (rol === 'admin') ? '' : 'none';
   document.getElementById('notificadoresBtn').style.display = (rol === 'admin') ? '' : 'none';
-  document.getElementById('reportSection').style.display = (rol === 'ito' || rol === 'ito2' || rol === 'admin' || rol === 'contratista2') ? 'block' : 'none';
+  document.getElementById('reportSection').style.display = (rol === 'ito' || rol === 'ito2' || rol === 'admin' || esContratista2o3(rol)) ? 'block' : 'none';
   // Contratista2 solo puede ingresar fallas individuales ("Agregar falla"), no inspecciones
-  document.getElementById('btnInformarInspeccion').style.display = (rol === 'contratista2') ? 'none' : '';
-  document.getElementById('repararSection').style.display = ['contratista','contratista2','camion'].includes(rol) ? 'block' : 'none';
-  document.getElementById('statsBtn').style.display = (rol === 'contratista' || rol === 'contratista2') ? 'none' : '';
-  document.getElementById('todasBtn').style.display = (rol === 'admin' || rol === 'ito' || rol === 'ito2' || rol === 'contratista' || rol === 'contratista2') ? '' : 'none';
+  document.getElementById('btnInformarInspeccion').style.display = esContratista2o3(rol) ? 'none' : '';
+  document.getElementById('repararSection').style.display = ['contratista','contratista2','contratista3','camion'].includes(rol) ? 'block' : 'none';
+  document.getElementById('statsBtn').style.display = (rol === 'contratista' || esContratista2o3(rol)) ? 'none' : '';
+  document.getElementById('inspC3Btn').style.display = (rol === 'contratista3') ? '' : 'none';
+  document.getElementById('todasBtn').style.display = (rol === 'admin' || rol === 'ito' || rol === 'ito2' || rol === 'contratista' || esContratista2o3(rol)) ? '' : 'none';
   // si cambia el rol efectivo (ej. "ver como"), se sale de cualquier modo de reporte activo
   salirModoInformar();
 }
@@ -2336,7 +2340,7 @@ async function obtenerInspeccionIdSesion(){
 
 function puedeReportar(){
   const r = rolEfectivo();
-  if(r === 'contratista2') return modoIngreso === 'agregar'; // solo fallas individuales, sin inspección
+  if(esContratista2o3(r)) return modoIngreso === 'agregar'; // solo fallas individuales, sin inspección
   return (r === 'ito' || r === 'ito2' || r === 'admin') && (modoIngreso === 'agregar' || modoIngreso === 'inspeccion');
 }
 
@@ -2464,7 +2468,7 @@ let listaNotificadores = [];
 function puedeNotificadorExterno(){
   return modoIngreso === 'agregar'
     && !!(currentUser && currentUser.notificador_externo_habilitado)
-    && ['admin','ito','ito2','contratista2'].includes(rolEfectivo());
+    && ['admin','ito','ito2','contratista2','contratista3'].includes(rolEfectivo());
 }
 
 function leerSesionNotificador(){
@@ -2531,7 +2535,7 @@ function opcionesNotificadorHtml(lista, textoVacio, previo){
   const opcion = (n) => `<option value="${n.id}" data-nombre="${escHtml(n.nombre)}">${escHtml(n.nombre)}</option>`;
   const sinReg = lista.filter(n => !n.validado && !n.usuario_id).map(opcion).join('');
   const validados = lista.filter(n => n.validado && !(n.usuario_id && idsUsuarios.has(n.usuario_id))).map(opcion).join('');
-  const rolTxt = { ito:'ITO', contratista:'Contratista', contratista2:'Contratista', admin:'Admin' };
+  const rolTxt = { ito:'ITO', contratista:'Contratista', contratista2:'Contratista', contratista3:'Contratista', admin:'Admin' };
   const usrs = usuarios.map(u => `<option value="u:${u.id}" data-nombre="${escHtml(u.nombre)}">${escHtml(u.nombre)} (${rolTxt[u.rol] || u.rol})</option>`).join('');
   let seleccion = previo || '';
   const enlazado = lista.find(n => n.id === previo && n.usuario_id && idsUsuarios.has(n.usuario_id));
@@ -3248,7 +3252,7 @@ async function abrirPopupFalla(feat){
   const botonEliminarHtml = puedeEliminar
     ? `<button id="eliminarDesdeMapaBtn" title="Eliminar falla" style="flex-shrink:0; width:26px; height:26px; padding:0; border:1.5px solid var(--red); border-radius:6px; background:#fbe7e5; color:var(--red); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>`
     : '';
-  const puedeAsignarCamion = ['contratista','contratista2','admin'].includes(rolEfectivo()) && !p.cascada && !p._vistaHistorica && p.estado !== 'reparada';
+  const puedeAsignarCamion = ['contratista','contratista2','contratista3','admin'].includes(rolEfectivo()) && !p.cascada && !p._vistaHistorica && p.estado !== 'reparada';
   const asignarCamionHtml = puedeAsignarCamion ? `
     <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
       <div class="hint" style="margin-bottom:4px;">Asignar a camión:</div>
@@ -3267,7 +3271,7 @@ async function abrirPopupFalla(feat){
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   let contenidoPanel;
-  if(['contratista','contratista2','camion','admin'].includes(rolEfectivo()) && !p.cascada && p.estado !== 'reparada'){
+  if(['contratista','contratista2','contratista3','camion','admin'].includes(rolEfectivo()) && !p.cascada && p.estado !== 'reparada'){
     const filasCierre = CATALOGO_CIERRES.map(item => `
       <div class="falla-opcion-row">
         <button class="codigo-btn cierre-btn" data-desc="${(item.c + ' ' + item.d).replace(/"/g,'&quot;')}">${item.c}</button>
@@ -3670,7 +3674,7 @@ function puedeGestionarFallaLateral(f){
   if(f.cascada) return false;
   if(rolEfectivo() === 'admin') return true;
   if(f.estado === 'reparada' || f.creado_por !== currentUser.id) return false;
-  if(!['ito','ito2','contratista2'].includes(currentUser.rol)) return false;
+  if(!['ito','ito2','contratista2','contratista3'].includes(currentUser.rol)) return false;
   return (Date.now() - new Date(f.creado_en).getTime()) / 60000 <= 15;
 }
 
@@ -3684,7 +3688,7 @@ window.editarFallaLateral = editarFallaLateral;
 // No se guardan: se reinician al abrir o recargar la página. Los contadores muestran el estado actual de la comuna
 // (todas las fallas activas del área), sin importar los filtros puestos.
 try{ localStorage.removeItem('fa_sin_asignar'); localStorage.removeItem('fa_solo_masivo'); }catch(_){}
-const ROLES_FILTRO_ASIGNAR = ['admin','contratista','contratista2'];
+const ROLES_FILTRO_ASIGNAR = ['admin','contratista','contratista2','contratista3'];
 function puedeFiltrarSinAsignar(){ return ROLES_FILTRO_ASIGNAR.includes(rolEfectivo()); }
 let filtroAsignacion = 'todas';    // 'todas' | 'sin' | 'asignadas'
 let filtroSubcontrato = 'todas';   // 'todas' | 'masivo' | 'normal'
@@ -3937,6 +3941,7 @@ async function subirFotoReparacion(fallaId, blob){
 
 // ---------- ESTADÍSTICAS (panel lateral) ----------
 document.getElementById('statsBtn').onclick = () => mostrarSidebarStats();
+document.getElementById('inspC3Btn').onclick = () => mostrarSidebarStats();
 document.getElementById('backFromStats').onclick = () => ocultarSidebarStats();
 
 function mostrarSidebarStats(){
@@ -3947,6 +3952,15 @@ function mostrarSidebarStats(){
   document.getElementById('tabInspecciones').style.display = ['admin','ito','ito2'].includes(rolEfectivo()) ? '' : 'none';
   // El Análisis solo lo ven admin e ito2 (la base de datos también lo exige).
   document.getElementById('tabAnalisis').style.display = ['admin','ito2'].includes(rolEfectivo()) ? '' : 'none';
+  if(rolEfectivo() === 'contratista3'){
+    // Contratista3: solo ve la pestaña Inspecciones (de todos los ITOs)
+    document.getElementById('tabPeriodo').style.display = 'none';
+    document.getElementById('tabInspecciones').style.display = '';
+    document.getElementById('tabAnalisis').style.display = 'none';
+    document.getElementById('tabInspecciones').click();
+    return;
+  }
+  document.getElementById('tabPeriodo').style.display = '';
   reiniciarFiltrosEst();
   actualizarBarraFiltrosEst();
   if(!document.getElementById('fechaInicioRango').value){
@@ -4030,7 +4044,7 @@ function mostrarModalTodas(){
   document.getElementById('todasContenido').style.display = 'block';
   document.getElementById('historialContenido').style.display = 'none';
   document.getElementById('inspeccionContenido').style.display = 'none';
-  document.getElementById('toggleExportBtn').style.display = ['admin','ito','ito2','contratista','contratista2'].includes(rolEfectivo()) ? 'inline-block' : 'none';
+  document.getElementById('toggleExportBtn').style.display = ['admin','ito','ito2','contratista','contratista2','contratista3'].includes(rolEfectivo()) ? 'inline-block' : 'none';
   document.getElementById('toggleRealesBtn').style.display = rolEfectivo() === 'admin' ? 'inline-block' : 'none';
   pintarBotonReales();
   document.getElementById('todasPanel').classList.add('visible');
@@ -4280,7 +4294,7 @@ function pintarChipsContratoTodas(){
 }
 
 // ---- Filtros de asignación en "Todas las fallas" (solo admin / contratista / contratista2) ----
-function verAsignacionTodas(){ return ['admin','contratista','contratista2'].includes(rolEfectivo()); }
+function verAsignacionTodas(){ return ['admin','contratista','contratista2','contratista3'].includes(rolEfectivo()); }
 let filtroAsignTodasFallas = 'todas';           // 'todas' | 'sin' | 'asignadas'
 const filtroAsignadoresTodasFallas = new Set();  // ids de quienes asignaron; vacío = todos
 function filtrarTodasFallasPorAsignacion(v){
@@ -4851,7 +4865,7 @@ function extraFiltrosEst(conIto, contratoId){
   return e;
 }
 function claveFiltrosEst(conIto, contratoId){ return JSON.stringify(extraFiltrosEst(conIto, contratoId)); }
-function veAsignadoresEst(){ return ['admin','contratista','contratista2','ito2'].includes(rolEfectivo()); }
+function veAsignadoresEst(){ return ['admin','contratista','contratista2','contratista3','ito2'].includes(rolEfectivo()); }
 let asignadoresEst = null;   // [{id, nombre}] quienes han asignado alguna falla
 async function cargarAsignadoresEst(){
   if(asignadoresEst || !veAsignadoresEst()) return;
@@ -5265,12 +5279,14 @@ function renderListadoInspecciones(){
         <div class="hint">${i.fallas ? `${i.fallas} falla${i.fallas>1?'s':''} · ${i.puntos_afectados} punto${i.puntos_afectados===1?'':'s'} lumínico${i.puntos_afectados===1?'':'s'} afectado${i.puntos_afectados===1?'':'s'}` : 'Inspección sin fallas'}</div>
         ${i.fallas ? `<div class="insp-pills">${pillsEstadoHtml(i)}</div>` : ''}
         <div class="hint">Ingresada por ${escHtml(i.ingresado_por || '—')} · ${escHtml(fmtFechaHoraChile(i.creado_en))}</div>
+        ${rolEfectivo() === 'contratista3' && (i.fallas - i.reparadas) > 0 ? `<button type="button" class="popup-btn insp-asig-btn" data-asig="${escHtml(i.inspeccion_id)}" style="width:auto; margin:8px 0 0; padding:6px 12px; background:#1f8a4c;">🚚 Asignar a camión</button>` : ''}
       </div>`).join('')}
   `;
   content.innerHTML = html;
   content.querySelectorAll('.insp-card').forEach(card => {
     card.onclick = () => abrirDetalleInspeccion(card.dataset.id);
   });
+  content.querySelectorAll('.insp-asig-btn').forEach(b => b.onclick = (ev) => { ev.stopPropagation(); abrirAsignarInspeccion(b.dataset.asig); });
 }
 
 // ---------- Detalle de una inspección (panel inferior + mapa) ----------
@@ -5428,19 +5444,25 @@ function renderDetalleInspeccion(det){
   ultimoDetalleInspeccion = det;
   const insp = det.inspeccion, fallas = det.fallas || [];
   const cont = document.getElementById('inspeccionContenido');
+  // Contratista3: ve toda la inspección, pero los conteos y la asignación consideran solo las fallas de su contrato
+  const esC3 = rolEfectivo() === 'contratista3';
+  const propias = esC3 ? fallas.filter(f => f.mi_contrato) : fallas;
+  const ajenas = fallas.length - propias.length;
+  const asignables = propias.filter(f => f.estado !== 'reparada').length;
   const cuenta = {reparada:0, pendiente:0, reiterada:0, reportada:0};
-  fallas.forEach(f => { if(cuenta[f.estado] !== undefined) cuenta[f.estado]++; });
-  const puntos = fallas.reduce((s, f) => s + (f.puntos_afectados || 0), 0);
+  propias.forEach(f => { if(cuenta[f.estado] !== undefined) cuenta[f.estado]++; });
+  const puntos = propias.reduce((s, f) => s + (f.puntos_afectados || 0), 0);
 
   const encabezado = `
     <div style="display:flex; flex-wrap:wrap; gap:8px 28px; margin-bottom:12px;">
       <div><div class="hint" style="margin:0;">ITO</div><b>${escHtml(insp.ito_nombre)}</b></div>
       <div><div class="hint" style="margin:0;">Día de la inspección</div><b>${escHtml(fmtDiaInspeccion(insp.fecha))}</b></div>
       <div><div class="hint" style="margin:0;">Ingresada por</div><b>${escHtml(insp.ingresado_por || '—')}</b> <span class="hint">· ${escHtml(fmtFechaHoraChile(insp.creado_en))}</span></div>
-      <div><div class="hint" style="margin:0;">Fallas</div><b>${fallas.length}</b> <span class="hint">· ${puntos} punto${puntos===1?'':'s'} afectado${puntos===1?'':'s'}</span></div>
+      <div><div class="hint" style="margin:0;">Fallas</div><b>${propias.length}</b> <span class="hint">· ${puntos} punto${puntos===1?'':'s'} afectado${puntos===1?'':'s'}${ajenas ? ` · ${ajenas} de otros contratos (en gris)` : ''}</span></div>
       <div style="align-self:flex-end;"><div class="insp-pills" style="margin:0;">${pillsEstadoHtml({reparadas:cuenta.reparada, pendientes:cuenta.pendiente, reiteradas:cuenta.reiterada, reportadas:cuenta.reportada})}</div></div>
       <div style="margin-left:auto; align-self:flex-end; display:flex; gap:8px;">
         ${rolEfectivo()==='admin' ? '<button class="popup-btn" id="inspEditarBtn" style="width:auto; margin:0; padding:7px 14px; background:#7a4b00; border:1.5px solid #000;">✏️ Editar inspección</button>' : ''}
+        ${esC3 && asignables ? '<button class="popup-btn" id="inspAsignarBtn" style="width:auto; margin:0; padding:7px 14px; background:#1f8a4c; border:1.5px solid #000;">🚚 Asignar a camión</button>' : ''}
         ${puedeContinuarInspeccion(insp) ? '<button class="popup-btn" id="inspContinuarBtn" style="width:auto; margin:0; padding:7px 14px; background:#2563a8; border:1.5px solid #000;">✏️ Continuar esta inspección</button>' : ''}
         <button class="popup-btn" id="inspPdfBtn" style="width:auto; margin:0; padding:7px 14px;">📄 Exportar PDF</button>
       </div>
@@ -5458,7 +5480,7 @@ function renderDetalleInspeccion(det){
   cont.innerHTML = encabezado + `
     <div id="inspFiltroDetalle" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-bottom:8px;">
       <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Estado:</span>
-      <button type="button" class="chip-estado activo" data-dest="todas">Todas <span class="n">(${fallas.length})</span></button>${chipsDetalle}
+      <button type="button" class="chip-estado activo" data-dest="todas">Todas <span class="n">(${propias.length})</span></button>${chipsDetalle}
     </div>
     <table id="inspeccionTabla" style="width:100%; border-collapse:collapse;">
       <thead>
@@ -5473,9 +5495,9 @@ function renderDetalleInspeccion(det){
       </thead>
       <tbody>
         ${fallas.map(f => `
-          <tr data-id="${escHtml(f.id)}" data-estado="${escHtml(f.estado)}">
+          <tr data-id="${escHtml(f.id)}" data-estado="${escHtml(f.estado)}" ${esC3 && !f.mi_contrato ? 'data-ajena="1" style="opacity:.45; filter:grayscale(1);"' : ''}>
             <td class="mono">${escHtml(f.ot || '—')}</td>
-            <td><b>${escHtml(f.tipo_falla)}</b><div class="hint">${escHtml(descripcionCodigoFalla(f))}</div></td>
+            <td><b>${escHtml(f.tipo_falla)}</b><div class="hint">${escHtml(descripcionCodigoFalla(f))}</div>${esC3 && f.contrato_nombre ? `<div class="hint">${escHtml(f.contrato_nombre)}</div>` : ''}</td>
             <td>${htmlUbicacionFalla(f)}</td>
             <td>${htmlNotificadoFalla(f)}</td>
             <td><span class="badge ${escHtml(f.estado)}">${escHtml(String(f.estado).replace('_',' '))}</span></td>
@@ -5505,7 +5527,68 @@ function renderDetalleInspeccion(det){
   enlazarPdfInspeccion();
   enlazarContinuarInspeccion(insp);
   enlazarEditarInspeccion(det);
+  const bAsig = document.getElementById('inspAsignarBtn');
+  if(bAsig) bAsig.onclick = () => abrirAsignarInspeccion(insp.id);
   llenarFotos(cont);
+}
+
+// ===== Contratista3: asignar de una vez las fallas de su contrato de una inspección a un camión =====
+function cerrarAsignarInspeccion(){ const m = document.getElementById('asignarInspModal'); if(m) m.remove(); }
+async function abrirAsignarInspeccion(inspId){
+  cerrarAsignarInspeccion();
+  const m = document.createElement('div');
+  m.id = 'asignarInspModal';
+  m.className = 'modal-overlay visible';
+  m.innerHTML = `<div class="modal-card" style="max-width:480px;"><button class="close-x" id="asigInspX" aria-label="Cerrar">×</button>
+    <h3 style="margin-top:0;">🚚 Asignar a camión</h3><div id="asigInspCuerpo" class="hint">Cargando...</div></div>`;
+  document.body.appendChild(m);
+  m.querySelector('#asigInspX').onclick = cerrarAsignarInspeccion;
+  const cuerpo = m.querySelector('#asigInspCuerpo');
+  try{
+    const [det, camiones] = await Promise.all([db.rpc('inspeccion_detalle', {p_inspeccion: inspId}), db.rpc('listar_camiones_contrato', {})]);
+    if(!det){ cuerpo.textContent = 'No se encontró la inspección.'; return; }
+    const propias = (det.fallas || []).filter(f => f.mi_contrato && f.estado !== 'reparada');
+    const sinAsig = propias.filter(f => !f.asignado_camion_id).length;
+    const yaAsig = propias.length - sinAsig;
+    if(!propias.length){ cuerpo.textContent = 'Esta inspección no tiene fallas de tu contrato por asignar.'; return; }
+    if(!camiones || !camiones.length){ cuerpo.textContent = 'No hay camiones asociados a tu contrato.'; return; }
+    cuerpo.className = '';
+    cuerpo.innerHTML = `
+      <div style="margin-bottom:10px;"><b>${escHtml(det.inspeccion.ito_nombre)}</b> · ${escHtml(fmtDiaInspeccion(det.inspeccion.fecha))}
+        <div class="hint">${propias.length} falla${propias.length===1?'':'s'} de tu contrato sin reparar: ${sinAsig} sin asignar, ${yaAsig} ya asignada${yaAsig===1?'':'s'}. Las de otros contratos y las reparadas no se tocan.</div></div>
+      <label class="hint" for="asigInspCamion">Camión</label>
+      <select id="asigInspCamion" class="popup-input" style="width:100%; margin-bottom:10px;">
+        ${camiones.map(c => `<option value="${escHtml(c.id)}">${escHtml(c.nombre)}</option>`).join('')}
+      </select>
+      ${yaAsig ? `<div style="border:1.5px solid #c9d3df; border-radius:8px; padding:10px; margin-bottom:10px;">
+        <b>${yaAsig} falla${yaAsig===1?' ya tiene':'s ya tienen'} camión asignado. ¿Volver a asignar${yaAsig===1?'la':'las'}?</b>
+        <label style="display:flex; gap:6px; margin-top:6px; align-items:flex-start;"><input type="radio" name="asigInspModo" value="vacias" checked> <span>No, asignar solo las que están sin camión (${sinAsig})</span></label>
+        <label style="display:flex; gap:6px; margin-top:4px; align-items:flex-start;"><input type="radio" name="asigInspModo" value="todas"> <span>Sí, reasignar todas (${propias.length})</span></label>
+      </div>` : ''}
+      <div id="asigInspError" class="hint" style="color:#c0392b; display:none;"></div>
+      <button class="popup-btn" id="asigInspOk" style="background:#1f8a4c;">Asignar</button>
+      <button class="popup-btn" id="asigInspNo" style="background:#666;">Cancelar</button>`;
+    m.querySelector('#asigInspNo').onclick = cerrarAsignarInspeccion;
+    const ok = m.querySelector('#asigInspOk');
+    ok.onclick = async () => {
+      const camion = m.querySelector('#asigInspCamion').value;
+      const radio = m.querySelector('input[name="asigInspModo"]:checked');
+      const sobrescribir = !!radio && radio.value === 'todas';
+      ok.disabled = true; ok.textContent = 'Asignando...';
+      try{
+        const n = await db.rpc('asignar_camion_inspeccion', {p_inspeccion: inspId, p_camion: camion, p_sobrescribir: sobrescribir});
+        const nombre = (camiones.find(c => c.id === camion) || {}).nombre || 'el camión';
+        cuerpo.innerHTML = `<div style="margin-bottom:12px;"><b>${n}</b> falla${n===1?'':'s'} asignada${n===1?'':'s'} a <b>${escHtml(nombre)}</b>.</div><button class="popup-btn" id="asigInspCerrar">Cerrar</button>`;
+        cuerpo.querySelector('#asigInspCerrar').onclick = cerrarAsignarInspeccion;
+        invalidarCacheTodasFallas();
+        try{ cargarFallasDelArea(); renderFallasOnMap(); }catch(e){}
+        if(inspeccionSeleccionadaId === inspId) abrirDetalleInspeccion(inspId);
+      }catch(e){
+        ok.disabled = false; ok.textContent = 'Asignar';
+        const er = m.querySelector('#asigInspError'); er.style.display = 'block'; er.textContent = 'No se pudo asignar: ' + e.message;
+      }
+    };
+  }catch(e){ cuerpo.textContent = 'Error: ' + e.message; }
 }
 
 
@@ -5614,7 +5697,7 @@ function dibujarFallasInspeccionEnMapa(fallas){
   capasInspeccionPorFalla = {};
   fallas.forEach(f => {
     if(!f.geometry) return;
-    const color = colorEstado[f.estado] || '#2563a8';
+    const color = (rolEfectivo() === 'contratista3' && f.mi_contrato === false) ? '#9aa5b1' : (colorEstado[f.estado] || '#2563a8');
     const tip = `OS ${f.ot || '—'} · ${f.tipo_falla} · ${String(f.estado).replace('_',' ')}`;
     let capa;
     if(f.geometry.type === 'Point'){
@@ -7497,13 +7580,13 @@ function mostrarModalUsuarios(){
   cargarUsuarios();
 }
 
-const ROLES_DISPONIBLES = ['admin','ito','ito2','contratista','contratista2','camion','observador'];
+const ROLES_DISPONIBLES = ['admin','ito','ito2','contratista','contratista2','contratista3','camion','observador'];
 // Roles que pueden ingresar fallas: solo ellos pueden tener habilitado el notificador externo
 // (la base de datos también lo exige y lo apaga si el rol cambia a otro).
-const ROLES_CON_NOTIFICADOR = ['admin','ito','ito2','contratista2'];
-const ROLES_CON_FOTO = ['contratista','contratista2','camion'];
+const ROLES_CON_NOTIFICADOR = ['admin','ito','ito2','contratista2','contratista3'];
+const ROLES_CON_FOTO = ['contratista','contratista2','contratista3','camion'];
 // Roles que pertenecen a uno o más contratos (los demás ven todo)
-const ROLES_CON_CONTRATO = ['contratista','contratista2','camion'];
+const ROLES_CON_CONTRATO = ['contratista','contratista2','contratista3','camion'];
 let CONTRATOS_LISTA = [];   // todos los contratos (activos e inactivos)
 const escAttr = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 function htmlCeldaContratos(rol, ids){
@@ -7783,7 +7866,7 @@ async function cargarNotificadoresAdmin(){
   try{
     const lista = await db.select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc');
     let usuarios = [];
-    try{ usuarios = await db.select('usuarios', 'select=id,nombre,rol&rol=in.(ito,contratista,contratista2,admin)&order=nombre.asc'); }catch(e){}
+    try{ usuarios = await db.select('usuarios', 'select=id,nombre,rol&rol=in.(ito,contratista,contratista2,contratista3,admin)&order=nombre.asc'); }catch(e){}
     const nomUsuario = Object.fromEntries(usuarios.map(u => [u.id, u.nombre]));
     const filas = lista.map(n => ({ ...n, nFallas: (n.fallas && n.fallas[0] && n.fallas[0].count) || 0 }));
     // Primero los "sin validar" (hay que revisarlos); luego los demás por nombre
