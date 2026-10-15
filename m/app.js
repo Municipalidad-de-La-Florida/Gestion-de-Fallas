@@ -1362,6 +1362,7 @@ async function abrirFalla(p, geom) {
     ${puedeEliminarEsta ? `<div style="text-align:center;margin-top:2px"><button id="bEliminar" class="btn-link" style="color:var(--rojo);font-weight:600">Eliminar falla${rol() === 'admin' ? '' : ` (quedan ${minRestantes} min)`}</button></div>` : ''}
     <h3>Historial</h3>
     <ul class="linea-tiempo" id="histFalla"><li class="hint">Cargando…</li></ul>`);
+  ofrecerEdicionReparacion(p, h);
   const bc = $('#bCerrar', h);
   if (bc) bc.addEventListener('click', () => formCierre(p));
   const bed = $('#bEditar', h);
@@ -1403,6 +1404,117 @@ async function abrirFalla(p, geom) {
       }
     }).catch(() => {});
   }
+}
+
+/* Editar / quitar una reparación: quien la registró, dentro de 10 minutos (el admin siempre). La base lo exige igual. */
+async function ofrecerEdicionReparacion(p, h) {
+  if (!PUEDE_CERRAR.includes(rol()) || p.cascada || p.estado !== 'reparada') return;
+  let est;
+  try { est = await rpc('reparacion_estado', { p_falla_id: p.id }); } catch (e) { return; }
+  const acc = $('#accFalla', h);
+  if (!est || !est.puede || !acc || !document.body.contains(acc)) return;
+  const min = est.segundos == null ? '' : ` (quedan ${Math.max(1, Math.ceil(est.segundos / 60))} min)`;
+  acc.insertAdjacentHTML('afterbegin', `<button id="bEditRep" class="btn btn-secundario">✏️ Editar o quitar la reparación${min}</button>`);
+  $('#bEditRep', h).addEventListener('click', () => editarReparacionApp(p, est));
+}
+async function editarReparacionApp(p, est) {
+  const cat = est.tipo === 'linea' ? CAT_CIRCUITO : (['F02', 'F03'].includes(est.tipo_falla) ? CAT_MONOPOSTE : CAT_PUNTO);
+  const bloq = !!est.bloqueada_por_otra_falla;
+  let codigo = est.tipo_falla;
+  const h = abrirHoja(`
+    <h2>Editar reparación · OS ${esc(p.ot || '—')}</h2>
+    <div class="hint">${esc(est.tipo_falla)}${est.segundos == null ? ' · sin límite de tiempo (admin)' : ''}</div>
+    <h3>Trabajo realizado</h3>
+    <div class="codigos">${CAT_CIERRES.map((x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>
+    <textarea id="rDesc" class="campo"></textarea>
+    <h3>Código de falla</h3>${htmlCodigos(cat)}
+    <textarea id="rOtro" class="campo" placeholder="Describe la falla (obligatorio si eliges OTRO)" ${codigo === 'OTRO' ? '' : 'hidden'}></textarea>
+    <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
+    <h3>Fotografías</h3>
+    <div id="rFotos" class="fotos"></div>
+    <div class="fila-btns">
+      <button type="button" id="rBtnCam" class="btn btn-secundario">📷 Tomar foto</button>
+      <button type="button" id="rBtnGal" class="btn btn-secundario">🖼 Galería</button>
+    </div>
+    <input id="rInCam" type="file" accept="image/*" capture="environment" hidden>
+    <input id="rInGal" type="file" accept="image/*" multiple hidden>
+    <div class="acciones"><button id="rGuardar" class="btn btn-primario">Guardar cambios</button></div>
+    <h3>Me equivoqué al cerrar</h3>
+    ${bloq ? '<div class="hint">Ya hay otra falla activa en este punto o circuito: no se puede quitar la reparación.</div>' : `
+    <div class="hint">Se borra la reparación (con su comentario y fotos) y la falla vuelve a su estado anterior.</div>
+    <div class="acciones"><button id="rQuitar" class="btn btn-secundario" style="color:var(--rojo)">↩ Quitar reparación</button></div>
+    <div class="hint">O déjala pendiente (motivo obligatorio):</div>
+    <textarea id="rMotivo" class="campo" placeholder="Motivo por el que queda pendiente"></textarea>
+    <div class="acciones"><button id="rPend" class="btn btn-secundario">Dejar pendiente</button></div>`}`);
+  $('#rDesc', h).value = est.descripcion || '';
+  $('#rOtro', h).value = est.descripcion_otro || '';
+  const m = /^([SE])-(.*)$/.exec(est.orden_externa || '');
+  if (m) { $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
+  $$('.codigos .codigo[data-t]', h).forEach((b) => b.addEventListener('click', () => {
+    const t = b.dataset.t, ta = $('#rDesc', h);
+    if (!ta.value.includes(t)) ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + t;
+  }));
+  $$('.codigo[data-c]', h).forEach((b) => {
+    if (b.dataset.c === codigo) b.classList.add('sel');
+    b.addEventListener('click', () => { $$('.codigo[data-c]', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c; $('#rOtro', h).hidden = codigo !== 'OTRO'; });
+  });
+  // Fotos: las ya subidas (✕ las quita en el servidor) y las nuevas por subir
+  let existentes = []; const nuevas = [];
+  const pintar = async () => {
+    const c = $('#rFotos', h); if (!c) return;
+    const urls = await Promise.all(existentes.map((f) => urlFoto(f.ruta).catch(() => null)));
+    c.innerHTML = existentes.map((f, i) => `<div class="foto"><img src="${esc(urls[i] || '')}" alt="Foto"><button type="button" data-q="${esc(f.id)}" aria-label="Quitar foto">✕</button></div>`).join('')
+      + nuevas.map((f, i) => `<div class="foto"><img src="${f.url}" alt="Foto nueva"><button type="button" data-n="${i}" aria-label="Quitar foto">✕</button></div>`).join('');
+    $$('[data-q]', c).forEach((b) => b.addEventListener('click', async () => {
+      try { await rpc('quitar_foto_reparacion', { p_foto_id: b.dataset.q }); existentes = existentes.filter((f) => f.id !== b.dataset.q); pintar(); }
+      catch (e) { toast(e.message, 'error'); }
+    }));
+    $$('[data-n]', c).forEach((b) => b.addEventListener('click', () => { const f = nuevas.splice(+b.dataset.n, 1)[0]; URL.revokeObjectURL(f.url); pintar(); }));
+    $('#rBtnCam', h).disabled = $('#rBtnGal', h).disabled = existentes.length + nuevas.length >= MAX_FOTOS;
+  };
+  try { existentes = (await select('fallas_fotos', `falla_id=eq.${p.id}&archivada_en=is.null&select=id,ruta&order=creado_en.asc`)) || []; } catch (e) { existentes = []; }
+  pintar();
+  const agregar = async (files) => {
+    const libres = MAX_FOTOS - existentes.length - nuevas.length;
+    for (const f of Array.from(files || []).slice(0, libres)) {
+      try { const blob = await comprimirFoto(f); nuevas.push({ blob, url: URL.createObjectURL(blob) }); } catch (e) { toast(e.message, 'error'); }
+    }
+    pintar();
+  };
+  $('#rBtnCam', h).addEventListener('click', () => $('#rInCam', h).click());
+  $('#rBtnGal', h).addEventListener('click', () => $('#rInGal', h).click());
+  ['rInCam', 'rInGal'].forEach((id) => $('#' + id, h).addEventListener('change', (e) => { agregar(e.target.files); e.target.value = ''; }));
+  const fin = (msg) => { cerrarHoja(); toast(msg, 'ok'); cargarFallas(); };
+  const gu = $('#rGuardar', h);
+  gu.addEventListener('click', ocupar(gu, async () => {
+    const d = $('#rDesc', h).value.trim();
+    if (!d) { toast('La descripción de la reparación no puede estar vacía.', 'error'); return; }
+    const o = $('#rOtro', h).value.trim();
+    if (codigo === 'OTRO' && !o) { toast('Describe la falla.', 'error'); return; }
+    const oe = leerOrdenExterna(h);
+    if (oe.error) { toast(oe.error, 'error'); return; }
+    const cambios = {};
+    if (d !== (est.descripcion || '').trim()) cambios.descripcion = d;
+    if (codigo !== est.tipo_falla) { cambios.tipo_falla = codigo; if (codigo !== 'OTRO') cambios.descripcion_otro = null; }
+    if (codigo === 'OTRO' && o !== (est.descripcion_otro || '')) cambios.descripcion_otro = o;
+    if ((oe.valor || null) !== (est.orden_externa || null)) cambios.orden_externa = oe.valor || null;
+    for (let i = 0; i < nuevas.length; i++) { gu.textContent = `Subiendo foto ${i + 1} de ${nuevas.length}…`; await subirFoto(p.id, nuevas[i].blob); }
+    if (Object.keys(cambios).length) { gu.textContent = 'Guardando…'; await rpc('editar_reparacion', { p_falla_id: p.id, p_cambios: cambios }); }
+    fin('Reparación actualizada');
+  }));
+  const q = $('#rQuitar', h);
+  if (q) q.addEventListener('click', ocupar(q, async () => {
+    if (!confirm('¿Quitar la reparación? La falla volverá a su estado anterior.')) return;
+    await rpc('anular_reparacion', { p_falla_id: p.id, p_motivo_pendiente: null });
+    fin('Reparación quitada');
+  }));
+  const pe = $('#rPend', h);
+  if (pe) pe.addEventListener('click', ocupar(pe, async () => {
+    const mot = $('#rMotivo', h).value.trim();
+    if (!mot) { toast('Escribe el motivo por el que queda pendiente.', 'error'); return; }
+    await rpc('anular_reparacion', { p_falla_id: p.id, p_motivo_pendiente: mot });
+    fin('La falla quedó pendiente');
+  }));
 }
 
 async function formAsignar(p) {

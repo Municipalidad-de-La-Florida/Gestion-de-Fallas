@@ -3323,6 +3323,9 @@ async function abrirPopupFalla(feat){
 
   const panel = mostrarPanel(contenidoPanel);
   llenarFotos(panel);
+  if(p.estado === 'reparada' && !p.cascada && !p._vistaHistorica && ['contratista','contratista2','contratista3','camion','admin'].includes(rolEfectivo())){
+    activarEdicionReparacion(panel, p);
+  }
 
   if(puedeAsignarCamion){
     (async () => {
@@ -3970,6 +3973,149 @@ async function subirFotoReparacion(fallaId, blob){
   }catch(e){ throw new Error('Sin conexión al subir la foto. Intenta de nuevo.'); }
   if(!res.ok) throw new Error('No se pudo subir la foto (' + res.status + ').');
   await db.rpc('registrar_foto_falla', {p_falla_id: fallaId, p_ruta: ruta, p_bytes: blob.size});
+}
+
+// ===== Editar / quitar una reparación (quien la registró, 10 minutos; el admin siempre) =====
+const ATAJOS_CIERRE = [
+  '001 Cambio de lámpara quemada','009 Luminaria en funcionamiento normal','011 Cambio de Ballast o Driver','012 Cambio de CFE dañada',
+  '013 Cambio de CFE averiada','026 Reparación de conexión','037 Cambio de contactor dañado','041 Circuito en funcionamiento normal',
+  '047 Cambio de porta CFE','052 Cambio de Ignitor','054 Falla subterránea','072 Normalización de luminaria o gancho virado',
+  '126 Cambio de lámpara agotada','129 Apriete CFE suelta','130 Automático operado','131 Automático operado por 3eros','999 Otros'
+];
+async function activarEdicionReparacion(panel, p){
+  let est;
+  try{ est = await db.rpc('reparacion_estado', {p_falla_id: p.id}); }catch(e){ return; }
+  if(!est || !est.puede || !panel.isConnected) return;
+  const caja = document.createElement('div');
+  caja.id = 'bloqueEditarRep';
+  caja.style.cssText = 'margin-top:10px; padding-top:8px; border-top:1px solid var(--line);';
+  caja.innerHTML = `<div class="hint" style="margin-bottom:6px;">Reparación recién registrada${est.segundos == null ? '' : ` · te quedan <b id="repCuenta"></b> para corregirla`}</div>
+    <div style="display:flex; gap:6px;">
+      <button class="popup-btn" id="editarRepBtn" style="margin:0; background:#2563a8;">✏️ Editar reparación</button>
+      <button class="popup-btn" id="quitarRepBtn" style="margin:0; background:#c0392b;">↩ Quitar</button>
+    </div>`;
+  panel.appendChild(caja);
+  if(est.segundos != null){
+    let resto = est.segundos;
+    const pint = () => { const c = caja.querySelector('#repCuenta'); if(c) c.textContent = `${Math.floor(resto / 60)}:${String(resto % 60).padStart(2, '0')}`; };
+    pint();
+    const t = setInterval(() => {
+      resto--;
+      if(resto < 0 || !caja.isConnected){ clearInterval(t); if(caja.isConnected) caja.remove(); return; }
+      pint();
+    }, 1000);
+  }
+  caja.querySelector('#editarRepBtn').onclick = () => abrirEditarReparacion(p, est, 'editar');
+  caja.querySelector('#quitarRepBtn').onclick = () => abrirEditarReparacion(p, est, 'quitar');
+}
+function cerrarEditarReparacion(){ const m = document.getElementById('editarRepModal'); if(m) m.remove(); }
+async function abrirEditarReparacion(p, est, modo){
+  cerrarEditarReparacion();
+  const m = document.createElement('div');
+  m.id = 'editarRepModal'; m.className = 'modal-overlay visible';
+  const catalogo = est.tipo === 'linea' ? CATALOGO_FALLAS_CIRCUITO : CATALOGO_FALLAS_PUNTO.concat([{c:'F02', d:'Monoposte apagado'}, {c:'F03', d:'Monoposte encendido de día'}].filter(x => x.c === p.tipo_falla));
+  const bloq = !!est.bloqueada_por_otra_falla;
+  m.innerHTML = `<div class="modal-card" style="max-width:560px; max-height:90vh; overflow-y:auto;">
+    <button class="close-x" id="erX" aria-label="Cerrar">×</button>
+    <h3 style="margin-top:0;">✏️ Editar reparación</h3>
+    <div class="hint">${escHtml(p.tipo_falla)} · OS ${escHtml(p.ot || '—')}${est.segundos == null ? ' · sin límite de tiempo (admin)' : ''}</div>
+    <div style="margin-top:10px;"><b>Trabajo realizado</b></div>
+    <div id="erAtajos" style="display:flex; flex-wrap:wrap; gap:4px; margin:6px 0;">${ATAJOS_CIERRE.map(t => `<button type="button" class="codigo-btn" data-t="${escHtml(t)}" title="${escHtml(t)}" style="width:auto; padding:3px 8px;">${escHtml(t.slice(0, 3))}</button>`).join('')}</div>
+    <textarea id="erDesc" class="popup-input" style="width:100%; min-height:90px; box-sizing:border-box;">${escHtml(est.descripcion || '')}</textarea>
+    <div style="margin-top:10px;"><b>Código de la falla</b></div>
+    <select id="erCodigo" class="popup-input" style="width:100%;">${catalogo.map(x => `<option value="${escHtml(x.c)}" ${x.c === est.tipo_falla ? 'selected' : ''}>${escHtml(x.c)} · ${escHtml(x.d)}</option>`).join('')}</select>
+    <input id="erOtro" class="popup-input" placeholder="Describe la falla (obligatorio si es OTRO)" value="${escHtml(est.descripcion_otro || '')}" style="width:100%; box-sizing:border-box; margin-top:6px; display:none;">
+    <div style="margin-top:10px;"><b>Orden externa</b> <span class="hint">(opcional, S-123 o E-123)</span></div>
+    <input id="erOE" class="popup-input" value="${escHtml(est.orden_externa || '')}" style="width:100%; box-sizing:border-box;">
+    <div style="margin-top:10px;"><b>Fotografías</b> <span class="hint">(hasta ${MAX_FOTOS_CIERRE})</span></div>
+    <div id="erFotos" style="display:flex; flex-wrap:wrap; gap:6px; margin:6px 0;"></div>
+    <button type="button" class="popup-btn" id="erAddFoto" style="width:auto; background:#555; margin:0 0 4px;">📷 Agregar foto</button>
+    <input type="file" id="erFotoIn" accept="image/*" multiple hidden>
+    <div id="erError" class="hint" style="color:#c0392b; display:none; margin-top:6px;"></div>
+    <button class="popup-btn" id="erGuardar" style="background:#1f8a4c; margin-top:12px;">Guardar cambios</button>
+    <div style="border:1.5px solid #c9d3df; border-radius:8px; padding:10px; margin-top:12px;">
+      <b>Me equivoqué al cerrar</b>
+      ${bloq ? '<div class="hint">Ya hay otra falla activa en este mismo punto o circuito: no se puede quitar la reparación.</div>' : `
+      <div class="hint">La reparación se borra (con su comentario y fotos) y la falla vuelve a su estado anterior.</div>
+      <button class="popup-btn" id="erQuitar" style="background:#c0392b; margin-top:6px;">↩ Quitar reparación</button>
+      <div class="hint" style="margin-top:8px;">O déjala pendiente (motivo obligatorio):</div>
+      <textarea id="erMotivo" class="popup-input" placeholder="Motivo por el que queda pendiente" style="width:100%; min-height:60px; box-sizing:border-box;"></textarea>
+      <button class="popup-btn" id="erPendiente" style="background:#f08c00; margin-top:6px;">Dejar pendiente</button>`}
+    </div>
+    <button class="popup-btn" id="erCancelar" style="background:#666; margin-top:10px;">Cancelar</button>
+  </div>`;
+  document.body.appendChild(m);
+  const $ = id => m.querySelector('#' + id);
+  const error = (t) => { const e = $('erError'); e.style.display = t ? 'block' : 'none'; e.textContent = t || ''; };
+  $('erX').onclick = $('erCancelar').onclick = cerrarEditarReparacion;
+  const txt = $('erDesc');
+  m.querySelectorAll('#erAtajos [data-t]').forEach(b => b.onclick = () => {
+    const t = b.dataset.t;
+    if(!txt.value.includes(t)) txt.value = (txt.value.trim() ? txt.value.trim() + '\n' : '') + t;
+  });
+  const cod = $('erCodigo'), otro = $('erOtro');
+  const verOtro = () => { otro.style.display = cod.value === 'OTRO' ? '' : 'none'; };
+  cod.onchange = verOtro; verOtro();
+
+  // Fotos: las ya subidas (con ✕ para quitarlas) y las nuevas por subir
+  const nuevas = [];
+  let existentes = [];
+  const pintarFotos = async () => {
+    const c = $('erFotos');
+    const urls = await Promise.all(existentes.map(f => urlFotoFirmada(f.ruta).catch(() => null)));
+    c.innerHTML = existentes.map((f, i) => `<div style="position:relative;"><img src="${escHtml(urls[i] || '')}" style="width:64px; height:64px; object-fit:cover; border-radius:6px; border:1px solid var(--line);"><span data-q="${escHtml(f.id)}" title="Quitar foto" style="position:absolute; top:-6px; right:-6px; background:#c0392b; color:#fff; border-radius:50%; width:18px; height:18px; text-align:center; font-size:12px; line-height:18px; cursor:pointer;">✕</span></div>`).join('')
+      + nuevas.map((f, i) => `<div style="position:relative;"><img src="${f.url}" style="width:64px; height:64px; object-fit:cover; border-radius:6px; border:2px solid #1f8a4c;"><span data-n="${i}" title="Quitar" style="position:absolute; top:-6px; right:-6px; background:#555; color:#fff; border-radius:50%; width:18px; height:18px; text-align:center; font-size:12px; line-height:18px; cursor:pointer;">✕</span></div>`).join('');
+    c.querySelectorAll('[data-q]').forEach(x => x.onclick = async () => {
+      try{ await db.rpc('quitar_foto_reparacion', {p_foto_id: x.dataset.q}); existentes = existentes.filter(f => f.id !== x.dataset.q); invalidarCacheTodasFallas(); pintarFotos(); error(''); }
+      catch(e){ error(e.message); }
+    });
+    c.querySelectorAll('[data-n]').forEach(x => x.onclick = () => { const f = nuevas.splice(+x.dataset.n, 1)[0]; URL.revokeObjectURL(f.url); pintarFotos(); });
+    $('erAddFoto').disabled = existentes.length + nuevas.length >= MAX_FOTOS_CIERRE;
+  };
+  try{ existentes = await db.select('fallas_fotos', `falla_id=eq.${p.id}&archivada_en=is.null&select=id,ruta&order=creado_en.asc`); }catch(e){ existentes = []; }
+  pintarFotos();
+  $('erAddFoto').onclick = () => $('erFotoIn').click();
+  $('erFotoIn').onchange = async (e) => {
+    const libres = MAX_FOTOS_CIERRE - existentes.length - nuevas.length;
+    const archivos = Array.from(e.target.files || []).slice(0, libres); e.target.value = '';
+    for(const a of archivos){ try{ const blob = await comprimirFotoWeb(a); nuevas.push({blob, url: URL.createObjectURL(blob)}); }catch(err){ error(err.message); } }
+    pintarFotos();
+  };
+
+  const terminar = () => {
+    invalidarCacheTodasFallas();
+    try{ cargarFallasDelArea(); renderFallasOnMap(); }catch(e){}
+    cerrarEditarReparacion(); cerrarPanel();
+  };
+  const ocupar = (b, fn) => async () => {
+    b.disabled = true; const t = b.textContent; error('');
+    try{ await fn(); }catch(e){ error(e.message); b.disabled = false; b.textContent = t; }
+  };
+  const g = $('erGuardar');
+  g.onclick = ocupar(g, async () => {
+    const cambios = {};
+    const d = txt.value.trim();
+    if(!d) throw new Error('La descripción de la reparación no puede estar vacía.');
+    if(d !== (est.descripcion || '').trim()) cambios.descripcion = d;
+    if(cod.value !== est.tipo_falla) cambios.tipo_falla = cod.value;
+    const o = otro.value.trim(), oe = $('erOE').value.trim();
+    if(cod.value === 'OTRO' && !o) throw new Error('Describe la falla (obligatorio si es OTRO).');
+    if(cod.value === 'OTRO' && o !== (est.descripcion_otro || '')) cambios.descripcion_otro = o;
+    if(cod.value !== 'OTRO' && est.descripcion_otro && (cambios.tipo_falla)) cambios.descripcion_otro = null;
+    if(oe !== (est.orden_externa || '')) cambios.orden_externa = oe || null;
+    for(let i = 0; i < nuevas.length; i++){ g.textContent = `Subiendo foto ${i + 1} de ${nuevas.length}…`; await subirFotoReparacion(p.id, nuevas[i].blob); }
+    if(Object.keys(cambios).length){ g.textContent = 'Guardando…'; await db.rpc('editar_reparacion', {p_falla_id: p.id, p_cambios: cambios}); }
+    terminar();
+  });
+  const q = m.querySelector('#erQuitar');
+  if(q) q.onclick = ocupar(q, async () => { await db.rpc('anular_reparacion', {p_falla_id: p.id, p_motivo_pendiente: null}); terminar(); });
+  const pe = m.querySelector('#erPendiente');
+  if(pe) pe.onclick = ocupar(pe, async () => {
+    const mot = m.querySelector('#erMotivo').value.trim();
+    if(!mot) throw new Error('Escribe el motivo por el que queda pendiente.');
+    await db.rpc('anular_reparacion', {p_falla_id: p.id, p_motivo_pendiente: mot}); terminar();
+  });
+  if(modo === 'quitar' && q) q.scrollIntoView({block: 'center'});
 }
 
 // ---------- ESTADÍSTICAS (panel lateral) ----------
