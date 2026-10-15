@@ -1573,8 +1573,15 @@ function detectarMovilPorDispositivo(){
 (function inicializarModoDispositivo(){
   let guardado = null;
   try{ guardado = localStorage.getItem('modoDispositivo'); }catch(e){}
-  const sugerido = detectarMovilPorDispositivo() ? 'movil' : 'escritorio';
-  aplicarModoDispositivo(guardado || sugerido);
+  const esTelefono = detectarMovilPorDispositivo();
+  const sugerido = esTelefono ? 'movil' : 'escritorio';
+  // Enlace de rescate: ...?modo=escritorio (o ?modo=movil) fuerza el modo y lo deja guardado.
+  let forzado = null;
+  try{ const q = new URLSearchParams(location.search).get('modo'); if(q === 'escritorio' || q === 'movil') forzado = q; }catch(e){}
+  // En un computador (no teléfono/tablet) con la ventana ancha, un "Móvil" guardado se ignora:
+  // si no, quien lo tocó una vez queda atrapado, sobre todo antes de iniciar sesión (el botón está dentro de la app).
+  if(!forzado && guardado === 'movil' && !esTelefono && window.innerWidth >= 1000) guardado = 'escritorio';
+  aplicarModoDispositivo(forzado || guardado || sugerido);
 })();
 
 function cerrarSidebarMovil(){
