@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.24.1';
+const VERSION_APP = '1.25.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -479,6 +479,11 @@ async function cargarPerfil() {
     const f = await select('usuarios', `id=eq.${sesion.user_id}&select=id,nombre,rol,foto_obligatoria`);
     if (!f || !f.length) { guardarSesion(null); throw new Error('Tu cuenta no tiene un perfil asignado en el sistema. Consulta con el administrador.'); }
     S.perfil = f[0];
+    // Pauta de días de inspección (solo rol ito). Si la columna aún no existe, queda sin restricción.
+    S.perfil.dias_inspeccion = null;
+    if (S.perfil.rol === 'ito') {
+      try { const d = await select('usuarios', `id=eq.${sesion.user_id}&select=dias_inspeccion`); if (d && d[0] && Array.isArray(d[0].dias_inspeccion)) S.perfil.dias_inspeccion = d[0].dias_inspeccion; } catch (e) { /* sin columna */ }
+    }
     try { localStorage.setItem(LS_PERFIL, JSON.stringify(S.perfil)); } catch (e) { /* */ }
   } catch (e) {
     if (e.name === 'SesionExpirada') throw e;
@@ -1085,6 +1090,7 @@ function modoTexto() {
 // (no se envía fecha: la base usa "ahora"); la inspección conserva la fecha en que se inició.
 async function contextoReporte() {
   if (S.modo.tipo !== 'inspeccion' || !S.modo.fecha) return {};
+  if (vencioModo()) { cerrarPorTiempo(); throw new Error('La inspección se cerró por superar las 4 horas.'); }
   if (!S.modo.inspId || S.modo.inspFecha !== S.modo.fecha) {
     S.modo.inspId = await rpc('obtener_o_crear_inspeccion', { p_fecha: S.modo.fecha, p_ito: null });
     S.modo.inspFecha = S.modo.fecha;
@@ -2234,7 +2240,21 @@ $('#uCuerpo').addEventListener('change', async (ev) => {
 });
 
 /* ------------------------- inspección (ITO, ITO2, admin) ------------------------- */
+const DURACION_MAX_INSPECCION_MS = 4 * 3600 * 1000;   // el ITO pierde la inspección a las 4 h de iniciada
+const NOMBRES_DIA = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+function esItoConPauta() { return rol() === 'ito' && Array.isArray(S.perfil.dias_inspeccion); }
+function diaIsoHoy() { const d = fechaChileLocal(hoyChileStr(), 12).getUTCDay(); return d === 0 ? 7 : d; }
+function textoDiasPauta() { return (S.perfil.dias_inspeccion || []).slice().sort().map((n) => NOMBRES_DIA[n]).join(', '); }
+function vencioModo() {
+  return rol() === 'ito' && S.modo.tipo === 'inspeccion' && S.modo.inicio && Date.now() - S.modo.inicio >= DURACION_MAX_INSPECCION_MS;
+}
+function cerrarPorTiempo() {
+  S.modo = { tipo: 'agregar', fecha: null, inspId: null }; guardarModo(); pintarModo();
+  toast('La inspección se cerró sola al cumplir 4 horas. Usa "Agregar falla" o inicia otra en tu día de ronda.', 'error');
+}
+setInterval(() => { if (S.perfil && vencioModo()) cerrarPorTiempo(); }, 30000);
 function pintarModo() {
+  if (S.perfil && vencioModo()) { S.modo = { tipo: 'agregar', fecha: null, inspId: null }; guardarModo(); }
   $('#navInspC3').hidden = rol() !== 'contratista3';
   const puede = PUEDE_MODO_INSPECCION.includes(rol());
   const c = $('#chipModo'), n = $('#navInsp');
@@ -2247,7 +2267,7 @@ function pintarModo() {
 }
 function guardarModo() {
   try {
-    if (S.modo.tipo === 'inspeccion') localStorage.setItem(LS_MODO, JSON.stringify({ uid: S.perfil.id, fecha: S.modo.fecha, guardado: Date.now() }));
+    if (S.modo.tipo === 'inspeccion') localStorage.setItem(LS_MODO, JSON.stringify({ uid: S.perfil.id, fecha: S.modo.fecha, guardado: Date.now(), inicio: S.modo.inicio || Date.now() }));
     else localStorage.removeItem(LS_MODO);
   } catch (e) { /* */ }
 }
@@ -2256,24 +2276,32 @@ function restaurarModo() {
     const s = JSON.parse(localStorage.getItem(LS_MODO) || 'null');
     if (!s || s.uid !== S.perfil.id || !PUEDE_MODO_INSPECCION.includes(rol())) return;
     const dias = Math.round((fechaChileLocal(hoyChileStr(), 12) - fechaChileLocal(s.fecha, 12)) / 86400000);
-    const vencida = Date.now() - (s.guardado || 0) > 36 * 3600 * 1000 || s.fecha > hoyChileStr() || (rol() !== 'admin' && dias > DIAS_MAX_INSPECCION);
+    const ini = s.inicio || s.guardado || 0;
+    const vencida = Date.now() - (s.guardado || 0) > 36 * 3600 * 1000 || s.fecha > hoyChileStr() || (rol() !== 'admin' && dias > DIAS_MAX_INSPECCION)
+      || (rol() === 'ito' && Date.now() - ini >= DURACION_MAX_INSPECCION_MS);
     if (vencida) { localStorage.removeItem(LS_MODO); return; }
-    S.modo = { tipo: 'inspeccion', fecha: s.fecha, inspId: null };
+    S.modo = { tipo: 'inspeccion', fecha: s.fecha, inspId: null, inicio: ini };
   } catch (e) { /* */ }
 }
 function abrirInspeccion() {
   const on = S.modo.tipo === 'inspeccion';
+  let bloqueo = '';
+  if (!on && esItoConPauta()) {
+    if (!S.perfil.dias_inspeccion.length) bloqueo = 'Aún no tienes días de inspección asignados. Pídele al administrador que los habilite; mientras tanto usa <b>Agregar falla</b>.';
+    else if (!S.perfil.dias_inspeccion.includes(diaIsoHoy())) bloqueo = `Hoy no es tu día de inspección (tus días: ${esc(textoDiasPauta())}). Hoy usa <b>Agregar falla</b>.`;
+  }
   const h = abrirHoja(`
     <h2>Inspección</h2>
     <p class="hint" style="font-size:14px;margin-top:6px">Con la inspección activa, todas las fallas que reportes quedan dentro de ella (para la estadística), cada una con la fecha y hora exactas en que la registras. Si la inspección es nocturna y pasa de medianoche, conserva la fecha en que la iniciaste. Cualquier otro ajuste se hace en la página de escritorio.</p>
-    ${on ? `<div class="aviso"><b>Inspección activa</b> iniciada el ${esc(fmtFechaCorta(S.modo.fecha))}</div>` : ''}
+    ${on ? `<div class="aviso"><b>Inspección activa</b> iniciada el ${esc(fmtFechaCorta(S.modo.fecha))}${rol() === 'ito' && S.modo.inicio ? ` · se cierra sola a las ${new Date(S.modo.inicio + DURACION_MAX_INSPECCION_MS).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' })}` : ''}</div>` : ''}
+    ${bloqueo ? `<div class="aviso">${bloqueo}</div>` : ''}
     <div class="acciones">
-      ${on ? '<button id="mTerminar" class="btn btn-primario">Terminar inspección</button>' : '<button id="mInsp" class="btn btn-primario">Comenzar inspección</button>'}
+      ${on ? '<button id="mTerminar" class="btn btn-primario">Terminar inspección</button>' : (bloqueo ? '' : '<button id="mInsp" class="btn btn-primario">Comenzar inspección</button>')}
     </div>`);
   const mi = $('#mInsp', h);
   if (mi) mi.addEventListener('click', ocupar(mi, async () => {
     const f = hoyChileStr();
-    S.modo = { tipo: 'inspeccion', fecha: f, inspId: null };
+    S.modo = { tipo: 'inspeccion', fecha: f, inspId: null, inicio: Date.now() };
     guardarModo(); pintarModo(); cerrarHoja();
     cambiarVista('mapa');
     toast(`Inspección del ${fmtFechaCorta(f)} activa. Toca un punto o circuito para reportar.`, 'ok');
