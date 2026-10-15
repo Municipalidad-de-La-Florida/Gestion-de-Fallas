@@ -497,13 +497,15 @@
   .gu-tab.on{ color:var(--primary); border-bottom-color:var(--primary); background:#eaf1fc; border-radius:8px 8px 0 0; }
 
   /* ===== Estadísticas en pantalla completa: resultados a la izquierda, mapa a la derecha (sin mapa en «Día o período») ===== */
-  body:not(.modo-movil).stats-full #app{ grid-template-columns: minmax(0,1.25fr) minmax(0,1fr) !important; }
+  body:not(.modo-movil).stats-full #app{ grid-template-columns: minmax(0,var(--stats-izq, 55%)) minmax(0,1fr) !important; position:relative; }
   body:not(.modo-movil).stats-full #sidebar{ grid-column:1; grid-row:2; border-left:none; overflow:hidden; }
   body:not(.modo-movil).stats-full #mapArea{ grid-column:2; grid-row:2; border-left:1px solid var(--line); }
   body:not(.modo-movil).stats-full #sidebarResizeHandle{ display:none; }
-  body:not(.modo-movil).stats-full.stats-sinmapa #app{ grid-template-columns: minmax(0,1fr) !important; }
-  body:not(.modo-movil).stats-full.stats-sinmapa #sidebar{ grid-column:1; }
-  body:not(.modo-movil).stats-full.stats-sinmapa #mapArea{ display:none !important; }
+  /* Línea divisoria arrastrable entre los datos y el mapa */
+  #statsDivisor{ display:none; position:absolute; top:56px; bottom:0; left:var(--stats-izq, 55%); width:12px; margin-left:-6px; cursor:col-resize; z-index:900; touch-action:none; }
+  #statsDivisor::after{ content:''; position:absolute; left:5px; top:0; bottom:0; width:2px; background:var(--line); transition:background .15s; }
+  #statsDivisor:hover::after, #statsDivisor.arrastrando::after{ background:var(--primary); width:4px; left:4px; }
+  body:not(.modo-movil).stats-full #statsDivisor{ display:block; }
   /* Barra superior: ← Volver · pestañas · botones; debajo, la franja de filtros */
   body:not(.modo-movil).stats-full #sidebarStats > .section{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:10px 18px; }
   body:not(.modo-movil).stats-full #sidebarStats > .section > div:first-child{ display:contents !important; }
@@ -718,6 +720,7 @@
     </div>
   </div>
   <div id="sidebarOverlayMovil"></div>
+  <div id="statsDivisor" title="Arrastra para ajustar el ancho (doble clic: restablecer)"></div>
   <div id="sidebar">
     <div id="sidebarResizeHandle" class="sidebar-resize-handle"></div>
     <div id="sidebarNormal" style="display:flex; flex-direction:column; flex:1; min-height:0;">
@@ -4283,14 +4286,33 @@ document.getElementById('statsBtn').onclick = () => mostrarSidebarStats();
 document.getElementById('inspC3Btn').onclick = () => mostrarSidebarStats();
 document.getElementById('backFromStats').onclick = () => ocultarSidebarStats();
 
-// Pantalla completa de estadísticas: «Día o período» sin mapa; Inspecciones y Análisis, con el mapa a la derecha
+// Pantalla completa de estadísticas: datos a la izquierda y mapa a la derecha, con divisoria ajustable
 function actualizarLayoutStats(){
   const abierto = document.getElementById('sidebarStats').style.display === 'flex';
-  const sinMapa = abierto && (document.getElementById('tabPeriodo').classList.contains('active') || document.getElementById('tabDia').classList.contains('active'));
   document.body.classList.toggle('stats-full', abierto);
-  document.body.classList.toggle('stats-sinmapa', sinMapa);
   if(typeof map !== 'undefined' && map) setTimeout(() => map.invalidateSize(), 60);
 }
+(function(){
+  const CLAVE = 'stats_izq_pct_v1';
+  const div = document.getElementById('statsDivisor');
+  const poner = pct => document.body.style.setProperty('--stats-izq', pct + '%');
+  try{ const g = parseFloat(localStorage.getItem(CLAVE)); if(g >= 25 && g <= 75) poner(g); }catch(e){}
+  let activo = false;
+  const mover = ev => {
+    if(!activo) return;
+    const pct = Math.min(75, Math.max(25, (ev.clientX / window.innerWidth) * 100));
+    poner(pct.toFixed(1));
+    if(typeof map !== 'undefined' && map) map.invalidateSize();
+  };
+  div.addEventListener('pointerdown', ev => { activo = true; div.classList.add('arrastrando'); div.setPointerCapture(ev.pointerId); ev.preventDefault(); });
+  div.addEventListener('pointermove', mover);
+  const soltar = () => {
+    if(!activo) return; activo = false; div.classList.remove('arrastrando');
+    try{ localStorage.setItem(CLAVE, String(parseFloat(document.body.style.getPropertyValue('--stats-izq')) || 55)); }catch(e){}
+  };
+  div.addEventListener('pointerup', soltar); div.addEventListener('pointercancel', soltar);
+  div.addEventListener('dblclick', () => { poner(55); try{ localStorage.removeItem(CLAVE); }catch(e){} if(typeof map !== 'undefined' && map) map.invalidateSize(); });
+})();
 ['tabDia','tabPeriodo','tabInspecciones','tabAnalisis'].forEach(id => new MutationObserver(actualizarLayoutStats).observe(document.getElementById(id), {attributes:true, attributeFilter:['class']}));
 function mostrarSidebarStats(){
   document.getElementById('sidebarNormal').style.display = 'none';
