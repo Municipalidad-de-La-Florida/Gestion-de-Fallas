@@ -956,7 +956,7 @@
     <div class="gu-pane" data-pane="usuarios">
     <details class="hint" style="margin-bottom:12px;"><summary style="cursor:pointer; font-weight:600;">ℹ️ Cómo funciona esta pantalla (crear usuarios, casillas y columnas)</summary><div style="margin-top:6px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Foto obligatoria</b> (solo contratistas) exige adjuntar al menos una fotografía al registrar una reparación, y esas reparaciones se hacen desde la app del teléfono. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). La columna <b>Contratos</b> (contratistas y camiones) indica a qué contratos pertenece cada usuario; puede ser más de uno. Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div></details>
       <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px;">
-        <input type="search" id="usuariosBuscar" placeholder="🔍 Buscar nombre o email…" style="font-size:12.5px; padding:6px 10px; width:260px; border:1.5px solid var(--line); border-radius:6px;">
+        <input type="text" id="usuariosBuscar" name="gu-filtro-tabla" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')" placeholder="🔍 Buscar nombre o email…" style="font-size:12.5px; padding:6px 10px; width:260px; border:1.5px solid var(--line); border-radius:6px;">
         <select id="usuariosFiltroRol" style="font-size:12.5px; padding:6px 8px; border:1.5px solid var(--line); border-radius:6px;"><option value="">Rol: todos</option></select>
         <span id="usuariosContador" class="hint" style="margin:0;"></span>
       </div>
@@ -8047,6 +8047,7 @@ function aplicarFiltroUsuarios(){
 function mostrarModalUsuarios(){
   document.getElementById('usuariosModal').classList.add('visible');
   elegirPestanaGestion('usuarios');
+  { const b = document.getElementById('usuariosBuscar'); b.value = ''; b.setAttribute('readonly', ''); document.getElementById('usuariosFiltroRol').value = ''; }   // el navegador no debe rellenarlo con el correo de inicio de sesión
   cargarUsuarios();
 }
 
