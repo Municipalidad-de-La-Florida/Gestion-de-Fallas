@@ -5912,11 +5912,18 @@ function abrirModalEditarInspeccion(det){
         err.textContent = 'No se pudo: ' + e.message + ' ¿Ejecutaste sql/2026-10-soltar-fallas-de-inspeccion.sql en Supabase?'; err.style.display = 'block';
         refrescar(); return;
       }
-      cerrarModalEditarInspeccion();
+      // La ventana se queda abierta (para seguir sacando otras) pero sin las fallas que justo se sacaron
+      m.querySelectorAll('.editInspChk:checked').forEach(c => c.closest('label').remove());
+      bSel.textContent = 'Actualizando…';
       if(inspeccionCache && inspeccionCache.id === insp.id) inspeccionCache = {clave:null, id:null};
       invalidarCacheTodasFallas();
-      await cargarListadoInspecciones();
-      await abrirDetalleInspeccion(insp.id);
+      try{
+        await cargarListadoInspecciones();
+        await abrirDetalleInspeccion(insp.id);   // actualiza la tabla y el mapa de la inspección
+        if(ultimoDetalleInspeccion && ultimoDetalleInspeccion.inspeccion && ultimoDetalleInspeccion.inspeccion.id === insp.id)
+          abrirModalEditarInspeccion(ultimoDetalleInspeccion);   // vuelve a armar la ventana con los datos frescos
+        else cerrarModalEditarInspeccion();
+      }catch(e){ cerrarModalEditarInspeccion(); }
       cargarFallasDelArea().then(() => renderFallasOnMap());
     };
   }
