@@ -495,6 +495,31 @@
 
   .gu-tab{ background:none; border:none; border-bottom:3px solid transparent; padding:9px 14px; font-size:13px; font-weight:600; color:var(--ink-soft); cursor:pointer; white-space:nowrap; margin-bottom:-2px; }
   .gu-tab.on{ color:var(--primary); border-bottom-color:var(--primary); background:#eaf1fc; border-radius:8px 8px 0 0; }
+
+  /* ===== Estadísticas en pantalla completa: resultados a la izquierda, mapa a la derecha (sin mapa en «Día o período») ===== */
+  body:not(.modo-movil).stats-full #app{ grid-template-columns: minmax(0,1.25fr) minmax(0,1fr) !important; }
+  body:not(.modo-movil).stats-full #sidebar{ grid-column:1; grid-row:2; border-left:none; overflow:hidden; }
+  body:not(.modo-movil).stats-full #mapArea{ grid-column:2; grid-row:2; border-left:1px solid var(--line); }
+  body:not(.modo-movil).stats-full #sidebarResizeHandle{ display:none; }
+  body:not(.modo-movil).stats-full.stats-sinmapa #app{ grid-template-columns: minmax(0,1fr) !important; }
+  body:not(.modo-movil).stats-full.stats-sinmapa #sidebar{ grid-column:1; }
+  body:not(.modo-movil).stats-full.stats-sinmapa #mapArea{ display:none !important; }
+  /* Barra superior: ← Volver · pestañas · botones; debajo, la franja de filtros */
+  body:not(.modo-movil).stats-full #sidebarStats > .section{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:10px 18px; }
+  body:not(.modo-movil).stats-full #sidebarStats > .section > div:first-child{ display:contents !important; }
+  body:not(.modo-movil).stats-full #sidebarStats > .section #backFromStats{ order:1; margin:0; padding:7px 12px; }
+  body:not(.modo-movil).stats-full #sidebarStats > .section > h3{ display:none; }
+  body:not(.modo-movil).stats-full #sidebarStats > .section > .toggle-row{ order:2; margin:0 !important; flex-wrap:nowrap; }
+  body:not(.modo-movil).stats-full #sidebarStats > .section > .toggle-row button{ flex:none; padding:7px 14px; }
+  body:not(.modo-movil).stats-full #sidebarStats > .section > div:first-child > div{ order:3; margin-left:auto; }
+  body:not(.modo-movil).stats-full #sidebarStats > .section > #selectorDia,
+  body:not(.modo-movil).stats-full #sidebarStats > .section > #selectorPeriodo,
+  body:not(.modo-movil).stats-full #sidebarStats > .section > #selectorInspecciones,
+  body:not(.modo-movil).stats-full #sidebarStats > .section > #selectorAnalisis{ order:4; flex-basis:100%; padding-top:8px; border-top:1px solid var(--line); }
+  body:not(.modo-movil).stats-full #sidebarStats .periodo-row{ display:inline-flex; margin:0 18px 6px 0; }
+  body:not(.modo-movil).stats-full #sidebarStats .section .hint{ display:inline-block; margin:4px 8px 0 0; }
+  body:not(.modo-movil).stats-full #sidebarStats .section > div[id^="selector"] > div[style*="display:flex"]{ display:inline-flex !important; margin:4px 12px 0 0 !important; max-width:360px; }
+  body:not(.modo-movil).stats-full #sidebarStats .section select{ width:auto !important; margin-top:4px; }
 </style>
 </head>
 <body>
@@ -867,13 +892,13 @@
             <option value="">Todos los ITOs</option>
           </select>
           <!-- Filtros "Resultado" y "Sus fallas" ocultos: siempre se consideran todas (FILTRO_INSP por defecto) -->
-          <div hidden style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:10px;">
+          <div style="display:none; flex-wrap:wrap; gap:5px; align-items:center; margin-top:10px;">
             <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Resultado:</span>
             <button type="button" class="chip-estado activo" data-ires="todas" onclick="fijarFiltroInsp('res','todas')">Todas</button>
             <button type="button" class="chip-estado" data-ires="con" onclick="fijarFiltroInsp('res','con')">Con fallas</button>
             <button type="button" class="chip-estado" data-ires="sin" onclick="fijarFiltroInsp('res','sin')">Sin fallas</button>
           </div>
-          <div hidden style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-top:8px;">
+          <div style="display:none; flex-wrap:wrap; gap:5px; align-items:center; margin-top:8px;">
             <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Sus fallas:</span>
             <button type="button" class="chip-estado" data-iest="abiertas" onclick="fijarFiltroInsp('est','abiertas')">Con abiertas</button>
             <button type="button" class="chip-estado" data-iest="reiteradas" onclick="fijarFiltroInsp('est','reiteradas')">Con reiteradas</button>
@@ -4258,9 +4283,19 @@ document.getElementById('statsBtn').onclick = () => mostrarSidebarStats();
 document.getElementById('inspC3Btn').onclick = () => mostrarSidebarStats();
 document.getElementById('backFromStats').onclick = () => ocultarSidebarStats();
 
+// Pantalla completa de estadísticas: «Día o período» sin mapa; Inspecciones y Análisis, con el mapa a la derecha
+function actualizarLayoutStats(){
+  const abierto = document.getElementById('sidebarStats').style.display === 'flex';
+  const sinMapa = abierto && (document.getElementById('tabPeriodo').classList.contains('active') || document.getElementById('tabDia').classList.contains('active'));
+  document.body.classList.toggle('stats-full', abierto);
+  document.body.classList.toggle('stats-sinmapa', sinMapa);
+  if(typeof map !== 'undefined' && map) setTimeout(() => map.invalidateSize(), 60);
+}
+['tabDia','tabPeriodo','tabInspecciones','tabAnalisis'].forEach(id => new MutationObserver(actualizarLayoutStats).observe(document.getElementById(id), {attributes:true, attributeFilter:['class']}));
 function mostrarSidebarStats(){
   document.getElementById('sidebarNormal').style.display = 'none';
   document.getElementById('sidebarStats').style.display = 'flex';
+  actualizarLayoutStats();
   // La pestaña "Inspecciones" la ven admin, ito e ito2. El ito solo ve las suyas; admin e ito2, las de todos
   // (la base de datos también lo exige).
   document.getElementById('tabInspecciones').style.display = ['admin','ito','ito2'].includes(rolEfectivo()) ? '' : 'none';
@@ -4293,6 +4328,7 @@ function ocultarSidebarStats(){
   }
   document.getElementById('sidebarStats').style.display = 'none';
   document.getElementById('sidebarNormal').style.display = 'flex';
+  actualizarLayoutStats();
   limpiarCapaPeriodo();
   mostrarCapaActivas(); // al volver, siempre se ven las activas de nuevo
 }
