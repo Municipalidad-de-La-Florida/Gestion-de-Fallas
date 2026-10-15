@@ -922,6 +922,7 @@
     <div id="contratosAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     <div id="ajustesAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     <div id="pautaAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    <div id="operativoAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><button id="guardarUsuariosBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;" disabled>Guardar cambios</button><span id="usuariosEstado" class="hint" style="margin:0;">Sin cambios</span></div>
     <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
@@ -1240,6 +1241,10 @@ async function cargarPerfilYIniciar(userId){
         const d = await db.select('usuarios', `id=eq.${userId}&select=dias_inspeccion`);
         if(d && d[0] && Array.isArray(d[0].dias_inspeccion)) currentUser.dias_inspeccion = d[0].dias_inspeccion;
       }catch(e){ /* sin la columna en la base: no se restringe */ }
+      try{
+        const o = await db.select('operativos_inspeccion', `fecha=gte.${sumarDiasStr(hoyChileStr(), -DIAS_MAX_CONTINUAR_INSPECCION)}&select=fecha`);
+        currentUser.operativos = (o || []).map(x => String(x.fecha).slice(0, 10));
+      }catch(e){ currentUser.operativos = []; }   // sin la tabla: no hay operativos
     }
     document.getElementById('login').style.display = 'none';
     document.getElementById('app').style.display = 'grid';
@@ -1317,6 +1322,17 @@ function diasInspeccionPermitidos(){
   if(!currentUser || currentUser.rol !== 'ito' || rolEfectivo() !== 'ito') return null;
   return Array.isArray(currentUser.dias_inspeccion) ? currentUser.dias_inspeccion : null;
 }
+// ¿Puede inspeccionar en esa fecha? Si es un día de su pauta o hay un «operativo» (habilitado para todos)
+async function refrescarOperativos(){
+  if(!currentUser || currentUser.rol !== 'ito') return;
+  try{
+    const o = await db.select('operativos_inspeccion', `fecha=gte.${sumarDiasStr(hoyChileStr(), -DIAS_MAX_CONTINUAR_INSPECCION)}&select=fecha`);
+    currentUser.operativos = (o || []).map(x => String(x.fecha).slice(0, 10));
+  }catch(e){ /* sin la tabla */ }
+}
+function fechaPermitidaPauta(dias, fecha){
+  return dias.includes(diaSemanaDeFecha(fecha)) || ((currentUser && currentUser.operativos) || []).includes(fecha);
+}
 function diaSemanaDeFecha(fechaIso){   // 1..7 (lunes = 1) de una fecha 'YYYY-MM-DD'
   const d = new Date(fechaIso + 'T12:00:00Z').getUTCDay();
   return d === 0 ? 7 : d;
@@ -1329,7 +1345,7 @@ function ultimaFechaInspeccionPermitida(dias){
   const hoy = hoyChileStr();
   for(let i = 0; i <= DIAS_MAX_CONTINUAR_INSPECCION; i++){
     const f = sumarDiasStr(hoy, -i);
-    if(dias.includes(diaSemanaDeFecha(f))) return f;
+    if(fechaPermitidaPauta(dias, f)) return f;
   }
   return null;
 }
@@ -1340,18 +1356,19 @@ function validarFechaInspeccionPauta(){
   const botones = ['comenzarInspeccionBtn', 'inspeccionSinFallasBtn'].map(id => document.getElementById(id));
   if(!dias){ if(aviso) aviso.style.display = 'none'; botones.forEach(b => { b.disabled = false; b.style.opacity = ''; }); return true; }
   const fecha = document.getElementById('fechaInspeccionInput').value;
-  const ok = !!fecha && dias.includes(diaSemanaDeFecha(fecha));
+  const ok = !!fecha && fechaPermitidaPauta(dias, fecha);
   aviso.style.display = 'block';
   aviso.style.background = ok ? '#eef6ef' : '#fdecea'; aviso.style.borderLeftColor = ok ? '#1f7a52' : '#c0392b';
   aviso.innerHTML = !dias.length
-    ? '<b>No tienes días de inspección habilitados.</b> Pídele al administrador que te asigne tus días. Mientras tanto usa «Agregar falla».'
-    : ok ? `Tus días de inspección: <b>${textoDiasInspeccion(dias)}</b>.`
+    ? '<b>No tienes días de inspección habilitados.</b> Pídele al administrador que te asigne tus días. Mientras tanto usa «Agregar falla».' + (ok ? ' <b>Esta fecha tiene un operativo: puedes inspeccionar.</b>' : '')
+    : ok ? (dias.includes(diaSemanaDeFecha(fecha)) ? `Tus días de inspección: <b>${textoDiasInspeccion(dias)}</b>.` : '🚨 <b>Operativo</b>: el administrador habilitó esta fecha para todos los ITO.')
          : `Ese día (${fecha ? NOMBRES_DIAS_LARGO[diaSemanaDeFecha(fecha) - 1] : '—'}) no es uno de tus días de inspección (<b>${textoDiasInspeccion(dias)}</b>). Elige otra fecha o usa «Agregar falla».`;
   botones.forEach(b => { b.disabled = !ok; b.style.opacity = ok ? '' : '.5'; });
   return ok;
 }
 
 document.getElementById('btnInformarInspeccion').onclick = async () => {
+  await refrescarOperativos();   // por si el admin habilitó un operativo después de que entró
   document.getElementById('menuInformarInicial').style.display = 'none';
   document.getElementById('modoActivoBox').style.display = 'block';
   document.getElementById('modoActivoTexto').textContent = 'Elige la fecha de la inspección para continuar:';
@@ -8122,6 +8139,7 @@ async function cargarUsuarios(){
       tr.querySelector('.reset-pass-btn').onclick = () => enviarResetPassword(email);
     });
     pintarPautaInspecciones();
+    pintarOperativos();
     refrescarCambiosUsuarios();
   }catch(e){
     tbody.innerHTML = `<tr><td colspan="7" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
@@ -8131,6 +8149,41 @@ async function cargarUsuarios(){
 // ---------- PAUTA SEMANAL DE INSPECCIONES (solo ITO; ito2 y admin no tienen restricción) ----------
 let PAUTA_DISPONIBLE = false;
 const NOMBRES_DIAS_CORTO = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+// ---------- OPERATIVO: fecha en que TODOS los ITO pueden inspeccionar (emergencias, temporales, rondas especiales) ----------
+async function pintarOperativos(){
+  const cont = document.getElementById('operativoAdmin'); if(!cont) return;
+  const titulo = '<div style="font-weight:700; margin-bottom:4px;">🚨 Operativo (habilitar a todos los ITO)</div>';
+  let lista = [];
+  try{
+    lista = await db.select('operativos_inspeccion', `fecha=gte.${sumarDiasStr(hoyChileStr(), -DIAS_MAX_CONTINUAR_INSPECCION)}&select=fecha,motivo&order=fecha.desc`);
+  }catch(e){
+    cont.innerHTML = titulo + '<div class="hint" style="margin:0;">No disponible: falta ejecutar sql/2026-10-operativo-inspecciones.sql en Supabase.</div>';
+    return;
+  }
+  const fmt = f => fechaChileLocal(String(f).slice(0, 10), 12, 0, 0).toLocaleDateString('es-CL', {weekday:'long', day:'2-digit', month:'2-digit'});
+  cont.innerHTML = titulo + `<div class="hint" style="margin:0 0 8px;">Al activarlo, <b>todos los ITO</b> pueden ingresar inspecciones esa fecha aunque no sea uno de sus días (siguen valiendo las 4 horas y el límite de 7 días atrás).</div>
+    <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:8px;">
+      <input type="date" id="operativoFecha" value="${hoyChileStr()}" style="font-size:12.5px; padding:4px 6px;">
+      <input type="text" id="operativoMotivo" placeholder="Motivo (ej. temporal, emergencia)" maxlength="80" style="font-size:12.5px; padding:5px 8px; width:240px;">
+      <button id="operativoActivarBtn" style="background:#c0392b; color:#fff; border:none; border-radius:6px; padding:6px 14px; font-weight:600; cursor:pointer;">Activar operativo</button>
+    </div>
+    <div id="operativoLista">${lista.length ? lista.map(o => `<div style="display:flex; gap:10px; align-items:center; padding:4px 0; border-top:1px solid var(--line);"><span><b>${escHtml(fmt(o.fecha))}</b>${o.motivo ? ' — ' + escHtml(o.motivo) : ''}</span><button class="operativo-quitar" data-fecha="${String(o.fecha).slice(0, 10)}" style="margin-left:auto; border:1px solid var(--line); background:#fff; border-radius:6px; padding:3px 10px; cursor:pointer;">Quitar</button></div>`).join('') : '<div class="hint" style="margin:0;">No hay operativos activos en los últimos 7 días.</div>'}</div>`;
+  document.getElementById('operativoActivarBtn').onclick = async () => {
+    const fecha = document.getElementById('operativoFecha').value;
+    if(!fecha){ alert('Elige la fecha del operativo.'); return; }
+    if(fecha > sumarDiasStr(hoyChileStr(), 30)){ alert('La fecha es demasiado lejana.'); return; }
+    try{ await db.rpc('activar_operativo', {p_fecha: fecha, p_motivo: document.getElementById('operativoMotivo').value}); }
+    catch(e){ alert('No se pudo activar el operativo: ' + e.message); return; }
+    pintarOperativos();
+  };
+  cont.querySelectorAll('.operativo-quitar').forEach(b => b.onclick = async () => {
+    if(!confirm('¿Quitar el operativo del ' + fmt(b.dataset.fecha) + '?')) return;
+    try{ await db.rpc('quitar_operativo', {p_fecha: b.dataset.fecha}); }
+    catch(e){ alert('No se pudo quitar: ' + e.message); return; }
+    pintarOperativos();
+  });
+}
+
 function pintarPautaInspecciones(){
   const cont = document.getElementById('pautaAdmin'); if(!cont) return;
   const titulo = '<div style="font-weight:700; margin-bottom:4px;">📅 Pauta semanal de inspecciones</div>';

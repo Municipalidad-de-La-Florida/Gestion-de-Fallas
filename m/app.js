@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.25.0';
+const VERSION_APP = '1.26.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2242,6 +2242,15 @@ $('#uCuerpo').addEventListener('change', async (ev) => {
 /* ------------------------- inspección (ITO, ITO2, admin) ------------------------- */
 const DURACION_MAX_INSPECCION_MS = 4 * 3600 * 1000;   // el ITO pierde la inspección a las 4 h de iniciada
 const NOMBRES_DIA = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+async function refrescarOperativos() {
+  S.perfil.operativos = [];
+  if (rol() !== 'ito') return;
+  try {
+    const o = await select('operativos_inspeccion', `fecha=eq.${hoyChileStr()}&select=fecha`);
+    S.perfil.operativos = (o || []).map((x) => String(x.fecha).slice(0, 10));
+  } catch (e) { /* sin la tabla: no hay operativos */ }
+}
+function esOperativoHoy() { return (S.perfil.operativos || []).includes(hoyChileStr()); }
 function esItoConPauta() { return rol() === 'ito' && Array.isArray(S.perfil.dias_inspeccion); }
 function diaIsoHoy() { const d = fechaChileLocal(hoyChileStr(), 12).getUTCDay(); return d === 0 ? 7 : d; }
 function textoDiasPauta() { return (S.perfil.dias_inspeccion || []).slice().sort().map((n) => NOMBRES_DIA[n]).join(', '); }
@@ -2283,18 +2292,19 @@ function restaurarModo() {
     S.modo = { tipo: 'inspeccion', fecha: s.fecha, inspId: null, inicio: ini };
   } catch (e) { /* */ }
 }
-function abrirInspeccion() {
+async function abrirInspeccion() {
   const on = S.modo.tipo === 'inspeccion';
+  if (!on) await refrescarOperativos();
   let bloqueo = '';
   if (!on && esItoConPauta()) {
-    if (!S.perfil.dias_inspeccion.length) bloqueo = 'Aún no tienes días de inspección asignados. Pídele al administrador que los habilite; mientras tanto usa <b>Agregar falla</b>.';
-    else if (!S.perfil.dias_inspeccion.includes(diaIsoHoy())) bloqueo = `Hoy no es tu día de inspección (tus días: ${esc(textoDiasPauta())}). Hoy usa <b>Agregar falla</b>.`;
+    if (!S.perfil.dias_inspeccion.length && !esOperativoHoy()) bloqueo = 'Aún no tienes días de inspección asignados. Pídele al administrador que los habilite; mientras tanto usa <b>Agregar falla</b>.';
+    else if (!S.perfil.dias_inspeccion.includes(diaIsoHoy()) && !esOperativoHoy()) bloqueo = `Hoy no es tu día de inspección (tus días: ${esc(textoDiasPauta())}). Hoy usa <b>Agregar falla</b>.`;
   }
   const h = abrirHoja(`
     <h2>Inspección</h2>
     <p class="hint" style="font-size:14px;margin-top:6px">Con la inspección activa, todas las fallas que reportes quedan dentro de ella (para la estadística), cada una con la fecha y hora exactas en que la registras. Si la inspección es nocturna y pasa de medianoche, conserva la fecha en que la iniciaste. Cualquier otro ajuste se hace en la página de escritorio.</p>
     ${on ? `<div class="aviso"><b>Inspección activa</b> iniciada el ${esc(fmtFechaCorta(S.modo.fecha))}${rol() === 'ito' && S.modo.inicio ? ` · se cierra sola a las ${new Date(S.modo.inicio + DURACION_MAX_INSPECCION_MS).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Santiago' })}` : ''}</div>` : ''}
-    ${bloqueo ? `<div class="aviso">${bloqueo}</div>` : ''}
+    ${bloqueo ? `<div class="aviso">${bloqueo}</div>` : (!on && esItoConPauta() && esOperativoHoy() && !S.perfil.dias_inspeccion.includes(diaIsoHoy()) ? '<div class="aviso">🚨 <b>Operativo</b> activo hoy: puedes inspeccionar aunque no sea tu día.</div>' : '')}
     <div class="acciones">
       ${on ? '<button id="mTerminar" class="btn btn-primario">Terminar inspección</button>' : (bloqueo ? '' : '<button id="mInsp" class="btn btn-primario">Comenzar inspección</button>')}
     </div>`);
