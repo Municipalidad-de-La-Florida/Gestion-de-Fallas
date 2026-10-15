@@ -454,7 +454,7 @@
 
   /* Header: permite que los botones se envuelvan en vez de desbordar */
   body.modo-movil #app{ grid-template-rows:auto 1fr !important; grid-template-columns:1fr !important; }
-  body.modo-movil header{ flex-wrap:wrap; padding:6px 10px; gap:8px; row-gap:6px; }
+  body.modo-movil header{ flex-wrap:wrap; padding:6px 10px; gap:8px; row-gap:6px; position:relative; z-index:1300; } /* por encima del mapa (600-660) para que el menú de usuario reciba los clics */
   body.modo-movil header .brand-s, body.modo-movil header .brand-sep{ display:none; }
   body.modo-movil header .brand-t{ font-size:13px; }
   body.modo-movil header .userinfo{ flex-wrap:wrap; gap:6px; margin-left:0; width:100%; justify-content:flex-start; }
