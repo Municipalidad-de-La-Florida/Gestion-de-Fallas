@@ -761,10 +761,23 @@ function activarBotonMasivo(h) {
 }
 const leerMasivo = (h) => !!$('#fMasivo.on', h);
 
+// Parpadeo de los puntos reiterados (el canvas no admite animación CSS): se alterna la opacidad cada 0,55 s
+let _parpadeoTimer = null, _parpadeoOn = true;
+function iniciarParpadeo() {
+  if (_parpadeoTimer || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) return;
+  _parpadeoTimer = setInterval(() => {
+    if (document.hidden || !S.parpadeo || !S.parpadeo.length) return;
+    _parpadeoOn = !_parpadeoOn;
+    S.parpadeo.forEach((l) => l.setStyle({ fillOpacity: _parpadeoOn ? 0.95 : 0.25, opacity: _parpadeoOn ? 1 : 0.35 }));
+  }, 550);
+}
+
 function dibujarFallas() {
+  iniciarParpadeo();
   if (!map || !capaFallas) return;
   const z = map.getZoom();
   capaFallas.clearLayers();
+  S.parpadeo = [];
   const asigF = asigActiva(), subF = FO.sub;
   // Una falla reparada (verde, visible unas horas) no se dibuja si ese punto/circuito ya tiene una falla activa nueva
   // (reiterada, reportada...): si no, el verde semitransparente tapa el morado y se ve azulado.
@@ -793,6 +806,7 @@ function dibujarFallas() {
       const [lng, lat] = f.geometry.coordinates;
       const r = p.cascada ? (z >= 18 ? 7 : 5) : (z >= 18 ? 13 : z >= 16 ? 11 : 8);
       capa = new MarcadorForma([lat, lng], { renderer: rend, forma: formaPoste(p.simb_poste), radius: r, weight: 3, color: '#fff', fillColor: color, fillOpacity: reparada ? 0.55 : 0.95, interactive: true });
+      if (p.estado === 'reiterada' && !p.cascada) S.parpadeo.push(capa); // punto reiterado: parpadea como los circuitos
     } else {
       if (p.estado === 'reportada' || p.estado === 'reiterada') {
         // Circuito reportado o reiterado: parpadea (como en el escritorio). El parpadeo es CSS sobre SVG;
