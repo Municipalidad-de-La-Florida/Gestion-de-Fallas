@@ -1707,7 +1707,7 @@ function iconoParaPunto(simbPoste, colorRelleno, colorBorde){
 }
 
 // Icono de una falla en un punto: conserva la forma del poste (igual que los puntos), en el color del estado.
-function iconoFalla(simbPoste, color, radio){
+function iconoFalla(simbPoste, color, radio, parpadea){
   const tipo = (simbPoste || '').toUpperCase().trim();
   const r = radio, S = Math.ceil(r * 2.4 + 6), c = S / 2;
   const poli = (pts) => `<polygon points="${pts.map(([a, b]) => `${(c + a * r).toFixed(1)},${(c + b * r).toFixed(1)}`).join(' ')}"`;
@@ -1719,7 +1719,7 @@ function iconoFalla(simbPoste, color, radio){
   else if(tipo === 'FACHADA') f = `<path d="M${(c - r * 1.05).toFixed(1)},${(c + r * .45).toFixed(1)} A${(r * 1.05).toFixed(1)},${(r * 1.05).toFixed(1)} 0 0 1 ${(c + r * 1.05).toFixed(1)},${(c + r * .45).toFixed(1)} Z"`;
   else f = `<circle cx="${c}" cy="${c}" r="${r}"`;
   const svg = `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg">${f} fill="${color}" fill-opacity="0.95" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>`;
-  return L.divIcon({ html: svg, className: '', iconSize: [S, S], iconAnchor: [c, c] });
+  return L.divIcon({ html: svg, className: parpadea ? 'falla-reportada' : '', iconSize: [S, S], iconAnchor: [c, c] });
 }
 
 // ---------- MAPA ----------
@@ -2946,7 +2946,7 @@ function renderFallasDesdeCache(){
         const [lon, lat] = feat.geometry.coordinates;
         const radioFalla = map.getZoom() <= 16 ? 4 : 8;
         const marker = L.marker([lat, lon], {
-          icon: iconoFalla(feat.properties.simb_poste, color, radioFalla), pane:'fallasPane',
+          icon: iconoFalla(feat.properties.simb_poste, color, radioFalla, estado === 'reiterada' && !feat.properties.cascada), pane:'fallasPane',
           interactive: !dejarPasarClick, keyboard: false
         }).addTo(fallasLayerGroup);
         if(!dejarPasarClick){
