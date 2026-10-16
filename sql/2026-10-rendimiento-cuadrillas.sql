@@ -75,6 +75,8 @@ begin
         'quitado_en', h.quitado_en,
         'reparada_en', r.fecha_reparacion,
         'reparado_por', r.reparado_por,
+        'reparado_por_rol', ur.rol,
+        'pendiente_por_rol', up.rol,
         'estado', f.estado,
         'fecha_pendiente', f.fecha_pendiente,
         'motivo_pendiente', f.motivo_pendiente
@@ -89,6 +91,8 @@ begin
         where r2.falla_id = f.id and r2.fecha_reparacion >= h.asignado_en
         order by r2.fecha_reparacion asc limit 1
       ) r on true
+      left join public.usuarios ur on ur.id = r.reparado_por
+      left join public.usuarios up on up.id = f.pendiente_por
       where h.asignado_en < p_hasta
         -- si la falla se reasignó a otra cuadrilla sin que esta la reparara, no cuenta para ella
         and not (h.quitado_en is not null and h.quitado_en < p_hasta
