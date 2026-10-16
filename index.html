@@ -6125,8 +6125,13 @@ function abrirModalEditarInspeccion(det){
       ${fallas.length ? `<div style="border:1.5px solid #2563a8; border-radius:8px; padding:12px; margin-bottom:12px;">
         <b>Dejar sueltas solo algunas fallas</b>
         <div class="hint">Marca las fallas que no corresponden a esta inspección. Quedan sueltas (con su OS, fecha, hora y estado) y la inspección sigue con las demás. Luego puedes agruparlas con «Armar inspección».</div>
+        <div style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:12px;">
+          <span class="hint" style="margin:0;">Ordenar por fecha de registro:</span>
+          <button type="button" class="chip-estado activo" id="editInspOrdAsc">Más antigua primero</button>
+          <button type="button" class="chip-estado" id="editInspOrdDesc">Más reciente primero</button>
+        </div>
         <div id="editInspLista" style="max-height:240px; overflow:auto; margin-top:8px; border:1px solid var(--line); border-radius:6px;">
-          ${fallas.map(f => `<label style="display:flex; gap:8px; align-items:flex-start; padding:6px 8px; border-bottom:1px solid var(--line); cursor:pointer; font-size:12.5px;">
+          ${[...fallas].sort((a, b) => String(a.fecha_ingreso || '').localeCompare(String(b.fecha_ingreso || '')) || String(a.ot || '').localeCompare(String(b.ot || ''))).map(f => `<label style="display:flex; gap:8px; align-items:flex-start; padding:6px 8px; border-bottom:1px solid var(--line); cursor:pointer; font-size:12.5px;">
             <input type="checkbox" class="editInspChk" value="${escHtml(f.id)}" style="margin-top:3px;">
             <span><b class="mono">${escHtml(f.ot || '—')}</b> · ${escHtml(f.tipo_falla)} · ${f.tipo === 'linea' ? 'Circuito ' + escHtml(f.circuito_id ?? '—') + ' (' + (f.puntos_afectados || 0) + ' pts)' : 'Llave ' + escHtml(f.llave ?? '—')}
               <span class="badge ${escHtml(f.estado)}">${escHtml(String(f.estado).replace('_',' '))}</span>
@@ -6178,6 +6183,17 @@ function abrirModalEditarInspeccion(det){
       bSel.textContent = n ? `Dejar sueltas ${n} falla${n === 1 ? '' : 's'}` : 'Dejar sueltas las marcadas';
     };
     m.querySelectorAll('.editInspChk').forEach(c => c.onchange = refrescar);
+    // Orden de la lista por fecha de registro (las marcas se conservan: solo se reordenan las filas)
+    const lista = m.querySelector('#editInspLista');
+    const ordenar = (desc) => {
+      const filas = [...lista.children];
+      filas.reverse().forEach(f => lista.appendChild(f));   // invierte el orden actual
+      m.querySelector('#editInspOrdAsc').classList.toggle('activo', !desc);
+      m.querySelector('#editInspOrdDesc').classList.toggle('activo', desc);
+    };
+    let ordenDesc = false;
+    m.querySelector('#editInspOrdAsc').onclick = () => { if(ordenDesc){ ordenDesc = false; ordenar(false); } };
+    m.querySelector('#editInspOrdDesc').onclick = () => { if(!ordenDesc){ ordenDesc = true; ordenar(true); } };
     bSel.onclick = async () => {
       const ids = marcadas(); if(!ids.length) return;
       if(!confirm(`¿Dejar sueltas ${ids.length} falla${ids.length === 1 ? '' : 's'} de esta inspección? Conservan su OS, fecha, hora y estado.`)) return;
@@ -6189,11 +6205,18 @@ function abrirModalEditarInspeccion(det){
         err.textContent = 'No se pudo: ' + e.message + ' ¿Ejecutaste sql/2026-10-soltar-fallas-de-inspeccion.sql en Supabase?'; err.style.display = 'block';
         refrescar(); return;
       }
-      cerrarModalEditarInspeccion();
+      // La ventana se queda abierta (para seguir sacando otras) pero sin las fallas que justo se sacaron
+      m.querySelectorAll('.editInspChk:checked').forEach(c => c.closest('label').remove());
+      bSel.textContent = 'Actualizando…';
       if(inspeccionCache && inspeccionCache.id === insp.id) inspeccionCache = {clave:null, id:null};
       invalidarCacheTodasFallas();
-      await cargarListadoInspecciones();
-      await abrirDetalleInspeccion(insp.id);
+      try{
+        await cargarListadoInspecciones();
+        await abrirDetalleInspeccion(insp.id);   // actualiza la tabla y el mapa de la inspección
+        if(ultimoDetalleInspeccion && ultimoDetalleInspeccion.inspeccion && ultimoDetalleInspeccion.inspeccion.id === insp.id)
+          abrirModalEditarInspeccion(ultimoDetalleInspeccion);   // vuelve a armar la ventana con los datos frescos
+        else cerrarModalEditarInspeccion();
+      }catch(e){ cerrarModalEditarInspeccion(); }
       cargarFallasDelArea().then(() => renderFallasOnMap());
     };
   }
