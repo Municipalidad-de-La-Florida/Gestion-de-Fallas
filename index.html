@@ -8448,11 +8448,11 @@ function fiscPintar(){
   const filas = lista.map(({f, ms, ratio}) => {
     const col = fiscColor(ratio);
     const det = f.estado === 'pendiente'
-      ? `<span style="color:#8a5200; font-weight:600;">● Pendiente</span>${motivoSinMasivo(f.motivo_pendiente) ? `<div style="color:var(--ink-soft);">${escHtml(motivoSinMasivo(f.motivo_pendiente))}</div>` : ''}${f.pendiente_por ? `<div style="color:var(--ink-soft);">por ${escHtml(f.pendiente_por)}</div>` : ''}`
-      : `<span style="color:#c1443c; font-weight:600;">● ${f.estado === 'reiterada' ? 'Reiterada' : 'Reportada'}</span>`;
+      ? `<span class="badge pendiente">pendiente</span>${f.es_reiterada ? ' <span class="badge reiterada">reiterada</span>' : ''}${motivoSinMasivo(f.motivo_pendiente) ? `<div style="color:var(--ink-soft);">${escHtml(motivoSinMasivo(f.motivo_pendiente))}</div>` : ''}${f.pendiente_por ? `<div style="color:var(--ink-soft);">por ${escHtml(f.pendiente_por)}</div>` : ''}`
+      : `<span class="badge ${f.estado === 'reiterada' ? 'reiterada' : 'reportada'}">${f.estado === 'reiterada' ? 'reiterada' : 'reportada'}</span>${f.es_reiterada && f.estado !== 'reiterada' ? ' <span class="badge reiterada">reiterada</span>' : ''}`;
     const asig = f.camion ? `🚚 ${escHtml(f.camion)}<div style="color:var(--ink-soft);">desde hace ${fiscEdadFmt(Date.now() - new Date(f.asignada_en || f.informada_en).getTime())}</div>` : '<span style="color:#c1443c;">Sin asignar</span>';
     return `<tr class="cu-fila" data-falla="${f.falla_id}"><td><span style="background:${col}; color:#fff; border-radius:10px; padding:2px 9px; font-weight:700; white-space:nowrap;">${fiscEdadFmt(ms)}</span></td>
-      <td>${escHtml(f.ot || '—')}</td><td>${escHtml(f.direccion || '—')}${f.tipo === 'linea' ? `<div style="color:var(--ink-soft);">${f.puntos_afectados} puntos</div>` : ''}</td><td>${f.contrato ? `<span style="background:#e6eefb; color:#2a5db0; border-radius:8px; padding:2px 8px; font-size:11px; white-space:nowrap;">${escHtml(f.contrato)}</span>` : '<span style="color:var(--ink-soft);">sin contrato</span>'}</td><td>${escHtml(f.tipo_falla || '')}${f.es_reiterada ? '<div style="color:var(--ink-soft);">⟳ reiterada</div>' : ''}</td>
+      <td>${escHtml(f.ot || '—')}</td><td>${escHtml(f.direccion || '—')}${f.tipo === 'linea' ? `<div style="color:var(--ink-soft);">${f.puntos_afectados} puntos</div>` : ''}</td><td>${f.contrato ? `<span style="background:#e6eefb; color:#2a5db0; border-radius:8px; padding:2px 8px; font-size:11px; white-space:nowrap;">${escHtml(f.contrato)}</span>` : '<span style="color:var(--ink-soft);">sin contrato</span>'}</td><td>${escHtml(f.tipo_falla || '')}</td>
       <td>${det}</td><td>${asig}</td>${cat.porInformada ? '' : `<td>${fiscEdadFmt(Date.now() - new Date(f.informada_en).getTime())}</td>`}</tr>`;
   }).join('');
   const um = FISC_UMBRALES_DEF, uAct = umb;
