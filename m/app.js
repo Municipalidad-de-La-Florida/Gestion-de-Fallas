@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.28.0';
+const VERSION_APP = '1.29.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -440,7 +440,7 @@ function cerrarHoja(desdePop) {
   if (S.borradorId) { S.borradorId = null; bdDel('cierre'); }
   if (!desdePop && history.state && history.state.hoja) { hojaVolviendo = true; try { history.back(); } catch (e) { hojaVolviendo = false; } }
 }
-window.addEventListener('popstate', () => { if (hojaVolviendo) { hojaVolviendo = false; return; } if (hojaAbierta) { cerrarHoja(true); return; } if (window._usrPop) window._usrPop(); });
+window.addEventListener('popstate', () => { if (hojaVolviendo) { hojaVolviendo = false; return; } if (hojaAbierta) { cerrarHoja(true); return; } if (window._cuPop && !$('#pantallaCuad').hidden) { window._cuPop(); return; } if (window._usrPop) window._usrPop(); });
 $('#velo').addEventListener('click', () => cerrarHoja());
 $('#hojaCerrar').addEventListener('click', () => cerrarHoja());
 
@@ -489,6 +489,9 @@ async function cargarPerfil() {
     const f = await select('usuarios', `id=eq.${sesion.user_id}&select=id,nombre,rol,foto_obligatoria`);
     if (!f || !f.length) { guardarSesion(null); throw new Error('Tu cuenta no tiene un perfil asignado en el sistema. Consulta con el administrador.'); }
     S.perfil = f[0];
+    // Permiso para ver Cuadrillas (el admin siempre; los demás solo si el admin se lo habilitó)
+    S.perfil.ver_cuadrillas = false;
+    try { const v = await select('usuarios', `id=eq.${sesion.user_id}&select=ver_cuadrillas`); if (v && v[0]) S.perfil.ver_cuadrillas = !!v[0].ver_cuadrillas; } catch (e) { /* sin columna */ }
     // Pauta de días de inspección (solo rol ito). Si la columna aún no existe, queda sin restricción.
     S.perfil.dias_inspeccion = null;
     if (S.perfil.rol === 'ito') {
@@ -1988,6 +1991,112 @@ function cerrarUsuarios(desdePop) {
 }
 window._usrPop = () => { if (usrVolviendo) { usrVolviendo = false; return; } if (!$('#pantallaUsuarios').hidden) cerrarUsuarios(true); };
 const formUsuarios = abrirUsuarios;
+/* ------------------------- Cuadrillas (admin o con permiso) -------------------------
+   Misma lógica que la web: por turno, solo cuenta lo que cerró o dejó pendiente un camión. */
+const CU_TURNOS = { '0': [0, 8], '1': [8, 16], '2': [16, 24], d: [0, 24] };
+const CU_COL = { reparada: '#3a8a5c', pendiente: '#d98e2f', sin: '#c1443c' };
+const CU = { datos: null, hist: false, volviendo: false };
+const puedeCuadrillas = () => !!S.perfil && (S.perfil.rol === 'admin' || !!S.perfil.ver_cuadrillas);
+function cuRango() {
+  const [y, mo, d] = $('#cuFecha').value.split('-').map(Number);
+  const [h0, h1] = CU_TURNOS[$('#cuTurno').value];
+  return { desde: new Date(y, mo - 1, d, h0), hasta: new Date(y, mo - 1, d, h1) };
+}
+const cuHora = (iso) => (iso ? new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—');
+function cuDur(ms) { if (ms == null) return '—'; const min = Math.round(ms / 60000); return min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min` : `${min} min`; }
+function cuCalcular(filas, desde, hasta) {
+  const items = filas.map((r) => {
+    const a = new Date(r.asignado_en), rep = r.reparada_en ? new Date(r.reparada_en) : null, fp = r.fecha_pendiente ? new Date(r.fecha_pendiente) : null;
+    const repEnTurno = !!(rep && rep >= desde && rep < hasta), pendEnTurno = !!(fp && fp >= a && fp >= desde && fp < hasta);
+    const inicioPend = a < desde && !!(fp && fp < desde);
+    const reparada = repEnTurno && r.reparado_por_rol === 'camion';
+    const porContr = (repEnTurno && r.reparado_por_rol !== 'camion') ? 'reparada' : ((!repEnTurno && pendEnTurno && r.pendiente_por_rol && r.pendiente_por_rol !== 'camion') ? 'pendiente' : null);
+    const pendiente = !reparada && !repEnTurno && pendEnTurno && !porContr;
+    return { ...r, a, rep, reparada, pendiente, porContr, resultado: reparada ? 'reparada' : (pendiente ? 'pendiente' : 'sin'), inicio: a < desde, inicioPend };
+  });
+  const reps = items.filter((i) => i.reparada).map((i) => i.rep.getTime()).sort((x, y) => x - y);
+  const medio = reps.length > 1 ? (reps[reps.length - 1] - reps[0]) / (reps.length - 1) : null;
+  const total = items.length, rep = items.filter((i) => i.reparada).length, pen = items.filter((i) => i.pendiente).length;
+  return {
+    items, total, inicio: items.filter((i) => i.inicio).length, inicioPend: items.filter((i) => i.inicioPend).length,
+    reparadas: rep, pendientes: pen, sin: total - rep - pen,
+    contrRep: items.filter((i) => i.porContr === 'reparada').length, contrPend: items.filter((i) => i.porContr === 'pendiente').length,
+    cumplimiento: total ? Math.round(100 * rep / total) : null, medio,
+  };
+}
+function abrirCuadrillas() {
+  if (!puedeCuadrillas()) return;
+  cerrarHoja(true);
+  CU.hist = true;
+  $('#pantallaCuad').hidden = false;
+  if (!$('#cuFecha').value) {
+    $('#cuFecha').value = hoyChileStr();
+    const h = Number(horaChileStr().slice(0, 2));
+    $('#cuTurno').value = h < 8 ? '0' : (h < 16 ? '1' : '2');
+  }
+  cargarCuadrillas();
+}
+function cerrarCuadrillas(desdePop) {
+  if ($('#pantallaCuad').hidden) return;
+  $('#pantallaCuad').hidden = true;
+  if (!desdePop && CU.hist) { CU.volviendo = true; try { history.back(); } catch (e) { CU.volviendo = false; } }
+  CU.hist = false;
+}
+window._cuPop = () => { if (CU.volviendo) { CU.volviendo = false; return; } if (!$('#pantallaCuad').hidden) cerrarCuadrillas(true); };
+async function cargarCuadrillas() {
+  const cont = $('#cuCuerpo');
+  if (!$('#cuFecha').value) return;
+  cont.innerHTML = '<div class="u-vacio">Cargando…</div>';
+  const { desde, hasta } = cuRango();
+  try { CU.datos = await rpc('rendimiento_cuadrillas', { p_desde: desde.toISOString(), p_hasta: hasta.toISOString() }); }
+  catch (e) { cont.innerHTML = `<div class="u-vacio">No se pudo cargar: ${esc(e.message)}</div>`; return; }
+  const sel = $('#cuSel'), previo = sel.value;
+  sel.innerHTML = '<option value="">Todas</option>' + CU.datos.cuadrillas.map((c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('');
+  if (CU.datos.cuadrillas.some((c) => c.id === previo)) sel.value = previo;
+  pintarCuadrillas();
+}
+function pintarCuadrillas() {
+  if (!CU.datos) return;
+  const cont = $('#cuCuerpo'), { desde, hasta } = cuRango(), selId = $('#cuSel').value;
+  const todas = CU.datos.cuadrillas.map((c) => ({ c, r: cuCalcular(CU.datos.filas.filter((f) => f.camion_id === c.id), desde, hasta) }));
+  const kpi = (l, v, col) => `<div class="cu-kpi" style="border-top-color:${col}"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+  let html = '';
+  if (!selId) {
+    const G = todas.reduce((g, x) => ({ t: g.t + x.r.total, r: g.r + x.r.reparadas }), { t: 0, r: 0 });
+    html += `<div class="cu-kpis">${kpi('Fallas del turno', G.t, '#9aa5b1')}${kpi('Reparadas por camión', G.r, CU_COL.reparada)}</div>`;
+    html += todas.map(({ c, r }) => { const t = r.total || 1;
+      return `<button class="cu-card" data-c="${esc(c.id)}"><div class="top"><span>${esc(c.nombre)}</span><span style="color:${r.cumplimiento == null ? 'var(--tinta-2)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')}">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</span></div>
+        ${r.total ? `<div class="cu-barra"><i style="width:${100 * r.reparadas / t}%;background:${CU_COL.reparada}"></i><i style="width:${100 * r.pendientes / t}%;background:${CU_COL.pendiente}"></i><i style="width:${100 * r.sin / t}%;background:${CU_COL.sin}"></i></div>
+        <div class="cu-leyenda"><span style="color:${CU_COL.reparada}">● ${r.reparadas} reparadas</span><span style="color:#b36b00">● ${r.pendientes} pend.</span><span style="color:${CU_COL.sin}">● ${r.sin} sin atender</span></div>` : '<div class="s" style="margin-top:6px;color:var(--tinta-2)">Sin fallas en este turno</div>'}
+        ${(r.contrRep || r.contrPend) ? `<div class="s" style="margin-top:6px;font-size:12px;color:#8a5200">🔧 ${r.contrRep ? r.contrRep + ' cerrada' + (r.contrRep > 1 ? 's' : '') + ' por contratista' : ''}${r.contrRep && r.contrPend ? ' · ' : ''}${r.contrPend ? r.contrPend + ' pendiente' + (r.contrPend > 1 ? 's' : '') + ' por contratista' : ''}</div>` : ''}</button>`; }).join('') || '<div class="u-vacio">No hay cuadrillas.</div>';
+  } else {
+    const x = todas.find((y) => y.c.id === selId); if (!x) { cont.innerHTML = ''; return; }
+    const { c, r } = x;
+    html += `<h3 style="margin:0 0 8px">${esc(c.nombre)}</h3><div class="cu-kpis">${kpi('Inició con', `${r.inicio}`, '#2563a8')}${kpi('Total', r.total, '#9aa5b1')}${kpi('Reparadas', r.reparadas, CU_COL.reparada)}${kpi('Dejó pendientes', r.pendientes, CU_COL.pendiente)}${kpi('Sin atender', r.sin, CU_COL.sin)}${kpi('Cumplimiento', r.cumplimiento == null ? '—' : r.cumplimiento + '%', '#7a5ca8')}</div>
+      <div class="s" style="margin:-4px 2px 8px;font-size:12.5px;color:var(--tinta-2)">Tiempo medio entre reparaciones: <b>${cuDur(r.medio)}</b></div>`;
+    if (!r.total) html += '<div class="u-vacio">Esta cuadrilla no tuvo fallas en este turno.</div>';
+    else {
+      const hechas = r.items.filter((i) => i.reparada || i.pendiente).sort((p, q) => (q.reparada ? q.rep : new Date(q.fecha_pendiente)) - (p.reparada ? p.rep : new Date(p.fecha_pendiente)));
+      const por = r.items.filter((i) => !i.reparada && !i.pendiente).sort((p, q) => p.a - q.a);
+      const fila = (i, izq, etq, col) => `<button class="cu-fila" data-f="${esc(i.falla_id)}"><b>${esc(izq)}</b> · OS ${esc(i.ot || '—')} · ${esc(i.tipo_falla || '')}<div class="s">${esc(i.direccion || '—')}</div><div class="s" style="color:${col};font-weight:600">${etq}</div></button>`;
+      html += `<div class="cu-sec" style="color:#3a8a5c">Atendidas en el turno (${hechas.length})</div>` + (hechas.length
+        ? hechas.map((i) => fila(i, cuHora(i.reparada ? i.reparada_en : i.fecha_pendiente), '', CU_COL[i.resultado]).replace('<div class="s" style="color:' + CU_COL[i.resultado] + ';font-weight:600"></div>', `<div class="s" style="color:${CU_COL[i.resultado]};font-weight:600">${i.reparada ? '✔ Reparada' : '● Pendiente'}</div>`)).join('')
+        : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">Aún no ha atendido ninguna.</div>');
+      html += `<div class="cu-sec" style="color:#c1443c">Por atender (${por.length})</div>` + (por.length
+        ? por.map((i) => fila(i, i.inicio ? (i.inicioPend ? 'Antes del turno (ya pendiente)' : 'Antes del turno') : 'Asignada ' + cuHora(i.asignado_en), '● Sin atender', CU_COL.sin)).join('')
+        : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">No le queda nada por atender.</div>');
+    }
+  }
+  cont.innerHTML = html;
+  cont.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => { $('#cuSel').value = b.dataset.c; pintarCuadrillas(); cont.scrollTop = 0; }));
+  cont.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { cerrarCuadrillas(); abrirFallaPorId(b.dataset.f); }));
+}
+document.addEventListener('DOMContentLoaded', () => {
+  $('#cuAtras').addEventListener('click', () => { if ($('#cuSel').value) { $('#cuSel').value = ''; pintarCuadrillas(); } else cerrarCuadrillas(); });
+  ['#cuFecha', '#cuTurno'].forEach((s) => $(s).addEventListener('change', cargarCuadrillas));
+  $('#cuSel').addEventListener('change', pintarCuadrillas);
+});
+
 
 function pintarTabsU() {
   const pend = U.notifs.filter((n) => !n.validado).length;
@@ -2437,6 +2546,7 @@ $('#btnMenu').addEventListener('click', () => {
       ${!S.instalar && esIOS() && !esStandalone() ? '<div class="aviso">Para instalarla en iPhone: toca el botón <b>Compartir</b> de Safari y luego <b>Añadir a pantalla de inicio</b>.</div>' : ''}
       <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
       ${rol() === 'admin' ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Gestionar usuarios</span>${chev}</button>` : ''}
+      ${puedeCuadrillas() ? `<button id="mCuadrillas" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M3 17h13V7H3z"/><path d="M16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>')}</span><span class="t">Cuadrillas</span>${chev}</button>` : ''}
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
     </div>`);
@@ -2457,6 +2567,8 @@ $('#btnMenu').addEventListener('click', () => {
   } else if (esIOS() && !esStandalone()) {
     mp.insertAdjacentHTML('afterend', '<div class="aviso">Para recibir avisos en iPhone, primero instala la app con <b>Añadir a pantalla de inicio</b>.</div>');
   }
+  const mcu = $('#mCuadrillas', h);
+  if (mcu) mcu.addEventListener('click', () => abrirCuadrillas());
   const mu = $('#mUsuarios', h);
   if (mu) mu.addEventListener('click', () => abrirUsuarios());
   $('#mActualizar', h).addEventListener('click', () => { $('#mActualizar', h).querySelector('.t').textContent = 'Actualizando…'; forzarActualizacion(); });
