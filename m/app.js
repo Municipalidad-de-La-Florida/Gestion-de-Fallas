@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.27.1';
+const VERSION_APP = '1.28.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1345,6 +1345,7 @@ async function abrirFalla(p, geom) {
   const kv = [
     ['OS', p.ot || '—'],
     p.orden_externa ? ['Orden externa', p.orden_externa] : null,
+    p.contrato_id && CONTR[p.contrato_id] ? ['Contrato', CONTR[p.contrato_id].nombre] : null,
     ['Tipo', tipoLabel(p)],
     p.tipo === 'punto' ? ['Llave / N.° mun.', `${p.llave ?? '—'} / ${p.nro_mun ?? '—'}`] : null,
     p.cardinalidad ? ['Cardinalidad', p.cardinalidad] : null,
