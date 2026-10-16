@@ -8115,13 +8115,16 @@ function cuadDur(ms){
   return min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min` : `${min} min`;
 }
 
-// Clasifica las asignaciones de una cuadrilla dentro del turno y calcula los indicadores
+// Clasifica las asignaciones de una cuadrilla dentro del turno y calcula los indicadores.
+// Solo cuenta lo que cerró o dejó pendiente un camión; lo que hizo un contratista se muestra aparte (no suma a la cuadrilla).
 function cuadCalcular(filas, desde, hasta){
   const items = filas.map(r => {
     const a = new Date(r.asignado_en), rep = r.reparada_en ? new Date(r.reparada_en) : null, fp = r.fecha_pendiente ? new Date(r.fecha_pendiente) : null;
-    const reparada = !!(rep && rep >= desde && rep < hasta);
-    const pendiente = !reparada && !!(fp && fp >= a && fp < hasta);
-    return {...r, a, rep, reparada, pendiente, resultado: reparada ? 'reparada' : (pendiente ? 'pendiente' : 'sin'), inicio: a < desde};
+    const repEnTurno = !!(rep && rep >= desde && rep < hasta), pendEnTurno = !!(fp && fp >= a && fp < hasta);
+    const reparada = repEnTurno && r.reparado_por_rol === 'camion';
+    const porContr = (repEnTurno && r.reparado_por_rol !== 'camion') ? 'reparada' : ((!repEnTurno && pendEnTurno && r.pendiente_por_rol && r.pendiente_por_rol !== 'camion') ? 'pendiente' : null);
+    const pendiente = !reparada && !repEnTurno && pendEnTurno && !porContr;
+    return {...r, a, rep, reparada, pendiente, porContr, resultado: reparada ? 'reparada' : (pendiente ? 'pendiente' : 'sin'), inicio: a < desde};
   });
   const reps = items.filter(i => i.reparada).map(i => i.rep.getTime()).sort((x, y) => x - y);
   let medio = null;
@@ -8130,15 +8133,22 @@ function cuadCalcular(filas, desde, hasta){
   return {
     items, total, inicio: items.filter(i => i.inicio).length, asignadas: items.filter(i => !i.inicio).length,
     reparadas: rep, pendientes: pen, sin: total - rep - pen,
+    contrRep: items.filter(i => i.porContr === 'reparada').length, contrPend: items.filter(i => i.porContr === 'pendiente').length,
     cumplimiento: total ? Math.round(100 * rep / total) : null, medio
   };
+}
+function cuadEtiquetaContr(r){
+  const t = [];
+  if(r.contrRep) t.push(`${r.contrRep} cerrada${r.contrRep > 1 ? 's' : ''} por contratista`);
+  if(r.contrPend) t.push(`${r.contrPend} pendiente${r.contrPend > 1 ? 's' : ''} por contratista`);
+  return t.length ? `<span style="display:inline-block; background:#fff1d9; color:#8a5200; border-radius:10px; padding:2px 8px; font-size:11px; margin:4px 4px 0 0;">🔧 ${t.join(' · ')}</span>` : '';
 }
 
 function cuadKpi(l, v, color){ return `<div class="cu-kpi" style="border-top-color:${color};"><div class="l">${l}</div><div class="v">${v}</div></div>`; }
 function cuadKpis(c){
   return `<div class="cu-kpis">${cuadKpi('Inició el turno con', c.inicio, '#64748b')}${cuadKpi('Asignadas en el turno', c.asignadas, '#2563a8')}${cuadKpi('Total del turno', c.total, '#1f4d3d')}
     ${cuadKpi('Reparadas', c.reparadas, CUAD_COLOR.reparada)}${cuadKpi('Dejó pendientes', c.pendientes, CUAD_COLOR.pendiente)}${cuadKpi('Sin atender', c.sin, CUAD_COLOR.sin)}
-    ${cuadKpi('% de cumplimiento', c.cumplimiento == null ? '—' : c.cumplimiento + '%', '#7a5ca8')}${cuadKpi('Tiempo medio entre reparaciones', cuadDur(c.medio), '#8a5200')}</div>`;
+    ${cuadKpi('% de cumplimiento', c.cumplimiento == null ? '—' : c.cumplimiento + '%', '#7a5ca8')}${cuadKpi('Tiempo medio entre reparaciones', cuadDur(c.medio), '#8a5200')}</div>` + (cuadEtiquetaContr(c) ? `<div style="margin-top:8px;">${cuadEtiquetaContr(c)}</div>` : '');
 }
 const CUAD_TXT = {reparada: ['✔ Reparada', CUAD_COLOR.reparada], pendiente: ['● Pendiente', CUAD_COLOR.pendiente], sin: ['● Sin atender', CUAD_COLOR.sin]};
 
@@ -8177,10 +8187,19 @@ function cuadPintar(){
   let html = `<div class="hint" style="margin:0 0 10px;">${escHtml(titulo.charAt(0).toUpperCase() + titulo.slice(1))}</div>`;
   let mapaItems = [];
   if(!selId){
-    html += `<table class="cu-t"><thead><tr><th>Cuadrilla</th><th>Inició con</th><th>Asignadas</th><th>Total</th><th>Reparadas</th><th>Pendientes</th><th>Sin atender</th><th>Cumplimiento</th><th>T. medio</th></tr></thead><tbody>` +
-      todas.map(({c, r}) => `<tr class="cu-fila" data-id="${c.id}"><td><b>${escHtml(c.nombre)}</b></td><td>${r.inicio}</td><td>${r.asignadas}</td><td>${r.total}</td><td>${r.reparadas}</td><td>${r.pendientes}</td><td>${r.sin}</td>
-        <td><div style="display:inline-block; width:70px; height:7px; background:var(--line); border-radius:4px; vertical-align:middle; overflow:hidden;"><div style="width:${r.cumplimiento || 0}%; height:7px; background:${CUAD_COLOR.reparada};"></div></div> ${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</td><td>${cuadDur(r.medio)}</td></tr>`).join('') +
-      `</tbody></table><div class="hint" style="margin-top:8px;">Clic en una cuadrilla para ver su detalle. Cada falla se cuenta una vez, para la cuadrilla que la tiene asignada (si se reasigna a otra sin que la repare, no suma). Las asignaciones anteriores al registro de historial se reconstruyen con la última asignación de cada falla.</div>`;
+    const G = {total: todas.reduce((n, x) => n + x.r.total, 0), rep: todas.reduce((n, x) => n + x.r.reparadas, 0), contr: todas.reduce((n, x) => n + x.r.contrRep, 0) + todas.reduce((n, x) => n + x.r.contrPend, 0)};
+    const kp = (l, v, bg, col) => `<div style="background:${bg}; border-radius:12px; padding:10px 12px; box-shadow:0 1px 3px #0001;"><div style="font-size:11px; color:${col || 'var(--ink-soft)'};">${l}</div><div style="font-size:24px; font-weight:700; color:${col || 'inherit'};">${v}</div></div>`;
+    html += `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:14px;">${kp('Fallas del turno', G.total, '#fff')}${kp('Reparadas por camión', G.rep, '#fff', CUAD_COLOR.reparada)}${kp('Cumplimiento global', G.total ? Math.round(100 * G.rep / G.total) + '%' : '—', '#fff', '#1f4d3d')}${kp('Atendidas por contratista', G.contr, '#fff7e8', '#b36b00')}</div>`;
+    const PAL = [['#e3f1ea', '#1f7a52'], ['#e6eefb', '#2a5db0'], ['#f3edff', '#7c3aed'], ['#fff1d9', '#8a5200'], ['#fbe7e5', '#c1443c']];
+    const ini = n => (n.match(/[A-Za-zÁÉÍÓÚÑ0-9]+/g) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('') + ((n.match(/#\d+/) || [''])[0].replace('#', ''));
+    html += `<div style="background:#fff; border-radius:14px; box-shadow:0 1px 4px #0001; overflow:hidden;"><div style="display:grid; grid-template-columns:2.1fr 3fr .9fr 1.1fr; padding:10px 16px; background:#1f4d3d; color:#fff; font-size:11.5px; font-weight:600; letter-spacing:.3px;"><div>CUADRILLA</div><div>RESULTADO DEL TURNO</div><div>CUMPL.</div><div>T. MEDIO</div></div>` +
+      todas.map(({c, r}, k) => { const t = r.total || 1, pc = PAL[k % PAL.length];
+        return `<div class="cu-fila" data-id="${c.id}" style="display:grid; grid-template-columns:2.1fr 3fr .9fr 1.1fr; padding:14px 16px; align-items:center; border-bottom:1px solid #eef1ef;">
+        <div style="display:flex; gap:10px; align-items:center;"><div style="width:34px; height:34px; border-radius:50%; background:${pc[0]}; color:${pc[1]}; font-weight:700; display:flex; align-items:center; justify-content:center;">${escHtml(ini(c.nombre))}</div><div><b>${escHtml(c.nombre)}</b><div style="font-size:11px; color:var(--ink-soft);">Inició con ${r.inicio} · +${r.asignadas} asignadas</div></div></div>
+        <div>${r.total ? `<div style="display:flex; height:10px; border-radius:5px; overflow:hidden; background:#e6ebe8;"><div style="width:${100 * r.reparadas / t}%; background:${CUAD_COLOR.reparada};"></div><div style="width:${100 * r.pendientes / t}%; background:${CUAD_COLOR.pendiente};"></div><div style="width:${100 * r.sin / t}%; background:${CUAD_COLOR.sin};"></div></div>
+          <div style="margin-top:6px; font-size:11.5px;"><span style="color:${CUAD_COLOR.reparada};">● ${r.reparadas} reparadas</span> &nbsp;<span style="color:#b36b00;">● ${r.pendientes} pend.</span> &nbsp;<span style="color:${CUAD_COLOR.sin};">● ${r.sin} sin atender</span></div>${cuadEtiquetaContr(r)}` : '<span class="hint" style="margin:0;">Sin fallas en este turno</span>'}</div>
+        <div style="font-size:20px; font-weight:700; color:${r.cumplimiento == null ? 'var(--ink-soft)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')};">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</div><div style="font-weight:600;">${cuadDur(r.medio)}</div></div>`; }).join('') +
+      `</div><div class="hint" style="margin-top:8px;">Clic en una cuadrilla para ver su detalle. Solo cuenta lo que cerró o dejó pendiente un camión; lo que hizo un contratista se muestra aparte y la falla sigue como «sin atender» para la cuadrilla. Cada falla se cuenta una vez, para la cuadrilla que la tiene asignada (si se reasigna a otra sin que la repare, no suma). Las asignaciones anteriores al historial se reconstruyen con la última asignación de cada falla.</div>`;
     todas.forEach(({c, r}) => r.items.forEach(i => mapaItems.push({...i, cuadrilla: c.nombre})));
   } else {
     const {c, r} = todas.find(x => x.c.id === selId) || {};
@@ -8189,12 +8208,12 @@ function cuadPintar(){
     if(r.total){
       html += `<div style="margin:12px 0 4px; font-weight:600;">Fallas del turno</div><table class="cu-t"><thead><tr><th>OS</th><th>Dirección</th><th>Tipo</th><th>Asignada</th><th>Resultado</th></tr></thead><tbody>` +
         r.items.slice().sort((a, b) => a.a - b.a).map(i => `<tr class="cu-fila" data-falla="${i.falla_id}"><td>${escHtml(i.ot || '—')}</td><td>${escHtml(i.direccion || '—')}</td><td>${escHtml(i.tipo_falla || '')}</td>
-          <td>${i.inicio ? 'antes del turno' : cuadHora(i.asignado_en)}</td><td style="color:${CUAD_TXT[i.resultado][1]}; font-weight:600;">${CUAD_TXT[i.resultado][0]}${i.reparada ? ' ' + cuadHora(i.reparada_en) : ''}${i.pendiente && i.motivo_pendiente ? `<div style="font-weight:400; color:var(--ink-soft);">${escHtml(i.motivo_pendiente)}</div>` : ''}</td></tr>`).join('') + '</tbody></table>';
+          <td>${i.inicio ? 'antes del turno' : cuadHora(i.asignado_en)}</td><td style="color:${CUAD_TXT[i.resultado][1]}; font-weight:600;">${CUAD_TXT[i.resultado][0]}${i.reparada ? ' ' + cuadHora(i.reparada_en) : ''}${i.porContr ? `<div style="font-weight:400; color:#8a5200;">🔧 ${i.porContr === 'reparada' ? 'Cerrada' : 'Dejada pendiente'} por contratista</div>` : ''}${i.pendiente && i.motivo_pendiente ? `<div style="font-weight:400; color:var(--ink-soft);">${escHtml(i.motivo_pendiente)}</div>` : ''}</td></tr>`).join('') + '</tbody></table>';
     } else html += '<div class="empty-state" style="margin-top:12px;">Esta cuadrilla no tuvo fallas en este turno.</div>';
     r.items.forEach(i => mapaItems.push({...i, cuadrilla: c.nombre}));
   }
   cont.innerHTML = html;
-  cont.querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => { document.getElementById('cuadSel').value = tr.dataset.id; cuadPintar(); });
+  cont.querySelectorAll('[data-id]').forEach(tr => tr.onclick = () => { document.getElementById('cuadSel').value = tr.dataset.id; cuadPintar(); });
   cont.querySelectorAll('tr[data-falla]').forEach(tr => tr.onclick = () => cuadEnfocar(tr.dataset.falla));
   cuadPintarMapa(mapaItems);
 }
@@ -8271,8 +8290,8 @@ document.getElementById('cuadPdfBtn').onclick = () => {
   const todas = cuadPorCuadrilla();
   pdf.autoTable({
     startY: 27, theme: 'grid', styles: {fontSize: 9}, headStyles: {fillColor: [37, 99, 168]},
-    head: [['Cuadrilla', 'Inició con', 'Asignadas', 'Total', 'Reparadas', 'Pendientes', 'Sin atender', 'Cumplimiento', 'T. medio entre reparaciones']],
-    body: todas.map(({c, r}) => [c.nombre, r.inicio, r.asignadas, r.total, r.reparadas, r.pendientes, r.sin, r.cumplimiento == null ? '—' : r.cumplimiento + '%', cuadDur(r.medio)])
+    head: [['Cuadrilla', 'Inició con', 'Asignadas', 'Total', 'Reparadas', 'Pendientes', 'Sin atender', 'Cumplimiento', 'T. medio entre reparaciones', 'Por contratista']],
+    body: todas.map(({c, r}) => [c.nombre, r.inicio, r.asignadas, r.total, r.reparadas, r.pendientes, r.sin, r.cumplimiento == null ? '—' : r.cumplimiento + '%', cuadDur(r.medio), r.contrRep + r.contrPend])
   });
   todas.filter(({r}) => r.total).forEach(({c, r}) => {
     pdf.addPage();
@@ -8283,7 +8302,7 @@ document.getElementById('cuadPdfBtn').onclick = () => {
     pdf.autoTable({
       startY: 26, theme: 'grid', styles: {fontSize: 8}, headStyles: {fillColor: [37, 99, 168]},
       head: [['OS', 'Dirección', 'Tipo', 'Asignada', 'Resultado', 'Detalle']],
-      body: r.items.slice().sort((a, b) => a.a - b.a).map(i => [i.ot || '—', i.direccion || '—', i.tipo_falla || '', i.inicio ? 'antes del turno' : cuadHora(i.asignado_en), CUAD_TXT[i.resultado][0].replace(/^[^\s]+\s/, ''), i.reparada ? 'Reparada ' + cuadHora(i.reparada_en) : (i.pendiente ? (i.motivo_pendiente || '') : '')])
+      body: r.items.slice().sort((a, b) => a.a - b.a).map(i => [i.ot || '—', i.direccion || '—', i.tipo_falla || '', i.inicio ? 'antes del turno' : cuadHora(i.asignado_en), CUAD_TXT[i.resultado][0].replace(/^[^\s]+\s/, ''), (i.reparada ? 'Reparada ' + cuadHora(i.reparada_en) : (i.pendiente ? (i.motivo_pendiente || '') : '')) + (i.porContr ? (i.porContr === 'reparada' ? ' · Cerrada por contratista' : ' · Pendiente por contratista') : '')])
     });
   });
   pdf.save(`rendimiento-cuadrillas-${document.getElementById('cuadFecha').value}-${document.getElementById('cuadTurno').value}.pdf`);
