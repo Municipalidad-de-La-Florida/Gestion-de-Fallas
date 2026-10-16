@@ -599,7 +599,7 @@
             </div>
             <button type="button" class="um-item" id="usuariosBtn" style="display:none;"><span class="um-ico" style="background:#e6eefb;color:#2a5db0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/></svg></span><span class="lbl">Usuarios</span></button>
             <button type="button" class="um-item" id="notificadoresBtn" style="display:none;"><span class="um-ico" style="background:#fff1d9;color:#8a5200;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/></svg></span><span class="lbl">Notificadores</span></button>
-            <button type="button" class="um-item" id="repararAdminBtn" style="display:none;" title="Al pinchar una falla, mostrar u ocultar las opciones de reparación (solo para ti, en este navegador)"><span class="um-ico" style="background:#e3f1ea;color:#1f7a52;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.1-.6-.6-2.1z"/></svg></span><span class="lbl" id="repararAdminLbl">Reparar fallas: Sí</span></button>
+            <button type="button" class="um-item" id="repararAdminBtn" style="display:none;" title="Al pinchar una falla, mostrar u ocultar las opciones de reparación y de asignación a camión (solo para ti, en este navegador)"><span class="um-ico" style="background:#e3f1ea;color:#1f7a52;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.1-.6-.6-2.1z"/></svg></span><span class="lbl" id="repararAdminLbl">Reparar y asignar fallas: Sí</span></button>
             <button type="button" class="um-item" id="cambiarPassBtn"><span class="um-ico" style="background:#eef2f0;color:#55665c;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg></span><span class="lbl">Cambiar contraseña</span></button>
             <button type="button" class="um-item" id="toggleModoDispositivoBtn" title="Cambiar entre modo Escritorio y modo Móvil"><span class="um-ico" style="background:#e3f1ea;color:#1f7a52;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span class="lbl">Modo: Escritorio</span></button>
             <div class="um-div"></div>
@@ -1759,12 +1759,12 @@ document.getElementById('toggleSearchBtn').onclick = () => {
   box.style.display = box.style.display === 'none' ? 'block' : 'none';
 };
 
-// El administrador puede ocultar las opciones de reparación al pinchar una falla (preferencia propia de este navegador)
+// El administrador puede ocultar las opciones de reparación y de asignación a camión al pinchar una falla (preferencia propia de este navegador)
 function adminPuedeReparar(){ try{ return localStorage.getItem('admin_reparar_off') !== '1'; }catch(e){ return true; } }
 function pintarBotonRepararAdmin(){
   const b = document.getElementById('repararAdminBtn');
   b.style.display = (currentUser && currentUser.rol === 'admin' && !modoVista) ? '' : 'none';
-  document.getElementById('repararAdminLbl').textContent = 'Reparar fallas: ' + (adminPuedeReparar() ? 'Sí' : 'No');
+  document.getElementById('repararAdminLbl').textContent = 'Reparar y asignar fallas: ' + (adminPuedeReparar() ? 'Sí' : 'No');
 }
 document.getElementById('repararAdminBtn').addEventListener('click', () => {
   try{ localStorage.setItem('admin_reparar_off', adminPuedeReparar() ? '1' : '0'); }catch(e){}
@@ -3508,7 +3508,7 @@ async function abrirPopupFalla(feat){
   const botonEliminarHtml = puedeEliminar
     ? `<button id="eliminarDesdeMapaBtn" title="Eliminar falla" style="flex-shrink:0; width:26px; height:26px; padding:0; border:1.5px solid var(--red); border-radius:6px; background:#fbe7e5; color:var(--red); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>`
     : '';
-  const puedeAsignarCamion = ['contratista','contratista2','contratista3','admin'].includes(rolEfectivo()) && !p.cascada && !p._vistaHistorica && p.estado !== 'reparada';
+  const puedeAsignarCamion = ['contratista','contratista2','contratista3','admin'].includes(rolEfectivo()) && (rolEfectivo() !== 'admin' || adminPuedeReparar()) && !p.cascada && !p._vistaHistorica && p.estado !== 'reparada';
   const asignarCamionHtml = puedeAsignarCamion ? `
     <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
       <div class="hint" style="margin-bottom:4px;">Asignar a camión:</div>
