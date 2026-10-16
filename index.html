@@ -6442,14 +6442,116 @@ function resumenOperativo(o, dat){
   const veces = (nm.fallas_prom && o.fallas) ? (o.fallas / nm.fallas_prom) : null;
   return {pct, nm, veces};
 }
-// Muestra el operativo como si fuera un período de ese solo día (mapa + estadísticas); con pdf=true además baja el informe resumido
+// ---- Resumen propio de un operativo: SOLO las fallas ingresadas en las inspecciones de esa fecha ----
+const OPER = {capa: null};
+function operativoCalc(det){
+  const fs = det.fallas || [];
+  const cuenta = (fn) => fs.filter(fn).length;
+  const horas = fs.filter(f => f.fecha_reparacion).map(f => (new Date(f.fecha_reparacion) - new Date(f.fecha_falla_real || f.fecha_falla)) / 3600000).filter(x => x >= 0).sort((a, b) => a - b);
+  const agr = (clave) => { const m = {}; fs.forEach(f => { const k = clave(f) || '—'; (m[k] = m[k] || {n: 0, rep: 0}); m[k].n++; if(f.estado === 'reparada') m[k].rep++; }); return Object.entries(m).sort((a, b) => b[1].n - a[1].n); };
+  return {
+    total: fs.length, reparadas: cuenta(f => f.estado === 'reparada'), pendientes: cuenta(f => f.estado === 'pendiente'),
+    reportadas: cuenta(f => f.estado === 'reportada'), reiteradas: cuenta(f => f.es_reiterada || f.estado === 'reiterada'),
+    puntos: fs.reduce((s, f) => s + (Number(f.puntos) || 0), 0),
+    mediana_h: horas.length ? horas[Math.floor(horas.length / 2)] : null,
+    media_h: horas.length ? horas.reduce((a, b) => a + b, 0) / horas.length : null,
+    porInspector: agr(f => f.inspector), porCodigo: agr(f => f.tipo_falla)
+  };
+}
+const fmtHorasOp = (h) => h === null ? '—' : (h < 10 ? (Math.round(h * 10) / 10).toFixed(1).replace('.', ',') : String(Math.round(h))) + ' h';
+function htmlResumenOperativo(det){
+  const c = operativoCalc(det), f = String(det.fecha).slice(8, 10) + '/' + String(det.fecha).slice(5, 7) + '/' + String(det.fecha).slice(0, 4);
+  const pct = c.total ? Math.round(100 * c.reparadas / c.total) : 0;
+  const filas = (arr, desc) => arr.map(([k, v]) => `<tr><td style="padding:3px 6px;">${escHtml(desc ? (k + (descripcionCodigoAnalisis('punto', k) ? ' · ' + descripcionCodigoAnalisis('punto', k) : '')) : k)}</td><td style="padding:3px 6px; text-align:right;"><b>${v.n}</b></td><td style="padding:3px 6px; text-align:right;">${v.rep}</td></tr>`).join('');
+  return `<button type="button" class="popup-btn" id="operVolverBtn" style="margin:0 0 8px;">← Volver al período</button>
+    <div style="font-weight:700; font-size:15px; color:#a03228;">🚨 ${escHtml(det.nombre || 'Operativo')}</div>
+    <div class="hint" style="margin:2px 0 8px;">${f} · solo las fallas ingresadas en las inspecciones del operativo · ${det.inspecciones} inspecciones${det.inspectores ? ' (' + escHtml(det.inspectores) + ')' : ''}</div>
+    ${kpiGrid(kpiHtml(c.total, 'Fallas'), kpiHtml(c.puntos, 'Puntos afectados'), kpiHtml(pct + '%', 'Reparadas', c.reparadas + ' de ' + c.total, true), kpiHtml(c.total - c.reparadas, 'Abiertas', `${c.pendientes} pend. · ${c.reiteradas} reit. · ${c.reportadas} sin atender`))}
+    <div class="hint">Tiempo hasta reparar (ingreso → reparación): mediana <b>${fmtHorasOp(c.mediana_h)}</b> · promedio <b>${fmtHorasOp(c.media_h)}</b></div>
+    <div style="font-weight:700; margin-top:10px;">Por inspector</div>
+    <table style="width:100%; font-size:12.5px; border-collapse:collapse;"><thead><tr style="text-align:left; border-bottom:1px solid var(--line);"><th style="padding:3px 6px;">Inspector</th><th style="padding:3px 6px; text-align:right;">Fallas</th><th style="padding:3px 6px; text-align:right;">Reparadas</th></tr></thead><tbody>${filas(c.porInspector, false)}</tbody></table>
+    <div style="font-weight:700; margin-top:10px;">Por tipo de falla</div>
+    <table style="width:100%; font-size:12.5px; border-collapse:collapse;"><thead><tr style="text-align:left; border-bottom:1px solid var(--line);"><th style="padding:3px 6px;">Código</th><th style="padding:3px 6px; text-align:right;">Fallas</th><th style="padding:3px 6px; text-align:right;">Reparadas</th></tr></thead><tbody>${filas(c.porCodigo, true)}</tbody></table>`;
+}
+function operativoItemsMapa(det){
+  return (det.fallas || []).map(f => ({geom: f.geom, label: '', color: colorFalla(f.estado, f.fecha_falla_real || f.fecha_falla, f.fecha_pendiente)}));
+}
+function quitarCapaOperativo(){ if(OPER.capa){ map.removeLayer(OPER.capa); OPER.capa = null; } }
+// Hojas del PDF con el resumen de UN operativo: mapa con sus fallas + estadísticas (como cualquier período, pero solo del operativo)
+async function agregarHojasOperativo(pdf, det, primera){
+  const ancho = pdf.internal.pageSize.getWidth(), alto = pdf.internal.pageSize.getHeight(), margen = 12, VERDE = [0, 49, 0], gris = [85, 102, 92];
+  const c = operativoCalc(det);
+  const fF = String(det.fecha).slice(8, 10) + '-' + String(det.fecha).slice(5, 7) + '-' + String(det.fecha).slice(0, 4);
+  if(!primera) pdf.addPage();
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...VERDE);
+  pdf.text('Operativo: ' + (det.nombre || ''), margen, 16);
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gris);
+  pdf.text(pdf.splitTextToSize(`${fF} · Solo las fallas ingresadas en las inspecciones del operativo (${det.inspecciones} inspecciones` + (det.inspectores ? ': ' + det.inspectores : '') + ')', ancho - 2 * margen), margen, 21);
+  pdf.setDrawColor(219, 226, 220); pdf.line(margen, 27, ancho - margen, 27);
+  const pct = c.total ? Math.round(100 * c.reparadas / c.total) : 0;
+  const kp = [['Fallas', c.total], ['Puntos afectados', c.puntos], ['Reparadas', `${pct}% (${c.reparadas})`], ['Abiertas', c.total - c.reparadas], ['Pendientes', c.pendientes], ['Reiteradas', c.reiteradas]];
+  const wk = (ancho - 2 * margen) / kp.length;
+  kp.forEach(([l, v], i) => {
+    const x = margen + i * wk;
+    pdf.setFillColor(243, 247, 244); pdf.roundedRect(x + 0.8, 30, wk - 1.6, 15, 2, 2, 'F');
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(...VERDE); pdf.text(String(v), x + wk / 2, 38, {align: 'center'});
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(l, x + wk / 2, 43, {align: 'center'});
+  });
+  pdf.setFontSize(8); pdf.text(`Tiempo desde el ingreso hasta la reparación: mediana ${fmtHorasOp(c.mediana_h)} · promedio ${fmtHorasOp(c.media_h)}`, margen, 50);
+  let y = 54;
+  try{
+    const cv = await renderMapaCanvas(operativoItemsMapa(det), {w: 1700, h: 1058, padding: 90});
+    if(cv){ const w = ancho - 2 * margen, hh = w * 1058 / 1700; pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', margen, y, w, hh); y += hh + 3; }
+  }catch(e){ console.warn('No se pudo dibujar el mapa del operativo:', e); }
+  const leyenda = [['Reportada', colorEstado.reportada], ['Pendiente', colorEstado.pendiente], ['Reiterada', colorEstado.reiterada], ['Reparada', colorEstado.reparada], ['Vencida', colorEstado.vencida]];
+  let lx = margen;
+  leyenda.forEach(([t, col]) => { const rgb = [1, 3, 5].map(i => parseInt(col.slice(i, i + 2), 16)); pdf.setFillColor(...rgb); pdf.circle(lx + 1.5, y + 1, 1.5, 'F'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(t, lx + 4, y + 2); lx += 28; });
+  y += 7;
+  const est = {margin: {left: margen, right: margen}, theme: 'grid', styles: {fontSize: 8, cellPadding: 1.4, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1}, headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'}};
+  if(y > alto - 70){ pdf.addPage(); y = 16; }
+  pdf.autoTable({...est, startY: y, head: [['Inspector', 'Fallas', 'Reparadas']], body: c.porInspector.map(([k, v]) => [k, v.n, v.rep]), tableWidth: (ancho - 2 * margen) / 2 - 3, margin: {left: margen, right: ancho / 2 + 3}});
+  const y1 = pdf.lastAutoTable.finalY;
+  pdf.autoTable({...est, startY: y, head: [['Código', 'Fallas', 'Reparadas']], body: c.porCodigo.slice(0, 12).map(([k, v]) => [k + (descripcionCodigoAnalisis('punto', k) ? ' · ' + descripcionCodigoAnalisis('punto', k) : ''), v.n, v.rep]), margin: {left: ancho / 2 + 3, right: margen}});
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
+  pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
+}
+// Botones de la tarjeta de un operativo
 window.verOperativo = async function(fecha, pdf){
-  document.getElementById('fechaDiaEspecifico').value = String(fecha).slice(0, 10);
-  document.getElementById('tabDia').onclick();
+  fecha = String(fecha).slice(0, 10);
+  let det;
+  try{ det = await db.rpc('operativo_detalle', {p_fecha: fecha}); }
+  catch(e){ alert('No se pudo cargar el operativo: ' + e.message + '\n\n¿Ejecutaste sql/2026-10-operativo-detalle.sql en Supabase?'); return; }
+  if(!det){ alert('No tienes permiso para ver este operativo.'); return; }
   if(pdf){
-    await new Promise(r => setTimeout(r, 1500));   // deja que cargue el día antes de armar el PDF
-    generarPdfPeriodo(true);
+    if(!window.jspdf || !window.jspdf.jsPDF){ alert('No se pudo cargar la librería de PDF. Recarga la página.'); return; }
+    const doc = new window.jspdf.jsPDF({orientation: 'portrait', unit: 'mm', format: 'a4'});
+    await agregarHojasOperativo(doc, det, true);
+    doc.save(`operativo_${fecha}.pdf`);
+    return;
   }
+  // En pantalla: mapa con las fallas del operativo + resumen en el panel de estadísticas
+  quitarCapaOperativo();
+  OPER.capa = L.layerGroup().addTo(map);
+  const pts = [];
+  (det.fallas || []).forEach(f => {
+    if(!f.geom) return;
+    const color = colorFalla(f.estado, f.fecha_falla_real || f.fecha_falla, f.fecha_pendiente);
+    let capa;
+    if(f.geom.type === 'Point'){
+      const [lon, lat] = f.geom.coordinates;
+      capa = L.circleMarker([lat, lon], {radius: 7, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95, pane: 'inspeccionPane'});
+      pts.push([lat, lon]);
+    } else {
+      capa = L.geoJSON(f.geom, {pane: 'inspeccionPane', style: {color, weight: 5, opacity: 0.9}});
+      capa.eachLayer(l => { const b = l.getBounds && l.getBounds(); if(b) pts.push(b.getCenter()); });
+    }
+    capa.bindTooltip(`OS ${f.ot || '—'} · ${f.tipo_falla || ''} · ${f.estado}`);
+    capa.on('click', () => enfocarFalla(f.id, true));
+    capa.addTo(OPER.capa);
+  });
+  if(pts.length) map.fitBounds(L.latLngBounds(pts), {padding: [40, 40], maxZoom: 17});
+  document.getElementById('statsContent').innerHTML = htmlResumenOperativo(det);
+  document.getElementById('operVolverBtn').onclick = () => { quitarCapaOperativo(); actualizarEstadisticasYMapa(); };
 };
 function htmlOperativos(dat){
   if(!dat || !dat.operativos || !dat.operativos.length) return '';
@@ -6458,7 +6560,7 @@ function htmlOperativos(dat){
     const {pct, nm, veces} = resumenOperativo(o, dat);
     return `<div style="border:1.5px solid #e8c9c5; background:#fff7f6; border-radius:10px; padding:9px 11px; margin-top:8px;">
       <div style="font-weight:700; color:#a03228;">🚨 ${escHtml(o.nombre)} <span style="font-weight:500; color:var(--ink-soft);">· ${f(o.fecha)}</span></div>
-      <div style="font-size:12.5px; margin-top:3px;"><b>${o.itos_ito ?? o.itos}</b> de ${dat.itos_total} ITO${(o.itos - (o.itos_ito ?? o.itos)) > 0 ? ' + ' + (o.itos - o.itos_ito) + ' más (admin / otros)' : ''} · <b>${o.inspecciones}</b> inspecciones · <b>${o.fallas}</b> fallas informadas</div>
+      <div style="font-size:12.5px; margin-top:3px;"><b>${o.itos}</b> inspector${o.itos === 1 ? '' : 'es'} · <b>${o.inspecciones}</b> inspecciones · <b>${o.fallas}</b> fallas informadas</div>
       <div style="font-size:12.5px;">Reparadas <b>${o.reparadas}</b>${pct === null ? '' : ' (' + pct + '%)'} · Abiertas <b>${o.abiertas}</b> (${o.pendientes} pend. · ${o.reiteradas} reit.)</div>
       ${o.inspectores ? `<div class="hint" style="margin:3px 0 0;">Participaron: ${escHtml(o.inspectores)}</div>` : ''}
       <div style="display:flex; gap:6px; margin-top:7px;"><button type="button" class="popup-btn" style="margin:0; padding:5px 10px; font-size:12px;" onclick="verOperativo('${o.fecha}', false)">🗺️ Ver resumen y mapa</button><button type="button" class="popup-btn" style="margin:0; padding:5px 10px; font-size:12px; background:#2563a8;" onclick="verOperativo('${o.fecha}', true)">📄 PDF del operativo</button></div>
@@ -7724,7 +7826,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
           styles: {fontSize: 8.5, cellPadding: 1.8, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1},
           headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'},
           head: [['Fecha', 'Operativo', 'Inspectores', 'Inspecciones', 'Fallas', 'Reparadas', 'Abiertas', 'Pend.', 'Reit.']],
-          body: datOp.operativos.map(o => [fmtF(o.fecha), o.nombre, `${o.itos_ito ?? o.itos} de ${datOp.itos_total} ITO${(o.itos - (o.itos_ito ?? o.itos)) > 0 ? ' + ' + (o.itos - o.itos_ito) : ''}`, o.inspecciones, o.fallas,
+          body: datOp.operativos.map(o => [fmtF(o.fecha), o.nombre, String(o.itos), o.inspecciones, o.fallas,
             o.fallas ? `${o.reparadas} (${Math.round(100 * o.reparadas / o.fallas)}%)` : '0', o.abiertas, o.pendientes, o.reiteradas])
         });
         let yo = pdf.lastAutoTable.finalY + 6;
@@ -7736,6 +7838,13 @@ async function generarPdfAnalisis(soloResumen, opciones){
         const inspNombres = datOp.operativos.filter(o => o.inspectores).map(o => `${fmtF(o.fecha)}: ${o.inspectores}`).join('\n');
         if(inspNombres){ pdf.setFontSize(8); pdf.text(pdf.splitTextToSize('Inspectores participantes\n' + inspNombres, ancho - 2 * margen), margen, yo); }
         pdf.setFontSize(8); pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
+        // Una sección por operativo: mapa con sus fallas + estadísticas (solo del operativo)
+        for(const o of datOp.operativos){
+          try{
+            const det = await db.rpc('operativo_detalle', {p_fecha: String(o.fecha).slice(0, 10)});
+            if(det && det.fallas && det.fallas.length) await agregarHojasOperativo(pdf, det, false);
+          }catch(e1){ console.warn('No se pudo agregar el detalle del operativo ' + o.fecha, e1); }
+        }
       }
     }catch(eOp){ console.warn('No se pudieron agregar los operativos al PDF:', eOp); }
 

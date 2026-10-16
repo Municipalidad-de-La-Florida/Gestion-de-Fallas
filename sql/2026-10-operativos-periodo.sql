@@ -15,7 +15,6 @@ begin
     select i.fecha,
            count(distinct i.id) inspecciones,
            count(distinct i.ito_id) itos,
-           count(distinct i.ito_id) filter (where u.rol = 'ito') itos_ito,
            string_agg(distinct u.nombre, ', ' order by u.nombre) nombres
     from public.inspecciones i
     join public.usuarios u on u.id = i.ito_id
@@ -43,7 +42,7 @@ begin
     'operativos', coalesce((
       select jsonb_agg(jsonb_build_object(
         'fecha', o.fecha, 'nombre', coalesce(o.motivo, 'Operativo'),
-        'inspecciones', coalesce(d.inspecciones, 0), 'itos', coalesce(d.itos, 0), 'itos_ito', coalesce(d.itos_ito, 0), 'inspectores', d.nombres,
+        'inspecciones', coalesce(d.inspecciones, 0), 'itos', coalesce(d.itos, 0), 'inspectores', d.nombres,
         'fallas', coalesce(fd.fallas, 0), 'reparadas', coalesce(fd.reparadas, 0), 'pendientes', coalesce(fd.pendientes, 0),
         'reiteradas', coalesce(fd.reiteradas, 0), 'abiertas', coalesce(fd.abiertas, 0)
       ) order by o.fecha)
