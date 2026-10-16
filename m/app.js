@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.29.0';
+const VERSION_APP = '1.30.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1991,6 +1991,25 @@ function cerrarUsuarios(desdePop) {
 }
 window._usrPop = () => { if (usrVolviendo) { usrVolviendo = false; return; } if (!$('#pantallaUsuarios').hidden) cerrarUsuarios(true); };
 const formUsuarios = abrirUsuarios;
+
+/* ------------------ Compartir ubicación (solo camiones, solo con la app abierta) ------------------ */
+const ubicActiva = () => true;   // los camiones comparten siempre mientras la app está abierta (el teléfono pide el permiso de GPS)
+let ubicTimer = null, ubicUltimo = 0;
+function enviarUbicacion() {
+  if (rol() !== 'camion' || !ubicActiva() || document.visibilityState !== 'visible' || !navigator.geolocation) return;
+  if (Date.now() - ubicUltimo < 45000) return;
+  navigator.geolocation.getCurrentPosition((p) => {
+    ubicUltimo = Date.now();
+    rpc('reportar_ubicacion', { p_lat: p.coords.latitude, p_lng: p.coords.longitude, p_precision: p.coords.accuracy }).catch(() => {});
+  }, () => {}, { enableHighAccuracy: true, maximumAge: 20000, timeout: 20000 });
+}
+function iniciarUbicacion() {
+  if (ubicTimer) { clearInterval(ubicTimer); ubicTimer = null; }
+  if (rol() !== 'camion' || !ubicActiva()) return;
+  enviarUbicacion();
+  ubicTimer = setInterval(enviarUbicacion, 60000);
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') enviarUbicacion(); });
 /* ------------------------- Cuadrillas (admin o con permiso) -------------------------
    Misma lógica que la web: por turno, solo cuenta lo que cerró o dejó pendiente un camión. */
 const CU_TURNOS = { '0': [0, 8], '1': [8, 16], '2': [16, 24], d: [0, 24] };
@@ -2546,6 +2565,7 @@ $('#btnMenu').addEventListener('click', () => {
       ${!S.instalar && esIOS() && !esStandalone() ? '<div class="aviso">Para instalarla en iPhone: toca el botón <b>Compartir</b> de Safari y luego <b>Añadir a pantalla de inicio</b>.</div>' : ''}
       <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
       ${rol() === 'admin' ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Gestionar usuarios</span>${chev}</button>` : ''}
+      ${rol() === 'camion' ? '<div class="hint" style="margin:4px 6px 8px">📍 Tu ubicación se comparte con el administrador mientras la app está abierta.</div>' : ''}
       ${puedeCuadrillas() ? `<button id="mCuadrillas" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M3 17h13V7H3z"/><path d="M16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>')}</span><span class="t">Cuadrillas</span>${chev}</button>` : ''}
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
@@ -2580,6 +2600,7 @@ window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.in
 async function entrarApp() {
   if (typeof L === 'undefined') throw new Error('No se pudo cargar el mapa. Revisa tu conexión y recarga la página.');
   await cargarPerfil();
+  iniciarUbicacion();
   $('#pantallaLogin').hidden = true;
   $('#pantallaApp').hidden = false;
   $('#barraNombre').textContent = S.perfil.nombre;
