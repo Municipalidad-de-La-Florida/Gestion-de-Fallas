@@ -522,6 +522,19 @@
   body:not(.modo-movil).stats-full #sidebarStats .section .hint{ display:inline-block; margin:4px 8px 0 0; }
   body:not(.modo-movil).stats-full #sidebarStats .section > div[id^="selector"] > div[style*="display:flex"]{ display:inline-flex !important; margin:4px 12px 0 0 !important; max-width:360px; }
   body:not(.modo-movil).stats-full #sidebarStats .section select{ width:auto !important; margin-top:4px; }
+  /* ===== Rendimiento de cuadrillas (solo web) ===== */
+  body.modo-movil #cuadBtn{ display:none !important; }
+  #sidebarCuad .cu-head{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:10px 18px; border-bottom:1px solid var(--line); }
+  #sidebarCuad .cu-head select, #sidebarCuad .cu-head input{ font-size:12.5px; padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; }
+  #sidebarCuad .cu-kpis{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; }
+  #sidebarCuad .cu-kpi{ background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 10px; border-top:4px solid #8a97a5; }
+  #sidebarCuad .cu-kpi .l{ font-size:10.5px; color:var(--ink-soft); }
+  #sidebarCuad .cu-kpi .v{ font-size:22px; font-weight:700; }
+  #sidebarCuad table.cu-t{ width:100%; border-collapse:collapse; font-size:12px; }
+  #sidebarCuad table.cu-t th{ text-align:left; color:var(--ink-soft); font-weight:600; padding:6px 6px; border-bottom:2px solid var(--line); position:sticky; top:0; background:#fff; }
+  #sidebarCuad table.cu-t td{ padding:6px 6px; border-bottom:1px solid var(--line); }
+  #sidebarCuad table.cu-t tr.cu-fila{ cursor:pointer; }
+  #sidebarCuad table.cu-t tr.cu-fila:hover{ background:#eef4fb; }
 </style>
 </head>
 <body>
@@ -549,6 +562,7 @@
     <div class="brand"><div class="brand-t">Gestión de Fallas</div><div class="brand-s">Alumbrado Público</div></div>
     <div class="userinfo">
       <button type="button" class="hb" id="statsBtn"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span class="bt">Estadísticas</span></button>
+      <button type="button" class="hb" id="cuadBtn" style="display:none;"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 6h13v10H1zM14 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></span><span class="bt">Cuadrillas</span></button>
       <button type="button" class="hb" id="inspC3Btn" style="display:none;"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="bt">Inspecciones</span></button>
       <button type="button" class="hb" id="todasBtn" style="display:none;"><span class="hb-chip" style="background:#e6eefb;color:#2a5db0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg></span><span class="bt">Todas las fallas</span></button>
       <button type="button" class="hb" id="toggleSearchBtn"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span><span class="bt">Buscador</span></button>
@@ -942,6 +956,26 @@
       </div>
       <div id="statsContent" style="flex:1; overflow-y:auto; padding:0 18px 18px;"><div class="empty-state">Selecciona una fecha.</div></div>
     </div>
+    <div id="sidebarCuad" style="display:none; flex-direction:column; flex:1; min-height:0;">
+      <div class="cu-head">
+        <button class="mode-btn" id="backFromCuad" style="margin:0; padding:7px 12px;">← Volver</button>
+        <b style="font-size:15px;">🚚 Rendimiento de cuadrillas</b>
+        <span style="flex:1;"></span>
+        <button type="button" id="cuadPdfBtn" title="Descargar resumen en PDF" style="height:30px; padding:0 12px; border:1.5px solid #000; border-radius:8px; background:#2563a8; color:#fff; font-size:12.5px; font-weight:600; cursor:pointer;">⬇ PDF</button>
+        <div style="flex-basis:100%; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+          <input type="date" id="cuadFecha">
+          <select id="cuadTurno">
+            <option value="0">Turno 1 · 00:00 – 08:00</option>
+            <option value="1">Turno 2 · 08:00 – 16:00</option>
+            <option value="2">Turno 3 · 16:00 – 24:00</option>
+            <option value="d">Día completo</option>
+          </select>
+          <select id="cuadSel"><option value="">Todas las cuadrillas</option></select>
+          <span class="hint" id="cuadEstado" style="margin:0;"></span>
+        </div>
+      </div>
+      <div id="cuadContenido" style="flex:1; overflow-y:auto; padding:12px 18px 18px;"></div>
+    </div>
   </div>
 </div>
 
@@ -952,6 +986,7 @@
     <div id="gestionTabs" style="display:flex; gap:4px; border-bottom:2px solid var(--line); margin:4px 0 12px; overflow-x:auto;">
       <button type="button" class="gu-tab" data-tab="usuarios">👥 Usuarios</button>
       <button type="button" class="gu-tab" data-tab="pauta">📅 Pauta inspecciones <span class="gu-dot" id="guDotPauta" style="display:none; color:#e08a00;">●</span></button>
+      <button type="button" class="gu-tab" data-tab="cuadrillas">🚚 Cuadrillas</button>
       <button type="button" class="gu-tab" data-tab="contratos">📄 Contratos</button>
       <button type="button" class="gu-tab" data-tab="ajustes">⚙️ Ajustes</button>
     </div>
@@ -985,6 +1020,9 @@
     <div class="gu-pane" data-pane="pauta" style="display:none;">
     <div id="pautaAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     <div id="operativoAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    </div>
+    <div class="gu-pane" data-pane="cuadrillas" style="display:none;">
+    <div id="cuadrillasAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     </div>
     <div class="gu-pane" data-pane="contratos" style="display:none;">
     <div id="contratosAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
@@ -1285,6 +1323,8 @@ async function cargarPerfilYIniciar(userId){
       return;
     }
     currentUser = data[0];
+    currentUser.ver_cuadrillas = false;
+    try{ const v = await db.select('usuarios', `id=eq.${userId}&select=ver_cuadrillas`); if(v && v[0]) currentUser.ver_cuadrillas = !!v[0].ver_cuadrillas; }catch(e){ /* sin la columna en la base: nadie la ve salvo el admin */ }
     currentUser.dias_inspeccion = null;   // null = sin restricción (columna aún no creada, o rol sin pauta)
     if(currentUser.rol === 'ito'){
       try{
@@ -1335,6 +1375,7 @@ function actualizarVisibilidadPorRol(){
   document.getElementById('btnInformarInspeccion').style.display = esContratista2o3(rol) ? 'none' : '';
   document.getElementById('repararSection').style.display = ['contratista','contratista2','contratista3','camion'].includes(rol) ? 'block' : 'none';
   document.getElementById('statsBtn').style.display = (rol === 'contratista' || esContratista2o3(rol)) ? 'none' : '';
+  document.getElementById('cuadBtn').style.display = ((currentUser.rol === 'admin' && !modoVista) || currentUser.ver_cuadrillas) ? '' : 'none';
   document.getElementById('inspC3Btn').style.display = (rol === 'contratista3') ? '' : 'none';
   document.getElementById('todasBtn').style.display = (rol === 'admin' || rol === 'ito' || rol === 'ito2' || rol === 'contratista' || esContratista2o3(rol)) ? '' : 'none';
   // si cambia el rol efectivo (ej. "ver como"), se sale de cualquier modo de reporte activo
@@ -4288,7 +4329,7 @@ document.getElementById('backFromStats').onclick = () => ocultarSidebarStats();
 
 // Pantalla completa de estadísticas: datos a la izquierda y mapa a la derecha, con divisoria ajustable
 function actualizarLayoutStats(){
-  const abierto = document.getElementById('sidebarStats').style.display === 'flex';
+  const abierto = document.getElementById('sidebarStats').style.display === 'flex' || document.getElementById('sidebarCuad').style.display === 'flex';
   document.body.classList.toggle('stats-full', abierto);
   if(typeof map !== 'undefined' && map) setTimeout(() => map.invalidateSize(), 60);
 }
@@ -8052,6 +8093,226 @@ document.addEventListener('click', e => {
   if(e.target.classList && e.target.classList.contains('modal-overlay') && _mousedownTarget !== e.target) e.stopPropagation();
 }, true);
 
+// =====================================================================
+// RENDIMIENTO DE CUADRILLAS (solo web; lo ve el admin y los usuarios que él habilite en Gestión de usuarios → Cuadrillas)
+// Datos: función SQL rendimiento_cuadrillas (sql/2026-10-rendimiento-cuadrillas.sql) + historial de asignaciones.
+// Turnos: 00–08, 08–16 y 16–24.
+// =====================================================================
+const CUAD = {datos: null, capa: null, filas: [], cargando: false};
+const CUAD_COLOR = {reparada: '#3a8a5c', pendiente: '#d98e2f', sin: '#c1443c'};
+const CUAD_TURNOS = {'0': [0, 8, 'Turno 1 (00:00–08:00)'], '1': [8, 16, 'Turno 2 (08:00–16:00)'], '2': [16, 24, 'Turno 3 (16:00–24:00)'], 'd': [0, 24, 'Día completo']};
+
+function cuadRango(){
+  const f = document.getElementById('cuadFecha').value;
+  const [h0, h1] = CUAD_TURNOS[document.getElementById('cuadTurno').value];
+  const [y, m, d] = f.split('-').map(Number);
+  return {desde: new Date(y, m - 1, d, h0), hasta: new Date(y, m - 1, d, h1)};
+}
+function cuadHora(iso){ return iso ? new Date(iso).toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit'}) : '—'; }
+function cuadDur(ms){
+  if(ms == null) return '—';
+  const min = Math.round(ms / 60000);
+  return min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min` : `${min} min`;
+}
+
+// Clasifica las asignaciones de una cuadrilla dentro del turno y calcula los indicadores
+function cuadCalcular(filas, desde, hasta){
+  const items = filas.map(r => {
+    const a = new Date(r.asignado_en), rep = r.reparada_en ? new Date(r.reparada_en) : null, fp = r.fecha_pendiente ? new Date(r.fecha_pendiente) : null;
+    const reparada = !!(rep && rep >= desde && rep < hasta);
+    const pendiente = !reparada && !!(fp && fp >= a && fp < hasta);
+    return {...r, a, rep, reparada, pendiente, resultado: reparada ? 'reparada' : (pendiente ? 'pendiente' : 'sin'), inicio: a < desde};
+  });
+  const reps = items.filter(i => i.reparada).map(i => i.rep.getTime()).sort((x, y) => x - y);
+  let medio = null;
+  if(reps.length > 1) medio = (reps[reps.length - 1] - reps[0]) / (reps.length - 1);
+  const total = items.length, rep = items.filter(i => i.reparada).length, pen = items.filter(i => i.pendiente).length;
+  return {
+    items, total, inicio: items.filter(i => i.inicio).length, asignadas: items.filter(i => !i.inicio).length,
+    reparadas: rep, pendientes: pen, sin: total - rep - pen,
+    cumplimiento: total ? Math.round(100 * rep / total) : null, medio
+  };
+}
+
+function cuadKpi(l, v, color){ return `<div class="cu-kpi" style="border-top-color:${color};"><div class="l">${l}</div><div class="v">${v}</div></div>`; }
+function cuadKpis(c){
+  return `<div class="cu-kpis">${cuadKpi('Inició el turno con', c.inicio, '#64748b')}${cuadKpi('Asignadas en el turno', c.asignadas, '#2563a8')}${cuadKpi('Total del turno', c.total, '#1f4d3d')}
+    ${cuadKpi('Reparadas', c.reparadas, CUAD_COLOR.reparada)}${cuadKpi('Dejó pendientes', c.pendientes, CUAD_COLOR.pendiente)}${cuadKpi('Sin atender', c.sin, CUAD_COLOR.sin)}
+    ${cuadKpi('% de cumplimiento', c.cumplimiento == null ? '—' : c.cumplimiento + '%', '#7a5ca8')}${cuadKpi('Tiempo medio entre reparaciones', cuadDur(c.medio), '#8a5200')}</div>`;
+}
+const CUAD_TXT = {reparada: ['✔ Reparada', CUAD_COLOR.reparada], pendiente: ['● Pendiente', CUAD_COLOR.pendiente], sin: ['● Sin atender', CUAD_COLOR.sin]};
+
+async function cuadCargar(){
+  const est = document.getElementById('cuadEstado'), cont = document.getElementById('cuadContenido');
+  if(!document.getElementById('cuadFecha').value) return;
+  const {desde, hasta} = cuadRango();
+  est.textContent = 'Cargando…';
+  try{
+    CUAD.datos = await db.rpc('rendimiento_cuadrillas', {p_desde: desde.toISOString(), p_hasta: hasta.toISOString()});
+    est.textContent = '';
+  }catch(e){
+    est.textContent = '';
+    cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escHtml(e.message)}<br><span class="hint">¿Ejecutaste sql/2026-10-rendimiento-cuadrillas.sql en Supabase?</span></div>`;
+    cuadLimpiarMapa(); return;
+  }
+  const sel = document.getElementById('cuadSel'), previo = sel.value;
+  sel.innerHTML = '<option value="">Todas las cuadrillas</option>' + CUAD.datos.cuadrillas.map(c => `<option value="${c.id}">${escHtml(c.nombre)}</option>`).join('');
+  if(CUAD.datos.cuadrillas.some(c => c.id === previo)) sel.value = previo;
+  cuadPintar();
+}
+
+function cuadLimpiarMapa(){ if(CUAD.capa){ CUAD.capa.clearLayers(); } }
+
+function cuadPorCuadrilla(){
+  const {desde, hasta} = cuadRango();
+  return CUAD.datos.cuadrillas.map(c => ({c, r: cuadCalcular(CUAD.datos.filas.filter(f => f.camion_id === c.id), desde, hasta)}));
+}
+
+function cuadPintar(){
+  if(!CUAD.datos) return;
+  const cont = document.getElementById('cuadContenido'), selId = document.getElementById('cuadSel').value;
+  const todas = cuadPorCuadrilla();
+  const {desde} = cuadRango();
+  const titulo = `${desde.toLocaleDateString('es-CL', {weekday: 'long', day: 'numeric', month: 'long'})} · ${CUAD_TURNOS[document.getElementById('cuadTurno').value][2]}`;
+  let html = `<div class="hint" style="margin:0 0 10px;">${escHtml(titulo.charAt(0).toUpperCase() + titulo.slice(1))}</div>`;
+  let mapaItems = [];
+  if(!selId){
+    html += `<table class="cu-t"><thead><tr><th>Cuadrilla</th><th>Inició con</th><th>Asignadas</th><th>Total</th><th>Reparadas</th><th>Pendientes</th><th>Sin atender</th><th>Cumplimiento</th><th>T. medio</th></tr></thead><tbody>` +
+      todas.map(({c, r}) => `<tr class="cu-fila" data-id="${c.id}"><td><b>${escHtml(c.nombre)}</b></td><td>${r.inicio}</td><td>${r.asignadas}</td><td>${r.total}</td><td>${r.reparadas}</td><td>${r.pendientes}</td><td>${r.sin}</td>
+        <td><div style="display:inline-block; width:70px; height:7px; background:var(--line); border-radius:4px; vertical-align:middle; overflow:hidden;"><div style="width:${r.cumplimiento || 0}%; height:7px; background:${CUAD_COLOR.reparada};"></div></div> ${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</td><td>${cuadDur(r.medio)}</td></tr>`).join('') +
+      `</tbody></table><div class="hint" style="margin-top:8px;">Clic en una cuadrilla para ver su detalle. Cada falla se cuenta una vez, para la cuadrilla que la tiene asignada (si se reasigna a otra sin que la repare, no suma). Las asignaciones anteriores al registro de historial se reconstruyen con la última asignación de cada falla.</div>`;
+    todas.forEach(({c, r}) => r.items.forEach(i => mapaItems.push({...i, cuadrilla: c.nombre})));
+  } else {
+    const {c, r} = todas.find(x => x.c.id === selId) || {};
+    if(!c){ cont.innerHTML = ''; return; }
+    html += `<h3 style="margin:0 0 8px;">${escHtml(c.nombre)}</h3>` + cuadKpis(r);
+    if(r.total){
+      html += `<div style="margin:12px 0 4px; font-weight:600;">Fallas del turno</div><table class="cu-t"><thead><tr><th>OS</th><th>Dirección</th><th>Tipo</th><th>Asignada</th><th>Resultado</th></tr></thead><tbody>` +
+        r.items.slice().sort((a, b) => a.a - b.a).map(i => `<tr class="cu-fila" data-falla="${i.falla_id}"><td>${escHtml(i.ot || '—')}</td><td>${escHtml(i.direccion || '—')}</td><td>${escHtml(i.tipo_falla || '')}</td>
+          <td>${i.inicio ? 'antes del turno' : cuadHora(i.asignado_en)}</td><td style="color:${CUAD_TXT[i.resultado][1]}; font-weight:600;">${CUAD_TXT[i.resultado][0]}${i.reparada ? ' ' + cuadHora(i.reparada_en) : ''}${i.pendiente && i.motivo_pendiente ? `<div style="font-weight:400; color:var(--ink-soft);">${escHtml(i.motivo_pendiente)}</div>` : ''}</td></tr>`).join('') + '</tbody></table>';
+    } else html += '<div class="empty-state" style="margin-top:12px;">Esta cuadrilla no tuvo fallas en este turno.</div>';
+    r.items.forEach(i => mapaItems.push({...i, cuadrilla: c.nombre}));
+  }
+  cont.innerHTML = html;
+  cont.querySelectorAll('tr[data-id]').forEach(tr => tr.onclick = () => { document.getElementById('cuadSel').value = tr.dataset.id; cuadPintar(); });
+  cont.querySelectorAll('tr[data-falla]').forEach(tr => tr.onclick = () => cuadEnfocar(tr.dataset.falla));
+  cuadPintarMapa(mapaItems);
+}
+
+function cuadPintarMapa(items){
+  if(!CUAD.capa) CUAD.capa = L.layerGroup();
+  if(!map.hasLayer(CUAD.capa)) CUAD.capa.addTo(map);
+  CUAD.capa.clearLayers();
+  CUAD.marcas = {};
+  const pts = [];
+  items.forEach(i => {
+    if(!i.geom) return;
+    const color = CUAD_COLOR[i.resultado];
+    const tip = `OS ${i.ot || '—'} · ${i.tipo_falla || ''}<br>${i.cuadrilla} · ${CUAD_TXT[i.resultado][0]}`;
+    let capa;
+    if(i.geom.type === 'Point'){
+      const [lon, lat] = i.geom.coordinates;
+      capa = L.circleMarker([lat, lon], {radius: 8, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95, pane: 'inspeccionPane'});
+      pts.push([lat, lon]);
+    } else {
+      capa = L.geoJSON(i.geom, {pane: 'inspeccionPane', style: {color, weight: 5, opacity: 0.9}});
+      capa.eachLayer(l => { const b = l.getBounds && l.getBounds(); if(b) pts.push(b.getCenter()); });
+    }
+    capa.bindTooltip(tip);
+    capa.on('click', () => enfocarFalla(i.falla_id, true));
+    capa.addTo(CUAD.capa);
+    CUAD.marcas[i.falla_id] = capa;
+  });
+  if(pts.length) map.fitBounds(L.latLngBounds(pts), {padding: [40, 40], maxZoom: 17});
+}
+function cuadEnfocar(fallaId){
+  const m = CUAD.marcas && CUAD.marcas[fallaId];
+  if(m){ const c = m.getLatLng ? m.getLatLng() : m.getBounds().getCenter(); map.setView(c, Math.max(map.getZoom(), 17)); m.openTooltip && m.openTooltip(); }
+  enfocarFalla(fallaId, true);
+}
+
+function mostrarCuadrillas(){
+  document.getElementById('sidebarNormal').style.display = 'none';
+  document.getElementById('sidebarStats').style.display = 'none';
+  document.getElementById('sidebarCuad').style.display = 'flex';
+  actualizarLayoutStats();
+  ocultarCapaActivas();
+  const fi = document.getElementById('cuadFecha');
+  if(!fi.value){
+    fi.value = hoyChileStr();
+    const h = new Date().getHours();
+    document.getElementById('cuadTurno').value = h < 8 ? '0' : (h < 16 ? '1' : '2');
+  }
+  cuadCargar();
+}
+function ocultarCuadrillas(){
+  document.getElementById('sidebarCuad').style.display = 'none';
+  document.getElementById('sidebarNormal').style.display = 'flex';
+  actualizarLayoutStats();
+  if(CUAD.capa) map.removeLayer(CUAD.capa);
+  mostrarCapaActivas();
+}
+document.getElementById('cuadBtn').onclick = () => mostrarCuadrillas();
+document.getElementById('backFromCuad').onclick = () => ocultarCuadrillas();
+document.getElementById('cuadFecha').onchange = () => cuadCargar();
+document.getElementById('cuadTurno').onchange = () => cuadCargar();
+document.getElementById('cuadSel').onchange = () => cuadPintar();
+
+// PDF resumen: tabla comparativa + detalle de cada cuadrilla con actividad
+document.getElementById('cuadPdfBtn').onclick = () => {
+  if(!CUAD.datos){ alert('Aún no hay datos cargados.'); return; }
+  if(!window.jspdf || !window.jspdf.jsPDF){ alert('No se pudo cargar la librería de PDF. Revisa tu conexión y recarga la página.'); return; }
+  const {desde} = cuadRango();
+  const turno = CUAD_TURNOS[document.getElementById('cuadTurno').value][2];
+  const pdf = new window.jspdf.jsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
+  const fechaTxt = desde.toLocaleDateString('es-CL', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'});
+  pdf.setFontSize(16); pdf.text('Rendimiento de cuadrillas', 14, 16);
+  pdf.setFontSize(10); pdf.setTextColor(90); pdf.text(`${fechaTxt} · ${turno} · Generado ${new Date().toLocaleString('es-CL')}`, 14, 22); pdf.setTextColor(0);
+  const todas = cuadPorCuadrilla();
+  pdf.autoTable({
+    startY: 27, theme: 'grid', styles: {fontSize: 9}, headStyles: {fillColor: [37, 99, 168]},
+    head: [['Cuadrilla', 'Inició con', 'Asignadas', 'Total', 'Reparadas', 'Pendientes', 'Sin atender', 'Cumplimiento', 'T. medio entre reparaciones']],
+    body: todas.map(({c, r}) => [c.nombre, r.inicio, r.asignadas, r.total, r.reparadas, r.pendientes, r.sin, r.cumplimiento == null ? '—' : r.cumplimiento + '%', cuadDur(r.medio)])
+  });
+  todas.filter(({r}) => r.total).forEach(({c, r}) => {
+    pdf.addPage();
+    pdf.setFontSize(13); pdf.text(c.nombre, 14, 16);
+    pdf.setFontSize(9); pdf.setTextColor(90);
+    pdf.text(`Inició con ${r.inicio} · Asignadas ${r.asignadas} · Total ${r.total} · Reparadas ${r.reparadas} · Pendientes ${r.pendientes} · Sin atender ${r.sin} · Cumplimiento ${r.cumplimiento}% · T. medio entre reparaciones ${cuadDur(r.medio)}`, 14, 22);
+    pdf.setTextColor(0);
+    pdf.autoTable({
+      startY: 26, theme: 'grid', styles: {fontSize: 8}, headStyles: {fillColor: [37, 99, 168]},
+      head: [['OS', 'Dirección', 'Tipo', 'Asignada', 'Resultado', 'Detalle']],
+      body: r.items.slice().sort((a, b) => a.a - b.a).map(i => [i.ot || '—', i.direccion || '—', i.tipo_falla || '', i.inicio ? 'antes del turno' : cuadHora(i.asignado_en), CUAD_TXT[i.resultado][0].replace(/^[^\s]+\s/, ''), i.reparada ? 'Reparada ' + cuadHora(i.reparada_en) : (i.pendiente ? (i.motivo_pendiente || '') : '')])
+    });
+  });
+  pdf.save(`rendimiento-cuadrillas-${document.getElementById('cuadFecha').value}-${document.getElementById('cuadTurno').value}.pdf`);
+};
+
+// Pestaña «Cuadrillas» de Gestión de usuarios: quién puede ver la herramienta
+async function pintarCuadrillasAdmin(){
+  const caja = document.getElementById('cuadrillasAdmin');
+  caja.innerHTML = '<div class="hint">Cargando…</div>';
+  let us;
+  try{ us = await db.select('usuarios', 'select=id,nombre,rol,email,ver_cuadrillas&order=nombre.asc'); }
+  catch(e){ caja.innerHTML = '<div class="hint">Falta ejecutar <b>sql/2026-10-rendimiento-cuadrillas.sql</b> en Supabase para activar esta herramienta.</div>'; return; }
+  us = us.filter(u => u.rol !== 'camion');
+  caja.innerHTML = `<b>🚚 Rendimiento de cuadrillas</b>
+    <div class="hint" style="margin:4px 0 10px;">Ventana (solo en la versión web, botón «Cuadrillas» de la barra superior) con el trabajo de cada cuadrilla por turno: con cuántas fallas empezó, cuántas se le asignaron, cuántas reparó, dejó pendientes o sin atender, % de cumplimiento y mapa. Marca quiénes pueden verla; el administrador siempre la ve. Los cambios se guardan al marcar.</div>
+    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:left; border-bottom:2px solid var(--line);"><th style="padding:8px 10px;">Puede verla</th><th style="padding:8px 10px;">Nombre</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Rol</th></tr></thead><tbody>` +
+    us.map(u => `<tr style="border-bottom:1px solid var(--line);"><td style="padding:6px 10px;">${u.rol === 'admin' ? '<span class="hint" style="margin:0;">siempre</span>' : `<input type="checkbox" class="cu-perm" data-id="${u.id}" ${u.ver_cuadrillas ? 'checked' : ''}>`}</td><td style="padding:6px 10px;">${escHtml(u.nombre || '')}</td><td style="padding:6px 10px;">${escHtml(u.email || '—')}</td><td style="padding:6px 10px;">${escHtml(u.rol)}</td></tr>`).join('') +
+    '</tbody></table></div><div class="hint" id="cuadPermEstado" style="margin-top:8px;"></div>';
+  caja.querySelectorAll('.cu-perm').forEach(chk => chk.onchange = async () => {
+    const est = document.getElementById('cuadPermEstado'); chk.disabled = true; est.textContent = 'Guardando…';
+    try{
+      const r = await db.update('usuarios', `id=eq.${chk.dataset.id}`, {ver_cuadrillas: chk.checked});
+      if(!r || !r.length) throw new Error('No se guardó');
+      est.textContent = '✔ Guardado';
+    }catch(e){ chk.checked = !chk.checked; est.textContent = 'No se pudo guardar: ' + e.message; }
+    chk.disabled = false;
+  });
+}
+
 // ---------- GESTIÓN DE USUARIOS (admin) ----------
 document.getElementById('usuariosBtn').onclick = () => mostrarModalUsuarios();
 document.getElementById('closeUsuariosBtn').onclick = () => document.getElementById('usuariosModal').classList.remove('visible');
@@ -8091,6 +8352,7 @@ function mostrarModalUsuarios(){
   elegirPestanaGestion('usuarios');
   { const b = document.getElementById('usuariosBuscar'); b.value = ''; b.setAttribute('readonly', ''); document.getElementById('usuariosFiltroRol').value = ''; }   // el navegador no debe rellenarlo con el correo de inicio de sesión
   cargarUsuarios();
+  pintarCuadrillasAdmin();
 }
 
 const ROLES_DISPONIBLES = ['admin','ito','ito2','contratista','contratista2','contratista3','camion','observador'];
