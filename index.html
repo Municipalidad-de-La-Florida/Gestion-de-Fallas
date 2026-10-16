@@ -6396,6 +6396,8 @@ async function cargarAnalisis(){
     await asegurarContratos();
     const [d, ...porC] = await Promise.all([rpcAnalisisFallas(ini, fin), ...CONTRATOS_ACTIVOS.map(c => rpcAnalisisFallas(ini, fin, c.id))]);
     if(req !== analisisReq) return;
+    analisisOperativos = await traerOperativos(ini, fin);
+    if(req !== analisisReq) return;
     if(!d){ content.innerHTML = '<div class="empty-state">No tienes permiso para ver este análisis.</div>'; return; }
     d._cid = null; d._nombre = 'Resumen general';
     CONTRATOS_ACTIVOS.forEach((c, i) => { if(porC[i]){ porC[i]._cid = c.id; porC[i]._nombre = c.nombre; } });
@@ -6404,6 +6406,32 @@ async function cargarAnalisis(){
     if(req !== analisisReq) return;
     content.innerHTML = `<div class="empty-state">Error cargando el análisis: ${escHtml(e.message)}<br><br>¿Ejecutaste el script bloqueC_analisis.sql en Supabase?</div>`;
   }
+}
+
+// ---------- OPERATIVOS en estadísticas, análisis y PDF (se suman a las cifras de siempre; no las excluyen) ----------
+async function traerOperativos(ini, fin){
+  try{ return await db.rpc('operativos_periodo', {p_inicio: ini, p_fin: fin}); }
+  catch(e){ return null; }   // si falta el SQL, simplemente no se muestra nada
+}
+function resumenOperativo(o, dat){
+  const pct = o.fallas ? Math.round(100 * o.reparadas / o.fallas) : null;
+  const nm = dat && dat.normal || {};
+  const veces = (nm.fallas_prom && o.fallas) ? (o.fallas / nm.fallas_prom) : null;
+  return {pct, nm, veces};
+}
+function htmlOperativos(dat){
+  if(!dat || !dat.operativos || !dat.operativos.length) return '';
+  const f = s => String(s).slice(8, 10) + '/' + String(s).slice(5, 7);
+  const tarjetas = dat.operativos.map(o => {
+    const {pct, nm, veces} = resumenOperativo(o, dat);
+    return `<div style="border:1.5px solid #e8c9c5; background:#fff7f6; border-radius:10px; padding:9px 11px; margin-top:8px;">
+      <div style="font-weight:700; color:#a03228;">🚨 ${escHtml(o.nombre)} <span style="font-weight:500; color:var(--ink-soft);">· ${f(o.fecha)}</span></div>
+      <div style="font-size:12.5px; margin-top:3px;"><b>${o.itos}</b> de ${dat.itos_total} inspectores · <b>${o.inspecciones}</b> inspecciones · <b>${o.fallas}</b> fallas informadas</div>
+      <div style="font-size:12.5px;">Reparadas <b>${o.reparadas}</b>${pct === null ? '' : ' (' + pct + '%)'} · Abiertas <b>${o.abiertas}</b> (${o.pendientes} pend. · ${o.reiteradas} reit.)</div>
+      ${nm.dias ? `<div class="hint" style="margin:3px 0 0;">Un día normal de inspección (${nm.dias} día${nm.dias > 1 ? 's' : ''} del período): ${String(nm.fallas_prom).replace('.', ',')} fallas y ${String(nm.itos_prom).replace('.', ',')} inspectores${veces ? ` → este día trajo <b>${veces.toFixed(1).replace('.', ',')}×</b> las fallas` : ''}.</div>` : ''}
+    </div>`;
+  }).join('');
+  return `<div style="margin-top:12px;"><div style="font-weight:700;">Operativos del período</div><div class="hint" style="margin:2px 0 0;">Ya están incluidos en todas las cifras; aquí se ven aparte.</div>${tarjetas}</div>`;
 }
 
 // Los tiempos llegan de la base en días (decimales); en pantalla y PDF se muestran siempre en horas.
@@ -6678,6 +6706,7 @@ function tablaComparaAnalisis(g, lista){
     <thead><tr><th></th><th class="n">Fallas</th><th class="n">Rep.</th><th class="n">Abiertas</th><th class="n">Reit.</th><th class="n">Puntos</th><th class="n" title="Promedio desde el ingreso, sin el 5% de cada extremo">Prom. ing.</th></tr></thead>
     <tbody>${fila('Total', g, true)}${lista.map(x => fila(x._nombre, x)).join('')}${filaSin}</tbody></table>`;
 }
+let analisisOperativos = null;
 function renderAnalisis(d, lista){
   lista = lista || [];
   const content = document.getElementById('statsContent');
@@ -6689,6 +6718,7 @@ function renderAnalisis(d, lista){
     </details>`;
   content.innerHTML = `
     <button class="popup-btn" id="anaPdfBtn" style="margin-top:10px;">📄 Descargar informe PDF</button>
+    ${htmlOperativos(analisisOperativos)}
     <div class="hint">Cada contrato se analiza por separado (fallas, tiempos, puntos críticos). Abre una sección para verla; el mapa muestra la que tengas abierta.</div>
     <div class="ana-tit">Vista del mapa <span id="anaFocoNombre" class="hint" style="margin:0;"></span></div>
     <div style="display:flex; gap:6px; margin:6px 0;">
@@ -7644,6 +7674,37 @@ async function generarPdfAnalisis(soloResumen, opciones){
     pdf.text('Verde: mejora respecto del período anterior; rojo: empeora. Período anterior = la misma cantidad de días inmediatamente anteriores. pp = puntos porcentuales.', margen, yc + hc + 4);
     pdf.setFontSize(8); pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
 
+    // Hoja de operativos del período (si los hubo): se suma a las cifras de siempre, no las excluye
+    try{
+      const datOp = await traerOperativos(ini, fin);
+      if(datOp && datOp.operativos && datOp.operativos.length){
+        pdf.addPage();
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...VERDE);
+        pdf.text('Operativos del período', margen, 16);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gris);
+        pdf.text(`Período: ${fmtF(ini)} a ${fmtF(fin)} · Cifras de todas las inspecciones de cada fecha (ya incluidas en el resto del informe).`, margen, 21);
+        pdf.setDrawColor(219, 226, 220); pdf.line(margen, 24, ancho - margen, 24);
+        const nm = datOp.normal || {};
+        pdf.autoTable({
+          startY: 29, margin: {left: margen, right: margen}, theme: 'grid',
+          styles: {fontSize: 8.5, cellPadding: 1.8, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1},
+          headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'},
+          head: [['Fecha', 'Operativo', 'Inspectores', 'Inspecciones', 'Fallas', 'Reparadas', 'Abiertas', 'Pend.', 'Reit.']],
+          body: datOp.operativos.map(o => [fmtF(o.fecha), o.nombre, `${o.itos} de ${datOp.itos_total}`, o.inspecciones, o.fallas,
+            o.fallas ? `${o.reparadas} (${Math.round(100 * o.reparadas / o.fallas)}%)` : '0', o.abiertas, o.pendientes, o.reiteradas])
+        });
+        let yo = pdf.lastAutoTable.finalY + 6;
+        pdf.setFontSize(9); pdf.setTextColor(...gris);
+        if(nm.dias){
+          const txt = `Día normal de inspección en este período (${nm.dias} día${nm.dias > 1 ? 's' : ''}, sin operativo): ${num(nm.fallas_prom)} fallas y ${num(nm.itos_prom)} inspectores en promedio.`;
+          pdf.text(pdf.splitTextToSize(txt, ancho - 2 * margen), margen, yo); yo += 10;
+        }
+        const inspNombres = datOp.operativos.filter(o => o.inspectores).map(o => `${fmtF(o.fecha)}: ${o.inspectores}`).join('\n');
+        if(inspNombres){ pdf.setFontSize(8); pdf.text(pdf.splitTextToSize('Inspectores participantes\n' + inspNombres, ancho - 2 * margen), margen, yo); }
+        pdf.setFontSize(8); pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
+      }
+    }catch(eOp){ console.warn('No se pudieron agregar los operativos al PDF:', eOp); }
+
     // Las hojas de detalle (tablas y mapa de críticos) son solo del informe de la pestaña "Análisis"
     if(!soloResumen){
     pdf.addPage();
@@ -7965,9 +8026,10 @@ async function cargarEstadisticas(fechaInicio, fechaFin){
     const esDia = document.getElementById('tabDia').classList.contains('active');
     const iniD = esDia ? document.getElementById('fechaDiaEspecifico').value : document.getElementById('fechaInicioRango').value;
     const finD = esDia ? iniD : document.getElementById('fechaFinRango').value;
-    const [g, nIns] = await Promise.all([
+    const [g, nIns, datOp] = await Promise.all([
       traer(null),
-      (async () => { try{ const f = await db.rpc('inspecciones_listado', {p_inicio: iniD, p_fin: finD, p_ito: null}); return Array.isArray(f) ? f.length : null; }catch(e){ return null; } })()
+      (async () => { try{ const f = await db.rpc('inspecciones_listado', {p_inicio: iniD, p_fin: finD, p_ito: null}); return Array.isArray(f) ? f.length : null; }catch(e){ return null; } })(),
+      traerOperativos(iniD, finD)
     ]);
     const total = g.total_fallas || 0, rep = g.reparadas || 0;
     const abiertas = (g.pendientes || 0) + (g.reiteradas || 0) + (g.reportadas_activas || 0);
@@ -7976,7 +8038,7 @@ async function cargarEstadisticas(fechaInicio, fechaFin){
       kpiHtml(total, 'Fallas', `${g.fallas_punto_individual || 0} individuales · ${g.fallas_circuito || 0} de circuito`),
       kpiHtml(g.puntos_afectados_total || 0, 'Puntos afectados', `${((g.puntos_afectados_total || 0) / TOTAL_PUNTOS_COMUNA * 100).toFixed(2).replace('.', ',')}% de la comuna`),
       kpiHtml(pctKpi(rep, total) + '%', 'Reparadas', `${rep} de ${total}`, true)
-    ) + `<div class="hint">Abiertas: <b>${abiertas}</b> (${g.pendientes || 0} pendientes · ${g.reiteradas || 0} reiteradas · ${g.reportadas_activas || 0} sin atender). El detalle completo está en el informe PDF.</div>`;
+    ) + `<div class="hint">Abiertas: <b>${abiertas}</b> (${g.pendientes || 0} pendientes · ${g.reiteradas || 0} reiteradas · ${g.reportadas_activas || 0} sin atender). El detalle completo está en el informe PDF.</div>` + htmlOperativos(datOp);
   }catch(e){
     content.innerHTML = `<div class="empty-state">Error cargando estadísticas: ${e.message}</div>`;
   }
