@@ -535,6 +535,8 @@
   #sidebarCuad table.cu-t td, #sidebarFisc table.cu-t td{ padding:6px 6px; border-bottom:1px solid var(--line); }
   #sidebarCuad table.cu-t tr.cu-fila, #sidebarFisc table.cu-t tr.cu-fila{ cursor:pointer; }
   #sidebarCuad table.cu-t tr.cu-fila:hover, #sidebarFisc table.cu-t tr.cu-fila:hover{ background:#eef4fb; }
+  /* la barra de desplazamiento queda a la izquierda de la línea divisoria arrastrable (que cubre unos 6 px del borde) */
+  #cuadContenido, #fiscContenido{ margin-right:12px; }
   #sidebarCuad div.cu-fila, #sidebarFisc div.cu-fila{ cursor:pointer; user-select:none; transition:background .12s, box-shadow .12s; }
   #sidebarCuad div.cu-fila:hover, #sidebarFisc div.cu-fila:hover{ background:#eef4fb; box-shadow:inset 4px 0 0 #1f4d3d; }
   #sidebarCuad div.cu-fila .cu-go, #sidebarFisc div.cu-fila .cu-go{ display:inline-block; margin-left:8px; color:#1f4d3d; font-size:20px; font-weight:700; opacity:.35; transition:opacity .12s, transform .12s; }
