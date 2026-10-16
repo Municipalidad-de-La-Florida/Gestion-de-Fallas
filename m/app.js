@@ -1345,6 +1345,7 @@ async function abrirFalla(p, geom) {
   const kv = [
     ['OS', p.ot || '—'],
     p.orden_externa ? ['Orden externa', p.orden_externa] : null,
+    p.contrato_id && CONTR[p.contrato_id] ? ['Contrato', CONTR[p.contrato_id].nombre] : null,
     ['Tipo', tipoLabel(p)],
     p.tipo === 'punto' ? ['Llave / N.° mun.', `${p.llave ?? '—'} / ${p.nro_mun ?? '—'}`] : null,
     p.cardinalidad ? ['Cardinalidad', p.cardinalidad] : null,
