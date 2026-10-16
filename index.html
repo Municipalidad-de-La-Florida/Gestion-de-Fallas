@@ -523,22 +523,22 @@
   body:not(.modo-movil).stats-full #sidebarStats .section > div[id^="selector"] > div[style*="display:flex"]{ display:inline-flex !important; margin:4px 12px 0 0 !important; max-width:360px; }
   body:not(.modo-movil).stats-full #sidebarStats .section select{ width:auto !important; margin-top:4px; }
   /* ===== Rendimiento de cuadrillas (solo web) ===== */
-  body.modo-movil #cuadBtn{ display:none !important; }
-  #sidebarCuad .cu-head{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:10px 18px; border-bottom:1px solid var(--line); }
-  #sidebarCuad .cu-head select, #sidebarCuad .cu-head input{ font-size:12.5px; padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; }
-  #sidebarCuad .cu-kpis{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; }
-  #sidebarCuad .cu-kpi{ background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 10px; border-top:4px solid #8a97a5; }
-  #sidebarCuad .cu-kpi .l{ font-size:10.5px; color:var(--ink-soft); }
-  #sidebarCuad .cu-kpi .v{ font-size:22px; font-weight:700; }
-  #sidebarCuad table.cu-t{ width:100%; border-collapse:collapse; font-size:12px; }
-  #sidebarCuad table.cu-t th{ text-align:left; color:var(--ink-soft); font-weight:600; padding:6px 6px; border-bottom:2px solid var(--line); position:sticky; top:0; background:#fff; }
-  #sidebarCuad table.cu-t td{ padding:6px 6px; border-bottom:1px solid var(--line); }
-  #sidebarCuad table.cu-t tr.cu-fila{ cursor:pointer; }
-  #sidebarCuad table.cu-t tr.cu-fila:hover{ background:#eef4fb; }
-  #sidebarCuad div.cu-fila{ cursor:pointer; user-select:none; transition:background .12s, box-shadow .12s; }
-  #sidebarCuad div.cu-fila:hover{ background:#eef4fb; box-shadow:inset 4px 0 0 #1f4d3d; }
-  #sidebarCuad div.cu-fila .cu-go{ display:inline-block; margin-left:8px; color:#1f4d3d; font-size:20px; font-weight:700; opacity:.35; transition:opacity .12s, transform .12s; }
-  #sidebarCuad div.cu-fila:hover .cu-go{ opacity:1; transform:translateX(3px); }
+  body.modo-movil #cuadBtn, body.modo-movil #fiscBtn{ display:none !important; }
+  #sidebarCuad .cu-head, #sidebarFisc .cu-head{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:10px 18px; border-bottom:1px solid var(--line); }
+  #sidebarCuad .cu-head select, #sidebarFisc .cu-head select, #sidebarCuad .cu-head input, #sidebarFisc .cu-head input{ font-size:12.5px; padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; }
+  #sidebarCuad .cu-kpis, #sidebarFisc .cu-kpis{ display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; }
+  #sidebarCuad .cu-kpi, #sidebarFisc .cu-kpi{ background:#fff; border:1px solid var(--line); border-radius:8px; padding:8px 10px; border-top:4px solid #8a97a5; }
+  #sidebarCuad .cu-kpi .l, #sidebarFisc .cu-kpi .l{ font-size:10.5px; color:var(--ink-soft); }
+  #sidebarCuad .cu-kpi .v, #sidebarFisc .cu-kpi .v{ font-size:22px; font-weight:700; }
+  #sidebarCuad table.cu-t, #sidebarFisc table.cu-t{ width:100%; border-collapse:collapse; font-size:12px; }
+  #sidebarCuad table.cu-t th, #sidebarFisc table.cu-t th{ text-align:left; color:var(--ink-soft); font-weight:600; padding:6px 6px; border-bottom:2px solid var(--line); position:sticky; top:0; background:#fff; }
+  #sidebarCuad table.cu-t td, #sidebarFisc table.cu-t td{ padding:6px 6px; border-bottom:1px solid var(--line); }
+  #sidebarCuad table.cu-t tr.cu-fila, #sidebarFisc table.cu-t tr.cu-fila{ cursor:pointer; }
+  #sidebarCuad table.cu-t tr.cu-fila:hover, #sidebarFisc table.cu-t tr.cu-fila:hover{ background:#eef4fb; }
+  #sidebarCuad div.cu-fila, #sidebarFisc div.cu-fila{ cursor:pointer; user-select:none; transition:background .12s, box-shadow .12s; }
+  #sidebarCuad div.cu-fila:hover, #sidebarFisc div.cu-fila:hover{ background:#eef4fb; box-shadow:inset 4px 0 0 #1f4d3d; }
+  #sidebarCuad div.cu-fila .cu-go, #sidebarFisc div.cu-fila .cu-go{ display:inline-block; margin-left:8px; color:#1f4d3d; font-size:20px; font-weight:700; opacity:.35; transition:opacity .12s, transform .12s; }
+  #sidebarCuad div.cu-fila:hover .cu-go, #sidebarFisc div.cu-fila:hover .cu-go{ opacity:1; transform:translateX(3px); }
 </style>
 </head>
 <body>
@@ -567,6 +567,7 @@
     <div class="userinfo">
       <button type="button" class="hb" id="statsBtn"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span class="bt">Estadísticas</span></button>
       <button type="button" class="hb" id="cuadBtn" style="display:none;"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 6h13v10H1zM14 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></span><span class="bt">Cuadrillas</span></button>
+      <button type="button" class="hb" id="fiscBtn" style="display:none;"><span class="hb-chip" style="background:#fbe7e5;color:#c1443c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v3.5M11 14h.01"/></svg></span><span class="bt">Fiscalización</span></button>
       <button type="button" class="hb" id="inspC3Btn" style="display:none;"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="bt">Inspecciones</span></button>
       <button type="button" class="hb" id="todasBtn" style="display:none;"><span class="hb-chip" style="background:#e6eefb;color:#2a5db0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg></span><span class="bt">Todas las fallas</span></button>
       <button type="button" class="hb" id="toggleSearchBtn"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span><span class="bt">Buscador</span></button>
@@ -980,6 +981,22 @@
       </div>
       <div id="cuadContenido" style="flex:1; overflow-y:auto; padding:12px 18px 18px;"></div>
     </div>
+    <div id="sidebarFisc" style="display:none; flex-direction:column; flex:1; min-height:0;">
+      <div class="cu-head">
+        <button class="mode-btn" id="backFromFisc" style="margin:0; padding:7px 12px;">← Volver</button>
+        <b style="font-size:15px;">🔎 Fiscalización de trabajos no hechos</b>
+        <span style="flex:1;"></span>
+        <span class="hint" id="fiscEstado" style="margin:0;"></span>
+        <button type="button" id="fiscRefrescar" title="Actualizar datos" style="height:30px; padding:0 12px; border:1.5px solid var(--line); border-radius:8px; background:#fff; font-size:12.5px; font-weight:600; cursor:pointer;">⟳ Actualizar</button>
+        <div style="flex-basis:100%; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+          <select id="fiscContrato"><option value="">Contrato: todos</option></select>
+          <select id="fiscTipo"><option value="">Tipo: todos</option></select>
+          <input type="text" id="fiscBuscar" placeholder="🔍 OS o dirección" autocomplete="off" style="width:170px;">
+          <label style="font-size:12.5px; display:flex; align-items:center; gap:5px;"><input type="checkbox" id="fiscSolo" checked> Solo las que superan el umbral</label>
+        </div>
+      </div>
+      <div id="fiscContenido" style="flex:1; overflow-y:auto; padding:12px 18px 18px;"></div>
+    </div>
   </div>
 </div>
 
@@ -990,7 +1007,7 @@
     <div id="gestionTabs" style="display:flex; gap:4px; border-bottom:2px solid var(--line); margin:4px 0 12px; overflow-x:auto;">
       <button type="button" class="gu-tab" data-tab="usuarios">👥 Usuarios</button>
       <button type="button" class="gu-tab" data-tab="pauta">📅 Pauta inspecciones <span class="gu-dot" id="guDotPauta" style="display:none; color:#e08a00;">●</span></button>
-      <button type="button" class="gu-tab" data-tab="cuadrillas">🚚 Cuadrillas</button>
+      <button type="button" class="gu-tab" data-tab="cuadrillas">🧰 Herramientas</button>
       <button type="button" class="gu-tab" data-tab="contratos">📄 Contratos</button>
       <button type="button" class="gu-tab" data-tab="ajustes">⚙️ Ajustes</button>
     </div>
@@ -1328,7 +1345,13 @@ async function cargarPerfilYIniciar(userId){
     }
     currentUser = data[0];
     currentUser.ver_cuadrillas = false;
-    try{ const v = await db.select('usuarios', `id=eq.${userId}&select=ver_cuadrillas`); if(v && v[0]) currentUser.ver_cuadrillas = !!v[0].ver_cuadrillas; }catch(e){ /* sin la columna en la base: nadie la ve salvo el admin */ }
+    currentUser.ver_fiscalizacion = false; currentUser.fisc_col = false;
+    try{
+      const v = await db.select('usuarios', `id=eq.${userId}&select=ver_cuadrillas,ver_fiscalizacion`);
+      if(v && v[0]){ currentUser.ver_cuadrillas = !!v[0].ver_cuadrillas; currentUser.ver_fiscalizacion = !!v[0].ver_fiscalizacion; currentUser.fisc_col = true; }
+    }catch(e){
+      try{ const v = await db.select('usuarios', `id=eq.${userId}&select=ver_cuadrillas`); if(v && v[0]) currentUser.ver_cuadrillas = !!v[0].ver_cuadrillas; }catch(e2){ /* sin las columnas: solo el admin ve Cuadrillas */ }
+    }
     currentUser.dias_inspeccion = null;   // null = sin restricción (columna aún no creada, o rol sin pauta)
     if(currentUser.rol === 'ito'){
       try{
@@ -1379,7 +1402,7 @@ function actualizarVisibilidadPorRol(){
   document.getElementById('btnInformarInspeccion').style.display = esContratista2o3(rol) ? 'none' : '';
   document.getElementById('repararSection').style.display = ['contratista','contratista2','contratista3','camion'].includes(rol) ? 'block' : 'none';
   document.getElementById('statsBtn').style.display = (rol === 'contratista' || esContratista2o3(rol)) ? 'none' : '';
-  document.getElementById('cuadBtn').style.display = ((currentUser.rol === 'admin' && !modoVista) || currentUser.ver_cuadrillas) ? '' : 'none';
+  aplicarBotonesHerramientas();
   document.getElementById('inspC3Btn').style.display = (rol === 'contratista3') ? '' : 'none';
   document.getElementById('todasBtn').style.display = (rol === 'admin' || rol === 'ito' || rol === 'ito2' || rol === 'contratista' || esContratista2o3(rol)) ? '' : 'none';
   // si cambia el rol efectivo (ej. "ver como"), se sale de cualquier modo de reporte activo
@@ -4333,7 +4356,7 @@ document.getElementById('backFromStats').onclick = () => ocultarSidebarStats();
 
 // Pantalla completa de estadísticas: datos a la izquierda y mapa a la derecha, con divisoria ajustable
 function actualizarLayoutStats(){
-  const abierto = document.getElementById('sidebarStats').style.display === 'flex' || document.getElementById('sidebarCuad').style.display === 'flex';
+  const abierto = document.getElementById('sidebarStats').style.display === 'flex' || document.getElementById('sidebarCuad').style.display === 'flex' || document.getElementById('sidebarFisc').style.display === 'flex';
   document.body.classList.toggle('stats-full', abierto);
   if(typeof map !== 'undefined' && map) setTimeout(() => map.invalidateSize(), 60);
 }
@@ -8267,6 +8290,8 @@ function cuadEnfocar(fallaId){
 }
 
 function mostrarCuadrillas(){
+  if(document.getElementById('sidebarStats').style.display === 'flex') ocultarSidebarStats();
+  if(document.getElementById('sidebarFisc').style.display === 'flex') ocultarFiscalizacion();
   document.getElementById('sidebarNormal').style.display = 'none';
   document.getElementById('sidebarStats').style.display = 'none';
   document.getElementById('sidebarCuad').style.display = 'flex';
@@ -8324,28 +8349,196 @@ document.getElementById('cuadPdfBtn').onclick = () => {
   pdf.save(`rendimiento-cuadrillas-${document.getElementById('cuadFecha').value}-${document.getElementById('cuadTurno').value}.pdf`);
 };
 
-// Pestaña «Cuadrillas» de Gestión de usuarios: quién puede ver la herramienta
+// =====================================================================
+// FISCALIZACIÓN DE TRABAJOS NO HECHOS (solo web; permiso aparte, se habilita en Gestión de usuarios → Herramientas)
+// Muestra fallas abiertas sin asignar, asignadas sin atender, pendientes y más antiguas, con su edad.
+// Datos: función SQL fiscalizacion_fallas (sql/2026-10-fiscalizacion.sql). Solo consulta.
+// =====================================================================
+const FISC = {filas: [], cat: 'sinasignar', capa: null, marcas: {}, cargada: false};
+const FISC_UMBRALES_DEF = {sinasignar: 24, sinatender: 24, pendiente: 96, antigua: 168};   // horas
+function fiscUmbrales(){
+  try{ const g = JSON.parse(localStorage.getItem('fisc_umbrales_v1') || 'null'); if(g) return {...FISC_UMBRALES_DEF, ...g}; }catch(e){}
+  return {...FISC_UMBRALES_DEF};
+}
+const FISC_CATS = {
+  sinasignar: {t: 'Sin asignar', color: '#c1443c', filtro: f => !f.camion_id, desde: f => f.informada_en, umb: 'sinasignar', nota: 'sin asignar hace'},
+  sinatender: {t: 'Asignadas sin atender', color: '#d98e2f', filtro: f => !!f.camion_id && f.estado !== 'pendiente', desde: f => f.asignada_en || f.informada_en, umb: 'sinatender', nota: 'asignada hace'},
+  pendiente:  {t: 'Pendientes', color: '#8a5200', filtro: f => f.estado === 'pendiente', desde: f => f.pendiente_en || f.informada_en, umb: 'pendiente', nota: 'pendiente hace'},
+  antigua:    {t: 'Más antiguas', color: '#7c3aed', filtro: f => true, desde: f => f.informada_en, umb: 'antigua', nota: 'informada hace'},
+  reiterada:  {t: 'Reiteradas abiertas', color: '#2a5db0', filtro: f => f.es_reiterada, desde: f => f.informada_en, umb: null, nota: 'informada hace'}
+};
+function fiscEdadFmt(ms){
+  const h = ms / 3600000;
+  if(h < 1) return Math.max(1, Math.round(ms / 60000)) + ' min';
+  if(h < 48) return Math.round(h) + ' h';
+  const d = Math.floor(h / 24);
+  return d + ' días';
+}
+function fiscUmbTxt(h){ return h % 24 === 0 && h >= 48 ? (h / 24) + ' días' : h + ' h'; }
+function fiscRatio(cat, f, umb){
+  const ms = Date.now() - new Date(cat.desde(f)).getTime();
+  const lim = cat.umb ? umb[cat.umb] : 0;
+  return {ms, ratio: lim ? ms / (lim * 3600000) : 1};
+}
+function fiscColor(ratio){ return ratio >= 1 ? '#c1443c' : (ratio >= 0.5 ? '#d98e2f' : '#8aa89a'); }
+
+async function fiscCargar(){
+  const est = document.getElementById('fiscEstado'), cont = document.getElementById('fiscContenido');
+  est.textContent = 'Cargando…';
+  try{
+    FISC.filas = await db.rpc('fiscalizacion_fallas', {});
+    FISC.cargada = true;
+    est.textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit'});
+  }catch(e){
+    est.textContent = '';
+    cont.innerHTML = `<div class="empty-state">No se pudo cargar: ${escHtml(e.message)}<br><span class="hint">¿Ejecutaste sql/2026-10-fiscalizacion.sql en Supabase y tienes el permiso habilitado?</span></div>`;
+    if(FISC.capa) FISC.capa.clearLayers();
+    return;
+  }
+  const cs = [...new Set(FISC.filas.map(f => f.contrato).filter(Boolean))].sort();
+  const tp = [...new Set(FISC.filas.map(f => f.tipo_falla).filter(Boolean))].sort();
+  const sc = document.getElementById('fiscContrato'), st = document.getElementById('fiscTipo'), pc = sc.value, pt = st.value;
+  sc.innerHTML = '<option value="">Contrato: todos</option>' + cs.map(c => `<option>${escHtml(c)}</option>`).join('');
+  st.innerHTML = '<option value="">Tipo: todos</option>' + tp.map(c => `<option>${escHtml(c)}</option>`).join('');
+  if(cs.includes(pc)) sc.value = pc; if(tp.includes(pt)) st.value = pt;
+  fiscPintar();
+}
+
+function fiscBase(){
+  const c = document.getElementById('fiscContrato').value, t = document.getElementById('fiscTipo').value, q = document.getElementById('fiscBuscar').value.trim().toLowerCase();
+  return FISC.filas.filter(f => (!c || f.contrato === c) && (!t || f.tipo_falla === t) && (!q || ((f.ot || '') + ' ' + (f.direccion || '')).toLowerCase().includes(q)));
+}
+
+function fiscPintar(){
+  if(!FISC.cargada) return;
+  const umb = fiscUmbrales(), base = fiscBase(), cont = document.getElementById('fiscContenido');
+  const solo = document.getElementById('fiscSolo').checked;
+  // Tarjetas
+  const tarjetas = Object.entries(FISC_CATS).map(([k, cat]) => {
+    const fs = base.filter(cat.filtro), sobre = fs.filter(f => fiscRatio(cat, f, umb).ratio >= 1).length;
+    const sub = cat.umb ? `${sobre} con más de ${fiscUmbTxt(umb[cat.umb])}` : 'abiertas';
+    return `<div class="cu-kpi cu-fila fi-card" data-cat="${k}" style="border-top-color:${cat.color}; cursor:pointer; ${FISC.cat === k ? `outline:2px solid #1f4d3d;` : ''}"><div class="l">${cat.t}</div><div class="v">${fs.length}</div><div style="font-size:10.5px; color:${cat.color};">${sub}</div></div>`;
+  }).join('');
+  // Lista de la categoría elegida
+  const cat = FISC_CATS[FISC.cat];
+  let lista = base.filter(cat.filtro).map(f => ({f, ...fiscRatio(cat, f, umb)}));
+  const total = lista.length;
+  if(solo && cat.umb) lista = lista.filter(x => x.ratio >= 1);
+  lista.sort((a, b) => b.ms - a.ms);
+  const filas = lista.map(({f, ms, ratio}) => {
+    const col = fiscColor(ratio);
+    const det = f.estado === 'pendiente'
+      ? `<span style="color:#8a5200; font-weight:600;">● Pendiente</span>${f.motivo_pendiente ? `<div style="color:var(--ink-soft);">${escHtml(String(f.motivo_pendiente).replace(/\\n/g, ' · '))}</div>` : ''}${f.pendiente_por ? `<div style="color:var(--ink-soft);">por ${escHtml(f.pendiente_por)}</div>` : ''}`
+      : `<span style="color:#c1443c; font-weight:600;">● ${f.estado === 'reiterada' ? 'Reiterada' : 'Reportada'}</span>`;
+    const asig = f.camion ? `🚚 ${escHtml(f.camion)}<div style="color:var(--ink-soft);">desde hace ${fiscEdadFmt(Date.now() - new Date(f.asignada_en || f.informada_en).getTime())}</div>` : '<span style="color:#c1443c;">Sin asignar</span>';
+    return `<tr class="cu-fila" data-falla="${f.falla_id}"><td><span style="background:${col}; color:#fff; border-radius:10px; padding:2px 9px; font-weight:700; white-space:nowrap;">${fiscEdadFmt(ms)}</span></td>
+      <td>${escHtml(f.ot || '—')}${f.masivo ? '<div style="color:var(--ink-soft);">masivo</div>' : ''}</td><td>${escHtml(f.direccion || '—')}${f.tipo === 'linea' ? `<div style="color:var(--ink-soft);">${f.puntos_afectados} puntos</div>` : ''}</td><td>${escHtml(f.tipo_falla || '')}${f.es_reiterada ? '<div style="color:var(--ink-soft);">⟳ reiterada</div>' : ''}</td>
+      <td>${det}</td><td>${asig}</td><td>${fiscEdadFmt(Date.now() - new Date(f.informada_en).getTime())}</td><td>${escHtml(f.contrato || '')}</td></tr>`;
+  }).join('');
+  const um = FISC_UMBRALES_DEF, uAct = umb;
+  cont.innerHTML = `<div class="cu-kpis" style="grid-template-columns:repeat(auto-fit,minmax(125px,1fr)); margin-bottom:12px;">${tarjetas}</div>
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:8px;"><b style="font-size:14px; color:${cat.color};">${cat.t}</b><span class="hint" style="margin:0;">${lista.length} de ${total} fallas${solo && cat.umb ? ' · solo las que superan ' + fiscUmbTxt(uAct[cat.umb]) : ''} · de la más antigua a la más reciente</span></div>
+    ${lista.length ? `<table class="cu-t"><thead><tr><th>${cat.nota.charAt(0).toUpperCase() + cat.nota.slice(1)}</th><th>OS</th><th>Dirección</th><th>Tipo</th><th>Estado</th><th>Asignación</th><th>Informada hace</th><th>Contrato</th></tr></thead><tbody>${filas}</tbody></table>` : '<div class="empty-state">No hay fallas en esta categoría con los filtros actuales. 🎉</div>'}
+    <details style="margin-top:14px;"><summary style="cursor:pointer; font-weight:600; font-size:12.5px;">⚙️ Umbrales de alerta (horas)</summary>
+      <div style="display:flex; flex-wrap:wrap; gap:12px; margin-top:8px; font-size:12px;">${[['sinasignar', 'Sin asignar'], ['sinatender', 'Asignada sin atender'], ['pendiente', 'Pendiente'], ['antigua', 'Antigua']].map(([k, l]) => `<label>${l}: <input type="number" min="1" class="fi-umb" data-k="${k}" value="${uAct[k]}" style="width:70px; padding:4px 6px; border:1.5px solid var(--line); border-radius:6px;"> h</label>`).join('')}<button type="button" id="fiscUmbReset" style="font-size:11.5px; padding:4px 10px; border:1px solid var(--line); background:#fff; border-radius:6px; cursor:pointer;">Restablecer</button></div>
+      <div class="hint">Por defecto: sin asignar 24 h, asignada sin atender 24 h, pendiente 96 h (4 días), antigua 168 h (7 días). Se guardan en este navegador. La edad se cuenta desde que se informó la falla; en «asignadas» desde su asignación y en «pendientes» desde que quedó pendiente.</div></details>`;
+  cont.querySelectorAll('.fi-card').forEach(c => c.onclick = () => { FISC.cat = c.dataset.cat; fiscPintar(); });
+  cont.querySelectorAll('tr[data-falla]').forEach(tr => tr.onclick = () => fiscEnfocar(tr.dataset.falla));
+  cont.querySelectorAll('.fi-umb').forEach(i => i.onchange = () => {
+    const u = fiscUmbrales(); const v = parseInt(i.value, 10); if(v >= 1) u[i.dataset.k] = v;
+    try{ localStorage.setItem('fisc_umbrales_v1', JSON.stringify(u)); }catch(e){}
+    fiscPintar();
+  });
+  const rs = cont.querySelector('#fiscUmbReset'); if(rs) rs.onclick = () => { try{ localStorage.removeItem('fisc_umbrales_v1'); }catch(e){} fiscPintar(); };
+  fiscPintarMapa(lista);
+}
+
+function fiscPintarMapa(lista){
+  if(!FISC.capa) FISC.capa = L.layerGroup();
+  if(!map.hasLayer(FISC.capa)) FISC.capa.addTo(map);
+  FISC.capa.clearLayers(); FISC.marcas = {};
+  const pts = [];
+  lista.forEach(({f, ms, ratio}) => {
+    if(!f.geom) return;
+    const color = fiscColor(ratio), tip = `OS ${f.ot || '—'} · ${f.tipo_falla || ''}<br>${fiscEdadFmt(ms)}`;
+    let capa;
+    if(f.geom.type === 'Point'){
+      const [lon, lat] = f.geom.coordinates;
+      capa = L.circleMarker([lat, lon], {radius: 8, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95, pane: 'inspeccionPane'});
+      pts.push([lat, lon]);
+    } else {
+      capa = L.geoJSON(f.geom, {pane: 'inspeccionPane', style: {color, weight: 5, opacity: 0.9}});
+      capa.eachLayer(l => { const b = l.getBounds && l.getBounds(); if(b) pts.push(b.getCenter()); });
+    }
+    capa.bindTooltip(tip);
+    capa.on('click', () => enfocarFalla(f.falla_id, true));
+    capa.addTo(FISC.capa);
+    FISC.marcas[f.falla_id] = capa;
+  });
+  if(pts.length) map.fitBounds(L.latLngBounds(pts), {padding: [40, 40], maxZoom: 16});
+}
+function fiscEnfocar(fallaId){
+  const m = FISC.marcas[fallaId];
+  if(m){ const c = m.getLatLng ? m.getLatLng() : m.getBounds().getCenter(); map.setView(c, Math.max(map.getZoom(), 17)); m.openTooltip && m.openTooltip(); }
+  enfocarFalla(fallaId, true);
+}
+
+function mostrarFiscalizacion(){
+  if(document.getElementById('sidebarStats').style.display === 'flex') ocultarSidebarStats();
+  if(document.getElementById('sidebarCuad').style.display === 'flex') ocultarCuadrillas();
+  document.getElementById('sidebarNormal').style.display = 'none';
+  document.getElementById('sidebarFisc').style.display = 'flex';
+  actualizarLayoutStats();
+  ocultarCapaActivas();
+  fiscCargar();
+}
+function ocultarFiscalizacion(){
+  document.getElementById('sidebarFisc').style.display = 'none';
+  document.getElementById('sidebarNormal').style.display = 'flex';
+  actualizarLayoutStats();
+  if(FISC.capa) map.removeLayer(FISC.capa);
+  mostrarCapaActivas();
+}
+document.getElementById('fiscBtn').onclick = () => mostrarFiscalizacion();
+document.getElementById('backFromFisc').onclick = () => ocultarFiscalizacion();
+document.getElementById('fiscRefrescar').onclick = () => fiscCargar();
+['fiscContrato', 'fiscTipo', 'fiscSolo'].forEach(id => document.getElementById(id).onchange = () => fiscPintar());
+document.getElementById('fiscBuscar').oninput = () => fiscPintar();
+
+// Pestaña «Herramientas» de Gestión de usuarios: quién puede ver Cuadrillas y Fiscalización (el administrador también se las puede apagar)
 async function pintarCuadrillasAdmin(){
   const caja = document.getElementById('cuadrillasAdmin');
   caja.innerHTML = '<div class="hint">Cargando…</div>';
-  let us;
-  try{ us = await db.select('usuarios', 'select=id,nombre,rol,email,ver_cuadrillas&order=nombre.asc'); }
-  catch(e){ caja.innerHTML = '<div class="hint">Falta ejecutar <b>sql/2026-10-rendimiento-cuadrillas.sql</b> en Supabase para activar esta herramienta.</div>'; return; }
+  let us, tieneFisc = true;
+  try{ us = await db.select('usuarios', 'select=id,nombre,rol,email,ver_cuadrillas,ver_fiscalizacion&order=nombre.asc'); }
+  catch(e){
+    tieneFisc = false;
+    try{ us = await db.select('usuarios', 'select=id,nombre,rol,email,ver_cuadrillas&order=nombre.asc'); }
+    catch(e2){ caja.innerHTML = '<div class="hint">Falta ejecutar <b>sql/2026-10-rendimiento-cuadrillas.sql</b> y <b>sql/2026-10-fiscalizacion.sql</b> en Supabase para activar estas herramientas.</div>'; return; }
+  }
   us = us.filter(u => u.rol !== 'camion');
-  caja.innerHTML = `<b>🚚 Rendimiento de cuadrillas</b>
-    <div class="hint" style="margin:4px 0 10px;">Ventana (solo en la versión web, botón «Cuadrillas» de la barra superior) con el trabajo de cada cuadrilla por turno: con cuántas fallas empezó, cuántas se le asignaron, cuántas reparó, dejó pendientes o sin atender, % de cumplimiento y mapa. Marca quiénes pueden verla; el administrador siempre la ve. Los cambios se guardan al marcar.</div>
-    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:left; border-bottom:2px solid var(--line);"><th style="padding:8px 10px;">Puede verla</th><th style="padding:8px 10px;">Nombre</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Rol</th></tr></thead><tbody>` +
-    us.map(u => `<tr style="border-bottom:1px solid var(--line);"><td style="padding:6px 10px;">${u.rol === 'admin' ? '<span class="hint" style="margin:0;">siempre</span>' : `<input type="checkbox" class="cu-perm" data-id="${u.id}" ${u.ver_cuadrillas ? 'checked' : ''}>`}</td><td style="padding:6px 10px;">${escHtml(u.nombre || '')}</td><td style="padding:6px 10px;">${escHtml(u.email || '—')}</td><td style="padding:6px 10px;">${escHtml(u.rol)}</td></tr>`).join('') +
+  const chk = (u, k) => `<input type="checkbox" class="cu-perm" data-id="${u.id}" data-k="${k}" ${u[k] ? 'checked' : ''}>`;
+  caja.innerHTML = `<b>🧰 Herramientas de la barra superior (solo versión web)</b>
+    <div class="hint" style="margin:4px 0 10px;"><b>🚚 Cuadrillas:</b> trabajo de cada cuadrilla por turno (con cuántas fallas empezó, asignadas, reparadas, pendientes, sin atender, % de cumplimiento y mapa). <b>🔎 Fiscalización:</b> fallas abiertas sin asignar, asignadas sin atender, pendientes y más antiguas, con su edad (solo consulta). Marca quién puede usar cada una; también puedes apagártelas a ti. Los cambios se guardan al marcar y se aplican la próxima vez que esa persona abra la aplicación.${tieneFisc ? '' : '<br><b style="color:var(--red);">Falta ejecutar sql/2026-10-fiscalizacion.sql para habilitar la Fiscalización.</b>'}</div>
+    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:left; border-bottom:2px solid var(--line);"><th style="padding:8px 10px;">🚚 Cuadrillas</th><th style="padding:8px 10px;">🔎 Fiscalización</th><th style="padding:8px 10px;">Nombre</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Rol</th></tr></thead><tbody>` +
+    us.map(u => `<tr style="border-bottom:1px solid var(--line);"><td style="padding:6px 10px;">${chk(u, 'ver_cuadrillas')}</td><td style="padding:6px 10px;">${tieneFisc ? chk(u, 'ver_fiscalizacion') : '—'}</td><td style="padding:6px 10px;">${escHtml(u.nombre || '')}</td><td style="padding:6px 10px;">${escHtml(u.email || '—')}</td><td style="padding:6px 10px;">${escHtml(u.rol)}</td></tr>`).join('') +
     '</tbody></table></div><div class="hint" id="cuadPermEstado" style="margin-top:8px;"></div>';
-  caja.querySelectorAll('.cu-perm').forEach(chk => chk.onchange = async () => {
-    const est = document.getElementById('cuadPermEstado'); chk.disabled = true; est.textContent = 'Guardando…';
+  caja.querySelectorAll('.cu-perm').forEach(c => c.onchange = async () => {
+    const est = document.getElementById('cuadPermEstado'); c.disabled = true; est.textContent = 'Guardando…';
     try{
-      const r = await db.update('usuarios', `id=eq.${chk.dataset.id}`, {ver_cuadrillas: chk.checked});
+      const r = await db.update('usuarios', `id=eq.${c.dataset.id}`, {[c.dataset.k]: c.checked});
       if(!r || !r.length) throw new Error('No se guardó');
+      if(c.dataset.id === currentUser.id){ currentUser[c.dataset.k] = c.checked; aplicarBotonesHerramientas(); }
       est.textContent = '✔ Guardado';
-    }catch(e){ chk.checked = !chk.checked; est.textContent = 'No se pudo guardar: ' + e.message; }
-    chk.disabled = false;
+    }catch(e){ c.checked = !c.checked; est.textContent = 'No se pudo guardar: ' + e.message; }
+    c.disabled = false;
   });
+}
+function aplicarBotonesHerramientas(){
+  // Si la base aún no tiene la columna de Fiscalización (SQL sin ejecutar), el administrador conserva Cuadrillas como antes
+  const cuad = currentUser.ver_cuadrillas || (currentUser.rol === 'admin' && !currentUser.fisc_col);
+  document.getElementById('cuadBtn').style.display = (cuad && !modoVista) ? '' : 'none';
+  document.getElementById('fiscBtn').style.display = (currentUser.ver_fiscalizacion && !modoVista) ? '' : 'none';
 }
 
 // ---------- GESTIÓN DE USUARIOS (admin) ----------
