@@ -8207,9 +8207,20 @@ function cuadPintar(){
     if(!c){ cont.innerHTML = ''; return; }
     html += `<h3 style="margin:0 0 8px;">${escHtml(c.nombre)}</h3>` + cuadKpis(r);
     if(r.total){
-      html += `<div style="margin:12px 0 4px; font-weight:600;">Fallas del turno</div><table class="cu-t"><thead><tr><th>OS</th><th>Dirección</th><th>Tipo</th><th>Asignada</th><th>Resultado</th></tr></thead><tbody>` +
-        r.items.slice().sort((a, b) => a.a - b.a).map(i => `<tr class="cu-fila" data-falla="${i.falla_id}"><td>${escHtml(i.ot || '—')}</td><td>${escHtml(i.direccion || '—')}</td><td>${escHtml(i.tipo_falla || '')}</td>
-          <td>${i.inicio ? (i.inicioPend ? 'antes del turno (ya pendiente)' : 'antes del turno') : cuadHora(i.asignado_en)}</td><td style="color:${CUAD_TXT[i.resultado][1]}; font-weight:600;">${CUAD_TXT[i.resultado][0]}${i.reparada ? ' ' + cuadHora(i.reparada_en) : ''}${i.porContr ? `<div style="font-weight:400; color:#8a5200;">🔧 ${i.porContr === 'reparada' ? 'Cerrada' : 'Dejada pendiente'} por contratista</div>` : ''}${i.pendiente && i.motivo_pendiente ? `<div style="font-weight:400; color:var(--ink-soft);">${escHtml(i.motivo_pendiente)}</div>` : ''}</td></tr>`).join('') + '</tbody></table>';
+      const hechas = r.items.filter(i => i.reparada || i.pendiente).sort((x, y) => (y.reparada ? y.rep : new Date(y.fecha_pendiente)) - (x.reparada ? x.rep : new Date(x.fecha_pendiente)));
+      const porAtender = r.items.filter(i => !i.reparada && !i.pendiente).sort((x, y) => x.a - y.a);
+      const titulo = (txt, n, color, nota) => `<div style="display:flex; align-items:center; gap:8px; margin:16px 0 6px; font-weight:700; font-size:14px; color:${color};"><span style="width:4px; height:18px; background:${color}; border-radius:2px;"></span>${txt} <span style="background:${color}; color:#fff; border-radius:10px; padding:1px 9px; font-size:12px;">${n}</span><span style="font-weight:400; font-size:11.5px; color:var(--ink-soft);">${nota}</span></div>`;
+      const ot = i => `<td>${escHtml(i.ot || '—')}</td><td>${escHtml(i.direccion || '—')}</td><td>${escHtml(i.tipo_falla || '')}</td>`;
+      html += titulo('Atendidas en el turno', hechas.length, '#3a8a5c', 'más recientes primero');
+      html += hechas.length
+        ? `<div style="background:#f3f9f5; border-radius:10px; padding:2px 8px;"><table class="cu-t"><thead><tr><th>Hora</th><th>OS</th><th>Dirección</th><th>Tipo</th><th>Resultado</th></tr></thead><tbody>` +
+          hechas.map(i => `<tr class="cu-fila" data-falla="${i.falla_id}"><td><b>${cuadHora(i.reparada ? i.reparada_en : i.fecha_pendiente)}</b></td>${ot(i)}<td style="color:${CUAD_TXT[i.resultado][1]}; font-weight:600;">${CUAD_TXT[i.resultado][0]}${i.pendiente && i.motivo_pendiente ? `<div style="font-weight:400; color:var(--ink-soft);">${escHtml(i.motivo_pendiente)}</div>` : ''}</td></tr>`).join('') + '</tbody></table></div>'
+        : '<div class="hint" style="margin:0;">Aún no ha atendido ninguna en este turno.</div>';
+      html += titulo('Por atender', porAtender.length, '#c1443c', 'trabajos que siguen en su lista');
+      html += porAtender.length
+        ? `<table class="cu-t"><thead><tr><th>Asignada</th><th>OS</th><th>Dirección</th><th>Tipo</th><th>Estado</th></tr></thead><tbody>` +
+          porAtender.map(i => `<tr class="cu-fila" data-falla="${i.falla_id}"><td>${i.inicio ? (i.inicioPend ? 'antes del turno (ya pendiente)' : 'antes del turno') : cuadHora(i.asignado_en)}</td>${ot(i)}<td style="color:${CUAD_COLOR.sin}; font-weight:600;">● Sin atender${i.porContr ? `<div style="font-weight:400; color:#8a5200;">🔧 ${i.porContr === 'reparada' ? 'Cerrada' : 'Dejada pendiente'} por contratista</div>` : ''}</td></tr>`).join('') + '</tbody></table>'
+        : '<div class="hint" style="margin:0;">No le queda nada por atender.</div>';
     } else html += '<div class="empty-state" style="margin-top:12px;">Esta cuadrilla no tuvo fallas en este turno.</div>';
     r.items.forEach(i => mapaItems.push({...i, cuadrilla: c.nombre}));
   }
