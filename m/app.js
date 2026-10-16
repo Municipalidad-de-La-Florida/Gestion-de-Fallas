@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.31.0';
+const VERSION_APP = '1.32.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -490,7 +490,8 @@ async function cargarPerfil() {
     if (!f || !f.length) { guardarSesion(null); throw new Error('Tu cuenta no tiene un perfil asignado en el sistema. Consulta con el administrador.'); }
     S.perfil = f[0];
     // Permiso para ver Cuadrillas (el admin siempre; los demás solo si el admin se lo habilitó)
-    S.perfil.ver_cuadrillas = false;
+    S.perfil.ver_cuadrillas = false; S.perfil.ver_ubicacion = false; S.perfil.ubic_col = false;
+    try { const w = await select('usuarios', `id=eq.${sesion.user_id}&select=ver_ubicacion`); if (w && w[0]) { S.perfil.ver_ubicacion = !!w[0].ver_ubicacion; S.perfil.ubic_col = true; } } catch (e) { /* sin columna: sigue a Cuadrillas */ }
     try { const v = await select('usuarios', `id=eq.${sesion.user_id}&select=ver_cuadrillas`); if (v && v[0]) S.perfil.ver_cuadrillas = !!v[0].ver_cuadrillas; } catch (e) { /* sin columna */ }
     // Pauta de días de inspección (solo rol ito). Si la columna aún no existe, queda sin restricción.
     S.perfil.dias_inspeccion = null;
@@ -1953,7 +1954,7 @@ const msgContrato = (e) => (/duplicate|unique|contratos_nombre/i.test(e.message)
 
 async function cargarUsuariosAdmin() {
   const [us, cs, rel, ns] = await Promise.all([
-    select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc'),
+    select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
     select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc').catch(() => []),
     select('usuario_contratos', 'select=usuario_id,contrato_id').catch(() => []),
     select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc').catch(() => []),
@@ -2016,6 +2017,7 @@ const CU_TURNOS = { '0': [0, 8], '1': [8, 16], '2': [16, 24], d: [0, 24] };
 const CU_COL = { reparada: '#3a8a5c', pendiente: '#d98e2f', sin: '#c1443c' };
 const CU = { datos: null, hist: false, volviendo: false };
 const puedeCuadrillas = () => !!S.perfil && (S.perfil.rol === 'admin' || !!S.perfil.ver_cuadrillas);
+const puedeUbicacion = () => !!S.perfil && (S.perfil.rol === 'admin' || (S.perfil.ubic_col ? !!S.perfil.ver_ubicacion : !!S.perfil.ver_cuadrillas));
 function cuRango() {
   const [y, mo, d] = $('#cuFecha').value.split('-').map(Number);
   const [h0, h1] = CU_TURNOS[$('#cuTurno').value];
@@ -2046,6 +2048,7 @@ function cuCalcular(filas, desde, hasta) {
 function abrirCuadrillas() {
   if (!puedeCuadrillas()) return;
   cerrarHoja(true);
+  $('#cuMapa').hidden = !puedeUbicacion();
   CU.hist = true;
   $('#pantallaCuad').hidden = false;
   if (!$('#cuFecha').value) {
@@ -2227,6 +2230,7 @@ function editarUsuarioU(id) {
   const h = abrirHoja(`<div class="u-sh"><span class="u-ini" style="background:${colorAv(u.nombre)};width:46px;height:46px">${esc(iniciales(u.nombre))}</span><div><div class="u-nm" style="font-size:17px">${esc(u.nombre || '—')}</div><div class="u-em">${esc(u.email || '—')}</div></div></div>
     <div class="u-lbl" style="margin-top:2px">Nombre</div><input id="eNom" class="campo" value="${esc(orig.nombre)}" maxlength="80" autocomplete="off">
     <div id="eDin"></div>
+    <div id="eHerr"></div>
     <button type="button" id="eReset" class="btn btn-ambar" style="width:100%;margin-top:12px" ${u.email ? '' : 'disabled'}>Enviar reseteo de contraseña</button>
     <div class="acciones fija" style="display:flex;gap:8px"><button type="button" id="eCancel" class="btn btn-secundario" style="flex:1">Cancelar</button><button type="button" id="eOk" class="btn btn-primario" style="flex:1;margin-top:0" disabled>Guardar cambios</button></div>`);
   const pintarDin = () => {
@@ -2241,6 +2245,27 @@ function editarUsuarioU(id) {
     const ok = $('#eOk', h), cambios = JSON.stringify(estado()) !== JSON.stringify({ nombre: orig.nombre.trim(), rol: orig.rol, notif: ROLES_CON_NOTIF.includes(orig.rol) && orig.notif, foto: ROLES_CON_FOTO.includes(orig.rol) && orig.foto, contr: ROLES_CON_CONTRATO.includes(orig.rol) ? orig.contr : [] });
     ok.disabled = !cambios;
   };
+  // Herramientas (permisos que se guardan al tocar): Cuadrillas y Ubicación de camiones
+  const pintarHerr = () => {
+    const cont = $('#eHerr', h);
+    if (u.rol === 'camion') { cont.innerHTML = ''; return; }
+    const t = (k, tit, sub) => `<button type="button" class="u-tog ${u[k] ? 'on' : ''}" data-p="${k}" style="margin-top:8px"><span class="u-tx"><b>${tit}</b><span>${sub}</span></span><span class="u-sw ${u[k] ? 'on' : ''}"></span></button>`;
+    cont.innerHTML = `<div class="u-lbl" style="margin-top:14px">Herramientas</div>` + t('ver_cuadrillas', '🚚 Cuadrillas', 'Rendimiento de las cuadrillas por turno') + t('ver_ubicacion', '📍 Ubicación de camiones', 'Ver dónde están los camiones (permiso aparte)');
+  };
+  pintarHerr();
+  $('#eHerr', h).addEventListener('click', async (ev) => {
+    const b = ev.target.closest('button[data-p]'); if (!b) return;
+    const k = b.dataset.p, nuevo = !u[k];
+    b.disabled = true;
+    try {
+      const r = await api(`/rest/v1/usuarios?id=eq.${id}`, { method: 'PATCH', prefer: 'return=representation', body: { [k]: nuevo } });
+      if (!r || !r.length) throw new Error('No se guardó (¿falta ejecutar el SQL?)');
+      u[k] = nuevo;
+      if (id === S.perfil.id) { S.perfil[k] = nuevo; if (k === 'ver_ubicacion') S.perfil.ubic_col = true; }
+      toast('Guardado', 'ok');
+    } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
+    pintarHerr();
+  });
   pintarDin();
   $('#eNom', h).addEventListener('input', (e) => { ed.nombre = e.target.value; pintarDin(); });
   ed.nombre = orig.nombre;
@@ -2601,6 +2626,7 @@ $('#btnMenu').addEventListener('click', () => {
       <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
       ${rol() === 'admin' ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Gestionar usuarios</span>${chev}</button>` : ''}
       ${rol() === 'camion' ? '<div class="hint" style="margin:4px 6px 8px">📍 Tu ubicación se comparte con el administrador mientras la app está abierta.</div>' : ''}
+      ${puedeUbicacion() && !puedeCuadrillas() ? `<button id="mCamiones" class="m-fila"><span class="m-ico m-azul">${ico('<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>')}</span><span class="t">Camiones en el mapa</span>${chev}</button>` : ''}
       ${puedeCuadrillas() ? `<button id="mCuadrillas" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M3 17h13V7H3z"/><path d="M16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>')}</span><span class="t">Cuadrillas</span>${chev}</button>` : ''}
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
@@ -2622,6 +2648,8 @@ $('#btnMenu').addEventListener('click', () => {
   } else if (esIOS() && !esStandalone()) {
     mp.insertAdjacentHTML('afterend', '<div class="aviso">Para recibir avisos en iPhone, primero instala la app con <b>Añadir a pantalla de inicio</b>.</div>');
   }
+  const mcm = $('#mCamiones', h);
+  if (mcm) mcm.addEventListener('click', () => { cerrarHoja(); mostrarCamionesMapa(); });
   const mcu = $('#mCuadrillas', h);
   if (mcu) mcu.addEventListener('click', () => abrirCuadrillas());
   const mu = $('#mUsuarios', h);
