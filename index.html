@@ -364,8 +364,8 @@
   .lat-chips{display:flex;gap:4px;flex-wrap:wrap;}
   .fchip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 9px;border-radius:12px;border:1.5px solid var(--cc,#dbe2dc);background:var(--cc,#fff);color:#fff;font-size:11.5px;font-weight:600;cursor:pointer;font-family:inherit;}
   .fchip .fdot{width:8px;height:8px;border-radius:50%;background:#fff;display:inline-block;}
-  .fchip[data-estado="reportada"]{--cc:#c1443c;--ct:#c1443c;}
-  .fchip[data-estado="pendiente"]{--cc:#d98e2f;--ct:#a96a12;}
+  .fchip[data-estado="reportada"]{--cc:#f2b705;--ct:#9a7400;}
+  .fchip[data-estado="pendiente"]{--cc:#2fa8d8;--ct:#1d7aa0;}
   .fchip[data-estado="reparada"]{--cc:#3a8a5c;--ct:#2e7a4d;}
   .fchip[data-estado="reiterada"]{--cc:#8e44ad;--ct:#8e44ad;}
   .fchip[data-estado].off{background:#fff;color:var(--ct);border-color:#dbe2dc;}
@@ -383,7 +383,9 @@
   #fallasList{background:var(--bg);padding-top:8px;}
   .fi{margin:0 10px 6px;padding:5px 10px 6px;background:#fff;border:1px solid #e3e9e5;border-left:4px solid var(--red);border-radius:8px;font-size:12.5px;cursor:pointer;}
   .fi:hover{background:#f7faf8;}
-  .fi.fi-est-pendiente{border-left-color:var(--amber);}
+  .fi.fi-est-reportada{border-left-color:#f2b705;}
+  .fi.fi-est-vencida{border-left-color:#d33a2c;}
+  .fi.fi-est-pendiente{border-left-color:#2fa8d8;}
   .fi.fi-est-reiterada{border-left-color:#8e44ad;}
   .fi.fi-est-reparada{border-left-color:var(--green);}
   .fi-1{display:flex;align-items:center;gap:7px;line-height:1.2;}
@@ -410,8 +412,9 @@
   .falla-item{padding:10px 18px;border-bottom:1px solid var(--line);font-size:12.5px;}
   .falla-item .row1{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
   .badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;text-transform:uppercase;}
-  .badge.reportada{background:#fbe7e5;color:var(--red);}
-  .badge.pendiente{background:#fbf0dd;color:var(--amber);}
+  .badge.reportada{background:#fdf3cf;color:#8a6700;}
+  .badge.vencida{background:#fbe7e5;color:#c0392b;}
+  .badge.pendiente{background:#dff2fa;color:#17708f;}
   .badge.reiterada{background:#f1e6f7;color:#8e44ad;}
   .badge.reparada{background:#e3f2e8;color:var(--green);}
   .badge.asignacion{background:#eef4fb;color:#2563a8;}
@@ -659,8 +662,8 @@
         <div id="todasFiltroEstado" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
           <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Estado:</span>
           <button type="button" class="chip-estado activo" data-estado="todas" onclick="filtrarTodasFallasPorEstado('todas')">Todas <span class="n" id="cntEstadoTodas"></span></button>
-          <button type="button" class="chip-estado" data-estado="reportada" onclick="filtrarTodasFallasPorEstado('reportada')"><span class="dot" style="background:#c1443c"></span>Reportada <span class="n" id="cntEstadoReportada"></span></button>
-          <button type="button" class="chip-estado" data-estado="pendiente" onclick="filtrarTodasFallasPorEstado('pendiente')"><span class="dot" style="background:#d98e2f"></span>Pendiente <span class="n" id="cntEstadoPendiente"></span></button>
+          <button type="button" class="chip-estado" data-estado="reportada" onclick="filtrarTodasFallasPorEstado('reportada')"><span class="dot" style="background:#f2b705"></span>Reportada <span class="n" id="cntEstadoReportada"></span></button>
+          <button type="button" class="chip-estado" data-estado="pendiente" onclick="filtrarTodasFallasPorEstado('pendiente')"><span class="dot" style="background:#2fa8d8"></span>Pendiente <span class="n" id="cntEstadoPendiente"></span></button>
           <button type="button" class="chip-estado" data-estado="reparada" onclick="filtrarTodasFallasPorEstado('reparada')"><span class="dot" style="background:#3a8a5c"></span>Reparada <span class="n" id="cntEstadoReparada"></span></button>
           <button type="button" class="chip-estado" data-estado="reiterada" onclick="filtrarTodasFallasPorEstado('reiterada')"><span class="dot" style="background:#8e44ad"></span>Reiterada <span class="n" id="cntEstadoReiterada"></span></button>
         </div>
@@ -3045,7 +3048,22 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
 }
 
 // ---------- DIBUJAR FALLAS EN EL MAPA (visibles en cualquier zoom) ----------
-const colorEstado = {reportada:'#c1443c', pendiente:'#d98e2f', reparada:'#3a8a5c', reiterada:'#8e44ad'};
+const colorEstado = {reportada:'#f2b705', pendiente:'#2fa8d8', reparada:'#3a8a5c', reiterada:'#8e44ad', vencida:'#d33a2c'};
+// Color vivo de una falla: amarillo reportada, morado reiterada, celeste pendiente; pasan a rojo si
+// la reportada/reiterada supera 48 h desde que se informó o la pendiente supera 7 días.
+// fInf = fecha en que se informó (o reiteró); fPend = fecha en que quedó pendiente.
+function claveColorFalla(estado, fInf, fPend){
+  if(estado === 'reparada') return 'reparada';
+  const ms = (d) => { const t = d ? new Date(d).getTime() : NaN; return isNaN(t) ? null : Date.now() - t; };
+  if(estado === 'pendiente'){
+    const t = ms(fPend || fInf);
+    return (t !== null && t > 7 * 86400000) ? 'vencida' : 'pendiente';
+  }
+  const t = ms(fInf);
+  if(t !== null && t > 48 * 3600000) return 'vencida';
+  return estado === 'reiterada' ? 'reiterada' : 'reportada';
+}
+function colorFalla(estado, fInf, fPend){ return colorEstado[claveColorFalla(estado, fInf, fPend)] || '#999'; }
 
 let filtrosEstadoVisible = {reportada:true, pendiente:true, reparada:true, reiterada:true};
 function toggleFiltroEstado(estado){
@@ -3178,7 +3196,7 @@ function renderFallasDesdeCache(){
         if(estado === 'reparada' || feat.properties.cascada) return;
         if(asigFiltro === 'sin' ? !!feat.properties.asignado_camion_id : !feat.properties.asignado_camion_id) return;
       }
-      const color = colorEstado[estado] || '#999';
+      const color = colorFalla(estado, feat.properties.fecha_falla_real || feat.properties.fecha_falla, feat.properties.fecha_pendiente);
       const fallaId = feat.properties.id;
       // Si la falla ya está reparada y el usuario está en modo "agregar/informar falla" (y no viendo
       // historial), dejamos el marcador/línea sin interacción para que el clic "atraviese" hacia la capa
@@ -3758,7 +3776,7 @@ function quitarFallaHistorica(){
 }
 function dibujarFallaHistorica(feat){
   quitarFallaHistorica();
-  const color = colorEstado[feat.properties.estado] || '#3a8a5c';
+  const color = colorFalla(feat.properties.estado, feat.properties.fecha_falla_real || feat.properties.fecha_falla, feat.properties.fecha_pendiente);
   let capa;
   if(feat.geometry.type === 'Point'){
     const [lon, lat] = feat.geometry.coordinates;
@@ -3897,7 +3915,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
 async function cargarFallasDelArea(){
   try{
     await asegurarContratos();
-    const query = 'select=id,ot,orden_externa,tipo,tipo_falla,estado,cascada,asignado_camion_id,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
+    const query = 'select=id,ot,orden_externa,tipo,tipo_falla,estado,cascada,asignado_camion_id,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,fecha_pendiente,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
       + ',masivo,contrato_id'
       + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=1000';
     fallasEnArea = await db.select('fallas', query);
@@ -3923,7 +3941,7 @@ function normalizarFilaLateral(f){
   const esBusqueda = 'nombre_creador' in f;
   return {
     id: f.id, ot: f.ot, masivo: !!f.masivo, contrato_id: f.contrato_id || null, asignado: f.asignado_camion_id || null, orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
-    fecha: f.fecha_creacion, creado_en: f.creado_en, creado_por: f.creado_por,
+    fecha: f.fecha_creacion, fecha_pendiente: f.fecha_pendiente || null, creado_en: f.creado_en, creado_por: f.creado_por,
     quien: esBusqueda ? (f.nombre_creador || '—') : (f.notificadores ? f.notificadores.nombre : (f.usuarios ? f.usuarios.nombre : '—')),
     llave: esBusqueda ? f.llave : (f.puntos_luminarios ? f.puntos_luminarios.llave : null)
   };
@@ -4090,7 +4108,7 @@ function renderFallasList(){
     const nombreFalla = descripcionCodigoAnalisis(f.tipo, f.tipo_falla) || '';
     const lineaLlave = (buscando && f.llave != null && terminos.some(t => String(f.llave).toLowerCase().includes(t.toLowerCase())))
       ? `<div class="fi-nom" style="margin-top:1px;">Llave ${resaltarTexto(f.llave, terminos)}</div>` : '';
-    return `<div class="fi fi-est-${f.estado}" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
+    return `<div class="fi fi-est-${claveColorFalla(f.estado, f.creado_en || f.fecha, f.fecha_pendiente)}" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
       <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}${contratoTag(f.contrato_id)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
       <div class="fi-nom">${escHtml(nombreFalla)}</div>
       <div class="fi-2"><span class="fi-q">${resaltarTexto(f.quien, terminos)}</span><span class="fi-oe${f.orden_externa ? '' : ' vacio'}">OE: ${f.orden_externa ? resaltarTexto(f.orden_externa, terminos) : '—'}</span><span class="fi-fh">${fechaTxt}</span></div>
@@ -6241,7 +6259,7 @@ function dibujarFallasInspeccionEnMapa(fallas, sinZoom){
   capasInspeccionPorFalla = {};
   fallas.forEach(f => {
     if(!f.geometry) return;
-    const color = (rolEfectivo() === 'contratista3' && f.mi_contrato === false) ? '#9aa5b1' : (colorEstado[f.estado] || '#2563a8');
+    const color = (rolEfectivo() === 'contratista3' && f.mi_contrato === false) ? '#9aa5b1' : colorFalla(f.estado, f.estado === 'pendiente' ? null : f.fecha_ingreso, null);
     const tip = `OS ${f.ot || '—'} · ${f.tipo_falla} · ${String(f.estado).replace('_',' ')}`;
     let capa;
     if(f.geometry.type === 'Point'){
@@ -6989,7 +7007,7 @@ async function renderMapaCanvas(items, opciones = {}){
 
 async function capturarMapaInspeccion(det){
   return renderMapaCanvas((det.fallas || []).map((f, i) => ({
-    geom: f.geometry, label: i + 1, color: colorEstado[f.estado] || '#2563a8'
+    geom: f.geometry, label: i + 1, color: colorFalla(f.estado, f.estado === 'pendiente' ? null : f.fecha_ingreso, null)
   })));
 }
 
@@ -7015,7 +7033,7 @@ async function generarPdfInspeccion(){
     const margen = 12;
     const VERDE = [31, 77, 61], gris = [85, 102, 92], TINTA = [30, 40, 35];
     const insp = det.inspeccion, fallas = det.fallas || [];
-    const COLOR_EST = {reparada: [58, 138, 92], pendiente: [217, 142, 47], reiterada: [142, 68, 173], reportada: [193, 68, 60]};
+    const COLOR_EST = {reparada: [58, 138, 92], pendiente: [47, 168, 216], reiterada: [142, 68, 173], reportada: [242, 183, 5]};
     const ROTULO_EST = {reparada: 'Reparadas', pendiente: 'Pendientes', reiterada: 'Reiteradas', reportada: 'Reportadas'};
     const cuenta = {reparada: 0, pendiente: 0, reiterada: 0, reportada: 0};
     fallas.forEach(f => { if(cuenta[f.estado] !== undefined) cuenta[f.estado]++; });
@@ -7182,7 +7200,7 @@ async function generarPdfInspeccion(){
         if(asig.length) p.push(`Asignación (${asig[asig.length - 1].autor || '-'}): ${asig[asig.length - 1].comentario}`);
         return p.join('\n');
       };
-      const colorEstadoPdf = {reparada: [223, 240, 230], pendiente: [253, 243, 226], reiterada: [238, 226, 246], reportada: [248, 226, 224]};
+      const colorEstadoPdf = {reparada: [223, 240, 230], pendiente: [223, 242, 250], reiterada: [238, 226, 246], reportada: [253, 243, 207]};
       pdf.addPage();
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(...VERDE);
       pdf.text(`Detalle de las fallas — ${insp.ito_nombre || ''} · ${dia}`, margen, 15);
@@ -7292,7 +7310,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     const nDiasRango = Math.round((new Date(fin + 'T00:00:00Z') - new Date(ini + 'T00:00:00Z')) / 86400000) + 1;
     const pctRep = rr.fallas ? Math.round((rr.reparadas || 0) / rr.fallas * 100) : 0;
     const LIMA = [123, 211, 0];
-    const COLOR_EST_PDF = {reportada: [211, 58, 44], pendiente: [240, 140, 0], reiterada: [123, 63, 228], reparada: [46, 158, 87]};
+    const COLOR_EST_PDF = {reportada: [242, 183, 5], pendiente: [47, 168, 216], reiterada: [142, 68, 173], reparada: [58, 138, 92]};
     const hexAPdf = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
     const conOpacidad = (op, fn) => { pdf.saveGraphicsState(); pdf.setGState(new pdf.GState({opacity: op})); fn(); pdf.restoreGraphicsState(); };
 
@@ -7323,7 +7341,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     // Mapa a página completa (si no se puede dibujar, queda un fondo liso)
     pdf.setFillColor(238, 242, 238); pdf.rect(0, 0, ancho, alto, 'F');
     try{
-      const items = feats.map(f => ({geom: f.geometry, color: colorEstado[f.properties.estado] || '#2563a8', label: ''}));
+      const items = feats.map(f => ({geom: f.geometry, color: colorFalla(f.properties.estado, f.properties.fecha_falla_real || f.properties.fecha_falla, f.properties.fecha_pendiente), label: ''}));
       const cv = await renderMapaCanvas(items, {w: 1588, h: 2246, padding: 190, padTop: 460, padBottom: 570, zMax: 17, simple: true, contorno: true});
       if(cv) pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
       else { pdf.setFontSize(10); pdf.setTextColor(...gris); pdf.text('No hay fallas con ubicación en este período.', ancho / 2, alto / 2, {align: 'center'}); }
