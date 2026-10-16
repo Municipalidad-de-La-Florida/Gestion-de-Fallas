@@ -6419,6 +6419,15 @@ function resumenOperativo(o, dat){
   const veces = (nm.fallas_prom && o.fallas) ? (o.fallas / nm.fallas_prom) : null;
   return {pct, nm, veces};
 }
+// Muestra el operativo como si fuera un período de ese solo día (mapa + estadísticas); con pdf=true además baja el informe resumido
+window.verOperativo = async function(fecha, pdf){
+  document.getElementById('fechaDiaEspecifico').value = String(fecha).slice(0, 10);
+  document.getElementById('tabDia').onclick();
+  if(pdf){
+    await new Promise(r => setTimeout(r, 1500));   // deja que cargue el día antes de armar el PDF
+    generarPdfPeriodo(true);
+  }
+};
 function htmlOperativos(dat){
   if(!dat || !dat.operativos || !dat.operativos.length) return '';
   const f = s => String(s).slice(8, 10) + '/' + String(s).slice(5, 7);
@@ -6426,8 +6435,10 @@ function htmlOperativos(dat){
     const {pct, nm, veces} = resumenOperativo(o, dat);
     return `<div style="border:1.5px solid #e8c9c5; background:#fff7f6; border-radius:10px; padding:9px 11px; margin-top:8px;">
       <div style="font-weight:700; color:#a03228;">🚨 ${escHtml(o.nombre)} <span style="font-weight:500; color:var(--ink-soft);">· ${f(o.fecha)}</span></div>
-      <div style="font-size:12.5px; margin-top:3px;"><b>${o.itos}</b> de ${dat.itos_total} inspectores · <b>${o.inspecciones}</b> inspecciones · <b>${o.fallas}</b> fallas informadas</div>
+      <div style="font-size:12.5px; margin-top:3px;"><b>${o.itos_ito ?? o.itos}</b> de ${dat.itos_total} ITO${(o.itos - (o.itos_ito ?? o.itos)) > 0 ? ' + ' + (o.itos - o.itos_ito) + ' más (admin / otros)' : ''} · <b>${o.inspecciones}</b> inspecciones · <b>${o.fallas}</b> fallas informadas</div>
       <div style="font-size:12.5px;">Reparadas <b>${o.reparadas}</b>${pct === null ? '' : ' (' + pct + '%)'} · Abiertas <b>${o.abiertas}</b> (${o.pendientes} pend. · ${o.reiteradas} reit.)</div>
+      ${o.inspectores ? `<div class="hint" style="margin:3px 0 0;">Participaron: ${escHtml(o.inspectores)}</div>` : ''}
+      <div style="display:flex; gap:6px; margin-top:7px;"><button type="button" class="popup-btn" style="margin:0; padding:5px 10px; font-size:12px;" onclick="verOperativo('${o.fecha}', false)">🗺️ Ver resumen y mapa</button><button type="button" class="popup-btn" style="margin:0; padding:5px 10px; font-size:12px; background:#2563a8;" onclick="verOperativo('${o.fecha}', true)">📄 PDF del operativo</button></div>
       ${nm.dias ? `<div class="hint" style="margin:3px 0 0;">Un día normal de inspección (${nm.dias} día${nm.dias > 1 ? 's' : ''} del período): ${String(nm.fallas_prom).replace('.', ',')} fallas y ${String(nm.itos_prom).replace('.', ',')} inspectores${veces ? ` → este día trajo <b>${veces.toFixed(1).replace('.', ',')}×</b> las fallas` : ''}.</div>` : ''}
     </div>`;
   }).join('');
@@ -7690,7 +7701,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
           styles: {fontSize: 8.5, cellPadding: 1.8, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1},
           headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'},
           head: [['Fecha', 'Operativo', 'Inspectores', 'Inspecciones', 'Fallas', 'Reparadas', 'Abiertas', 'Pend.', 'Reit.']],
-          body: datOp.operativos.map(o => [fmtF(o.fecha), o.nombre, `${o.itos} de ${datOp.itos_total}`, o.inspecciones, o.fallas,
+          body: datOp.operativos.map(o => [fmtF(o.fecha), o.nombre, `${o.itos_ito ?? o.itos} de ${datOp.itos_total} ITO${(o.itos - (o.itos_ito ?? o.itos)) > 0 ? ' + ' + (o.itos - o.itos_ito) : ''}`, o.inspecciones, o.fallas,
             o.fallas ? `${o.reparadas} (${Math.round(100 * o.reparadas / o.fallas)}%)` : '0', o.abiertas, o.pendientes, o.reiteradas])
         });
         let yo = pdf.lastAutoTable.finalY + 6;
