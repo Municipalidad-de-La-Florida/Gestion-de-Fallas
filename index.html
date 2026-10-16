@@ -6455,14 +6455,18 @@ function operativoCalc(det){
     puntos: fs.reduce((s, f) => s + (Number(f.puntos) || 0), 0),
     mediana_h: horas.length ? horas[Math.floor(horas.length / 2)] : null,
     media_h: horas.length ? horas.reduce((a, b) => a + b, 0) / horas.length : null,
-    porInspector: agr(f => f.inspector), porCodigo: agr(f => f.tipo_falla)
+    porInspector: agr(f => f.inspector), porCodigo: agr(f => (f.tipo === 'linea' ? 'linea' : 'punto') + '|' + (f.tipo_falla || '—'))
   };
+}
+function etiquetaCodOp(k){
+  const [t, c] = String(k).split('|'), d = descripcionCodigoAnalisis(t, c);
+  return c + (d ? ' · ' + d : (c === 'OTRO' ? ' · Otro' : ''));
 }
 const fmtHorasOp = (h) => h === null ? '—' : (h < 10 ? (Math.round(h * 10) / 10).toFixed(1).replace('.', ',') : String(Math.round(h))) + ' h';
 function htmlResumenOperativo(det){
   const c = operativoCalc(det), f = String(det.fecha).slice(8, 10) + '/' + String(det.fecha).slice(5, 7) + '/' + String(det.fecha).slice(0, 4);
   const pct = c.total ? Math.round(100 * c.reparadas / c.total) : 0;
-  const filas = (arr, desc) => arr.map(([k, v]) => `<tr><td style="padding:3px 6px;">${escHtml(desc ? (k + (descripcionCodigoAnalisis('punto', k) ? ' · ' + descripcionCodigoAnalisis('punto', k) : '')) : k)}</td><td style="padding:3px 6px; text-align:right;"><b>${v.n}</b></td><td style="padding:3px 6px; text-align:right;">${v.rep}</td></tr>`).join('');
+  const filas = (arr, desc) => arr.map(([k, v]) => `<tr><td style="padding:3px 6px;">${escHtml(desc ? etiquetaCodOp(k) : k)}</td><td style="padding:3px 6px; text-align:right;"><b>${v.n}</b></td><td style="padding:3px 6px; text-align:right;">${v.rep}</td></tr>`).join('');
   return `<button type="button" class="popup-btn" id="operVolverBtn" style="margin:0 0 8px;">← Volver al período</button>
     <div style="font-weight:700; font-size:15px; color:#a03228;">🚨 ${escHtml(det.nombre || 'Operativo')}</div>
     <div class="hint" style="margin:2px 0 8px;">${f} · solo las fallas ingresadas en las inspecciones del operativo · ${det.inspecciones} inspecciones${det.inspectores ? ' (' + escHtml(det.inspectores) + ')' : ''}</div>
@@ -6479,39 +6483,65 @@ function operativoItemsMapa(det){
 function quitarCapaOperativo(){ if(OPER.capa){ map.removeLayer(OPER.capa); OPER.capa = null; } }
 // Hojas del PDF con el resumen de UN operativo: mapa con sus fallas + estadísticas (como cualquier período, pero solo del operativo)
 async function agregarHojasOperativo(pdf, det, primera){
-  const ancho = pdf.internal.pageSize.getWidth(), alto = pdf.internal.pageSize.getHeight(), margen = 12, VERDE = [0, 49, 0], gris = [85, 102, 92];
+  const ancho = pdf.internal.pageSize.getWidth(), alto = pdf.internal.pageSize.getHeight(), margen = 12, VERDE = [0, 49, 0], gris = [85, 102, 92], LIMA = [123, 211, 0];
   const c = operativoCalc(det);
   const fF = String(det.fecha).slice(8, 10) + '-' + String(det.fecha).slice(5, 7) + '-' + String(det.fecha).slice(0, 4);
+  const [yy, mm, dd] = String(det.fecha).slice(0, 10).split('-').map(Number);
+  const dias = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  const meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const fechaLarga = `${dias[new Date(Date.UTC(yy, mm - 1, dd)).getUTCDay()]} ${String(dd).padStart(2, '0')} de ${meses[mm - 1]} de ${yy}`;
+  const conOpacidad = (op, fn) => { pdf.saveGraphicsState(); pdf.setGState(new pdf.GState({opacity: op})); fn(); pdf.restoreGraphicsState(); };
   if(!primera) pdf.addPage();
-  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...VERDE);
-  pdf.text('Operativo: ' + (det.nombre || ''), margen, 16);
-  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gris);
-  pdf.text(pdf.splitTextToSize(`${fF} · Solo las fallas ingresadas en las inspecciones del operativo (${det.inspecciones} inspecciones` + (det.inspectores ? ': ' + det.inspectores : '') + ')', ancho - 2 * margen), margen, 21);
-  pdf.setDrawColor(219, 226, 220); pdf.line(margen, 27, ancho - margen, 27);
-  const pct = c.total ? Math.round(100 * c.reparadas / c.total) : 0;
-  const kp = [['Fallas', c.total], ['Puntos afectados', c.puntos], ['Reparadas', `${pct}% (${c.reparadas})`], ['Abiertas', c.total - c.reparadas], ['Pendientes', c.pendientes], ['Reiteradas', c.reiteradas]];
-  const wk = (ancho - 2 * margen) / kp.length;
-  kp.forEach(([l, v], i) => {
-    const x = margen + i * wk;
-    pdf.setFillColor(243, 247, 244); pdf.roundedRect(x + 0.8, 30, wk - 1.6, 15, 2, 2, 'F');
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(...VERDE); pdf.text(String(v), x + wk / 2, 38, {align: 'center'});
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(l, x + wk / 2, 43, {align: 'center'});
-  });
-  pdf.setFontSize(8); pdf.text(`Tiempo desde el ingreso hasta la reparación: mediana ${fmtHorasOp(c.mediana_h)} · promedio ${fmtHorasOp(c.media_h)}`, margen, 50);
-  let y = 54;
+  // ---------- HOJA 1: mapa a página completa + encabezado + indicadores (igual que los demás informes) ----------
+  pdf.setFillColor(238, 242, 238); pdf.rect(0, 0, ancho, alto, 'F');
   try{
-    const cv = await renderMapaCanvas(operativoItemsMapa(det), {w: 1700, h: 1058, padding: 90});
-    if(cv){ const w = ancho - 2 * margen, hh = w * 1058 / 1700; pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', margen, y, w, hh); y += hh + 3; }
+    const cv = await renderMapaCanvas(operativoItemsMapa(det), {w: 1588, h: 2246, padding: 190, padTop: 400, padBottom: 520, zMax: 17, simple: true, radio: 5});
+    if(cv) pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
+    else { pdf.setFontSize(10); pdf.setTextColor(...gris); pdf.text('Este operativo no tiene fallas con ubicación.', ancho / 2, alto / 2, {align: 'center'}); }
   }catch(e){ console.warn('No se pudo dibujar el mapa del operativo:', e); }
+  conOpacidad(0.93, () => { pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F'); });
+  pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
+  pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
+  pdf.setFont('helvetica', 'bold');
+  { let fs = 24; pdf.setFontSize(fs); const maxT = ancho - 2 * margen - 60; while(fs > 12 && pdf.getTextWidth('Informe de operativo') > maxT){ fs -= 0.5; pdf.setFontSize(fs); } pdf.text('Informe de operativo', margen + 2, 22); }
+  pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
+  pdf.text(String(det.nombre || 'Operativo'), margen + 2, 29.5);
+  pdf.text(fechaLarga, margen + 2, 35);
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
+  pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
+  pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 20, {align: 'right'});
+  pdf.text(`extraído por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 25, {align: 'right'});
+  // Panel de indicadores
+  const py = alto - 56, ph = 44, pct = c.total ? Math.round(100 * c.reparadas / c.total) : 0;
+  conOpacidad(0.96, () => { pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(margen - 2, py, ancho - (margen - 2) * 2, ph, 4, 4, 'FD'); });
+  const kpi = (x, valor, etiqueta, sub) => {
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.setTextColor(...VERDE); pdf.text(String(valor), x, py + 16);
+    pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text(etiqueta, x, py + 22);
+    if(sub){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(sub, x, py + 26.5); }
+  };
+  kpi(margen + 6, c.total, 'Fallas', '');
+  kpi(margen + 46, c.puntos, 'Puntos afectados', '');
+  kpi(margen + 92, pct + '%', 'Reparadas', `${c.reparadas} de ${c.total}`);
+  kpi(margen + 132, c.total - c.reparadas, 'Abiertas', `${c.pendientes} pend. · ${c.reiteradas} reit.`);
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
+  pdf.text(`${det.inspecciones} inspecciones${det.inspectores ? ' (' + det.inspectores + ')' : ''} · solo las fallas ingresadas en el operativo`, margen + 6, py + 32.5, {maxWidth: ancho - 2 * margen - 12});
+  pdf.text(`Tiempo desde el ingreso hasta la reparación: mediana ${fmtHorasOp(c.mediana_h)} · promedio ${fmtHorasOp(c.media_h)}`, margen + 6, py + 37);
   const leyenda = [['Reportada', colorEstado.reportada], ['Pendiente', colorEstado.pendiente], ['Reiterada', colorEstado.reiterada], ['Reparada', colorEstado.reparada], ['Vencida', colorEstado.vencida]];
-  let lx = margen;
-  leyenda.forEach(([t, col]) => { const rgb = [1, 3, 5].map(i => parseInt(col.slice(i, i + 2), 16)); pdf.setFillColor(...rgb); pdf.circle(lx + 1.5, y + 1, 1.5, 'F'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(t, lx + 4, y + 2); lx += 28; });
-  y += 7;
-  const est = {margin: {left: margen, right: margen}, theme: 'grid', styles: {fontSize: 8, cellPadding: 1.4, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1}, headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'}};
-  if(y > alto - 70){ pdf.addPage(); y = 16; }
-  pdf.autoTable({...est, startY: y, head: [['Inspector', 'Fallas', 'Reparadas']], body: c.porInspector.map(([k, v]) => [k, v.n, v.rep]), tableWidth: (ancho - 2 * margen) / 2 - 3, margin: {left: margen, right: ancho / 2 + 3}});
-  const y1 = pdf.lastAutoTable.finalY;
-  pdf.autoTable({...est, startY: y, head: [['Código', 'Fallas', 'Reparadas']], body: c.porCodigo.slice(0, 12).map(([k, v]) => [k + (descripcionCodigoAnalisis('punto', k) ? ' · ' + descripcionCodigoAnalisis('punto', k) : ''), v.n, v.rep]), margin: {left: ancho / 2 + 3, right: margen}});
+  let lx = margen + 6;
+  leyenda.forEach(([t, col]) => { const rgb = [1, 3, 5].map(i => parseInt(col.slice(i, i + 2), 16)); pdf.setFillColor(...rgb); pdf.circle(lx + 1.5, py + 41, 1.5, 'F'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(t, lx + 4, py + 41.8); lx += 28; });
+
+  // ---------- HOJA 2: estadísticas ----------
+  pdf.addPage();
+  pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 18, 'F');
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(255, 255, 255);
+  pdf.text('Operativo: ' + (det.nombre || '') + ' · ' + fF, margen + 2, 11.5);
+  const est = {theme: 'grid', styles: {fontSize: 8.5, cellPadding: 1.8, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1}, headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'}, alternateRowStyles: {fillColor: [243, 247, 244]}};
+  pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text('Por inspector', margen, 28);
+  pdf.autoTable({...est, startY: 30, margin: {left: margen, right: margen}, head: [['Inspector', 'Fallas', 'Reparadas']], body: c.porInspector.map(([k, v]) => [k, v.n, v.rep])});
+  let y = pdf.lastAutoTable.finalY + 10;
+  if(y > alto - 50){ pdf.addPage(); y = 20; }
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text('Por tipo de falla', margen, y);
+  pdf.autoTable({...est, startY: y + 2, margin: {left: margen, right: margen}, head: [['Código', 'Fallas', 'Reparadas']], body: c.porCodigo.map(([k, v]) => [etiquetaCodOp(k), v.n, v.rep])});
   pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
   pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
 }
@@ -6539,7 +6569,7 @@ window.verOperativo = async function(fecha, pdf){
     let capa;
     if(f.geom.type === 'Point'){
       const [lon, lat] = f.geom.coordinates;
-      capa = L.circleMarker([lat, lon], {radius: 7, color: '#fff', weight: 2, fillColor: color, fillOpacity: 0.95, pane: 'inspeccionPane'});
+      capa = L.circleMarker([lat, lon], {radius: 4.5, color: '#fff', weight: 1.5, fillColor: color, fillOpacity: 0.95, pane: 'inspeccionPane'});
       pts.push([lat, lon]);
     } else {
       capa = L.geoJSON(f.geom, {pane: 'inspeccionPane', style: {color, weight: 5, opacity: 0.9}});
@@ -7093,8 +7123,8 @@ async function renderMapaCanvas(items, opciones = {}){
     // Mapa sin números: cada punto es un círculo del color de su estado (los circuitos ya se dibujaron como líneas)
     validos.filter(it => it.geom.type === 'Point').forEach(it => {
       const [x, y] = P(it.geom.coordinates[0], it.geom.coordinates[1]);
-      ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2);
-      ctx.fillStyle = it.color; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#ffffff'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(x, y, opciones.radio || 8, 0, Math.PI * 2);
+      ctx.fillStyle = it.color; ctx.fill(); ctx.lineWidth = opciones.radio ? 2 : 3; ctx.strokeStyle = '#ffffff'; ctx.stroke();
     });
     ctx.font = '15px sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
     const atr = '© OpenStreetMap contributors', tw0 = ctx.measureText(atr).width;
