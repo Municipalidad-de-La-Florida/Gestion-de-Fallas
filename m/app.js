@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.27.0';
+const VERSION_APP = '1.27.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -76,11 +76,11 @@ const DESC_CODIGO = {};
 const ETIQUETA_ESTADO = { reportada: 'Reportada', pendiente: 'Pendiente', reiterada: 'Reiterada', reparada: 'Reparada' };
 const COLOR_ESTADO = { reportada: '#f2b705', pendiente: '#2fa8d8', reiterada: '#7b3fe4', reparada: '#2e9e57', vencida: '#d33a2c' };
 // Amarillo reportada, morado reiterada, celeste pendiente; pasan a rojo con más de 48 h (reportada/reiterada,
-// desde que se informó) o más de 7 días (pendiente, desde que quedó pendiente).
+// desde que se informó) o más de 7 días (pendiente, también desde que se informó).
 function claveColor(p) {
   if (p.estado === 'reparada') return 'reparada';
   const ms = (d) => { const t = d ? Date.parse(d) : NaN; return isNaN(t) ? null : Date.now() - t; };
-  if (p.estado === 'pendiente') { const t = ms(p.fecha_pendiente || p.fecha_falla_real || p.fecha_falla); return t !== null && t > 7 * 86400000 ? 'vencida' : 'pendiente'; }
+  if (p.estado === 'pendiente') { const t = ms(p.fecha_falla_real || p.fecha_falla || p.fecha_pendiente); return t !== null && t > 7 * 86400000 ? 'vencida' : 'pendiente'; }
   const t = ms(p.fecha_falla_real || p.fecha_falla);
   if (t !== null && t > 48 * 3600000) return 'vencida';
   return p.estado === 'reiterada' ? 'reiterada' : 'reportada';
@@ -1813,7 +1813,7 @@ async function detalleInspC3(id) {
     const fs = det.fallas || [];
     h.innerHTML = `<h2>${esc(det.inspeccion.ito_nombre)} · ${esc(fmtFechaCorta(det.inspeccion.fecha))}</h2>
       <div class="hint">${fs.length} falla${fs.length === 1 ? '' : 's'} en total. Las de otros contratos se ven en gris.</div>
-      ${fs.map((f) => `<div class="tarjeta est-${esc(f.estado === 'pendiente' ? f.estado : claveColor({ estado: f.estado, fecha_falla_real: f.fecha_ingreso }))}"${f.mi_contrato ? ` data-fid="${esc(f.id)}"` : ''} style="margin-top:8px;${f.mi_contrato ? ' cursor:pointer;' : ' opacity:.45; filter:grayscale(1);'}">
+      ${fs.map((f) => `<div class="tarjeta est-${esc(claveColor({ estado: f.estado, fecha_falla_real: f.fecha_ingreso })}"${f.mi_contrato ? ` data-fid="${esc(f.id)}"` : ''} style="margin-top:8px;${f.mi_contrato ? ' cursor:pointer;' : ' opacity:.45; filter:grayscale(1);'}">
         <div class="tarjeta-top"><b>${esc(f.tipo_falla)} · ${esc(DESC_CODIGO[f.tipo_falla] || '')}</b></div>
         <div class="sub">OS ${esc(f.ot || '—')} · ${f.tipo === 'linea' ? 'Circuito ' + esc(f.circuito_id ?? '—') : 'Llave ' + esc(f.llave ?? '—')} · <span class="insignia ${esc(f.estado)}">${esc(ETIQUETA_ESTADO[f.estado] || f.estado)}</span></div>
         ${f.contrato_nombre ? `<div class="sub">${esc(f.contrato_nombre)}${f.asignado_camion ? ' · Asignada a ' + esc(f.asignado_camion) : ''}</div>` : ''}
