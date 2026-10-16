@@ -1351,8 +1351,9 @@ async function cargarPerfilYIniciar(userId){
       return;
     }
     currentUser = data[0];
-    currentUser.ver_cuadrillas = false;
+    currentUser.ver_cuadrillas = false; currentUser.ver_ubicacion = false; currentUser.ubic_col = false;
     currentUser.ver_fiscalizacion = false; currentUser.fisc_col = false;
+    try{ const u2 = await db.select('usuarios', `id=eq.${userId}&select=ver_ubicacion`); if(u2 && u2[0]){ currentUser.ver_ubicacion = !!u2[0].ver_ubicacion; currentUser.ubic_col = true; } }catch(e0){ /* sin la columna: la ubicación sigue al permiso de Cuadrillas */ }
     try{
       const v = await db.select('usuarios', `id=eq.${userId}&select=ver_cuadrillas,ver_fiscalizacion`);
       if(v && v[0]){ currentUser.ver_cuadrillas = !!v[0].ver_cuadrillas; currentUser.ver_fiscalizacion = !!v[0].ver_fiscalizacion; currentUser.fisc_col = true; }
@@ -8585,19 +8586,23 @@ document.getElementById('fiscBuscar').oninput = () => fiscPintar();
 async function pintarCuadrillasAdmin(){
   const caja = document.getElementById('cuadrillasAdmin');
   caja.innerHTML = '<div class="hint">Cargando…</div>';
-  let us, tieneFisc = true;
-  try{ us = await db.select('usuarios', 'select=id,nombre,rol,email,ver_cuadrillas,ver_fiscalizacion&order=nombre.asc'); }
+  let us, tieneFisc = true, tieneUbic = true;
+  try{ us = await db.select('usuarios', 'select=id,nombre,rol,email,ver_cuadrillas,ver_fiscalizacion,ver_ubicacion&order=nombre.asc'); }
   catch(e){
+    tieneUbic = false;
+    try{ us = await db.select('usuarios', 'select=id,nombre,rol,email,ver_cuadrillas,ver_fiscalizacion&order=nombre.asc'); }
+    catch(e1){
     tieneFisc = false;
     try{ us = await db.select('usuarios', 'select=id,nombre,rol,email,ver_cuadrillas&order=nombre.asc'); }
     catch(e2){ caja.innerHTML = '<div class="hint">Falta ejecutar <b>sql/2026-10-rendimiento-cuadrillas.sql</b> y <b>sql/2026-10-fiscalizacion.sql</b> en Supabase para activar estas herramientas.</div>'; return; }
+    }
   }
   us = us.filter(u => u.rol !== 'camion');
   const chk = (u, k) => `<input type="checkbox" class="cu-perm" data-id="${u.id}" data-k="${k}" ${u[k] ? 'checked' : ''}>`;
   caja.innerHTML = `<b>🧰 Herramientas de la barra superior (solo versión web)</b>
-    <div class="hint" style="margin:4px 0 10px;"><b>🚚 Cuadrillas:</b> trabajo de cada cuadrilla por turno (con cuántas fallas empezó, asignadas, reparadas, pendientes, sin atender, % de cumplimiento y mapa). <b>🔎 Fiscalización:</b> fallas abiertas sin asignar, asignadas sin atender, pendientes y más antiguas, con su edad (solo consulta). Marca quién puede usar cada una; también puedes apagártelas a ti. Los cambios se guardan al marcar y se aplican la próxima vez que esa persona abra la aplicación.${tieneFisc ? '' : '<br><b style="color:var(--red);">Falta ejecutar sql/2026-10-fiscalizacion.sql para habilitar la Fiscalización.</b>'}</div>
-    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:left; border-bottom:2px solid var(--line);"><th style="padding:8px 10px;">🚚 Cuadrillas</th><th style="padding:8px 10px;">🔎 Fiscalización</th><th style="padding:8px 10px;">Nombre</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Rol</th></tr></thead><tbody>` +
-    us.map(u => `<tr style="border-bottom:1px solid var(--line);"><td style="padding:6px 10px;">${chk(u, 'ver_cuadrillas')}</td><td style="padding:6px 10px;">${tieneFisc ? chk(u, 'ver_fiscalizacion') : '—'}</td><td style="padding:6px 10px;">${escHtml(u.nombre || '')}</td><td style="padding:6px 10px;">${escHtml(u.email || '—')}</td><td style="padding:6px 10px;">${escHtml(u.rol)}</td></tr>`).join('') +
+    <div class="hint" style="margin:4px 0 10px;"><b>🚚 Cuadrillas:</b> trabajo de cada cuadrilla por turno (con cuántas fallas empezó, asignadas, reparadas, pendientes, sin atender, % de cumplimiento y mapa). <b>📍 Ubicación camiones:</b> ver dónde están los camiones que comparten su ubicación (permiso aparte; el botón está dentro de Cuadrillas). <b>🔎 Fiscalización:</b> fallas abiertas sin asignar, asignadas sin atender, pendientes y más antiguas, con su edad (solo consulta). Marca quién puede usar cada una; también puedes apagártelas a ti. Los cambios se guardan al marcar y se aplican la próxima vez que esa persona abra la aplicación.${tieneFisc ? '' : '<br><b style="color:var(--red);">Falta ejecutar sql/2026-10-fiscalizacion.sql para habilitar la Fiscalización.</b>'}</div>
+    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:left; border-bottom:2px solid var(--line);"><th style="padding:8px 10px;">🚚 Cuadrillas</th><th style="padding:8px 10px;">🔎 Fiscalización</th><th style="padding:8px 10px;">📍 Ubicación camiones</th><th style="padding:8px 10px;">Nombre</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Rol</th></tr></thead><tbody>` +
+    us.map(u => `<tr style="border-bottom:1px solid var(--line);"><td style="padding:6px 10px;">${chk(u, 'ver_cuadrillas')}</td><td style="padding:6px 10px;">${tieneFisc ? chk(u, 'ver_fiscalizacion') : '—'}</td><td style="padding:6px 10px;">${tieneUbic ? chk(u, 'ver_ubicacion') : '—'}</td><td style="padding:6px 10px;">${escHtml(u.nombre || '')}</td><td style="padding:6px 10px;">${escHtml(u.email || '—')}</td><td style="padding:6px 10px;">${escHtml(u.rol)}</td></tr>`).join('') +
     '</tbody></table></div><div class="hint" id="cuadPermEstado" style="margin-top:8px;"></div>';
   caja.querySelectorAll('.cu-perm').forEach(c => c.onchange = async () => {
     const est = document.getElementById('cuadPermEstado'); c.disabled = true; est.textContent = 'Guardando…';
@@ -8615,6 +8620,9 @@ function aplicarBotonesHerramientas(){
   const cuad = currentUser.ver_cuadrillas || (currentUser.rol === 'admin' && !currentUser.fisc_col);
   document.getElementById('cuadBtn').style.display = (cuad && !modoVista) ? '' : 'none';
   document.getElementById('fiscBtn').style.display = (currentUser.ver_fiscalizacion && !modoVista) ? '' : 'none';
+  // Ubicación de camiones: permiso propio (si la columna aún no existe, sigue al de Cuadrillas)
+  const ubic = currentUser.ubic_col ? (currentUser.ver_ubicacion || currentUser.rol === 'admin') : cuad;
+  document.getElementById('cuadUbicBtn').style.display = ubic ? '' : 'none';
 }
 
 // ---------- GESTIÓN DE USUARIOS (admin) ----------
