@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.32.0';
+const VERSION_APP = '1.33.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -561,6 +561,8 @@ function iniciarMapa() {
   capaFallas = L.geoJSON(null, { renderer: rend });
   capaEmpalmes = L.geoJSON(null, { renderer: rend });
   map.on('moveend', cargarArea);
+  map.on('dragstart dragend', pausarSeguir);
+  map.on('zoomstart', () => { if (!movProg) pausarSeguir(); });
   map.on('zoomend', () => { ajustarRadios(); dibujarFallas(); });
   map.on('click', () => { /* un toque en el vacío no hace nada */ });
   // Atenuar lo que queda fuera de la comuna (botón en el mapa, se recuerda la elección). No bloquea toques.
@@ -751,7 +753,7 @@ function actualizarFiltrosOtrosUI() {
   b.hidden = !partes.length;
   b.textContent = 'Solo ' + partes.join(' · ') + ' ✕';
 }
-function ordenLista() { try { return localStorage.getItem('fm_orden_lista') === 'recientes' ? 'recientes' : 'cerca'; } catch (e) { return 'cerca'; } }
+function ordenLista() { try { const o = localStorage.getItem('fm_orden_lista'); return (o === 'recientes' || o === 'antiguas') ? o : 'cerca'; } catch (e) { return 'cerca'; } }
 // Si el teléfono tiene un index.html antiguo en caché, el selector se crea aquí (así la lista nunca se rompe).
 function asegurarOrdenUI() {
   if ($('#listaOrdenGrupo')) return;
@@ -759,7 +761,8 @@ function asegurarOrdenUI() {
   g.id = 'listaOrdenGrupo'; g.hidden = true;
   g.innerHTML = '<div class="lf-t">Ordenar por</div><div class="lf-chips" id="listaOrden">'
     + '<button type="button" class="fchip fchip-sel on" data-orden="cerca">Cercanía</button>'
-    + '<button type="button" class="fchip fchip-sel" data-orden="recientes">Más recientes</button></div>';
+    + '<button type="button" class="fchip fchip-sel" data-orden="recientes">Más recientes</button>'
+    + '<button type="button" class="fchip fchip-sel" data-orden="antiguas">Más antiguas</button></div>';
   const panel = $('#filtrosListaPanel');
   panel.insertBefore(g, panel.querySelector('.lf-t'));
 }
@@ -861,7 +864,35 @@ function comenzarGPS() {
   if (S.watchId != null) return;
   S.watchId = navigator.geolocation.watchPosition(onPos, onPosError, { enableHighAccuracy: true, maximumAge: 5000, timeout: 25000 });
 }
+/* Seguimiento: el mapa acompaña al GPS; si lo mueves para mirar algo, a los pocos segundos vuelve a centrarse solo. */
+const SEGUIR_ESPERA_MS = 8000;
+let seguirPausa = false, seguirTimer = null, movProg = false;
+function puedeAutoCentrar() { return S.seguir && !seguirPausa && !!map && !!S.pos && S.vista === 'mapa' && !hojaAbierta; }
+function centrarSeguir(zoomMin) {
+  if (!map || !S.pos) return;
+  movProg = true;
+  map.setView([S.pos.lat, S.pos.lng], Math.max(map.getZoom(), zoomMin || 17), { animate: true });
+  setTimeout(() => { movProg = false; }, 800);
+}
+function marcarSeguir() { $('#btnUbicacion').classList.toggle('sigue', !!S.seguir); }
+function pausarSeguir() {
+  if (!S.seguir || movProg) return;
+  seguirPausa = true;
+  clearTimeout(seguirTimer);
+  seguirTimer = setTimeout(reanudarSeguir, SEGUIR_ESPERA_MS);
+}
+function reanudarSeguir() {
+  clearTimeout(seguirTimer);
+  if (!S.seguir) { seguirPausa = false; return; }
+  const libre = S.vista === 'mapa' && !hojaAbierta;
+  if (!libre) { seguirTimer = setTimeout(reanudarSeguir, 5000); return; }   // hay una ficha abierta: se espera
+  seguirPausa = false;
+  centrarSeguir();
+}
+function activarSeguir() { S.seguir = true; seguirPausa = false; clearTimeout(seguirTimer); marcarSeguir(); centrarSeguir(18); }
+function detenerSeguir() { S.seguir = false; seguirPausa = false; clearTimeout(seguirTimer); marcarSeguir(); }
 function detenerGPS() {
+  detenerSeguir();
   if (S.watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(S.watchId);
   S.watchId = null; S.pos = null;
   if (map) { [marcadorPos, circuloPos].forEach((l) => l && map.removeLayer(l)); }
@@ -879,7 +910,8 @@ function onPos(p) {
     } else {
       marcadorPos.setLatLng(ll); circuloPos.setLatLng(ll); circuloPos.setRadius(S.pos.prec);
     }
-    if (S.centrarAlFijar) { map.setView(ll, Math.max(map.getZoom(), 18)); S.centrarAlFijar = false; }
+    if (S.centrarAlFijar) { S.centrarAlFijar = false; activarSeguir(); }
+    else if (puedeAutoCentrar()) { movProg = true; map.panTo(ll, { animate: true }); setTimeout(() => { movProg = false; }, 800); }
   }
   if (S.vista === 'lista') renderLista();
 }
@@ -889,7 +921,12 @@ function onPosError(e) {
   else toast('No se pudo obtener tu ubicación. ¿GPS activado?', 'error');
 }
 $('#btnUbicacion').addEventListener('click', () => {
-  if (S.pos && map) { map.setView([S.pos.lat, S.pos.lng], Math.max(map.getZoom(), 18)); return; }
+  if (S.pos && map) {
+    // Primer toque: el mapa empieza a seguirte. Si lo habías movido, te devuelve al centro. Si ya te sigue, deja de seguirte.
+    if (S.seguir && !seguirPausa) { detenerSeguir(); toast('Seguimiento desactivado.'); }
+    else { activarSeguir(); toast('El mapa te sigue. Toca de nuevo para dejar de seguir.'); }
+    return;
+  }
   S.centrarAlFijar = true;
   toast('Buscando tu ubicación…');
   iniciarGPS();
@@ -1733,11 +1770,12 @@ function renderLista() {
   const orden = ordenLista();
   const porCerca = orden === 'cerca' && !!S.pos;
   if (porCerca) items.sort((a, b) => a.d - b.d);
+  else if (orden === 'antiguas') items.sort((a, b) => (Date.parse(a.f.properties.fecha_falla) || 0) - (Date.parse(b.f.properties.fecha_falla) || 0) || String(a.f.properties.ot).localeCompare(String(b.f.properties.ot)));
   else items.sort((a, b) => (Date.parse(b.f.properties.fecha_falla) || 0) - (Date.parse(a.f.properties.fecha_falla) || 0) || String(b.f.properties.ot).localeCompare(String(a.f.properties.ot)));
   asegurarOrdenUI();
   $('#listaOrdenGrupo').hidden = false;
   $$('#listaOrden .fchip').forEach((c) => c.classList.toggle('on', c.dataset.orden === orden));
-  $('#listaResumen').textContent = `${items.length - nRep} de ${total} fallas activas${nRep ? ` + ${nRep} reparada${nRep > 1 ? 's' : ''} (últimos 10 días)` : ''} · ${porCerca ? 'ordenadas por cercanía' : (orden === 'cerca' ? 'más recientes primero (activa el GPS para ordenar por cercanía)' : 'más recientes primero')}`;
+  $('#listaResumen').textContent = `${items.length - nRep} de ${total} fallas activas${nRep ? ` + ${nRep} reparada${nRep > 1 ? 's' : ''} (últimos 10 días)` : ''} · ${porCerca ? 'ordenadas por cercanía' : (orden === 'antiguas' ? 'más antiguas primero' : (orden === 'cerca' ? 'más recientes primero (activa el GPS para ordenar por cercanía)' : 'más recientes primero'))}`;
   $('#listaItems').innerHTML = items.length ? items.map(({ f, d }, i) => {
     const p = f.properties;
     return `<button class="tarjeta est-${esc(claveColor(p))}" data-i="${i}">

@@ -55,6 +55,7 @@ main{ flex:1 1 auto; position:relative; min-height:0; }
 .zoom-aviso{ position:absolute; z-index:500; top:10px; left:50%; transform:translateX(-50%); background:rgba(24,33,29,.86); color:#fff; padding:8px 14px; border-radius:20px; font-size:13px; pointer-events:none; white-space:nowrap; }
 .fab{ position:absolute; z-index:500; right:14px; bottom:calc(var(--safe-b) + 84px); width:46px; height:46px; padding:0; display:flex; align-items:center; justify-content:center; border-radius:50%; border:0; background:#fff; color:var(--verde); box-shadow:0 4px 14px rgba(0,0,0,.2); }
 .fab.activo{ background:var(--verde); color:#fff; }
+.fab.sigue{ box-shadow:0 0 0 3px rgba(46,158,87,.45), 0 2px 8px rgba(0,0,0,.25); }
 .fab2{ bottom:calc(var(--safe-b) + 140px); }
 .fab3{ bottom:calc(var(--safe-b) + 196px); }
 .fab[hidden]{ display:none; }
