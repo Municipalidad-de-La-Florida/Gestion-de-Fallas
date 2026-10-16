@@ -52,6 +52,7 @@
     <div id="map"></div>
     <div id="zoomAviso" class="zoom-aviso" hidden>Acércate más para ver y tocar los puntos</div>
     <button id="badgeSinAsignar" class="badge-filtro" hidden>Solo sin asignar ✕</button>
+    <button id="badgeCamiones" class="badge-filtro" style="top:52px" hidden>Camiones ✕</button>
     <button id="btnUbicacion" class="fab" aria-label="Mi ubicación"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg></button>
     <button id="btnComuna" class="fab fab2 activo" aria-label="Atenuar fuera de la comuna" aria-pressed="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16z" fill="currentColor" stroke="none"/></svg></button>
     <button id="btnDistrib" class="fab fab3 activo" aria-label="Fallas de distribución" aria-pressed="true" hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l9.5 9.5-9.5 9.5L2.5 12z"/><path d="M12.8 7.5l-3 5h3l-1 4 3.2-5.2h-3z" fill="currentColor" stroke="none"/></svg></button>
@@ -120,7 +121,7 @@
 
 <!-- ============ CUADRILLAS (admin o con permiso) ============ -->
 <section id="pantallaCuad" class="pantalla" hidden>
-  <header class="u-bar"><button id="cuAtras" class="icon-btn" aria-label="Volver"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div class="u-bar-t">Cuadrillas</div></header>
+  <header class="u-bar"><button id="cuAtras" class="icon-btn" aria-label="Volver"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div class="u-bar-t">Cuadrillas</div><button id="cuMapa" class="icon-btn" aria-label="Ver camiones en el mapa" style="font-size:13px;font-weight:700;width:auto;padding:0 10px">📍 Camiones</button></header>
   <div class="cu-filtros"><input type="date" id="cuFecha"><select id="cuTurno"><option value="0">00–08</option><option value="1">08–16</option><option value="2">16–24</option><option value="d">Día</option></select><select id="cuSel"></select></div>
   <div id="cuCuerpo" class="u-cuerpo"></div>
 </section>
