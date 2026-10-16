@@ -6495,7 +6495,7 @@ async function agregarHojasOperativo(pdf, det, primera){
   // ---------- HOJA 1: mapa a página completa + encabezado + indicadores (igual que los demás informes) ----------
   pdf.setFillColor(238, 242, 238); pdf.rect(0, 0, ancho, alto, 'F');
   try{
-    const cv = await renderMapaCanvas(operativoItemsMapa(det), {w: 1588, h: 2246, padding: 190, padTop: 400, padBottom: 520, zMax: 17, simple: true, radio: 5});
+    const cv = await renderMapaCanvas(operativoItemsMapa(det), {w: 1588, h: 2246, padding: 190, padTop: 400, padBottom: 800, zMax: 17, simple: true, radio: 5});
     if(cv) pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
     else { pdf.setFontSize(10); pdf.setTextColor(...gris); pdf.text('Este operativo no tiene fallas con ubicación.', ancho / 2, alto / 2, {align: 'center'}); }
   }catch(e){ console.warn('No se pudo dibujar el mapa del operativo:', e); }
@@ -6512,7 +6512,7 @@ async function agregarHojasOperativo(pdf, det, primera){
   pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 20, {align: 'right'});
   pdf.text(`extraído por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 25, {align: 'right'});
   // Panel de indicadores
-  const py = alto - 56, ph = 44, pct = c.total ? Math.round(100 * c.reparadas / c.total) : 0;
+  const py = alto - 112, ph = 100, pct = c.total ? Math.round(100 * c.reparadas / c.total) : 0;
   conOpacidad(0.96, () => { pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(margen - 2, py, ancho - (margen - 2) * 2, ph, 4, 4, 'FD'); });
   const kpi = (x, valor, etiqueta, sub) => {
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.setTextColor(...VERDE); pdf.text(String(valor), x, py + 16);
@@ -6530,18 +6530,12 @@ async function agregarHojasOperativo(pdf, det, primera){
   let lx = margen + 6;
   leyenda.forEach(([t, col]) => { const rgb = [1, 3, 5].map(i => parseInt(col.slice(i, i + 2), 16)); pdf.setFillColor(...rgb); pdf.circle(lx + 1.5, py + 41, 1.5, 'F'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(t, lx + 4, py + 41.8); lx += 28; });
 
-  // ---------- HOJA 2: estadísticas ----------
-  pdf.addPage();
-  pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 18, 'F');
-  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(13); pdf.setTextColor(255, 255, 255);
-  pdf.text('Operativo: ' + (det.nombre || '') + ' · ' + fF, margen + 2, 11.5);
-  const est = {theme: 'grid', styles: {fontSize: 8.5, cellPadding: 1.8, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1}, headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'}, alternateRowStyles: {fillColor: [243, 247, 244]}};
-  pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text('Por inspector', margen, 28);
-  pdf.autoTable({...est, startY: 30, margin: {left: margen, right: margen}, head: [['Inspector', 'Fallas', 'Reparadas']], body: c.porInspector.map(([k, v]) => [k, v.n, v.rep])});
-  let y = pdf.lastAutoTable.finalY + 10;
-  if(y > alto - 50){ pdf.addPage(); y = 20; }
-  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text('Por tipo de falla', margen, y);
-  pdf.autoTable({...est, startY: y + 2, margin: {left: margen, right: margen}, head: [['Código', 'Fallas', 'Reparadas']], body: c.porCodigo.map(([k, v]) => [etiquetaCodOp(k), v.n, v.rep])});
+  // Tablas dentro del mismo panel (todo el operativo en una sola hoja)
+  const resumir = (arr, max) => arr.length <= max ? arr : arr.slice(0, max - 1).concat([['Otros', arr.slice(max - 1).reduce((a, [, v]) => ({n: a.n + v.n, rep: a.rep + v.rep}), {n: 0, rep: 0})]]);
+  const est = {theme: 'grid', styles: {fontSize: 7.5, cellPadding: 0.9, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1}, headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'}, alternateRowStyles: {fillColor: [243, 247, 244]}};
+  const mitad = (ancho - 2 * margen) / 2 - 3, ty = py + 48;
+  pdf.autoTable({...est, startY: ty, margin: {left: margen + 2, right: ancho - margen - 2 - mitad}, head: [['Inspector', 'Fallas', 'Rep.']], columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}}, body: resumir(c.porInspector, 9).map(([k, v]) => [k, v.n, v.rep])});
+  pdf.autoTable({...est, startY: ty, margin: {left: margen + mitad + 6, right: margen + 2}, head: [['Tipo de falla', 'Fallas', 'Rep.']], columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}}, body: resumir(c.porCodigo, 9).map(([k, v]) => [k === 'Otros' ? k : etiquetaCodOp(k), v.n, v.rep])});
   pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
   pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
 }
@@ -7840,34 +7834,10 @@ async function generarPdfAnalisis(soloResumen, opciones){
     pdf.text('Verde: mejora respecto del período anterior; rojo: empeora. Período anterior = la misma cantidad de días inmediatamente anteriores. pp = puntos porcentuales.', margen, yc + hc + 4);
     pdf.setFontSize(8); pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
 
-    // Hoja de operativos del período (si los hubo): se suma a las cifras de siempre, no las excluye
+    // Una hoja por cada operativo del período (si los hubo): se suma a las cifras de siempre, no las excluye
     try{
       const datOp = await traerOperativos(ini, fin);
       if(datOp && datOp.operativos && datOp.operativos.length){
-        pdf.addPage();
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...VERDE);
-        pdf.text('Operativos del período', margen, 16);
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gris);
-        pdf.text(`Período: ${fmtF(ini)} a ${fmtF(fin)} · Cifras de todas las inspecciones de cada fecha (ya incluidas en el resto del informe).`, margen, 21);
-        pdf.setDrawColor(219, 226, 220); pdf.line(margen, 24, ancho - margen, 24);
-        const nm = datOp.normal || {};
-        pdf.autoTable({
-          startY: 29, margin: {left: margen, right: margen}, theme: 'grid',
-          styles: {fontSize: 8.5, cellPadding: 1.8, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1},
-          headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'},
-          head: [['Fecha', 'Operativo', 'Inspectores', 'Inspecciones', 'Fallas', 'Reparadas', 'Abiertas', 'Pend.', 'Reit.']],
-          body: datOp.operativos.map(o => [fmtF(o.fecha), o.nombre, String(o.itos), o.inspecciones, o.fallas,
-            o.fallas ? `${o.reparadas} (${Math.round(100 * o.reparadas / o.fallas)}%)` : '0', o.abiertas, o.pendientes, o.reiteradas])
-        });
-        let yo = pdf.lastAutoTable.finalY + 6;
-        pdf.setFontSize(9); pdf.setTextColor(...gris);
-        if(nm.dias){
-          const txt = `Día normal de inspección en este período (${nm.dias} día${nm.dias > 1 ? 's' : ''}, sin operativo): ${num(nm.fallas_prom)} fallas y ${num(nm.itos_prom)} inspectores en promedio.`;
-          pdf.text(pdf.splitTextToSize(txt, ancho - 2 * margen), margen, yo); yo += 10;
-        }
-        const inspNombres = datOp.operativos.filter(o => o.inspectores).map(o => `${fmtF(o.fecha)}: ${o.inspectores}`).join('\n');
-        if(inspNombres){ pdf.setFontSize(8); pdf.text(pdf.splitTextToSize('Inspectores participantes\n' + inspNombres, ancho - 2 * margen), margen, yo); }
-        pdf.setFontSize(8); pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
         // Una sección por operativo: mapa con sus fallas + estadísticas (solo del operativo)
         for(const o of datOp.operativos){
           try{
