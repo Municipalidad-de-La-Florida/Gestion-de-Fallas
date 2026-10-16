@@ -1813,7 +1813,7 @@ async function detalleInspC3(id) {
     const fs = det.fallas || [];
     h.innerHTML = `<h2>${esc(det.inspeccion.ito_nombre)} · ${esc(fmtFechaCorta(det.inspeccion.fecha))}</h2>
       <div class="hint">${fs.length} falla${fs.length === 1 ? '' : 's'} en total. Las de otros contratos se ven en gris.</div>
-      ${fs.map((f) => `<div class="tarjeta est-${esc(claveColor({ estado: f.estado, fecha_falla_real: f.fecha_ingreso })}"${f.mi_contrato ? ` data-fid="${esc(f.id)}"` : ''} style="margin-top:8px;${f.mi_contrato ? ' cursor:pointer;' : ' opacity:.45; filter:grayscale(1);'}">
+      ${fs.map((f) => `<div class="tarjeta est-${esc(claveColor({ estado: f.estado, fecha_falla_real: f.fecha_ingreso }))}"${f.mi_contrato ? ` data-fid="${esc(f.id)}"` : ''} style="margin-top:8px;${f.mi_contrato ? ' cursor:pointer;' : ' opacity:.45; filter:grayscale(1);'}">
         <div class="tarjeta-top"><b>${esc(f.tipo_falla)} · ${esc(DESC_CODIGO[f.tipo_falla] || '')}</b></div>
         <div class="sub">OS ${esc(f.ot || '—')} · ${f.tipo === 'linea' ? 'Circuito ' + esc(f.circuito_id ?? '—') : 'Llave ' + esc(f.llave ?? '—')} · <span class="insignia ${esc(f.estado)}">${esc(ETIQUETA_ESTADO[f.estado] || f.estado)}</span></div>
         ${f.contrato_nombre ? `<div class="sub">${esc(f.contrato_nombre)}${f.asignado_camion ? ' · Asignada a ' + esc(f.asignado_camion) : ''}</div>` : ''}
