@@ -3052,13 +3052,13 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
 // ---------- DIBUJAR FALLAS EN EL MAPA (visibles en cualquier zoom) ----------
 const colorEstado = {reportada:'#f2b705', pendiente:'#2fa8d8', reparada:'#3a8a5c', reiterada:'#8e44ad', vencida:'#d33a2c'};
 // Color vivo de una falla: amarillo reportada, morado reiterada, celeste pendiente; pasan a rojo si
-// la reportada/reiterada supera 48 h desde que se informó o la pendiente supera 7 días.
+// la reportada/reiterada supera 48 h o la pendiente 7 días, contados desde que se informó.
 // fInf = fecha en que se informó (o reiteró); fPend = fecha en que quedó pendiente.
 function claveColorFalla(estado, fInf, fPend){
   if(estado === 'reparada') return 'reparada';
   const ms = (d) => { const t = d ? new Date(d).getTime() : NaN; return isNaN(t) ? null : Date.now() - t; };
   if(estado === 'pendiente'){
-    const t = ms(fPend || fInf);
+    const t = ms(fInf || fPend);
     return (t !== null && t > 7 * 86400000) ? 'vencida' : 'pendiente';
   }
   const t = ms(fInf);
@@ -4110,7 +4110,7 @@ function renderFallasList(){
     const nombreFalla = descripcionCodigoAnalisis(f.tipo, f.tipo_falla) || '';
     const lineaLlave = (buscando && f.llave != null && terminos.some(t => String(f.llave).toLowerCase().includes(t.toLowerCase())))
       ? `<div class="fi-nom" style="margin-top:1px;">Llave ${resaltarTexto(f.llave, terminos)}</div>` : '';
-    return `<div class="fi fi-est-${claveColorFalla(f.estado, f.creado_en || f.fecha, f.fecha_pendiente)}" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
+    return `<div class="fi fi-est-${claveColorFalla(f.estado, f.creado_en || f.fecha, null)}" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
       <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}${contratoTag(f.contrato_id)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
       <div class="fi-nom">${escHtml(nombreFalla)}</div>
       <div class="fi-2"><span class="fi-q">${resaltarTexto(f.quien, terminos)}</span><span class="fi-oe${f.orden_externa ? '' : ' vacio'}">OE: ${f.orden_externa ? resaltarTexto(f.orden_externa, terminos) : '—'}</span><span class="fi-fh">${fechaTxt}</span></div>
@@ -6261,7 +6261,7 @@ function dibujarFallasInspeccionEnMapa(fallas, sinZoom){
   capasInspeccionPorFalla = {};
   fallas.forEach(f => {
     if(!f.geometry) return;
-    const color = (rolEfectivo() === 'contratista3' && f.mi_contrato === false) ? '#9aa5b1' : colorFalla(f.estado, f.estado === 'pendiente' ? null : f.fecha_ingreso, null);
+    const color = (rolEfectivo() === 'contratista3' && f.mi_contrato === false) ? '#9aa5b1' : colorFalla(f.estado, f.fecha_ingreso, null);
     const tip = `OS ${f.ot || '—'} · ${f.tipo_falla} · ${String(f.estado).replace('_',' ')}`;
     let capa;
     if(f.geometry.type === 'Point'){
@@ -7009,7 +7009,7 @@ async function renderMapaCanvas(items, opciones = {}){
 
 async function capturarMapaInspeccion(det){
   return renderMapaCanvas((det.fallas || []).map((f, i) => ({
-    geom: f.geometry, label: i + 1, color: colorFalla(f.estado, f.estado === 'pendiente' ? null : f.fecha_ingreso, null)
+    geom: f.geometry, label: i + 1, color: colorFalla(f.estado, f.fecha_ingreso, null)
   })));
 }
 
@@ -8468,8 +8468,8 @@ function fiscPintar(){
   const filas = lista.map(({f, ms, ratio}) => {
     const col = fiscColor(ratio);
     const det = f.estado === 'pendiente'
-      ? `<span class="badge pendiente">pendiente</span>${f.es_reiterada ? ' <span class="badge reiterada">reiterada</span>' : ''}${motivoSinMasivo(f.motivo_pendiente) ? `<div style="color:var(--ink-soft);">${escHtml(motivoSinMasivo(f.motivo_pendiente))}</div>` : ''}${f.pendiente_por ? `<div style="color:var(--ink-soft);">por ${escHtml(f.pendiente_por)}</div>` : ''}`
-      : `<span class="badge ${f.estado === 'reiterada' ? 'reiterada' : 'reportada'}">${f.estado === 'reiterada' ? 'reiterada' : 'reportada'}</span>${f.es_reiterada && f.estado !== 'reiterada' ? ' <span class="badge reiterada">reiterada</span>' : ''}`;
+      ? `<span class="badge ${claveColorFalla('pendiente', f.informada_en, null)}">pendiente</span>${f.es_reiterada ? ' <span class="badge reiterada">reiterada</span>' : ''}${motivoSinMasivo(f.motivo_pendiente) ? `<div style="color:var(--ink-soft);">${escHtml(motivoSinMasivo(f.motivo_pendiente))}</div>` : ''}${f.pendiente_por ? `<div style="color:var(--ink-soft);">por ${escHtml(f.pendiente_por)}</div>` : ''}`
+      : `<span class="badge ${claveColorFalla(f.estado === 'reiterada' ? 'reiterada' : 'reportada', f.informada_en, null)}">${f.estado === 'reiterada' ? 'reiterada' : 'reportada'}</span>${f.es_reiterada && f.estado !== 'reiterada' ? ' <span class="badge reiterada">reiterada</span>' : ''}`;
     const asig = f.camion ? `🚚 ${escHtml(f.camion)}<div style="color:var(--ink-soft);">desde hace ${fiscEdadFmt(Date.now() - new Date(f.asignada_en || f.informada_en).getTime())}</div>` : '<span style="color:#c1443c;">Sin asignar</span>';
     return `<tr class="cu-fila" data-falla="${f.falla_id}"><td><span style="background:${col}; color:#fff; border-radius:10px; padding:2px 9px; font-weight:700; white-space:nowrap;">${fiscEdadFmt(ms)}</span></td>
       <td>${escHtml(f.ot || '—')}</td><td>${escHtml(f.direccion || '—')}${f.tipo === 'linea' ? `<div style="color:var(--ink-soft);">${f.puntos_afectados} puntos</div>` : ''}</td><td>${f.contrato ? `<span style="background:#e6eefb; color:#2a5db0; border-radius:8px; padding:2px 8px; font-size:11px; white-space:nowrap;">${escHtml(f.contrato)}</span>` : '<span style="color:var(--ink-soft);">sin contrato</span>'}</td><td>${escHtml(f.tipo_falla || '')}</td>
