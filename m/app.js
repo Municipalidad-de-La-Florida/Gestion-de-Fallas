@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.30.0';
+const VERSION_APP = '1.30.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1993,8 +1993,7 @@ window._usrPop = () => { if (usrVolviendo) { usrVolviendo = false; return; } if 
 const formUsuarios = abrirUsuarios;
 
 /* ------------------ Compartir ubicación (solo camiones, solo con la app abierta) ------------------ */
-const LS_UBIC = 'fm_compartir_ubic';
-const ubicActiva = () => { try { return localStorage.getItem(LS_UBIC) === '1'; } catch (e) { return false; } };
+const ubicActiva = () => true;   // los camiones comparten siempre mientras la app está abierta (el teléfono pide el permiso de GPS)
 let ubicTimer = null, ubicUltimo = 0;
 function enviarUbicacion() {
   if (rol() !== 'camion' || !ubicActiva() || document.visibilityState !== 'visible' || !navigator.geolocation) return;
@@ -2011,19 +2010,6 @@ function iniciarUbicacion() {
   ubicTimer = setInterval(enviarUbicacion, 60000);
 }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') enviarUbicacion(); });
-async function alternarUbicacion() {
-  if (ubicActiva()) {
-    try { localStorage.setItem(LS_UBIC, '0'); } catch (e) { /* */ }
-    if (ubicTimer) { clearInterval(ubicTimer); ubicTimer = null; }
-    try { await rpc('borrar_mi_ubicacion', {}); } catch (e) { /* */ }
-    toast('Dejaste de compartir tu ubicación', 'ok');
-  } else {
-    if (!navigator.geolocation) { toast('Este dispositivo no tiene GPS disponible.', 'error'); return; }
-    try { localStorage.setItem(LS_UBIC, '1'); } catch (e) { /* */ }
-    ubicUltimo = 0; iniciarUbicacion();
-    toast('Compartes tu ubicación mientras la app esté abierta', 'ok');
-  }
-}
 /* ------------------------- Cuadrillas (admin o con permiso) -------------------------
    Misma lógica que la web: por turno, solo cuenta lo que cerró o dejó pendiente un camión. */
 const CU_TURNOS = { '0': [0, 8], '1': [8, 16], '2': [16, 24], d: [0, 24] };
@@ -2579,7 +2565,7 @@ $('#btnMenu').addEventListener('click', () => {
       ${!S.instalar && esIOS() && !esStandalone() ? '<div class="aviso">Para instalarla en iPhone: toca el botón <b>Compartir</b> de Safari y luego <b>Añadir a pantalla de inicio</b>.</div>' : ''}
       <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
       ${rol() === 'admin' ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Gestionar usuarios</span>${chev}</button>` : ''}
-      ${rol() === 'camion' ? `<button id="mUbic" class="m-fila"><span class="m-ico m-azul">${ico('<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>')}</span><span class="t">${ubicActiva() ? 'Dejar de compartir mi ubicación' : 'Compartir mi ubicación'}</span></button><div class="hint" style="margin:-2px 6px 8px">Se envía solo mientras la app está abierta; lo ve el administrador.</div>` : ''}
+      ${rol() === 'camion' ? '<div class="hint" style="margin:4px 6px 8px">📍 Tu ubicación se comparte con el administrador mientras la app está abierta.</div>' : ''}
       ${puedeCuadrillas() ? `<button id="mCuadrillas" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M3 17h13V7H3z"/><path d="M16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>')}</span><span class="t">Cuadrillas</span>${chev}</button>` : ''}
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
@@ -2601,8 +2587,6 @@ $('#btnMenu').addEventListener('click', () => {
   } else if (esIOS() && !esStandalone()) {
     mp.insertAdjacentHTML('afterend', '<div class="aviso">Para recibir avisos en iPhone, primero instala la app con <b>Añadir a pantalla de inicio</b>.</div>');
   }
-  const mub = $('#mUbic', h);
-  if (mub) mub.addEventListener('click', async () => { await alternarUbicacion(); cerrarHoja(); });
   const mcu = $('#mCuadrillas', h);
   if (mcu) mcu.addEventListener('click', () => abrirCuadrillas());
   const mu = $('#mUsuarios', h);

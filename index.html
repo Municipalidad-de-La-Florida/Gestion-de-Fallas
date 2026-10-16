@@ -8370,7 +8370,7 @@ async function cuadUbicCargar(){
     btn.textContent = `📍 Camiones (${(filas || []).length})`;
     if(CUAD.ubicEncuadrar && pts.length){ map.fitBounds(L.latLngBounds(pts), {padding: [60, 60], maxZoom: 16}); }
     CUAD.ubicEncuadrar = false;
-    if(!pts.length && CUAD.ubicMsg){ alert('Ningún camión está compartiendo su ubicación ahora. Cada camión debe activar «Compartir mi ubicación» en el menú de la app (versión 1.30 o superior).'); }
+    if(!pts.length && CUAD.ubicMsg){ alert('Ningún camión está compartiendo su ubicación ahora. Los camiones la comparten sola al abrir la app (versión 1.30.1 o superior) y dar permiso de ubicación al teléfono.'); }
     CUAD.ubicMsg = false;
   }catch(e){ btn.textContent = '📍 Camiones'; if(CUAD.ubicMsg) alert('No se pudo cargar la ubicación: ' + e.message + '\n\n¿Ejecutaste sql/2026-10-ubicacion-camiones.sql en Supabase?'); CUAD.ubicMsg = false; }
 }
