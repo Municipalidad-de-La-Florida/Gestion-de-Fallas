@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.30.1';
+const VERSION_APP = '1.31.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2110,7 +2110,42 @@ function pintarCuadrillas() {
   cont.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => { $('#cuSel').value = b.dataset.c; pintarCuadrillas(); cont.scrollTop = 0; }));
   cont.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { cerrarCuadrillas(); abrirFallaPorId(b.dataset.f); }));
 }
+/* Camiones en el mapa (admin o con permiso de Cuadrillas): se actualizan solos cada minuto */
+const CAM = { capa: null, timer: null };
+async function cargarCamionesMapa(encuadrar) {
+  try {
+    const filas = await rpc('ubicaciones_camiones', {});
+    if (!CAM.capa) return;
+    CAM.capa.clearLayers();
+    const pts = [];
+    (filas || []).forEach((u) => {
+      const min = Math.max(0, Math.round((Date.now() - new Date(u.actualizado_en).getTime()) / 60000));
+      const viejo = min > 15, col = viejo ? '#9aa5b1' : '#1f4d3d';
+      const icono = L.divIcon({ className: '', iconSize: [0, 0], html: `<div style="transform:translate(-50%,-100%);text-align:center"><div style="background:${col};color:#fff;font-weight:700;font-size:12px;border-radius:12px;padding:3px 9px;white-space:nowrap;border:2px solid #fff;box-shadow:0 1px 4px #0006">🚚 ${esc(u.nombre)}</div><div style="width:0;height:0;margin:0 auto;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${col}"></div></div>` });
+      L.marker([u.lat, u.lng], { icon: icono, zIndexOffset: 1000 }).bindTooltip(`${u.nombre} · hace ${min < 60 ? min + ' min' : Math.floor(min / 60) + ' h ' + (min % 60) + ' min'}`).addTo(CAM.capa);
+      pts.push([u.lat, u.lng]);
+    });
+    $('#badgeCamiones').textContent = `Camiones (${pts.length}) ✕`;
+    if (encuadrar) { if (pts.length) map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 16 }); else toast('Ningún camión comparte su ubicación ahora', 'error'); }
+  } catch (e) { if (encuadrar) toast('No se pudo cargar: ' + e.message, 'error'); }
+}
+function mostrarCamionesMapa() {
+  cerrarCuadrillas();
+  cambiarVista('mapa');
+  if (!CAM.capa) CAM.capa = L.layerGroup().addTo(map);
+  $('#badgeCamiones').hidden = false;
+  cargarCamionesMapa(true);
+  clearInterval(CAM.timer);
+  CAM.timer = setInterval(() => cargarCamionesMapa(false), 60000);
+}
+function ocultarCamionesMapa() {
+  clearInterval(CAM.timer); CAM.timer = null;
+  if (CAM.capa) { map.removeLayer(CAM.capa); CAM.capa = null; }
+  $('#badgeCamiones').hidden = true;
+}
 document.addEventListener('DOMContentLoaded', () => {
+  $('#cuMapa').addEventListener('click', mostrarCamionesMapa);
+  $('#badgeCamiones').addEventListener('click', ocultarCamionesMapa);
   $('#cuAtras').addEventListener('click', () => { if ($('#cuSel').value) { $('#cuSel').value = ''; pintarCuadrillas(); } else cerrarCuadrillas(); });
   ['#cuFecha', '#cuTurno'].forEach((s) => $(s).addEventListener('change', cargarCuadrillas));
   $('#cuSel').addEventListener('change', pintarCuadrillas);
