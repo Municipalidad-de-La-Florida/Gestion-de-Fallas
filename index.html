@@ -972,6 +972,7 @@
         <button class="mode-btn" id="backFromCuad" style="margin:0; padding:7px 12px;">← Volver</button>
         <b style="font-size:15px;">🚚 Rendimiento de cuadrillas</b>
         <span style="flex:1;"></span>
+        <button type="button" id="cuadUbicBtn" title="Ver dónde están los camiones que comparten su ubicación" style="height:30px; padding:0 12px; border:1.5px solid #000; border-radius:8px; background:#fff; color:#1f4d3d; font-size:12.5px; font-weight:600; cursor:pointer;">📍 Camiones</button>
         <button type="button" id="cuadPdfBtn" title="Descargar resumen en PDF" style="height:30px; padding:0 12px; border:1.5px solid #000; border-radius:8px; background:#2563a8; color:#fff; font-size:12.5px; font-weight:600; cursor:pointer;">⬇ PDF</button>
         <div style="flex-basis:100%; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
           <input type="date" id="cuadFecha">
@@ -8345,10 +8346,44 @@ function ocultarCuadrillas(){
   document.getElementById('sidebarNormal').style.display = 'flex';
   actualizarLayoutStats();
   if(CUAD.capa) map.removeLayer(CUAD.capa);
+  if(CUAD.ubic){ map.removeLayer(CUAD.ubic); CUAD.ubic = null; document.getElementById('cuadUbicBtn').style.background = '#fff'; }
   mostrarCapaActivas();
 }
 document.getElementById('cuadBtn').onclick = () => mostrarCuadrillas();
 document.getElementById('backFromCuad').onclick = () => ocultarCuadrillas();
+// Ubicación de los camiones que comparten su posición desde la app (se actualiza sola cada minuto mientras está activa)
+async function cuadUbicCargar(){
+  const btn = document.getElementById('cuadUbicBtn');
+  try{
+    const filas = await db.rpc('ubicaciones_camiones', {});
+    if(!CUAD.ubic) return;
+    CUAD.ubic.clearLayers();
+    const pts = [];
+    (filas || []).forEach(u => {
+      const min = Math.max(0, Math.round((Date.now() - new Date(u.actualizado_en).getTime()) / 60000));
+      const viejo = min > 15;
+      const hace = min < 1 ? 'hace menos de 1 min' : (min < 60 ? `hace ${min} min` : `hace ${Math.floor(min / 60)} h ${min % 60} min`);
+      const icono = L.divIcon({className: '', iconSize: [0, 0], html: `<div style="transform:translate(-50%,-100%); text-align:center;"><div style="background:${viejo ? '#9aa5b1' : '#1f4d3d'}; color:#fff; font-weight:700; font-size:12px; border-radius:12px; padding:3px 9px; white-space:nowrap; border:2px solid #fff; box-shadow:0 1px 4px #0006;">🚚 ${escHtml(u.nombre)}</div><div style="width:0;height:0;margin:0 auto;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid ${viejo ? '#9aa5b1' : '#1f4d3d'};"></div></div>`});
+      L.marker([u.lat, u.lng], {icon: icono, pane: 'inspeccionPane', zIndexOffset: 1000}).bindTooltip(`${escHtml(u.nombre)} · ${hace}`).addTo(CUAD.ubic);
+      pts.push([u.lat, u.lng]);
+    });
+    btn.textContent = `📍 Camiones (${(filas || []).length})`;
+    if(CUAD.ubicEncuadrar && pts.length){ map.fitBounds(L.latLngBounds(pts), {padding: [60, 60], maxZoom: 16}); }
+    CUAD.ubicEncuadrar = false;
+    if(!pts.length && CUAD.ubicMsg){ alert('Ningún camión está compartiendo su ubicación ahora. Cada camión debe activar «Compartir mi ubicación» en el menú de la app (versión 1.30 o superior).'); }
+    CUAD.ubicMsg = false;
+  }catch(e){ btn.textContent = '📍 Camiones'; if(CUAD.ubicMsg) alert('No se pudo cargar la ubicación: ' + e.message + '\n\n¿Ejecutaste sql/2026-10-ubicacion-camiones.sql en Supabase?'); CUAD.ubicMsg = false; }
+}
+document.getElementById('cuadUbicBtn').onclick = () => {
+  const btn = document.getElementById('cuadUbicBtn');
+  if(CUAD.ubic){ map.removeLayer(CUAD.ubic); CUAD.ubic = null; clearInterval(CUAD.ubicTimer); btn.style.background = '#fff'; btn.textContent = '📍 Camiones'; return; }
+  CUAD.ubic = L.layerGroup().addTo(map);
+  btn.style.background = '#e3f1ea';
+  CUAD.ubicEncuadrar = true; CUAD.ubicMsg = true;
+  cuadUbicCargar();
+  clearInterval(CUAD.ubicTimer);
+  CUAD.ubicTimer = setInterval(() => { if(CUAD.ubic) cuadUbicCargar(); }, 60000);
+};
 document.getElementById('cuadFecha').onchange = () => cuadCargar();
 document.getElementById('cuadTurno').onchange = () => cuadCargar();
 document.getElementById('cuadSel').onchange = () => cuadPintar();
