@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.33.0';
+const VERSION_APP = '1.33.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -134,10 +134,10 @@ function fmtFechaHoraCorta(iso) {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-GB', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).map((x) => [x.type, x.value]));
   return `${p.day}/${p.month}, ${p.hour}:${p.minute}`;
 }
-// Duración desde que se informó la falla (mismo criterio que la web de escritorio).
-function fmtDuracion(iso) {
+// Duración desde que se informó la falla (mismo criterio que la web de escritorio); si ya se reparó, se detiene en la fecha de reparación.
+function fmtDuracion(iso, finIso) {
   if (!iso) return '—';
-  const ms = Date.now() - new Date(iso).getTime();
+  const ms = (finIso ? new Date(finIso).getTime() : Date.now()) - new Date(iso).getTime();
   if (isNaN(ms) || ms < 0) return '0 min';
   const total = Math.floor(ms / 60000);
   const dias = Math.floor(total / 1440), horas = Math.floor((total % 1440) / 60), min = total % 60;
@@ -1392,7 +1392,7 @@ async function abrirFalla(p, geom) {
     p.cardinalidad ? ['Cardinalidad', p.cardinalidad] : null,
     ['Informada', fmtFecha(p.fecha_falla)],
     ['Inspector', p.nombre_creador || p.nombre_real_creador || '—'],
-    ['Duración de la falla', fmtDuracion(p.fecha_falla)],
+    ['Duración de la falla', fmtDuracion(p.fecha_falla, p.estado === 'reparada' ? p.fecha_reparacion : null)],
     p.tipo !== 'punto' ? ['Puntos afectados', p.puntos_afectados ?? '—'] : null,
     p.asignado_camion_nombre ? ['Asignado por', `${p.asignado_por_nombre || '—'}${p.fecha_asignacion ? ' · ' + fmtFechaHoraCorta(p.fecha_asignacion) : ''}`] : null,
     // "Asignado a" solo en fallas activas; en reparadas/pendientes la zona de respuesta lleva "Responde"
