@@ -3390,8 +3390,9 @@ async function abrirEditorFalla(p){
 }
 window.abrirEditorFalla = abrirEditorFalla;
 
-function formatearDuracion(fechaInicio){
-  const ms = Date.now() - new Date(fechaInicio).getTime();
+// Duración desde que se informó la falla hasta ahora; si ya se reparó, se detiene en la fecha de reparación.
+function formatearDuracion(fechaInicio, fechaFin){
+  const ms = (fechaFin ? new Date(fechaFin).getTime() : Date.now()) - new Date(fechaInicio).getTime();
   if(ms < 0) return '0 min';
   const minutosTotal = Math.floor(ms / 60000);
   const dias = Math.floor(minutosTotal / (60*24));
@@ -3438,7 +3439,7 @@ async function abrirPopupFalla(feat){
     ? `<div class="hint" style="margin-top:4px;"><b>Luminaria ${p.cardinalidad}</b></div>`
     : '';
   const fechaFalla = p.fecha_falla ? new Date(p.fecha_falla).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-  const duracion = p.fecha_falla ? formatearDuracion(p.fecha_falla) : '—';
+  const duracion = p.fecha_falla ? formatearDuracion(p.fecha_falla, p.estado === 'reparada' ? p.fecha_reparacion : null) : '—';
   const infoComentario = p.descripcion_otro
     ? `<div class="hint" style="margin-top:4px;">Comentario:</div><div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.descripcion_otro}</div>`
     : '';
