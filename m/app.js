@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.36.1';
+const VERSION_APP = '1.36.2';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1433,12 +1433,12 @@ async function abrirFalla(p, geom) {
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
     <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && rol() === 'admin' ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
-    ${p.estado === 'reparada' ? `<div style="border-top:1px solid var(--linea);margin-top:12px;padding-top:4px">
+    ${p.estado === 'reparada' ? `<div style="border-top:1px solid var(--linea);margin-top:6px;padding-top:4px">
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
       ${p.descripcion_reparacion ? `<h3>Trabajo realizado</h3><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
       <div id="fotosFalla"></div>
     </div>` : ''}
-    ${p.estado === 'pendiente' ? `<div style="border-top:1px solid var(--linea);margin-top:12px;padding-top:4px">
+    ${p.estado === 'pendiente' ? `<div style="border-top:1px solid var(--linea);margin-top:6px;padding-top:4px">
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
       <h3>Motivo</h3><pre class="texto">${esc(p.motivo_pendiente || '')}</pre>
     </div>` : ''}
