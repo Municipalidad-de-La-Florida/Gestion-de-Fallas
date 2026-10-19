@@ -3968,7 +3968,7 @@ function resaltarTexto(texto, terminos){
 function normalizarFilaLateral(f){
   const esBusqueda = 'nombre_creador' in f;
   return {
-    id: f.id, ot: f.ot, masivo: !!f.masivo, contrato_id: f.contrato_id || null, asignado: f.asignado_camion_id || null, orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
+    id: f.id, ot: f.ot, masivo: !!f.masivo, contrato_id: f.contrato_id || null, asignado: f.asignado_camion_id || (f.asignado_camion_nombre ? 'asignada' : null), orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
     fecha: f.fecha_creacion, fecha_pendiente: f.fecha_pendiente || null, creado_en: f.creado_en, creado_por: f.creado_por,
     quien: esBusqueda ? (f.nombre_creador || '—') : (f.notificadores ? f.notificadores.nombre : (f.usuarios ? f.usuarios.nombre : '—')),
     llave: esBusqueda ? f.llave : (f.puntos_luminarios ? f.puntos_luminarios.llave : null)
@@ -4110,7 +4110,10 @@ function renderFallasList(){
   if(buscando){
     if(busquedaLateral.cargando){ list.innerHTML = '<div class="empty-state">Buscando…</div>'; estado.style.display = 'none'; return; }
     if(busquedaLateral.error){ list.innerHTML = `<div class="empty-state">No se pudo buscar: ${escHtml(busquedaLateral.error)}</div>`; estado.style.display = 'none'; return; }
-    filas = (busquedaLateral.filas || []).map(normalizarFilaLateral);
+    // La búsqueda de texto respeta los filtros puestos (asignación, subcontrato, contrato, código y estados)
+    filas = (busquedaLateral.filas || []).map(normalizarFilaLateral)
+      .filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id, f.tipo_falla))
+      .filter(f => filtrosEstadoVisible[f.estado] !== false);
   } else {
     filas = fallasEnArea.map(normalizarFilaLateral);
     filas = filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id, f.tipo_falla));
@@ -4119,7 +4122,7 @@ function renderFallasList(){
   actualizarFiltrosOtrosUI();
   actualizarFiltrosUI(filas.length);
   estado.style.display = (buscando && filas.length) ? 'block' : 'none';
-  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas)` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${asignacionActiva() === 'sin' ? ' sin asignar' : (asignacionActiva() === 'asignadas' ? ' asignadas' : '')}${filtroSubcontrato === 'masivo' ? ' · masivo' : (filtroSubcontrato === 'normal' ? ' · normal' : '')}${filtroCodigos.size ? ' · ' + [...filtroCodigos].join(', ') : ''}`;
+  estado.textContent = buscando ? `${filas.length} resultado${filas.length !== 1 ? 's' : ''} (en todas las fallas, también reparadas${contarFiltrosActivos() ? ' · con los filtros puestos' : ''})` : `${filas.length} ${filas.length === 1 ? 'falla activa' : 'fallas activas'}${asignacionActiva() === 'sin' ? ' sin asignar' : (asignacionActiva() === 'asignadas' ? ' asignadas' : '')}${filtroSubcontrato === 'masivo' ? ' · masivo' : (filtroSubcontrato === 'normal' ? ' · normal' : '')}${filtroCodigos.size ? ' · ' + [...filtroCodigos].join(', ') : ''}`;
   if(!filas.length){
     list.innerHTML = buscando
       ? `<div class="empty-state">Sin resultados para «${escHtml(busquedaLateral.texto)}».</div>`
@@ -4147,7 +4150,7 @@ function renderFallasList(){
 
 async function ejecutarBusquedaLateral(texto){
   try{
-    const filas = (await db.rpc('resumen_todas_fallas', {limite: 50, desplazamiento: 0, busqueda: texto})) || [];
+    const filas = (await db.rpc('resumen_todas_fallas', {limite: 300, desplazamiento: 0, busqueda: texto})) || [];
     if(document.getElementById('buscarFallasLateral').value.trim() !== texto) return;
     busquedaLateral = {texto, filas, cargando: false, error: null};
   }catch(e){
