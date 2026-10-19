@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.33.1';
+const VERSION_APP = '1.35.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2063,6 +2063,13 @@ function cuRango() {
 }
 const cuHora = (iso) => (iso ? new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—');
 function cuDur(ms) { if (ms == null) return '—'; const min = Math.round(ms / 60000); return min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min` : `${min} min`; }
+// Atenciones del turno = reparadas + pendientes que dejó la cuadrilla. La píldora usa el mismo relleno que la barra.
+function cuPildora(r) {
+  const a = r.reparadas + r.pendientes, txt = a + (a === 1 ? ' atención' : ' atenciones');
+  if (!a) return `<div class="cu-pill cero">${txt}</div>`;
+  const pr = 100 * r.reparadas / a;
+  return `<div class="cu-pill" style="background:linear-gradient(90deg,${CU_COL.reparada} ${pr}%,${CU_COL.pendiente} ${pr}%)">${txt}</div>`;
+}
 function cuCalcular(filas, desde, hasta) {
   const items = filas.map((r) => {
     const a = new Date(r.asignado_en), rep = r.reparada_en ? new Date(r.reparada_en) : null, fp = r.fecha_pendiente ? new Date(r.fecha_pendiente) : null;
@@ -2108,31 +2115,52 @@ async function cargarCuadrillas() {
   if (!$('#cuFecha').value) return;
   cont.innerHTML = '<div class="u-vacio">Cargando…</div>';
   const { desde, hasta } = cuRango();
-  try { CU.datos = await rpc('rendimiento_cuadrillas', { p_desde: desde.toISOString(), p_hasta: hasta.toISOString() }); }
-  catch (e) { cont.innerHTML = `<div class="u-vacio">No se pudo cargar: ${esc(e.message)}</div>`; return; }
+  const prm = { p_desde: desde.toISOString(), p_hasta: hasta.toISOString() };
+  try {
+    try { CU.datos = await rpc('rendimiento_cuadrillas_v2', prm); }
+    catch (e2) {
+      // Sin el SQL nuevo (sql/2026-10-rendimiento-contratos.sql) se usa la función anterior, sin contratos
+      CU.datos = await rpc('rendimiento_cuadrillas', prm);
+      CU.datos.contratos = []; CU.datos.activas = null;
+      CU.datos.cuadrillas.forEach((c) => { c.contratos = []; });
+    }
+  } catch (e) { cont.innerHTML = `<div class="u-vacio">No se pudo cargar: ${esc(e.message)}</div>`; return; }
   const sel = $('#cuSel'), previo = sel.value;
-  sel.innerHTML = '<option value="">Todas</option>' + CU.datos.cuadrillas.map((c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('');
-  if (CU.datos.cuadrillas.some((c) => c.id === previo)) sel.value = previo;
+  const opCuad = (c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`;
+  const cts = CU.datos.contratos || [], sinContrato = CU.datos.cuadrillas.filter((c) => !(c.contratos || []).length);
+  // Subgrupos por contrato: "Todas las de <contrato>" + cada cuadrilla del contrato (un grupo vacío queda visible)
+  sel.innerHTML = '<option value="">Todas</option>' + cts.map((ct) => `<optgroup label="${esc(ct.nombre)}"><option value="c:${esc(ct.id)}">Todas las de ${esc(ct.nombre)}</option>${CU.datos.cuadrillas.filter((c) => (c.contratos || []).includes(ct.id)).map(opCuad).join('')}</optgroup>`).join('')
+    + (cts.length ? (sinContrato.length ? `<optgroup label="Sin contrato">${sinContrato.map(opCuad).join('')}</optgroup>` : '') : CU.datos.cuadrillas.map(opCuad).join(''));
+  if ([...sel.options].some((o) => o.value === previo)) sel.value = previo;
   pintarCuadrillas();
 }
 function pintarCuadrillas() {
   if (!CU.datos) return;
   const cont = $('#cuCuerpo'), { desde, hasta } = cuRango(), selId = $('#cuSel').value;
-  const todas = CU.datos.cuadrillas.map((c) => ({ c, r: cuCalcular(CU.datos.filas.filter((f) => f.camion_id === c.id), desde, hasta) }));
-  const kpi = (l, v, col) => `<div class="cu-kpi" style="border-top-color:${col}"><div class="l">${l}</div><div class="v">${v}</div></div>`;
+  const ctSel = selId.startsWith('c:') ? selId.slice(2) : null;
+  const ctNombre = ctSel ? ((CU.datos.contratos || []).find((x) => x.id === ctSel) || {}).nombre : null;
+  const todasLas = CU.datos.cuadrillas.map((c) => ({ c, r: cuCalcular(CU.datos.filas.filter((f) => f.camion_id === c.id), desde, hasta) }));
+  const todas = ctSel ? todasLas.filter((x) => (x.c.contratos || []).includes(ctSel)) : todasLas;
+  const kpi = (l, v, col, sub) => `<div class="cu-kpi" style="border-top-color:${col}"><div class="l">${l}</div><div class="v">${v}</div>${sub ? `<div class="l" style="font-size:10.5px">${sub}</div>` : ''}</div>`;
   let html = '';
-  if (!selId) {
-    const G = todas.reduce((g, x) => ({ t: g.t + x.r.total, r: g.r + x.r.reparadas }), { t: 0, r: 0 });
-    html += `<div class="cu-kpis">${kpi('Fallas del turno', G.t, '#9aa5b1')}${kpi('Reparadas por camión', G.r, CU_COL.reparada)}</div>`;
+  if (!selId || ctSel) {
+    const G = todas.reduce((g, x) => ({ t: g.t + x.r.total, r: g.r + x.r.reparadas, c: g.c + x.r.contrRep + x.r.contrPend }), { t: 0, r: 0, c: 0 });
+    // Fallas activas del contrato (o de todos): abiertas al inicio del turno + ingresadas durante el turno
+    const hayAct = Array.isArray(CU.datos.activas);
+    const acts = (CU.datos.activas || []).filter((a) => !ctSel || a.contrato_id === ctSel);
+    const aIni = acts.reduce((n, a) => n + a.inicio, 0), aIng = acts.reduce((n, a) => n + a.ingresadas, 0), aTot = aIni + aIng;
+    if ((CU.datos.contratos || []).length) html += `<div class="cu-sec" style="margin-top:0">${ctNombre ? 'Contrato: ' + esc(ctNombre) : 'Todos los contratos'}</div>`;
+    html += `<div class="cu-kpis">${hayAct ? kpi('Fallas activas', aTot, '#1f4d3d', `${aIni} al inicio del turno · ${aIng} ingresadas en el turno`) : ''}${kpi('Asignadas a cuadrillas', G.t, '#9aa5b1', hayAct ? `de ${aTot} activas` : '')}${kpi('Reparadas por camión', G.r, CU_COL.reparada)}${kpi('Cumplimiento de las asignadas', G.t ? Math.round(100 * G.r / G.t) + '%' : '—', '#7a5ca8', G.t ? `${G.r} de ${G.t}` : '')}${kpi('Atendidas por contratista', G.c, '#d98e2f')}</div>`;
+    if (!todas.length) html += '<div class="u-vacio">Este contrato aún no tiene cuadrillas.</div>';
     html += todas.map(({ c, r }) => { const t = r.total || 1;
       return `<button class="cu-card" data-c="${esc(c.id)}"><div class="top"><span>${esc(c.nombre)}</span><span style="color:${r.cumplimiento == null ? 'var(--tinta-2)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')}">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</span></div>
-        ${r.total ? `<div class="cu-barra"><i style="width:${100 * r.reparadas / t}%;background:${CU_COL.reparada}"></i><i style="width:${100 * r.pendientes / t}%;background:${CU_COL.pendiente}"></i><i style="width:${100 * r.sin / t}%;background:${CU_COL.sin}"></i></div>
+        ${r.total ? `<div class="cu-centro">${cuPildora(r)}</div><div class="cu-barra"><i style="width:${100 * r.reparadas / t}%;background:${CU_COL.reparada}"></i><i style="width:${100 * r.pendientes / t}%;background:${CU_COL.pendiente}"></i><i style="width:${100 * r.sin / t}%;background:${CU_COL.sin}"></i></div>
         <div class="cu-leyenda"><span style="color:${CU_COL.reparada}">● ${r.reparadas} reparadas</span><span style="color:#b36b00">● ${r.pendientes} pend.</span><span style="color:${CU_COL.sin}">● ${r.sin} sin atender</span></div>` : '<div class="s" style="margin-top:6px;color:var(--tinta-2)">Sin fallas en este turno</div>'}
         ${(r.contrRep || r.contrPend) ? `<div class="s" style="margin-top:6px;font-size:12px;color:#8a5200">🔧 ${r.contrRep ? r.contrRep + ' cerrada' + (r.contrRep > 1 ? 's' : '') + ' por contratista' : ''}${r.contrRep && r.contrPend ? ' · ' : ''}${r.contrPend ? r.contrPend + ' pendiente' + (r.contrPend > 1 ? 's' : '') + ' por contratista' : ''}</div>` : ''}</button>`; }).join('') || '<div class="u-vacio">No hay cuadrillas.</div>';
   } else {
-    const x = todas.find((y) => y.c.id === selId); if (!x) { cont.innerHTML = ''; return; }
+    const x = todasLas.find((y) => y.c.id === selId); if (!x) { cont.innerHTML = ''; return; }
     const { c, r } = x;
-    html += `<h3 style="margin:0 0 8px">${esc(c.nombre)}</h3><div class="cu-kpis">${kpi('Inició con', `${r.inicio}`, '#2563a8')}${kpi('Total', r.total, '#9aa5b1')}${kpi('Reparadas', r.reparadas, CU_COL.reparada)}${kpi('Dejó pendientes', r.pendientes, CU_COL.pendiente)}${kpi('Sin atender', r.sin, CU_COL.sin)}${kpi('Cumplimiento', r.cumplimiento == null ? '—' : r.cumplimiento + '%', '#7a5ca8')}</div>
+    html += `<h3 style="margin:0 0 8px">${esc(c.nombre)}</h3><div class="cu-kpis">${kpi('Inició con', `${r.inicio}`, '#2563a8')}${kpi('Total', r.total, '#9aa5b1')}${kpi('Atenciones', r.reparadas + r.pendientes, CU_COL.reparada)}${kpi('Reparadas', r.reparadas, CU_COL.reparada)}${kpi('Dejó pendientes', r.pendientes, CU_COL.pendiente)}${kpi('Sin atender', r.sin, CU_COL.sin)}${kpi('Cumplimiento', r.cumplimiento == null ? '—' : r.cumplimiento + '%', '#7a5ca8')}</div>
       <div class="s" style="margin:-4px 2px 8px;font-size:12.5px;color:var(--tinta-2)">Tiempo medio entre reparaciones: <b>${cuDur(r.medio)}</b></div>`;
     if (!r.total) html += '<div class="u-vacio">Esta cuadrilla no tuvo fallas en este turno.</div>';
     else {

@@ -8433,9 +8433,17 @@ function cuadEtiquetaContr(r){
 }
 
 function cuadKpi(l, v, color){ return `<div class="cu-kpi" style="border-top-color:${color};"><div class="l">${l}</div><div class="v">${v}</div></div>`; }
+// Atenciones del turno = reparadas + pendientes que dejó la cuadrilla. La píldora usa el mismo relleno que la barra (verde reparadas, ámbar pendientes).
+function cuadPildora(r){
+  const a = r.reparadas + r.pendientes;
+  const txt = a + (a === 1 ? ' atención' : ' atenciones');
+  if(!a) return `<div style="display:inline-block; margin-bottom:7px; padding:3px 12px; border-radius:12px; background:#e6ebe8; color:#6b7a72; font-weight:700; font-size:12.5px;">${txt}</div>`;
+  const pr = 100 * r.reparadas / a;
+  return `<div style="display:inline-block; margin-bottom:7px; padding:3px 12px; border-radius:12px; background:linear-gradient(90deg, ${CUAD_COLOR.reparada} ${pr}%, ${CUAD_COLOR.pendiente} ${pr}%); color:#fff; font-weight:700; font-size:12.5px; text-shadow:0 1px 1px #0005;">${txt}</div>`;
+}
 function cuadKpis(c){
   return `<div class="cu-kpis">${cuadKpi('Inició el turno con', `${c.inicio}<div style="font-size:10.5px; font-weight:400; color:var(--ink-soft);">${c.inicio - c.inicioPend} reportadas · ${c.inicioPend} pendientes</div>`, '#64748b')}${cuadKpi('Asignadas en el turno', c.asignadas, '#2563a8')}${cuadKpi('Total del turno', c.total, '#1f4d3d')}
-    ${cuadKpi('Reparadas', c.reparadas, CUAD_COLOR.reparada)}${cuadKpi('Dejó pendientes', c.pendientes, CUAD_COLOR.pendiente)}${cuadKpi('Sin atender', c.sin, CUAD_COLOR.sin)}
+    ${cuadKpi('Atenciones', c.reparadas + c.pendientes, '#1f7a52')}${cuadKpi('Reparadas', c.reparadas, CUAD_COLOR.reparada)}${cuadKpi('Dejó pendientes', c.pendientes, CUAD_COLOR.pendiente)}${cuadKpi('Sin atender', c.sin, CUAD_COLOR.sin)}
     ${cuadKpi('% de cumplimiento', c.cumplimiento == null ? '—' : c.cumplimiento + '%', '#7a5ca8')}${cuadKpi('Tiempo medio entre reparaciones', cuadDur(c.medio), '#8a5200')}</div>` + (cuadEtiquetaContr(c) ? `<div style="margin-top:8px;">${cuadEtiquetaContr(c)}</div>` : '');
 }
 const CUAD_TXT = {reparada: ['✔ Reparada', CUAD_COLOR.reparada], pendiente: ['● Pendiente', CUAD_COLOR.pendiente], sin: ['● Sin atender', CUAD_COLOR.sin]};
@@ -8446,7 +8454,14 @@ async function cuadCargar(){
   const {desde, hasta} = cuadRango();
   est.textContent = 'Cargando…';
   try{
-    CUAD.datos = await db.rpc('rendimiento_cuadrillas', {p_desde: desde.toISOString(), p_hasta: hasta.toISOString()});
+    const prm = {p_desde: desde.toISOString(), p_hasta: hasta.toISOString()};
+    try{ CUAD.datos = await db.rpc('rendimiento_cuadrillas_v2', prm); }
+    catch(e2){
+      // Sin el SQL nuevo (sql/2026-10-rendimiento-contratos.sql) se usa la función anterior, sin contratos
+      CUAD.datos = await db.rpc('rendimiento_cuadrillas', prm);
+      CUAD.datos.contratos = []; CUAD.datos.activas = null;
+      CUAD.datos.cuadrillas.forEach(c => { c.contratos = []; });
+    }
     est.textContent = '';
   }catch(e){
     est.textContent = '';
@@ -8454,37 +8469,50 @@ async function cuadCargar(){
     cuadLimpiarMapa(); return;
   }
   const sel = document.getElementById('cuadSel'), previo = sel.value;
-  sel.innerHTML = '<option value="">Todas las cuadrillas</option>' + CUAD.datos.cuadrillas.map(c => `<option value="${c.id}">${escHtml(c.nombre)}</option>`).join('');
-  if(CUAD.datos.cuadrillas.some(c => c.id === previo)) sel.value = previo;
+  const opCuad = c => `<option value="${c.id}">${escHtml(c.nombre)}</option>`;
+  const cts = CUAD.datos.contratos || [];
+  const sinContrato = CUAD.datos.cuadrillas.filter(c => !(c.contratos || []).length);
+  // Subgrupos por contrato: "Todas las de <contrato>" + cada cuadrilla del contrato (un grupo vacío queda visible)
+  sel.innerHTML = '<option value="">Todas las cuadrillas</option>' + cts.map(ct => `<optgroup label="${escHtml(ct.nombre)}"><option value="c:${ct.id}">Todas las de ${escHtml(ct.nombre)}</option>${CUAD.datos.cuadrillas.filter(c => (c.contratos || []).includes(ct.id)).map(opCuad).join('')}</optgroup>`).join('')
+    + (cts.length ? (sinContrato.length ? `<optgroup label="Sin contrato">${sinContrato.map(opCuad).join('')}</optgroup>` : '') : CUAD.datos.cuadrillas.map(opCuad).join(''));
+  if([...sel.options].some(o => o.value === previo)) sel.value = previo;
   cuadPintar();
 }
 
 function cuadLimpiarMapa(){ if(CUAD.capa){ CUAD.capa.clearLayers(); } }
 
-function cuadPorCuadrilla(){
+function cuadPorCuadrilla(ctId){
   const {desde, hasta} = cuadRango();
-  return CUAD.datos.cuadrillas.map(c => ({c, r: cuadCalcular(CUAD.datos.filas.filter(f => f.camion_id === c.id), desde, hasta)}));
+  return CUAD.datos.cuadrillas.filter(c => !ctId || (c.contratos || []).includes(ctId)).map(c => ({c, r: cuadCalcular(CUAD.datos.filas.filter(f => f.camion_id === c.id), desde, hasta)}));
 }
 
 function cuadPintar(){
   if(!CUAD.datos) return;
   const cont = document.getElementById('cuadContenido'), selId = document.getElementById('cuadSel').value;
-  const todas = cuadPorCuadrilla();
+  const ctSel = selId.startsWith('c:') ? selId.slice(2) : null;
+  const ctNombre = ctSel ? ((CUAD.datos.contratos || []).find(x => x.id === ctSel) || {}).nombre : null;
+  const todas = cuadPorCuadrilla(ctSel);
   const {desde} = cuadRango();
   const titulo = `${desde.toLocaleDateString('es-CL', {weekday: 'long', day: 'numeric', month: 'long'})} · ${CUAD_TURNOS[document.getElementById('cuadTurno').value][2]}`;
   let html = `<div class="hint" style="margin:0 0 10px;">${escHtml(titulo.charAt(0).toUpperCase() + titulo.slice(1))}</div>`;
   let mapaItems = [];
-  if(!selId){
+  if(!selId || ctSel){
     const G = {total: todas.reduce((n, x) => n + x.r.total, 0), rep: todas.reduce((n, x) => n + x.r.reparadas, 0), contr: todas.reduce((n, x) => n + x.r.contrRep, 0) + todas.reduce((n, x) => n + x.r.contrPend, 0)};
-    const kp = (l, v, bg, col) => `<div style="background:${bg}; border-radius:12px; padding:10px 12px; box-shadow:0 1px 3px #0001;"><div style="font-size:11px; color:${col || 'var(--ink-soft)'};">${l}</div><div style="font-size:24px; font-weight:700; color:${col || 'inherit'};">${v}</div></div>`;
-    html += `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:14px;">${kp('Fallas del turno', G.total, '#fff')}${kp('Reparadas por camión', G.rep, '#fff', CUAD_COLOR.reparada)}${kp('Cumplimiento global', G.total ? Math.round(100 * G.rep / G.total) + '%' : '—', '#fff', '#1f4d3d')}${kp('Atendidas por contratista', G.contr, '#fff7e8', '#b36b00')}</div>`;
+    const kp = (l, v, bg, col, sub) => `<div style="background:${bg}; border-radius:12px; padding:10px 12px; box-shadow:0 1px 3px #0001;"><div style="font-size:11px; color:${col || 'var(--ink-soft)'};">${l}</div><div style="font-size:24px; font-weight:700; color:${col || 'inherit'};">${v}</div>${sub ? `<div style="font-size:10.5px; color:var(--ink-soft);">${sub}</div>` : ''}</div>`;
+    // Fallas activas del contrato (o de todos): abiertas al inicio del turno + ingresadas durante el turno
+    const hayAct = Array.isArray(CUAD.datos.activas);
+    const acts = (CUAD.datos.activas || []).filter(a => !ctSel || a.contrato_id === ctSel);
+    const aIni = acts.reduce((n, a) => n + a.inicio, 0), aIng = acts.reduce((n, a) => n + a.ingresadas, 0), aTot = aIni + aIng;
+    if((CUAD.datos.contratos || []).length) html += `<div style="margin:0 0 8px; font-weight:700; color:#1f4d3d;">${ctNombre ? 'Contrato: ' + escHtml(ctNombre) : 'Todos los contratos'}</div>`;
+    html += `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:10px; margin-bottom:14px;">${hayAct ? kp('Fallas activas', aTot, '#fff', '#1f4d3d', `${aIni} al inicio del turno · ${aIng} ingresadas en el turno`) : ''}${kp('Asignadas a cuadrillas', G.total, '#fff', null, hayAct ? `de ${aTot} activas` : '')}${kp('Reparadas por camión', G.rep, '#fff', CUAD_COLOR.reparada)}${kp('Cumplimiento de las asignadas', G.total ? Math.round(100 * G.rep / G.total) + '%' : '—', '#fff', '#1f4d3d', G.total ? `${G.rep} de ${G.total}` : '')}${kp('Atendidas por contratista', G.contr, '#fff7e8', '#b36b00')}</div>`;
+    if(!todas.length) html += '<div class="empty-state">Este contrato aún no tiene cuadrillas.</div>';
     const PAL = [['#e3f1ea', '#1f7a52'], ['#e6eefb', '#2a5db0'], ['#f3edff', '#7c3aed'], ['#fff1d9', '#8a5200'], ['#fbe7e5', '#c1443c']];
     const ini = n => (n.match(/[A-Za-zÁÉÍÓÚÑ0-9]+/g) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
-    html += `<div style="background:#fff; border-radius:14px; box-shadow:0 1px 4px #0001; overflow:hidden;"><div style="display:grid; grid-template-columns:2.1fr 3fr .9fr 1.1fr; padding:10px 16px; background:#1f4d3d; color:#fff; font-size:11.5px; font-weight:600; letter-spacing:.3px;"><div>CUADRILLA</div><div>RESULTADO DEL TURNO</div><div>CUMPL.</div><div>T. MEDIO · detalle</div></div>` +
+    if(todas.length) html += `<div style="background:#fff; border-radius:14px; box-shadow:0 1px 4px #0001; overflow:hidden;"><div style="display:grid; grid-template-columns:2.1fr 3fr .9fr 1.1fr; padding:10px 16px; background:#1f4d3d; color:#fff; font-size:11.5px; font-weight:600; letter-spacing:.3px;"><div>CUADRILLA</div><div style="text-align:center;">RESULTADO DEL TURNO</div><div>CUMPL.</div><div>T. MEDIO · detalle</div></div>` +
       todas.map(({c, r}, k) => { const t = r.total || 1, pc = PAL[k % PAL.length];
         return `<div class="cu-fila" data-id="${c.id}" style="display:grid; grid-template-columns:2.1fr 3fr .9fr 1.1fr; padding:14px 16px; align-items:center; border-bottom:1px solid #eef1ef;">
         <div style="display:flex; gap:10px; align-items:center;"><div style="width:34px; height:34px; border-radius:50%; background:${pc[0]}; color:${pc[1]}; font-weight:700; display:flex; align-items:center; justify-content:center;">${escHtml(ini(c.nombre))}</div><div><b>${escHtml(c.nombre)}</b><div style="font-size:11px; color:var(--ink-soft);">Inició con ${r.inicio} (${r.inicio - r.inicioPend} rep. · ${r.inicioPend} pend.) · +${r.asignadas} asignadas</div></div></div>
-        <div>${r.total ? `<div style="display:flex; height:10px; border-radius:5px; overflow:hidden; background:#e6ebe8;"><div style="width:${100 * r.reparadas / t}%; background:${CUAD_COLOR.reparada};"></div><div style="width:${100 * r.pendientes / t}%; background:${CUAD_COLOR.pendiente};"></div><div style="width:${100 * r.sin / t}%; background:${CUAD_COLOR.sin};"></div></div>
+        <div style="text-align:center;">${r.total ? `${cuadPildora(r)}<div style="display:flex; height:10px; border-radius:5px; overflow:hidden; background:#e6ebe8;"><div style="width:${100 * r.reparadas / t}%; background:${CUAD_COLOR.reparada};"></div><div style="width:${100 * r.pendientes / t}%; background:${CUAD_COLOR.pendiente};"></div><div style="width:${100 * r.sin / t}%; background:${CUAD_COLOR.sin};"></div></div>
           <div style="margin-top:6px; font-size:11.5px;"><span style="color:${CUAD_COLOR.reparada};">● ${r.reparadas} reparadas</span> &nbsp;<span style="color:#b36b00;">● ${r.pendientes} pend.</span> &nbsp;<span style="color:${CUAD_COLOR.sin};">● ${r.sin} sin atender</span></div>${cuadEtiquetaContr(r)}` : '<span class="hint" style="margin:0;">Sin fallas en este turno</span>'}</div>
         <div style="font-size:20px; font-weight:700; color:${r.cumplimiento == null ? 'var(--ink-soft)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')};">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</div><div style="font-weight:600; display:flex; align-items:center; justify-content:space-between;">${cuadDur(r.medio)}<span class="cu-go">›</span></div></div>`; }).join('') +
       `</div><div class="hint" style="margin-top:8px;">Haz clic en una cuadrilla (fila con ›) para ver su detalle. Solo cuenta lo que cerró o dejó pendiente un camión; lo que hizo un contratista se muestra aparte y la falla sigue como «sin atender» para la cuadrilla. Cada falla se cuenta una vez, para la cuadrilla que la tiene asignada (si se reasigna a otra sin que la repare, no suma). Las asignaciones anteriores al historial se reconstruyen con la última asignación de cada falla.</div>`;
@@ -8621,18 +8649,22 @@ document.getElementById('cuadPdfBtn').onclick = () => {
   const pdf = new window.jspdf.jsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
   const fechaTxt = desde.toLocaleDateString('es-CL', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'});
   pdf.setFontSize(16); pdf.text('Rendimiento de cuadrillas', 14, 16);
-  pdf.setFontSize(10); pdf.setTextColor(90); pdf.text(`${fechaTxt} · ${turno} · Generado ${new Date().toLocaleString('es-CL')}`, 14, 22); pdf.setTextColor(0);
-  const todas = cuadPorCuadrilla();
+  const selPdf = document.getElementById('cuadSel').value, ctPdf = selPdf.startsWith('c:') ? selPdf.slice(2) : null;
+  const ctPdfNombre = ctPdf ? ((CUAD.datos.contratos || []).find(x => x.id === ctPdf) || {}).nombre : null;
+  const actsPdf = (CUAD.datos.activas || []).filter(a => !ctPdf || a.contrato_id === ctPdf);
+  const actTxt = Array.isArray(CUAD.datos.activas) ? ` · Fallas activas: ${actsPdf.reduce((n, a) => n + a.inicio + a.ingresadas, 0)} (${actsPdf.reduce((n, a) => n + a.inicio, 0)} al inicio del turno + ${actsPdf.reduce((n, a) => n + a.ingresadas, 0)} ingresadas)` : '';
+  pdf.setFontSize(10); pdf.setTextColor(90); pdf.text(`${fechaTxt} · ${turno}${ctPdfNombre ? ' · Contrato: ' + ctPdfNombre : ''}${actTxt} · Generado ${new Date().toLocaleString('es-CL')}`, 14, 22); pdf.setTextColor(0);
+  const todas = cuadPorCuadrilla(ctPdf);
   pdf.autoTable({
     startY: 27, theme: 'grid', styles: {fontSize: 9}, headStyles: {fillColor: [37, 99, 168]},
-    head: [['Cuadrilla', 'Inició con', 'Asignadas', 'Total', 'Reparadas', 'Pendientes', 'Sin atender', 'Cumplimiento', 'T. medio entre reparaciones', 'Por contratista']],
-    body: todas.map(({c, r}) => [c.nombre, r.inicio, r.asignadas, r.total, r.reparadas, r.pendientes, r.sin, r.cumplimiento == null ? '—' : r.cumplimiento + '%', cuadDur(r.medio), r.contrRep + r.contrPend])
+    head: [['Cuadrilla', 'Inició con', 'Asignadas', 'Total', 'Atenciones', 'Reparadas', 'Pendientes', 'Sin atender', 'Cumplimiento', 'T. medio entre reparaciones', 'Por contratista']],
+    body: todas.map(({c, r}) => [c.nombre, r.inicio, r.asignadas, r.total, r.reparadas + r.pendientes, r.reparadas, r.pendientes, r.sin, r.cumplimiento == null ? '—' : r.cumplimiento + '%', cuadDur(r.medio), r.contrRep + r.contrPend])
   });
   todas.filter(({r}) => r.total).forEach(({c, r}) => {
     pdf.addPage();
     pdf.setFontSize(13); pdf.text(c.nombre, 14, 16);
     pdf.setFontSize(9); pdf.setTextColor(90);
-    pdf.text(`Inició con ${r.inicio} (${r.inicio - r.inicioPend} reportadas, ${r.inicioPend} pendientes) · Asignadas ${r.asignadas} · Total ${r.total} · Reparadas ${r.reparadas} · Pendientes ${r.pendientes} · Sin atender ${r.sin} · Cumplimiento ${r.cumplimiento}% · T. medio entre reparaciones ${cuadDur(r.medio)}`, 14, 22);
+    pdf.text(`Inició con ${r.inicio} (${r.inicio - r.inicioPend} reportadas, ${r.inicioPend} pendientes) · Asignadas ${r.asignadas} · Total ${r.total} · Atenciones ${r.reparadas + r.pendientes} · Reparadas ${r.reparadas} · Pendientes ${r.pendientes} · Sin atender ${r.sin} · Cumplimiento ${r.cumplimiento}% · T. medio entre reparaciones ${cuadDur(r.medio)}`, 14, 22);
     pdf.setTextColor(0);
     pdf.autoTable({
       startY: 26, theme: 'grid', styles: {fontSize: 8}, headStyles: {fillColor: [37, 99, 168]},
