@@ -3437,6 +3437,13 @@ async function abrirPopupFalla(feat){
       if(filasComentario && filasComentario.length) ultimoComentarioAsignacion = filasComentario[0];
     }catch(e){ console.error('No se pudo cargar el comentario de asignación:', e); }
   }
+  // Comentarios agregados a la falla después de creada (sin cerrarla ni editarla)
+  let comentariosLibres = [];
+  if(p.id){
+    try{
+      comentariosLibres = await db.select('fallas_comentarios', `falla_id=eq.${p.id}&tipo=eq.comentario&select=comentario,autor_nombre,creado_en&order=creado_en.asc`) || [];
+    }catch(e){ console.error('No se pudieron cargar los comentarios:', e); }
+  }
   if(p.tipo === 'punto'){
     const [lon, lat] = feat.geometry.coordinates;
     resaltarPuntoConsulta(lat, lon);
@@ -3461,6 +3468,12 @@ async function abrirPopupFalla(feat){
       </div>
     `;
   })() : '';
+  const infoComentariosLibres = comentariosLibres.map(c => {
+    const f = new Date(c.creado_en).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<div style="margin-top:6px; padding:6px 8px; background:#f4f7f4; border-left:3px solid var(--primary); border-radius:4px;">
+      <div class="hint" style="margin-bottom:2px;">💬 <b>${escHtml(c.autor_nombre || '—')}</b> · ${f}</div>
+      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${escHtml(c.comentario)}</div></div>`;
+  }).join('');
   const infoLlaveMun = p.tipo === 'punto'
     ? `<div class="hint" style="margin-top:6px;">N.° de Llave: <b>${escHtml(p.llave ?? '—')}</b> · N.° Municipal: <b>${escHtml(p.nro_mun ?? '—')}</b></div>`
     : '';
@@ -3482,6 +3495,7 @@ async function abrirPopupFalla(feat){
     ${(p.estado === 'reparada' || (p.estado === 'pendiente' && !(rolEfectivo() === 'admin' && !!p.asignado_camion_id && !p.cascada && !p._vistaHistorica))) ? '' : `<div class="hint">Asignado a: <b>${p.asignado_camion_nombre || 'Sin asignar'}</b>${(rolEfectivo() === 'admin' && !!p.asignado_camion_id && !p.cascada && !p._vistaHistorica) ? ' <button id="quitarAsignacionBtn" title="Quitar la asignación" style="margin-left:6px; padding:1px 8px; font-size:10.5px; border:1px solid #c1443c; color:#c1443c; background:#fff; border-radius:10px; cursor:pointer;">Quitar</button>' : ''}</div>`}
     ${infoComentario}
     ${infoComentarioAsignacion}
+    ${infoComentariosLibres}
   `;
   let infoReparacion = '';
   if(p.estado === 'reparada' && p.reparado_por_nombre){
@@ -3558,6 +3572,8 @@ async function abrirPopupFalla(feat){
   const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${p.masivo ? ' <span class="tag-masivo">Masivo</span>' : ''}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
+  // Quién puede dejar un comentario en una falla ya creada (todos menos el observador); los puntos de cascada comentan en su circuito
+  const puedeComentar = ['admin','ito','ito2','contratista','contratista2','contratista3','camion'].includes(rolEfectivo()) && !p.cascada && !p._vistaHistorica;
   let contenidoPanel;
   if((['contratista','contratista2','contratista3','camion'].includes(rolEfectivo()) || (rolEfectivo() === 'admin' && adminPuedeReparar())) && !p.cascada && p.estado !== 'reparada'){
     const filasCierre = CATALOGO_CIERRES.map(item => `
@@ -3574,6 +3590,7 @@ async function abrirPopupFalla(feat){
       <div id="cierrePreview" style="margin-top:8px; font-size:11.5px; color:var(--ink); font-weight:600; line-height:1.5;"></div>
       <div class="hint" style="margin-top:8px;">Información adicional:</div>
       <textarea class="popup-input" id="cierreDesc" placeholder="Ej: Información adicional" style="width:100%; min-height:120px; box-sizing:border-box;"></textarea>
+      <button type="button" class="popup-btn" id="guardarComentarioBtn" style="margin-top:6px; background:#fff; color:var(--primary); border:1.5px solid var(--primary);">💬 Guardar comentario (sin cerrar)</button>
       <div class="hint" style="margin-top:8px;">Fotografías ${currentUser.foto_obligatoria ? `<b style="color:var(--red);">(obligatorio: al menos 1, hasta ${MAX_FOTOS_CIERRE})</b>` : `(opcional, hasta ${MAX_FOTOS_CIERRE})`}:</div>
       <div id="cierreFotos" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;"></div>
       <button type="button" class="popup-btn" id="cierreFotoBtn" style="margin-top:6px; background:#fff; color:var(--ink); border:1.5px solid var(--line);">🖼 Agregar fotos</button>
@@ -3595,6 +3612,10 @@ async function abrirPopupFalla(feat){
       ${infoGeneral}
       ${infoReparacion}
       ${asignarCamionHtml}
+      ${puedeComentar ? `<div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
+        <div class="hint" style="margin-bottom:4px;">Agregar un comentario:</div>
+        <textarea class="popup-input" id="comentarioNuevoInput" placeholder="Escribe un comentario sobre esta falla" style="width:100%; min-height:60px; box-sizing:border-box; margin-bottom:6px;"></textarea>
+        <button type="button" class="popup-btn" id="guardarComentarioBtn" style="background:#fff; color:var(--primary); border:1.5px solid var(--primary);">💬 Guardar comentario</button></div>` : ''}
       ${p.cascada ? '<div class="hint" style="margin-top:8px;">Este punto se cierra automáticamente al reparar su circuito.</div>' : ''}
     `;
   }
@@ -3630,6 +3651,22 @@ async function abrirPopupFalla(feat){
       };
       protegerClick(btnAsignar);
     }
+  }
+
+  const btnGuardarCom = panel.querySelector('#guardarComentarioBtn');
+  if(btnGuardarCom){
+    btnGuardarCom.onclick = async () => {
+      const caja = panel.querySelector('#comentarioNuevoInput') || panel.querySelector('#cierreDesc');
+      const texto = caja ? caja.value.trim() : '';
+      if(!texto){ alert('Escribe el comentario antes de guardarlo.'); return; }
+      try{
+        await db.insert('fallas_comentarios', {falla_id: p.id, tipo: 'comentario', comentario: texto, autor_id: currentUser.id, autor_nombre: currentUser.nombre});
+      }catch(e){ alert('No se pudo guardar el comentario: ' + e.message); return; }
+      invalidarCacheTodasFallas();
+      abrirPopupFalla(feat);   // vuelve a abrir la ventana para mostrar el comentario nuevo
+    };
+    if(!puedeComentar) btnGuardarCom.style.display = 'none';
+    protegerClick(btnGuardarCom);
   }
 
   const btnQuitarAsig = panel.querySelector('#quitarAsignacionBtn');
