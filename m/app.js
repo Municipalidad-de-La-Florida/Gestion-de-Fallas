@@ -641,7 +641,7 @@ async function cargarArea(forzar) {
       L.geoJSON(circ, {
         renderer: rend,
         style: { color: '#2563a8', weight: 4, opacity: 0.75 },
-        onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirCircuito(f.properties); }),
+        onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirCircuito(f.properties, f.geometry); }),
       }).eachLayer((l) => capaCircuitos.addLayer(l));
     }
     if (pts) {
@@ -1149,7 +1149,15 @@ async function contextoReporte() {
   return { p_inspeccion_id: S.modo.inspId };
 }
 
-function abrirPunto(p) {
+// Acciones de la ventana de un punto o circuito: reportar (solo quien puede) + «Cómo llegar» para todos
+function accionesReporte(textoReportar, geom) {
+  const c = geom ? centroGeom(geom) : null;
+  return `<div class="acciones acc-fila" id="accFalla">
+    ${puedeReportar() ? `<button id="bReportar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}${esc(textoReportar)}</button>` : ''}
+    ${c ? `<a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>` : ''}
+  </div>`;
+}
+function abrirPunto(p, geom) {
   const h = abrirHoja(`
     <h2>Punto lumínico</h2>
     <dl class="kv">
@@ -1159,7 +1167,7 @@ function abrirPunto(p) {
       <dt>Poste</dt><dd>${esc(p.simb_poste || '—')}</dd>
     </dl>
     ${infoSoloLectura()}
-    ${puedeReportar() ? `<div class="acciones"><button id="bReportar" class="btn btn-primario">Reportar falla</button></div>` : ''}`);
+    ${accionesReporte('Reportar falla', geom)}`);
   const b = $('#bReportar', h);
   if (b) b.addEventListener('click', ocupar(b, async () => {
     b.textContent = 'Revisando…';
@@ -1168,7 +1176,7 @@ function abrirPunto(p) {
     formReportePunto(p);
   }));
 }
-function abrirCircuito(p) {
+function abrirCircuito(p, geom) {
   const h = abrirHoja(`
     <h2>Circuito ${esc(p.id ?? '')}</h2>
     <dl class="kv">
@@ -1176,7 +1184,7 @@ function abrirCircuito(p) {
       <dt>N.° de cliente</dt><dd>${esc(p.n_cliente ?? '—')}</dd>
     </dl>
     ${infoSoloLectura()}
-    ${puedeReportar() ? `<div class="acciones"><button id="bReportar" class="btn btn-primario">Reportar falla de circuito</button></div>` : ''}`);
+    ${accionesReporte('Reportar falla de circuito', geom)}`);
   const b = $('#bReportar', h);
   if (b) b.addEventListener('click', ocupar(b, async () => {
     b.textContent = 'Revisando…';
@@ -1382,6 +1390,7 @@ async function eliminarFallaApp(p) {
 }
 const _ia = (d) => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const ICO_ACC = {
+  alerta: _ia('<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>'),
   ok: _ia('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
   editar: _ia('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
   nueva: _ia('<path d="M12 5v14M5 12h14"/>'),
