@@ -373,3 +373,9 @@ textarea.campo{ min-height:70px; }
 .acc-t small{ font-size:10.5px; font-weight:500; color:var(--tinta-2,#5b6b63); }
 .acc-t svg{ color:var(--verde-2); }
 .acc-t.acc-peligro{ background:#fbe7e5; color:var(--rojo); } .acc-t.acc-peligro svg{ color:var(--rojo); }
+
+/* Reportar + Cómo llegar en una sola fila */
+.acciones.acc-fila{ flex-direction:row; align-items:stretch; gap:8px; }
+.acc-fila .btn-primario{ flex:1.7; height:auto; min-height:58px; padding:0 10px; font-size:15px; line-height:1.15; }
+.acc-fila .acc-t{ flex:1; min-height:58px; }
+.acc-fila .acc-t:only-child{ flex-direction:row; gap:8px; min-height:48px; font-size:14px; }
