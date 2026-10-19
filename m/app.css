@@ -101,7 +101,7 @@ main{ flex:1 1 auto; position:relative; min-height:0; }
 .hoja-x{ position:absolute; top:10px; right:10px; width:40px; height:40px; border:0; background:#eef2f0; border-radius:50%; font-size:16px; }
 #hojaContenido h2{ margin:0 44px 2px 0; font-size:20px; line-height:1.2; }
 #hojaContenido h3{ margin:16px 0 6px; font-size:14px; text-transform:uppercase; letter-spacing:.4px; color:var(--tinta-2); }
-.kv{ display:grid; grid-template-columns:auto 1fr; gap:4px 12px; margin:10px 0; font-size:15px; }
+.kv{ display:grid; grid-template-columns:auto 1fr; gap:0 12px; margin:4px 0; font-size:14px; line-height:1.45; }
 .kv dt{ color:var(--tinta-2); }
 .kv dd{ margin:0; font-weight:600; word-break:break-word; }
 .acciones{ display:flex; flex-direction:column; gap:10px; margin-top:16px; }
