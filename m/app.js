@@ -1414,7 +1414,7 @@ async function abrirFalla(p, geom) {
   const h = abrirHoja(`
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
-    <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+    <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && rol() === 'admin' ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
     ${p.estado === 'reparada' ? `<div style="border-top:1px solid var(--linea);margin-top:12px;padding-top:4px">
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
       ${p.descripcion_reparacion ? `<h3>Trabajo realizado</h3><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
@@ -1430,7 +1430,6 @@ async function abrirFalla(p, geom) {
       ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario">Registrar reparación</button>` : ''}
       ${puedeNuevaAqui ? `<button id="bNueva" class="btn btn-secundario">Reportar falla nueva en ${p.tipo === 'linea' ? 'este circuito' : 'este punto'}</button>` : ''}
       ${puedeAsignarEsta ? `<button id="bAsignar" class="btn btn-secundario">${p.asignado_camion_id ? 'Cambiar camión asignado' : 'Asignar a camión'}</button>` : ''}
-      ${puedeAsignarEsta && p.asignado_camion_id && rol() === 'admin' ? `<button id="bQuitarAsig" class="btn btn-secundario" style="color:var(--rojo)">Quitar asignación</button>` : ''}
       <a class="btn btn-secundario" style="display:flex;align-items:center;justify-content:center;text-decoration:none" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">Cómo llegar</a>
     </div>
     ${puedeEliminarEsta ? `<div style="text-align:center;margin-top:2px"><button id="bEliminar" class="btn-link" style="color:var(--rojo);font-weight:600">Eliminar falla${rol() === 'admin' ? '' : ` (quedan ${minRestantes} min)`}</button></div>` : ''}
