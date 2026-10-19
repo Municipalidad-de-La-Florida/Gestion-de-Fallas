@@ -3479,7 +3479,7 @@ async function abrirPopupFalla(feat){
     <div class="hint">Duración de la falla: <b>${duracion}</b></div>
     <div class="hint">Puntos lumínicos afectados: <b>${p.puntos_afectados ?? '—'}</b></div>
     ${p.asignado_camion_nombre ? `<div class="hint">Asignado por: <b>${p.asignado_por_nombre || '—'}</b>${fechaAsignacionCorta ? ` · ${fechaAsignacionCorta}` : ''}</div>` : ''}
-    ${(p.estado === 'reparada' || p.estado === 'pendiente') ? '' : `<div class="hint">Asignado a: <b>${p.asignado_camion_nombre || 'Sin asignar'}</b>${(rolEfectivo() === 'admin' && !!p.asignado_camion_id && !p.cascada && !p._vistaHistorica) ? ' <button id="quitarAsignacionBtn" title="Quitar la asignación" style="margin-left:6px; padding:1px 8px; font-size:10.5px; border:1px solid #c1443c; color:#c1443c; background:#fff; border-radius:10px; cursor:pointer;">Quitar</button>' : ''}</div>`}
+    ${(p.estado === 'reparada' || (p.estado === 'pendiente' && !(rolEfectivo() === 'admin' && !!p.asignado_camion_id && !p.cascada && !p._vistaHistorica))) ? '' : `<div class="hint">Asignado a: <b>${p.asignado_camion_nombre || 'Sin asignar'}</b>${(rolEfectivo() === 'admin' && !!p.asignado_camion_id && !p.cascada && !p._vistaHistorica) ? ' <button id="quitarAsignacionBtn" title="Quitar la asignación" style="margin-left:6px; padding:1px 8px; font-size:10.5px; border:1px solid #c1443c; color:#c1443c; background:#fff; border-radius:10px; cursor:pointer;">Quitar</button>' : ''}</div>`}
     ${infoComentario}
     ${infoComentarioAsignacion}
   `;

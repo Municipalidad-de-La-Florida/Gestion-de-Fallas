@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.36.0';
+const VERSION_APP = '1.36.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1405,7 +1405,7 @@ async function abrirFalla(p, geom) {
     p.tipo !== 'punto' ? ['Puntos afectados', p.puntos_afectados ?? '—'] : null,
     p.asignado_camion_nombre ? ['Asignado por', `${p.asignado_por_nombre || '—'}${p.fecha_asignacion ? ' · ' + fmtFechaHoraCorta(p.fecha_asignacion) : ''}`] : null,
     // "Asignado a" solo en fallas activas; en reparadas/pendientes la zona de respuesta lleva "Responde"
-    p.asignado_camion_nombre && p.estado !== 'reparada' && p.estado !== 'pendiente' ? ['Asignado a', p.asignado_camion_nombre] : null,
+    p.asignado_camion_nombre && p.estado !== 'reparada' && (p.estado !== 'pendiente' || (rol() === 'admin' && !p.cascada)) ? ['Asignado a', p.asignado_camion_nombre] : null,
   ].filter(Boolean);
   const kvRespuesta = p.estado === 'reparada'
     ? [['Responde', p.reparado_por_nombre || '—'], ['Fecha respuesta', fmtFecha(p.fecha_reparacion)]]
