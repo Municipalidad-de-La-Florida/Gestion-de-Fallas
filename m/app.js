@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.35.0';
+const VERSION_APP = '1.36.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1430,6 +1430,7 @@ async function abrirFalla(p, geom) {
       ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario">Registrar reparación</button>` : ''}
       ${puedeNuevaAqui ? `<button id="bNueva" class="btn btn-secundario">Reportar falla nueva en ${p.tipo === 'linea' ? 'este circuito' : 'este punto'}</button>` : ''}
       ${puedeAsignarEsta ? `<button id="bAsignar" class="btn btn-secundario">${p.asignado_camion_id ? 'Cambiar camión asignado' : 'Asignar a camión'}</button>` : ''}
+      ${puedeAsignarEsta && p.asignado_camion_id && rol() === 'admin' ? `<button id="bQuitarAsig" class="btn btn-secundario" style="color:var(--rojo)">Quitar asignación</button>` : ''}
       <a class="btn btn-secundario" style="display:flex;align-items:center;justify-content:center;text-decoration:none" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">Cómo llegar</a>
     </div>
     ${puedeEliminarEsta ? `<div style="text-align:center;margin-top:2px"><button id="bEliminar" class="btn-link" style="color:var(--rojo);font-weight:600">Eliminar falla${rol() === 'admin' ? '' : ` (quedan ${minRestantes} min)`}</button></div>` : ''}
@@ -1444,6 +1445,15 @@ async function abrirFalla(p, geom) {
   if (bn) bn.addEventListener('click', ocupar(bn, () => reportarNuevaSobre(p)));
   const ba = $('#bAsignar', h);
   if (ba) ba.addEventListener('click', () => formAsignar(p));
+  const bq = $('#bQuitarAsig', h);
+  if (bq) bq.addEventListener('click', ocupar(bq, async () => {
+    if (!confirm('¿Quitar la asignación de esta falla?')) return;
+    const filas = await api(`/rest/v1/fallas?id=eq.${p.id}`, { method: 'PATCH', prefer: 'return=representation', body: { asignado_camion_id: null, asignado_por_id: null } });
+    if (!filas || !filas.length) throw new Error('No tienes permiso para quitar la asignación.');
+    cerrarHoja();
+    toast('Asignación quitada', 'ok');
+    cargarFallas();
+  }));
   const be = $('#bEliminar', h);
   if (be) be.addEventListener('click', ocupar(be, () => eliminarFallaApp(p)));
   if (p.estado === 'reparada') {

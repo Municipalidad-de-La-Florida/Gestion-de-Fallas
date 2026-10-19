@@ -3552,6 +3552,8 @@ async function abrirPopupFalla(feat){
     </div>
   ` : '';
 
+  const puedeQuitarAsig = rolEfectivo() === 'admin' && !!p.asignado_camion_id && !p.cascada && !p._vistaHistorica && p.estado !== 'reparada';
+  const quitarAsigHtml = puedeQuitarAsig ? `<button class="popup-btn" id="quitarAsignacionBtn" style="background:#c1443c; margin-top:6px;">Quitar asignación</button>` : '';
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
@@ -3571,6 +3573,7 @@ async function abrirPopupFalla(feat){
       ${infoGeneral}
       ${infoReparacion}
       ${asignarCamionHtml}
+      ${quitarAsigHtml}
       <div id="cierrePreview" style="margin-top:8px; font-size:11.5px; color:var(--ink); font-weight:600; line-height:1.5;"></div>
       <div class="hint" style="margin-top:8px;">Información adicional:</div>
       <textarea class="popup-input" id="cierreDesc" placeholder="Ej: Información adicional" style="width:100%; min-height:120px; box-sizing:border-box;"></textarea>
@@ -3595,6 +3598,7 @@ async function abrirPopupFalla(feat){
       ${infoGeneral}
       ${infoReparacion}
       ${asignarCamionHtml}
+      ${quitarAsigHtml}
       ${p.cascada ? '<div class="hint" style="margin-top:8px;">Este punto se cierra automáticamente al reparar su circuito.</div>' : ''}
     `;
   }
@@ -3630,6 +3634,20 @@ async function abrirPopupFalla(feat){
       };
       protegerClick(btnAsignar);
     }
+  }
+
+  const btnQuitarAsig = panel.querySelector('#quitarAsignacionBtn');
+  if(btnQuitarAsig){
+    btnQuitarAsig.onclick = async () => {
+      if(!confirm('¿Quitar la asignación de esta falla? Quedará sin camión asignado.')) return;
+      btnQuitarAsig.disabled = true;
+      try{
+        await db.update('fallas', `id=eq.${p.id}`, {asignado_camion_id: null, asignado_por_id: null});
+        cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+        cerrarPanel();
+      }catch(e){ btnQuitarAsig.disabled = false; alert('No se pudo quitar la asignación: ' + e.message); }
+    };
+    protegerClick(btnQuitarAsig);
   }
 
   const btnEditarMapa = panel.querySelector('#editarDesdeMapaBtn');
