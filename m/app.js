@@ -1380,6 +1380,15 @@ async function eliminarFallaApp(p) {
     if (S.modo && S.modo.inspId === inspId) S.modo.inspId = null;
   } catch (e) { console.error('No se pudo revisar la inspección vacía:', e); }
 }
+const _ia = (d) => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const ICO_ACC = {
+  ok: _ia('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
+  editar: _ia('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
+  nueva: _ia('<path d="M12 5v14M5 12h14"/>'),
+  camion: _ia('<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.7"/><circle cx="17" cy="17.5" r="1.7"/>'),
+  ir: _ia('<path d="M12 21s-6-5.6-6-10.5a6 6 0 0112 0C18 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/>'),
+  borrar: _ia('<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>'),
+};
 async function abrirFalla(p, geom) {
   const c = centroGeom(geom);
   const desc = DESC_CODIGO[p.tipo_falla];
@@ -1426,13 +1435,15 @@ async function abrirFalla(p, geom) {
     </div>` : ''}
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
-      ${puedeEditarEsta ? `<button id="bEditar" class="btn ${puedeCerrarEsta ? 'btn-secundario' : 'btn-primario'}">Editar falla${rol() === 'admin' ? '' : ` (quedan ${minRestantes} min)`}</button>` : ''}
-      ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario">Registrar reparación</button>` : ''}
-      ${puedeNuevaAqui ? `<button id="bNueva" class="btn btn-secundario">Reportar falla nueva en ${p.tipo === 'linea' ? 'este circuito' : 'este punto'}</button>` : ''}
-      ${puedeAsignarEsta ? `<button id="bAsignar" class="btn btn-secundario">${p.asignado_camion_id ? 'Cambiar camión asignado' : 'Asignar a camión'}</button>` : ''}
-      <a class="btn btn-secundario" style="display:flex;align-items:center;justify-content:center;text-decoration:none" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">Cómo llegar</a>
+      ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.ok}Registrar reparación</button>` : ''}
+      <div class="acc-mini">
+        ${puedeEditarEsta ? `<button id="bEditar" class="acc-t">${ICO_ACC.editar}<span>Editar${rol() === 'admin' ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
+        ${puedeNuevaAqui ? `<button id="bNueva" class="acc-t">${ICO_ACC.nueva}<span>Nueva falla<small>${p.tipo === 'linea' ? 'en este circuito' : 'en este punto'}</small></span></button>` : ''}
+        ${puedeAsignarEsta ? `<button id="bAsignar" class="acc-t">${ICO_ACC.camion}<span>${p.asignado_camion_id ? 'Cambiar camión' : 'Asignar camión'}</span></button>` : ''}
+        <a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>
+        ${puedeEliminarEsta ? `<button id="bEliminar" class="acc-t acc-peligro">${ICO_ACC.borrar}<span>Eliminar${rol() === 'admin' ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
+      </div>
     </div>
-    ${puedeEliminarEsta ? `<div style="text-align:center;margin-top:2px"><button id="bEliminar" class="btn-link" style="color:var(--rojo);font-weight:600">Eliminar falla${rol() === 'admin' ? '' : ` (quedan ${minRestantes} min)`}</button></div>` : ''}
     <h3>Historial</h3>
     <ul class="linea-tiempo" id="histFalla"><li class="hint">Cargando…</li></ul>`);
   ofrecerEdicionReparacion(p, h);
