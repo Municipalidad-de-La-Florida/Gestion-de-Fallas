@@ -8205,6 +8205,16 @@ async function generarPdfAnalisis(soloResumen, opciones){
     pdf.text(`Período: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen, 16, {align: 'right'});
     if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(255, 255, 255); pdf.text('Contrato: ' + nombre, ancho - margen, 7.5, {align: 'right'}); }
     let y = 34;
+    // Hoja nueva de la sección de detalle: repite la misma banda de encabezado
+    const hojaDet = () => {
+      pdf.addPage();
+      pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 24, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 24, ancho, 1, 'F');
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(255, 255, 255); pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 7.5);
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text('Detalle del análisis', margen, 16);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(123, 211, 0); pdf.text(`Período: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen, 16, {align: 'right'});
+      if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(255, 255, 255); pdf.text('Contrato: ' + nombre, ancho - margen, 7.5, {align: 'right'}); }
+      y = 34;
+    };
 
     const estilosTabla = {
       margin: {left: margen, right: margen},
@@ -8214,7 +8224,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     };
     // Título de subsección: barra lima + título + filete fino hasta el margen derecho; la nota va debajo
     const titulo = (texto, nota) => {
-      if(y > alto - 40){ pdf.addPage(); y = 16; }
+      if(y > alto - 40) hojaDet();
       pdf.setFillColor(123, 211, 0); pdf.roundedRect(margen, y - 4.6, 1.8, 6, 0.9, 0.9, 'F');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(...VERDE); pdf.text(texto, margen + 4.5, y);
       const wT = pdf.getTextWidth(texto);
@@ -8324,11 +8334,11 @@ async function generarPdfAnalisis(soloResumen, opciones){
       let cie = null;
       try{ cie = await rpcAnalisisCierres(ini, fin, cid); }catch(e){ console.warn('No se pudieron obtener los cierres:', e); }
       if(cie && (cie.por_codigo || []).length){
-        pdf.addPage(); y = 16; // las reparaciones siempre arrancan en hoja propia
+        hojaDet(); // las reparaciones siempre arrancan en hoja propia
         const COL_GRUPO = {'Equipo de la luminaria': [63, 108, 143], 'Red y conexiones': [217, 138, 28], 'Tablero y protecciones': [181, 71, 58], 'Infraestructura': [122, 106, 92], 'Funcionamiento normal': [46, 125, 79], 'Otros': [154, 165, 159]};
         const colG = (g) => COL_GRUPO[g] || [150, 160, 154];
         const totCod = cie.por_codigo.reduce((a, c) => a + c.veces, 0) || 1;
-        titulo('Cierres de las reparaciones', `${num(cie.con_codigo)} de ${num(cie.total_reparadas)} reparaciones tienen código de cierre. Una reparación puede llevar más de un código.`);
+        titulo('Detalle de reparaciones', `${num(cie.con_codigo)} de ${num(cie.total_reparadas)} reparaciones tienen código de cierre. Una reparación puede llevar más de un código.`);
         const grupos = cie.por_grupo || [];
         const gw = ancho - margen * 2, pctT = (v) => (v * 100 / totCod).toFixed(1).replace('.', ',') + '%';
         // Anillo por grupo (izquierda) + total por grupo (derecha)
@@ -8363,7 +8373,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
         grupos.forEach((g) => {
           const cods = cie.por_codigo.filter(c => c.grupo === g.grupo); if(!cods.length) return;
           const hB = 7 + cods.length * RH + 2;
-          if(y + hB > alto - 16){ pdf.addPage(); y = 16; }
+          if(y + hB > alto - 16) hojaDet();
           const col = colG(g.grupo), x0 = margen;
           pdf.setDrawColor(214, 222, 216); pdf.setLineWidth(0.25); pdf.roundedRect(x0, y, gw, hB, 2.4, 2.4, 'S');
           pdf.setFillColor(...col); pdf.roundedRect(x0, y, gw, 7, 2.4, 2.4, 'F'); pdf.rect(x0, y + 3.5, gw, 3.5, 'F');
@@ -8413,7 +8423,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
 
     if(!cid){
     // 7) Operativos del período (esta parte parte siempre en una hoja nueva)
-    pdf.addPage(); y = 16;
+    hojaDet();
     const cob = d.cobertura || {};
     const diasCob = cob.por_dia || [];
     if(opsDet.length){
@@ -8445,7 +8455,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
         const primero = new Date(Date.UTC(yy, mm - 1, 1)), nDias = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
         const off = (primero.getUTCDay() + 6) % 7;   // lunes = 0
         const nSem = Math.ceil((off + nDias) / 7);
-        if(y + 14 + nSem * hC > alto - 16){ pdf.addPage(); y = 16; }
+        if(y + 14 + nSem * hC > alto - 16) hojaDet();
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...VERDE); pdf.text(`${MESES_PDF[mm - 1]} ${yy}`, margen, y + 2);
         y += 5;
         ['L', 'M', 'M', 'J', 'V', 'S', 'D'].forEach((t, i) => { pdf.setFillColor(...VERDE); pdf.roundedRect(margen + i * wC + 0.6, y, wC - 1.2, 5.4, 2.7, 2.7, 'F'); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5); pdf.setTextColor(...(i >= 5 ? [190, 205, 195] : [123, 211, 0])); pdf.text(t, margen + i * wC + wC / 2, y + 3.8, {align: 'center'}); });
