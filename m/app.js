@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.37.2';
+const VERSION_APP = '1.37.3';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2259,10 +2259,12 @@ const cuHora = (iso) => (iso ? new Date(iso).toLocaleTimeString('es-CL', { hour:
 function cuDur(ms) { if (ms == null) return '—'; const min = Math.round(ms / 60000); return min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min` : `${min} min`; }
 // Atenciones del turno = reparadas + pendientes que dejó la cuadrilla. La píldora usa el mismo relleno que la barra.
 function cuPildora(r) {
-  const a = r.reparadas + r.pendientes, txt = a + (a === 1 ? ' atención' : ' atenciones') + (r.aportes ? ` + ${r.aportes} aporte${r.aportes > 1 ? 's' : ''}` : '');
-  if (!a) return `<div class="cu-pill cero">${txt}</div>`;
-  const pr = 100 * r.reparadas / a;
-  return `<div class="cu-pill" style="background:linear-gradient(90deg,${CU_COL.reparada} ${pr}%,${CU_COL.pendiente} ${pr}%)">${txt}</div>`;
+  const a = r.reparadas + r.pendientes, txt = a + (a === 1 ? ' atención' : ' atenciones');
+  const nombres = [...new Set((r.aps || []).map((x) => x.maestro).filter(Boolean))].join(', ');
+  const ap = r.aportes ? `<div class="cu-pill cu-ap">🛠 + ${r.aportes} aporte${r.aportes > 1 ? 's' : ''}${nombres ? ' · ' + esc(nombres) : ''}</div>` : '';
+  const pr = a ? 100 * r.reparadas / a : 0;
+  const base = a ? `<div class="cu-pill" style="background:linear-gradient(90deg,${CU_COL.reparada} ${pr}%,${CU_COL.pendiente} ${pr}%)">${txt}</div>` : `<div class="cu-pill cero">${txt}</div>`;
+  return `<div class="cu-pills">${base}${ap}</div>`;
 }
 function cuCalcular(todasFilas, desde, hasta) {
   // Los aportes son un extra al trabajo normal: no entran en atenciones, cumplimiento ni tiempos
