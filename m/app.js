@@ -1508,7 +1508,7 @@ async function abrirFalla(p, geom) {
   }
 }
 
-/* Editar / quitar una reparación: quien la registró, dentro de 10 minutos (el admin siempre). La base lo exige igual. */
+/* Editar / quitar una reparación: quien la registró, dentro de 30 minutos (el admin siempre). La base lo exige igual. */
 async function ofrecerEdicionReparacion(p, h) {
   if (!PUEDE_CERRAR.includes(rol()) || p.cascada || p.estado !== 'reparada') return;
   let est;

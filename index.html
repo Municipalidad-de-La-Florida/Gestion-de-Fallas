@@ -4307,7 +4307,7 @@ async function subirFotoReparacion(fallaId, blob){
   await db.rpc('registrar_foto_falla', {p_falla_id: fallaId, p_ruta: ruta, p_bytes: blob.size});
 }
 
-// ===== Editar / quitar una reparación (quien la registró, 10 minutos; el admin siempre) =====
+// ===== Editar / quitar una reparación (quien la registró, 30 minutos; el admin siempre) =====
 const ATAJOS_CIERRE = [
   '001 Cambio de lámpara quemada','009 Luminaria en funcionamiento normal','011 Cambio de Ballast o Driver','012 Cambio de CFE dañada',
   '013 Cambio de CFE averiada','026 Reparación de conexión','037 Cambio de contactor dañado','041 Circuito en funcionamiento normal',
