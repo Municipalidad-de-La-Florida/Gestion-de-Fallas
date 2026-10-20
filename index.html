@@ -8339,7 +8339,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       let cie = null;
       try{ cie = await rpcAnalisisCierres(ini, fin, cid); }catch(e){ console.warn('No se pudieron obtener los cierres:', e); }
       if(cie && (cie.por_codigo || []).length){
-        if(!cid || y + 100 > alto - 16) hojaDet(); // las reparaciones arrancan en hoja propia (en cada contrato, solo si no caben)
+        hojaDet(); // las reparaciones siempre arrancan en hoja propia
         const COL_GRUPO = {'Equipo de la luminaria': [63, 108, 143], 'Red y conexiones': [217, 138, 28], 'Tablero y protecciones': [181, 71, 58], 'Infraestructura': [122, 106, 92], 'Funcionamiento normal': [46, 125, 79], 'Otros': [154, 165, 159]};
         const colG = (g) => COL_GRUPO[g] || [150, 160, 154];
         const totCod = cie.por_codigo.reduce((a, c) => a + c.veces, 0) || 1;
@@ -8400,18 +8400,6 @@ async function generarPdfAnalisis(soloResumen, opciones){
       }
     }
 
-    // 4) Por quien repara: solo en la evaluación de cada contrato
-    if(cid){
-    titulo('Por quien repara');
-    if((d.por_camion || []).length){
-      tabla({
-        head: [['Quién repara', 'Reparadas', 'Prom. insp.', 'Prom. ing.', 'Máx. insp.', 'Máx. ing.']],
-        body: d.por_camion.map(c => [c.nombre, c.reparadas, pdfProm(c.media_rec_insp, c.reparadas), pdfProm(c.media_rec_ing, c.reparadas), dias(c.max_insp), dias(c.max_ing)]),
-        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}}
-      });
-    } else vacio('Sin reparaciones en este rango.');
-    }
-
     // 6) Pendientes (en el informe general va al final de la hoja de inspecciones nocturnas)
     const seccionPendientes = () => {
     const pen = d.pendientes || {};
@@ -8424,7 +8412,6 @@ async function generarPdfAnalisis(soloResumen, opciones){
       });
     } else vacio('Ninguna falla del rango quedó pendiente con un motivo registrado.');
     };
-    if(cid) seccionPendientes();
 
     if(!cid){
     // 7) Operativos del período (esta parte parte siempre en una hoja nueva)
@@ -8515,6 +8502,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
 
     // 8) Críticos (al final del informe): con número temporal, el mismo que lleva el mapa siguiente
     const cPuntos = d.criticos_puntos || [], cCirc = d.criticos_circuitos || [];
+    if(!cid){
     titulo('Puntos críticos', 'Puntos con 2 o más fallas en el período, o con alguna reiterada. El N.º es temporal (solo de este informe) y es el mismo que lleva el mapa.');
     if(cPuntos.length){
       tabla({
@@ -8531,6 +8519,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
         columnStyles: {0: {halign: 'center', fontStyle: 'bold', cellWidth: 11, textColor: [37, 99, 168]}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}}
       });
     } else vacio('Ningún circuito se repite en este rango.');
+    }
 
     // 9) Mapa de puntos y circuitos críticos (hoja propia, recortado a la comuna)
     // Encabezado y nota de lectura comunes a las dos hojas de mapa
@@ -8557,7 +8546,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       const items = [];
       cPuntos.forEach((p, i) => { if(p.lat != null && p.lon != null) items.push({geom: {type: 'Point', coordinates: [p.lon, p.lat]}, color: '#8e44ad', label: i + 1}); });
       cCirc.forEach((c, i) => { if(c.lat != null && c.lon != null) items.push({geom: {type: 'Point', coordinates: [c.lon, c.lat]}, color: '#2563a8', label: cPuntos.length + i + 1}); });
-      if(items.length){
+      if(items.length && !cid){
         const cvK = await renderMapaCanvas(items, {w: 1400, h: 1500, padding: 60, zMax: 17, contorno: true});
         if(cvK) hojaMapa('Mapa de puntos y circuitos críticos', () => {
           pdf.setFillColor(142, 68, 173); pdf.circle(margen + 1.6, 32, 1.6, 'F'); pdf.text('Punto crítico', margen + 5, 33);
