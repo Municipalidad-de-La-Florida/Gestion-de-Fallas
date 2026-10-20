@@ -115,7 +115,7 @@ function htmlCodigosGrupo(cat, items, fila) {
   const esOtro = (x) => x.c === 'OTRO' || (cat === 'cierre' && x.c === '999');
   const norm = items.filter((x) => !esOtro(x)), otros = items.filter(esOtro);
   const frec = (LIBRERIA.frec && LIBRERIA.frec[cat]) || [];
-  const top = frec.map((c) => norm.find((x) => x.c === c)).filter(Boolean).slice(0, 6);
+  const top = frec.map((c) => norm.find((x) => x.c === c)).filter(Boolean).slice(0, 6).sort((x, y) => x.c.localeCompare(y.c, 'es', { numeric: true }));
   if (norm.length <= 6 || top.length < 3) return items.map(fila).join('');
   const resto = norm.filter((x) => !top.includes(x)).concat(otros);
   const sec = (t) => `<div class="codigos-sec">${t}</div>`;
