@@ -1390,6 +1390,7 @@ async function cargarPerfilYIniciar(userId){
       return;
     }
     currentUser = data[0];
+    cargarLibreria();   // códigos de falla y de cierre desde la Librería (sin bloquear el inicio)
     currentUser.ver_cuadrillas = false; currentUser.ver_ubicacion = false; currentUser.ubic_col = false;
     currentUser.ver_fiscalizacion = false; currentUser.fisc_col = false;
     try{ const u2 = await db.select('usuarios', `id=eq.${userId}&select=ver_ubicacion`); if(u2 && u2[0]){ currentUser.ver_ubicacion = !!u2[0].ver_ubicacion; currentUser.ubic_col = true; } }catch(e0){ /* sin la columna: la ubicación sigue al permiso de Cuadrillas */ }
@@ -2699,6 +2700,62 @@ async function verificarDuplicadoYAbrir(campo, gid, siguientePaso){
   }
 }
 
+// ---------- LIBRERÍA DE CÓDIGOS (tablas codigos_falla / codigos_cierre) ----------
+// Los formularios leen los códigos activos de la base; si no se pueden leer (sin red o sin el SQL), se usan las listas fijas de abajo.
+const CIERRES_FIJOS = [
+  {c:'001', d:'Cambio de lámpara quemada'}, {c:'009', d:'Luminaria en funcionamiento normal'}, {c:'011', d:'Cambio de Ballast o Driver'},
+  {c:'012', d:'Cambio de CFE dañada'}, {c:'013', d:'Cambio de CFE averiada'}, {c:'026', d:'Reparación de conexión'},
+  {c:'037', d:'Cambio de contactor dañado'}, {c:'041', d:'Circuito en funcionamiento normal'}, {c:'047', d:'Cambio de porta CFE'},
+  {c:'052', d:'Cambio de Ignitor'}, {c:'054', d:'Falla subterránea'}, {c:'072', d:'Normalización de luminaria o gancho virado'},
+  {c:'126', d:'Cambio de lámpara agotada'}, {c:'129', d:'Apriete CFE suelta'}, {c:'130', d:'Automático operado'},
+  {c:'131', d:'Automático operado por 3eros'}, {c:'999', d:'Otros'},
+];
+const LIBRERIA = {falla: {punto: null, monoposte: null, circuito: null}, cierre: null, desc: {punto: {}, monoposte: {}, circuito: {}, cierre: {}}, frec: null};
+const LIBRERIA_CACHE = 'libreriaCodigosV1';
+function libreriaAplicar(d){
+  ['punto', 'monoposte', 'circuito'].forEach(cat => {
+    const filas = (d.falla || []).filter(f => f.categoria === cat);
+    LIBRERIA.desc[cat] = Object.fromEntries(filas.map(f => [f.codigo, f.descripcion]));
+    LIBRERIA.falla[cat] = filas.filter(f => f.activo).sort((a, b) => (a.orden - b.orden) || a.codigo.localeCompare(b.codigo)).map(f => ({c: f.codigo, d: f.descripcion}));
+  });
+  const ci = d.cierre || [];
+  LIBRERIA.desc.cierre = Object.fromEntries(ci.map(f => [f.codigo, f.descripcion]));
+  LIBRERIA.cierre = ci.filter(f => f.activo).sort((a, b) => (a.orden - b.orden) || a.codigo.localeCompare(b.codigo)).map(f => ({c: f.codigo, d: f.descripcion}));
+  LIBRERIA.frec = d.frec || null;
+}
+async function cargarLibreria(){
+  try{
+    const [falla, cierre] = await Promise.all([db.select('codigos_falla', 'select=categoria,codigo,descripcion,orden,activo'), db.select('codigos_cierre', 'select=codigo,descripcion,orden,activo')]);
+    let frec = null; try{ frec = await db.rpc('codigos_frecuentes', {p_dias: 90}); }catch(e){}
+    const d = {falla, cierre, frec};
+    libreriaAplicar(d);
+    try{ localStorage.setItem(LIBRERIA_CACHE, JSON.stringify(d)); }catch(e){}
+  }catch(e){
+    try{ const c = localStorage.getItem(LIBRERIA_CACHE); if(c) libreriaAplicar(JSON.parse(c)); }catch(e2){}
+  }
+}
+// Códigos activos de una lista (punto, monoposte, circuito o cierre). Si se pasa "incluir", ese código aparece aunque esté desactivado.
+function catalogoActivo(cat, incluir){
+  const lib = cat === 'cierre' ? LIBRERIA.cierre : LIBRERIA.falla[cat];
+  let lista = (lib && lib.length) ? lib.slice() : (cat === 'cierre' ? CIERRES_FIJOS.slice() : cat === 'circuito' ? CATALOGO_FALLAS_CIRCUITO.slice() : cat === 'monoposte' ? CODIGOS_MONOPOSTE.concat([{c:'OTRO', d:'Otro (describe la falla)'}]) : CATALOGO_FALLAS_PUNTO.slice());
+  if(incluir && !lista.some(x => x.c === incluir)){
+    const d = LIBRERIA.desc[cat] && LIBRERIA.desc[cat][incluir];
+    if(d) lista.push({c: incluir, d});
+  }
+  return lista;
+}
+// Lista de códigos para un formulario: los 6 más usados primero (ordenados por código) y a continuación el resto (si hay más de 6)
+function htmlCodigosAgrupados(cat, items, filaFn){
+  const esOtro = (x) => x.c === 'OTRO' || (cat === 'cierre' && x.c === '999');
+  const norm = items.filter(x => !esOtro(x)), otros = items.filter(esOtro);
+  const frec = (LIBRERIA.frec && LIBRERIA.frec[cat]) || [];
+  const top = frec.map(c => norm.find(x => x.c === c)).filter(Boolean).slice(0, 6).sort((x, y) => x.c.localeCompare(y.c, 'es', {numeric: true}));
+  if(norm.length <= 6 || top.length < 3) return items.map(filaFn).join('');
+  const resto = norm.filter(x => !top.includes(x)).concat(otros);
+  const sec = (t) => `<div class="hint" style="margin:8px 0 2px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; font-size:10px;">${t}</div>`;
+  return sec('Más frecuentes') + top.map(filaFn).join('') + sec('Otros códigos') + resto.map(filaFn).join('');
+}
+
 const CATALOGO_FALLAS_PUNTO = [
   {c:'F01', d:'Luminaria vial apagada'},
   {c:'F04', d:'Luminaria vial encendida de día'},
@@ -2974,15 +3031,13 @@ function recordarNotificador(r){
 
 function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
   let codigoSel = null, cardSel = null;
-  const catalogo = esMonoposte
-    ? [{c:'F02', d:'Monoposte apagado'}, {c:'F03', d:'Monoposte encendido de día'}, {c:'OTRO', d:'Otro (describe la falla)'}]
-    : CATALOGO_FALLAS_PUNTO;
-  const filasCatalogo = catalogo.map(item => `
+  const catPunto = esMonoposte ? 'monoposte' : 'punto';
+  const filasCatalogo = htmlCodigosAgrupados(catPunto, catalogoActivo(catPunto), item => `
     <div class="falla-opcion-row">
-      <button class="codigo-btn" data-c="${item.c}">${item.c}</button>
-      <span class="falla-opcion-desc">${item.d}</span>
+      <button class="codigo-btn" data-c="${item.c}">${escHtml(item.c)}</button>
+      <span class="falla-opcion-desc">${escHtml(item.d)}</span>
     </div>
-  `).join('');
+  `);
   const panel = mostrarPanel(`
     ${htmlBotonMasivo(false)}
     <b>Falla individual - Pto. Lumínico Llave N.° ${llave}</b>
@@ -3049,12 +3104,12 @@ const CATALOGO_FALLAS_CIRCUITO = [
 
 function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
   let codigoSel = null;
-  const filasCatalogo = CATALOGO_FALLAS_CIRCUITO.map(item => `
+  const filasCatalogo = htmlCodigosAgrupados('circuito', catalogoActivo('circuito'), item => `
     <div class="falla-opcion-row">
-      <button class="codigo-btn" data-c="${item.c}">${item.c}</button>
-      <span class="falla-opcion-desc">${item.d}</span>
+      <button class="codigo-btn" data-c="${item.c}">${escHtml(item.c)}</button>
+      <span class="falla-opcion-desc">${escHtml(item.d)}</span>
     </div>
-  `).join('');
+  `);
   const panel = mostrarPanel(`
     ${htmlBotonMasivo(false)}
     <b>Falla de circuito ${idOriginal||''}</b>
@@ -3311,15 +3366,12 @@ async function abrirEditorFalla(p){
   if(!fila){ alert('No se encontró la falla.'); return; }
 
   const esCircuito = fila.tipo === 'linea';
-  const catalogo = esCircuito ? CATALOGO_FALLAS_CIRCUITO
-    : (['F02','F03'].includes(fila.tipo_falla)
-        ? [{c:'F02', d:'Monoposte apagado'}, {c:'F03', d:'Monoposte encendido de día'}, {c:'OTRO', d:'Otro (describe la falla)'}]
-        : CATALOGO_FALLAS_PUNTO);
-  const filasCatalogo = catalogo.map(item => `
+  const catEd = esCircuito ? 'circuito' : (['F02','F03'].includes(fila.tipo_falla) ? 'monoposte' : 'punto');
+  const filasCatalogo = htmlCodigosAgrupados(catEd, catalogoActivo(catEd, fila.tipo_falla), item => `
     <div class="falla-opcion-row">
-      <button class="codigo-btn${item.c === fila.tipo_falla ? ' sel' : ''}" data-c="${item.c}">${item.c}</button>
-      <span class="falla-opcion-desc">${item.d}</span>
-    </div>`).join('');
+      <button class="codigo-btn${item.c === fila.tipo_falla ? ' sel' : ''}" data-c="${item.c}">${escHtml(item.c)}</button>
+      <span class="falla-opcion-desc">${escHtml(item.d)}</span>
+    </div>`);
 
   const permisoNotif = !!(currentUser.notificador_externo_habilitado && ROLES_CON_NOTIFICADOR.includes(currentUser.rol)) && !fila.inspeccion_id;
   const orig = partesChile(fila.fecha_falla);
@@ -3546,25 +3598,7 @@ async function abrirPopupFalla(feat){
       <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.motivo_pendiente || '—'}</div>
     `;
   }
-  const CATALOGO_CIERRES = [
-  {c:'001', d:'Cambio de lámpara quemada'},
-  {c:'009', d:'Luminaria en funcionamiento normal'},
-  {c:'011', d:'Cambio de Ballast o Driver'},
-  {c:'012', d:'Cambio de CFE dañada'},
-  {c:'013', d:'Cambio de CFE averiada'},
-  {c:'026', d:'Reparación de conexión'},
-  {c:'037', d:'Cambio de contactor dañado'},
-  {c:'041', d:'Circuito en funcionamiento normal'},
-  {c:'047', d:'Cambio de porta CFE'},
-  {c:'052', d:'Cambio de Ignitor'},
-  {c:'054', d:'Falla subterránea'},
-  {c:'072', d:'Normalización de luminaria o gancho virado'},
-  {c:'126', d:'Cambio de lámpara agotada'},
-  {c:'129', d:'Apriete CFE suelta'},
-  {c:'130', d:'Automático operado'},
-  {c:'131', d:'Automático operado por 3eros'},
-  {c:'999', d:'Otros'},
-];
+  const CATALOGO_CIERRES = catalogoActivo('cierre');
 
 // Botón "Eliminar": admin puede eliminar cualquiera en cualquier momento;
   // el creador (ITO/ITO2/admin) solo su propia falla, no reparada, dentro de 15 min
@@ -3606,12 +3640,12 @@ async function abrirPopupFalla(feat){
   const puedeComentar = ['admin','ito','ito2','contratista','contratista2','contratista3','camion'].includes(rolEfectivo()) && !p.cascada && !p._vistaHistorica;
   let contenidoPanel;
   if((['contratista','contratista2','contratista3','camion'].includes(rolEfectivo()) || (rolEfectivo() === 'admin' && adminPuedeReparar())) && !p.cascada && p.estado !== 'reparada'){
-    const filasCierre = CATALOGO_CIERRES.map(item => `
+    const filasCierre = htmlCodigosAgrupados('cierre', CATALOGO_CIERRES, item => `
       <div class="falla-opcion-row">
-        <button class="codigo-btn cierre-btn" data-desc="${(item.c + ' ' + item.d).replace(/"/g,'&quot;')}">${item.c}</button>
-        <span class="falla-opcion-desc">${item.d}</span>
+        <button class="codigo-btn cierre-btn" data-desc="${(item.c + ' ' + item.d).replace(/"/g,'&quot;')}">${escHtml(item.c)}</button>
+        <span class="falla-opcion-desc">${escHtml(item.d)}</span>
       </div>
-    `).join('');
+    `);
     const columnaIzquierda = `
       ${infoCardinalidad}
       ${infoGeneral}
@@ -4375,7 +4409,7 @@ async function abrirEditarReparacion(p, est, modo){
   cerrarEditarReparacion();
   const m = document.createElement('div');
   m.id = 'editarRepModal'; m.className = 'modal-overlay visible';
-  const catalogo = est.tipo === 'linea' ? CATALOGO_FALLAS_CIRCUITO : CATALOGO_FALLAS_PUNTO.concat([{c:'F02', d:'Monoposte apagado'}, {c:'F03', d:'Monoposte encendido de día'}].filter(x => x.c === p.tipo_falla));
+  const catalogo = catalogoActivo(est.tipo === 'linea' ? 'circuito' : (['F02','F03'].includes(p.tipo_falla) ? 'monoposte' : 'punto'), p.tipo_falla);
   const bloq = !!est.bloqueada_por_otra_falla;
   m.innerHTML = `<div class="modal-card" style="max-width:560px; max-height:90vh; overflow-y:auto;">
     <button class="close-x" id="erX" aria-label="Cerrar">×</button>
@@ -5893,6 +5927,9 @@ function descripcionCodigoFalla(f){
   const catalogo = f.tipo === 'linea'
     ? CATALOGO_FALLAS_CIRCUITO
     : ((f.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE' ? CODIGOS_MONOPOSTE : CATALOGO_FALLAS_PUNTO);
+  const catLib = f.tipo === 'linea' ? 'circuito' : ((f.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE' ? 'monoposte' : 'punto');
+  const dLib = LIBRERIA.desc[catLib] && LIBRERIA.desc[catLib][f.tipo_falla];
+  if(dLib) return dLib;
   const it = catalogo.find(x => x.c === f.tipo_falla);
   return it ? it.d : '';
 }
@@ -9524,6 +9561,7 @@ async function libAccion(fn){
   try{ await fn(); }
   catch(e){ alert('No se pudo guardar: ' + String((e && e.message) || e)); }
   await libCargarCodigos();
+  cargarLibreria();   // el admin ve de inmediato sus cambios en los formularios
 }
 // Mover una fila: se renumera todo el orden (1, 2, 3…) y solo se guardan las filas que cambian de posición
 async function libMover(i, d){
