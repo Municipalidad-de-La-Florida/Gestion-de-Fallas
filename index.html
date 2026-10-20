@@ -307,6 +307,8 @@
   .chip-estado{display:inline-flex; align-items:center; gap:6px; padding:2px 9px; border:1.5px solid var(--line); border-radius:20px; background:#fff; cursor:pointer; font-size:11.5px; font-weight:600; color:var(--ink-soft);}
   .chip-estado:hover{border-color:var(--primary);}
   .chip-estado.activo{border-color:var(--primary); background:#eef5f1; color:var(--primary);}
+  .lib-tab, .lib-cat{padding:6px 14px; font-size:12.5px;}
+  .lib-tab.active, .lib-cat.active{border-color:var(--primary); background:var(--primary); color:#fff;}
   .chip-estado .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
   .chip-estado .n{font-weight:500; opacity:.75;}
 
@@ -612,7 +614,7 @@
               <div class="um-div"></div>
             </div>
             <button type="button" class="um-item" id="usuariosBtn" style="display:none;"><span class="um-ico" style="background:#e6eefb;color:#2a5db0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/></svg></span><span class="lbl">Usuarios</span></button>
-            <button type="button" class="um-item" id="notificadoresBtn" style="display:none;"><span class="um-ico" style="background:#fff1d9;color:#8a5200;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/></svg></span><span class="lbl">Notificadores</span></button>
+            <button type="button" class="um-item" id="notificadoresBtn" style="display:none;"><span class="um-ico" style="background:#fff1d9;color:#8a5200;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/></svg></span><span class="lbl">Librería</span></button>
             <button type="button" class="um-item" id="repararAdminBtn" style="display:none;" title="Al pinchar una falla, mostrar u ocultar las opciones de reparación y de asignación a camión (solo para ti, en este navegador)"><span class="um-ico" style="background:#e3f1ea;color:#1f7a52;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.1-.6-.6-2.1z"/></svg></span><span class="lbl" id="repararAdminLbl">Reparar y asignar fallas: Sí</span></button>
             <button type="button" class="um-item" id="cambiarPassBtn"><span class="um-ico" style="background:#eef2f0;color:#55665c;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg></span><span class="lbl">Cambiar contraseña</span></button>
             <button type="button" class="um-item" id="toggleModoDispositivoBtn" title="Cambiar entre modo Escritorio y modo Móvil"><span class="um-ico" style="background:#e3f1ea;color:#1f7a52;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span class="lbl">Modo: Escritorio</span></button>
@@ -1073,7 +1075,34 @@
 <div id="notificadoresModal" class="modal-overlay">
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeNotificadoresBtn">×</button>
-    <h2>Notificadores externos</h2>
+    <h2>Librería</h2>
+    <div id="libTabs" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+      <button type="button" class="chip-estado lib-tab active" data-tab="notif">Notificadores</button>
+      <button type="button" class="chip-estado lib-tab" data-tab="falla">Códigos de falla</button>
+      <button type="button" class="chip-estado lib-tab" data-tab="cierre">Códigos de cierre</button>
+    </div>
+    <div id="libPaneCodigos" style="display:none;">
+      <div id="libCategorias" style="display:none; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
+        <button type="button" class="chip-estado lib-cat active" data-cat="punto">Puntos</button>
+        <button type="button" class="chip-estado lib-cat" data-cat="monoposte">Monopostes</button>
+        <button type="button" class="chip-estado lib-cat" data-cat="circuito">Circuitos</button>
+      </div>
+      <div class="hint" id="libAyuda" style="margin-bottom:10px;"></div>
+      <form autocomplete="off" onsubmit="return false;" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
+        <input type="text" id="libNuevoCodigo" class="popup-input" maxlength="12" autocomplete="off" placeholder="Código" style="width:100px; margin:0;">
+        <input type="text" id="libNuevoDesc" class="popup-input" maxlength="120" autocomplete="off" placeholder="Descripción" style="flex:1; min-width:180px; margin:0;">
+        <input type="text" id="libNuevoGrupo" class="popup-input" maxlength="40" autocomplete="off" list="libGrupos" placeholder="Grupo" style="width:190px; margin:0; display:none;">
+        <datalist id="libGrupos"></datalist>
+        <button type="button" class="popup-btn" id="libAgregarBtn" style="width:auto; margin:0; padding:7px 16px;">Agregar</button>
+      </form>
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+          <thead><tr id="libThead" style="text-align:left; border-bottom:2px solid var(--line);"></tr></thead>
+          <tbody id="libTbody"><tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="libPaneNotif">
     <div class="hint" style="margin-bottom:12px;">Personas sin cuenta que informan fallas. Quién puede usarlas se decide por usuario, con la casilla "Notificadores" del botón 👥 Usuarios: esos usuarios pueden elegir (o escribir) a quién informó cada falla en "Agregar falla" y elegir fecha y hora. Los nombres escritos a mano quedan "sin validar" hasta que los apruebes o los fusiones con uno existente.</div>
     <!-- Va dentro de su propio <form> para que el navegador no lo confunda con el usuario del login
          (y no le autocomplete el correo guardado). -->
@@ -1095,6 +1124,7 @@
           <tr><td colspan="4" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
         </tbody>
       </table>
+    </div>
     </div>
   </div>
 </div>
@@ -9426,8 +9456,102 @@ document.getElementById('notificadoresModal').addEventListener('click', (e) => {
 
 function mostrarModalNotificadores(){
   document.getElementById('notificadoresModal').classList.add('visible');
-  cargarNotificadoresAdmin();
+  libMostrarTab(LIB.tab);
 }
+
+// ---------- LIBRERÍA: notificadores + códigos de falla y de cierre (solo admin) ----------
+// Los códigos viven en las tablas codigos_falla y codigos_cierre. Un código nunca se borra ni cambia de nombre (las fallas
+// antiguas lo usan): se edita su descripción, se ordena y se activa o desactiva.
+const LIB = {tab: 'notif', cat: 'punto', filas: []};
+const LIB_GRUPOS_BASE = ['Equipo de la luminaria', 'Red y conexiones', 'Tablero y protecciones', 'Infraestructura', 'Funcionamiento normal', 'Otros'];
+function libMostrarTab(t){
+  LIB.tab = t;
+  document.querySelectorAll('.lib-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+  document.getElementById('libPaneNotif').style.display = t === 'notif' ? '' : 'none';
+  document.getElementById('libPaneCodigos').style.display = t === 'notif' ? 'none' : '';
+  if(t === 'notif'){ cargarNotificadoresAdmin(); return; }
+  const esCierre = t === 'cierre';
+  document.getElementById('libCategorias').style.display = esCierre ? 'none' : 'flex';
+  document.getElementById('libNuevoGrupo').style.display = esCierre ? '' : 'none';
+  document.getElementById('libNuevoCodigo').placeholder = esCierre ? 'Código (3 dígitos)' : 'Código (ej. F50)';
+  document.getElementById('libAyuda').innerHTML = esCierre
+    ? 'Códigos con los que se cierran las reparaciones y el <b>grupo</b> al que pertenecen (se usa en el informe). Los cambios les llegan a los usuarios al volver a abrir la página o la app. Un código no se borra: se desactiva.'
+    : 'Códigos de falla que se ofrecen al informar. Los cambios les llegan a los usuarios al volver a abrir la página o la app. Un código no se borra: se desactiva. Los códigos F02 y F03 de monoposte y de circuito son distintos.';
+  libCargarCodigos();
+}
+async function libCargarCodigos(){
+  const esCierre = LIB.tab === 'cierre', tb = document.getElementById('libTbody');
+  document.getElementById('libThead').innerHTML = ['Orden', 'Código', 'Descripción'].concat(esCierre ? ['Grupo'] : []).concat(['Acciones']).map(h => `<th style="padding:8px 10px;">${h}</th>`).join('');
+  tb.innerHTML = `<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>`;
+  try{
+    LIB.filas = esCierre
+      ? await db.select('codigos_cierre', 'select=*&order=orden.asc,codigo.asc')
+      : await db.select('codigos_falla', `select=*&categoria=eq.${LIB.cat}&order=orden.asc,codigo.asc`);
+    if(esCierre){
+      const gs = [...new Set(LIB_GRUPOS_BASE.concat(LIB.filas.map(f => f.grupo)))];
+      document.getElementById('libGrupos').innerHTML = gs.map(g => `<option value="${escHtml(g)}"></option>`).join('');
+    }
+    libPintar();
+  }catch(e){
+    tb.innerHTML = `<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${escHtml(String((e && e.message) || e))}<br>¿Ejecutaste sql/2026-10-libreria-codigos.sql en Supabase?</td></tr>`;
+  }
+}
+function libPintar(){
+  const esCierre = LIB.tab === 'cierre', tb = document.getElementById('libTbody');
+  const btn = (c) => `font-size:11px; border:1px solid ${c}; color:${c}; background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer; margin:2px 4px 2px 0;`;
+  const flecha = 'font-size:13px; border:1px solid var(--line); background:#fff; border-radius:6px; width:28px; height:28px; cursor:pointer; margin-right:3px;';
+  tb.innerHTML = LIB.filas.map((f, i) => `<tr data-i="${i}" style="border-bottom:1px solid var(--line); ${f.activo ? '' : 'opacity:.55;'}">
+    <td style="padding:6px 10px; white-space:nowrap;"><button class="lib-sube" style="${flecha}" ${i === 0 ? 'disabled' : ''} title="Subir">▲</button><button class="lib-baja" style="${flecha}" ${i === LIB.filas.length - 1 ? 'disabled' : ''} title="Bajar">▼</button></td>
+    <td style="padding:6px 10px; font-weight:700;">${escHtml(f.codigo)}</td>
+    <td style="padding:6px 10px;"><input type="text" class="popup-input lib-desc" maxlength="120" value="${escHtml(f.descripcion)}" style="margin:0; padding:6px 8px; min-width:200px;"></td>
+    ${esCierre ? `<td style="padding:6px 10px;"><input type="text" class="popup-input lib-grupo" maxlength="40" list="libGrupos" value="${escHtml(f.grupo)}" style="margin:0; padding:6px 8px; min-width:150px;"></td>` : ''}
+    <td style="padding:6px 10px; min-width:180px;"><button class="lib-guardar" style="${btn('var(--primary)')}">Guardar</button><button class="lib-activo" style="${btn(f.activo ? 'var(--amber)' : 'var(--green,#2e7d32)')}">${f.activo ? 'Desactivar' : 'Reactivar'}</button></td>
+  </tr>`).join('') || `<tr><td colspan="5" style="padding:20px; text-align:center; color:var(--ink-soft);">Sin códigos.</td></tr>`;
+  tb.querySelectorAll('tr[data-i]').forEach(tr => {
+    const i = +tr.dataset.i, f = LIB.filas[i];
+    tr.querySelector('.lib-sube').onclick = () => libMover(i, -1);
+    tr.querySelector('.lib-baja').onclick = () => libMover(i, 1);
+    tr.querySelector('.lib-guardar').onclick = () => libAccion(() => libActualizar(f, {descripcion: tr.querySelector('.lib-desc').value.trim(), ...(esCierre ? {grupo: (tr.querySelector('.lib-grupo').value.trim() || 'Otros')} : {})}));
+    tr.querySelector('.lib-activo').onclick = () => libAccion(() => libActualizar(f, {activo: !f.activo}));
+  });
+}
+function libActualizar(f, cambios){
+  return LIB.tab === 'cierre'
+    ? db.update('codigos_cierre', `codigo=eq.${encodeURIComponent(f.codigo)}`, cambios)
+    : db.update('codigos_falla', `categoria=eq.${f.categoria}&codigo=eq.${encodeURIComponent(f.codigo)}`, cambios);
+}
+async function libAccion(fn){
+  try{ await fn(); }
+  catch(e){ alert('No se pudo guardar: ' + String((e && e.message) || e)); }
+  await libCargarCodigos();
+}
+// Mover una fila: se renumera todo el orden (1, 2, 3…) y solo se guardan las filas que cambian de posición
+async function libMover(i, d){
+  const j = i + d; if(j < 0 || j >= LIB.filas.length) return;
+  const arr = LIB.filas.slice(); [arr[i], arr[j]] = [arr[j], arr[i]];
+  await libAccion(async () => {
+    for(let k = 0; k < arr.length; k++){
+      const nuevo = arr[k].codigo === 'OTRO' || arr[k].codigo === '999' ? 99 : k + 1;
+      if(arr[k].orden !== nuevo) await libActualizar(arr[k], {orden: nuevo});
+    }
+  });
+}
+async function libAgregar(){
+  const esCierre = LIB.tab === 'cierre';
+  const codigo = document.getElementById('libNuevoCodigo').value.trim().toUpperCase();
+  const desc = document.getElementById('libNuevoDesc').value.trim();
+  const grupo = document.getElementById('libNuevoGrupo').value.trim() || 'Otros';
+  if(!codigo || !desc){ alert('Escribe el código y la descripción.'); return; }
+  if(esCierre && !/^[0-9]{3}$/.test(codigo)){ alert('El código de cierre debe tener 3 dígitos (ej. 140).'); return; }
+  if(LIB.filas.some(f => f.codigo === codigo)){ alert('Ese código ya existe en esta lista' + (LIB.filas.find(f => f.codigo === codigo).activo ? '.' : ' (está desactivado: reactívalo).')); return; }
+  const mayor = Math.max(0, ...LIB.filas.filter(f => f.orden < 99).map(f => f.orden));
+  const fila = esCierre ? {codigo, descripcion: desc, grupo, orden: mayor + 1} : {categoria: LIB.cat, codigo, descripcion: desc, orden: mayor + 1};
+  await libAccion(() => db.insert(esCierre ? 'codigos_cierre' : 'codigos_falla', fila));
+  document.getElementById('libNuevoCodigo').value = ''; document.getElementById('libNuevoDesc').value = ''; document.getElementById('libNuevoGrupo').value = '';
+}
+document.querySelectorAll('.lib-tab').forEach(b => b.onclick = () => libMostrarTab(b.dataset.tab));
+document.querySelectorAll('.lib-cat').forEach(b => b.onclick = () => { LIB.cat = b.dataset.cat; document.querySelectorAll('.lib-cat').forEach(x => x.classList.toggle('active', x === b)); libCargarCodigos(); });
+document.getElementById('libAgregarBtn').onclick = libAgregar;
 
 function mensajeErrorNotificador(e){
   const m = String((e && e.message) || e);
