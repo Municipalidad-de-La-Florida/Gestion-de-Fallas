@@ -2744,12 +2744,12 @@ function catalogoActivo(cat, incluir){
   }
   return lista;
 }
-// Lista de códigos para un formulario: los 6 más usados primero y a continuación el resto (si hay más de 6)
+// Lista de códigos para un formulario: los 6 más usados primero (ordenados por código) y a continuación el resto (si hay más de 6)
 function htmlCodigosAgrupados(cat, items, filaFn){
   const esOtro = (x) => x.c === 'OTRO' || (cat === 'cierre' && x.c === '999');
   const norm = items.filter(x => !esOtro(x)), otros = items.filter(esOtro);
   const frec = (LIBRERIA.frec && LIBRERIA.frec[cat]) || [];
-  const top = frec.map(c => norm.find(x => x.c === c)).filter(Boolean).slice(0, 6);
+  const top = frec.map(c => norm.find(x => x.c === c)).filter(Boolean).slice(0, 6).sort((x, y) => x.c.localeCompare(y.c, 'es', {numeric: true}));
   if(norm.length <= 6 || top.length < 3) return items.map(filaFn).join('');
   const resto = norm.filter(x => !top.includes(x)).concat(otros);
   const sec = (t) => `<div class="hint" style="margin:8px 0 2px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; font-size:10px;">${t}</div>`;
