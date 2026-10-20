@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.38.0';
+const VERSION_APP = '1.38.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -611,7 +611,9 @@ function iniciarMapa() {
   capaPuntos = L.geoJSON(null, { renderer: rend });
   capaFallas = L.geoJSON(null, { renderer: rend });
   capaEmpalmes = L.geoJSON(null, { renderer: rend });
-  map.on('moveend', cargarArea);
+  // Espera a que el mapa se quede quieto antes de pedir datos (menos llamadas a la base mientras se arrastra)
+  let _areaTimer = null;
+  map.on('moveend', () => { clearTimeout(_areaTimer); _areaTimer = setTimeout(cargarArea, 300); });
   map.on('dragstart dragend', pausarSeguir);
   map.on('zoomstart', () => { if (!movProg) pausarSeguir(); });
   map.on('zoomend', () => { ajustarRadios(); dibujarFallas(); });
