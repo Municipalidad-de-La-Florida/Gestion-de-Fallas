@@ -983,6 +983,7 @@
         <button class="mode-btn" id="backFromCuad" style="margin:0; padding:7px 12px;">← Volver</button>
         <b style="font-size:15px;">🚚 Rendimiento de cuadrillas</b>
         <span style="flex:1;"></span>
+        <button type="button" id="cuadMesBtn" title="Aportes del mes por maestro" style="height:30px; padding:0 12px; border:1.5px solid #6b4fa0; border-radius:8px; background:#fff; color:#6b4fa0; font-size:12.5px; font-weight:600; cursor:pointer;">🛠 Aportes del mes</button>
         <button type="button" id="cuadUbicBtn" title="Ver dónde están los camiones que comparten su ubicación" style="height:30px; padding:0 12px; border:1.5px solid #000; border-radius:8px; background:#fff; color:#1f4d3d; font-size:12.5px; font-weight:600; cursor:pointer;">📍 Camiones</button>
         <button type="button" id="cuadPdfBtn" title="Descargar resumen en PDF" style="height:30px; padding:0 12px; border:1.5px solid #000; border-radius:8px; background:#2563a8; color:#fff; font-size:12.5px; font-weight:600; cursor:pointer;">⬇ PDF</button>
         <div style="flex-basis:100%; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
@@ -9156,7 +9157,7 @@ function cuadPildora(r){
 }
 function cuadKpis(c){
   return `<div class="cu-kpis">${cuadKpi('Inició el turno con', `${c.inicio}<div style="font-size:10.5px; font-weight:400; color:var(--ink-soft);">${c.inicio - c.inicioPend} reportadas · ${c.inicioPend} pendientes</div>`, '#64748b')}${cuadKpi('Asignadas en el turno', c.asignadas, '#2563a8')}${cuadKpi('Total del turno', c.total, '#1f4d3d')}
-    ${cuadKpi('Atenciones', c.reparadas + c.pendientes, '#1f7a52')}${cuadKpi('Reparadas', c.reparadas, CUAD_COLOR.reparada)}${cuadKpi('Dejó pendientes', c.pendientes, CUAD_COLOR.pendiente)}${cuadKpi('Sin atender', c.sin, CUAD_COLOR.sin)}${cuadKpi('Aportes', c.aportes || 0, '#6b4fa0')}
+    ${cuadKpi('Atenciones', `${c.reparadas + c.pendientes}${c.aportes ? `<div style="font-size:10.5px; font-weight:400; color:#6b4fa0;">+ ${c.aportes} aporte${c.aportes > 1 ? 's' : ''} = ${c.reparadas + c.pendientes + c.aportes} en total</div>` : ''}`, '#1f7a52')}${cuadKpi('Reparadas', c.reparadas, CUAD_COLOR.reparada)}${cuadKpi('Dejó pendientes', c.pendientes, CUAD_COLOR.pendiente)}${cuadKpi('Sin atender', c.sin, CUAD_COLOR.sin)}${cuadKpi('Aportes', c.aportes || 0, '#6b4fa0')}
     ${cuadKpi('% de cumplimiento', c.cumplimiento == null ? '—' : c.cumplimiento + '%', '#7a5ca8')}${cuadKpi('Tiempo medio entre reparaciones', cuadDur(c.medio), '#8a5200')}</div>` + (cuadEtiquetaContr(c) ? `<div style="margin-top:8px;">${cuadEtiquetaContr(c)}</div>` : '');
 }
 const CUAD_TXT = {reparada: ['✔ Reparada', CUAD_COLOR.reparada], pendiente: ['● Pendiente', CUAD_COLOR.pendiente], sin: ['● Sin atender', CUAD_COLOR.sin]};
@@ -9209,6 +9210,13 @@ function cuadPintar(){
   const titulo = `${desde.toLocaleDateString('es-CL', {weekday: 'long', day: 'numeric', month: 'long'})} · ${CUAD_TURNOS[document.getElementById('cuadTurno').value][2]}`;
   let html = `<div class="hint" style="margin:0 0 10px;">${escHtml(titulo.charAt(0).toUpperCase() + titulo.slice(1))}</div>`;
   let mapaItems = [];
+  const mb = document.getElementById('cuadMesBtn');
+  if(mb){ mb.style.background = CUAD.verMes ? '#6b4fa0' : '#fff'; mb.style.color = CUAD.verMes ? '#fff' : '#6b4fa0'; mb.onclick = () => { CUAD.verMes = !CUAD.verMes; cuadPintar(); }; }
+  if(CUAD.verMes){
+    cont.innerHTML = `<div class="hint" style="margin:0 0 10px;">Aportes del mes por maestro${ctNombre ? ' · ' + escHtml(ctNombre) : ''}. Vuelve a pulsar «🛠 Aportes del mes» para regresar a las cuadrillas.</div>` + cuadMesHtml(ctSel);
+    cuadMesEnlazar(cont);
+    return;
+  }
   if(!selId || ctSel){
     const apItems = todas.flatMap(x => x.r.aps.map(i => ({...i, cuad: x.c.nombre})));
     const G = {total: todas.reduce((n, x) => n + x.r.total, 0), rep: todas.reduce((n, x) => n + x.r.reparadas, 0), contr: todas.reduce((n, x) => n + x.r.contrRep, 0) + todas.reduce((n, x) => n + x.r.contrPend, 0)};
@@ -9229,7 +9237,7 @@ function cuadPintar(){
         <div style="text-align:center;">${(r.total || r.aportes) ? `${cuadPildora(r)}<div style="display:flex; height:10px; border-radius:5px; overflow:hidden; background:#e6ebe8;"><div style="width:${100 * r.reparadas / t}%; background:${CUAD_COLOR.reparada};"></div><div style="width:${100 * r.pendientes / t}%; background:${CUAD_COLOR.pendiente};"></div><div style="width:${100 * r.sin / t}%; background:${CUAD_COLOR.sin};"></div></div>
           <div style="margin-top:6px; font-size:11.5px;"><span style="color:${CUAD_COLOR.reparada};">● ${r.reparadas} reparadas</span> &nbsp;<span style="color:#b36b00;">● ${r.pendientes} pend.</span> &nbsp;<span style="color:${CUAD_COLOR.sin};">● ${r.sin} sin atender</span></div>${cuadEtiquetaContr(r)}` : '<span class="hint" style="margin:0;">Sin fallas en este turno</span>'}</div>
         <div style="font-size:20px; font-weight:700; color:${r.cumplimiento == null ? 'var(--ink-soft)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')};">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</div><div style="font-weight:600; display:flex; align-items:center; justify-content:space-between;">${cuadDur(r.medio)}<span class="cu-go">›</span></div></div>`; }).join('') +
-      `</div>` + cuadAportesMaestros(apItems) + cuadMesHtml(ctSel) + `<div class="hint" style="margin-top:8px;">Haz clic en una cuadrilla (fila con ›) para ver su detalle. Solo cuenta lo que cerró o dejó pendiente un camión; lo que hizo un contratista se muestra aparte y la falla sigue como «sin atender» para la cuadrilla. Cada falla se cuenta una vez, para la cuadrilla que la tiene asignada (si se reasigna a otra sin que la repare, no suma). Las asignaciones anteriores al historial se reconstruyen con la última asignación de cada falla.</div>`;
+      `</div>` + `<div class="hint" style="margin-top:8px;">Haz clic en una cuadrilla (fila con ›) para ver su detalle. Solo cuenta lo que cerró o dejó pendiente un camión; lo que hizo un contratista se muestra aparte y la falla sigue como «sin atender» para la cuadrilla. Cada falla se cuenta una vez, para la cuadrilla que la tiene asignada (si se reasigna a otra sin que la repare, no suma). Las asignaciones anteriores al historial se reconstruyen con la última asignación de cada falla.</div>`;
     todas.forEach(({c, r}) => r.items.forEach(i => mapaItems.push({...i, cuadrilla: c.nombre})));
   } else {
     const {c, r} = todas.find(x => x.c.id === selId) || {};
