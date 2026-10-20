@@ -6615,6 +6615,18 @@ function operativoItemsMapa(det){
 }
 function quitarCapaOperativo(){ if(OPER.capa){ map.removeLayer(OPER.capa); OPER.capa = null; } }
 // Hojas del PDF con el resumen de UN operativo: mapa con sus fallas + estadísticas (como cualquier período, pero solo del operativo)
+let LOGO_PDF_DATA = null;   // logo municipal como data URL (se carga una vez)
+async function cargarLogoPdf(){
+  if(LOGO_PDF_DATA) return LOGO_PDF_DATA;
+  try{
+    const img = new Image();
+    await new Promise((ok, mal) => { img.onload = ok; img.onerror = mal; img.src = 'logo-laflorida.png'; });
+    const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+    c.getContext('2d').drawImage(img, 0, 0); LOGO_PDF_DATA = c.toDataURL('image/png');
+  }catch(e){ console.warn('No se pudo cargar el logo para el PDF:', e); }
+  return LOGO_PDF_DATA;
+}
+const textoPieGeneracion = () => `Documento generado por el Sistema de Gestión de Fallas · ${fechaGeneracionPdf()} · extraído por ${currentUser ? currentUser.nombre : '-'}`;
 const fechaGeneracionPdf = () => {
   const MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {timeZone: ZONA_CHILE, year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}).formatToParts(new Date()).map(x => [x.type, x.value]));
@@ -6659,7 +6671,7 @@ async function agregarHojasOperativo(pdf, det, primera, info){
     if(cv) pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
     else { pdf.setFontSize(10); pdf.setTextColor(...gris); pdf.text('Este operativo no tiene fallas con ubicación.', ancho / 2, alto / 2, {align: 'center'}); }
   }catch(e){ console.warn('No se pudo dibujar el mapa del operativo:', e); }
-  conOpacidad(0.93, () => { pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F'); });
+  pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 38, ancho, 1, 'F');
   pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
   pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
   pdf.setFont('helvetica', 'bold');
@@ -6710,7 +6722,7 @@ async function agregarHojasOperativo(pdf, det, primera, info){
   pdf.autoTable({...est, startY: ty, margin: {left: margen + 2, right: ancho - margen - 2 - mitad}, head: [['Inspector', 'Fallas', 'Rep.', 'Pend.']], columnStyles: colN, didParseCell: pinta, body: bodyI.map(([k, v]) => [k, v.n, v.rep, v.n - v.rep])});
   pdf.autoTable({...est, startY: ty, margin: {left: margen + mitad + 6, right: margen + 2}, head: [['Tipo de falla', 'Fallas', 'Rep.', 'Pend.']], columnStyles: colN, didParseCell: pinta, body: bodyT.map(([k, v]) => [k === 'Otros' ? k : etiquetaCodOp(k), v.n, v.rep, v.n - v.rep])});
   pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
-  pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
+  if(primera) pdf.text(textoPieGeneracion(), margen, alto - 7);   // hoja suelta: lleva su propio pie (en el informe completo lo pone el pie común)
 }
 // Botones de la tarjeta de un operativo
 window.verOperativo = async function(fecha, pdf){
@@ -7810,7 +7822,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     pdf.setFillColor(238, 242, 238); pdf.rect(0, 0, ancho, alto, 'F');
     try{
       const items = feats1.map(f => ({geom: f.geometry, color: colorFalla(f.properties.estado, f.properties.fecha_falla_real || f.properties.fecha_falla, f.properties.fecha_pendiente), label: ''}));
-      const cv = await renderMapaCanvas(items, {w: 1588, h: 2246, padding: 150, padTop: 390, padBottom: 500, zMax: 17, simple: true, contorno: true});
+      const cv = await renderMapaCanvas(items, {w: 1588, h: 2246, padding: 150, padTop: 440, padBottom: 500, zMax: 17, simple: true, contorno: true});
       if(cv) pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
       else { pdf.setFontSize(10); pdf.setTextColor(...gris); pdf.text('No hay fallas con ubicación en este período.', ancho / 2, alto / 2, {align: 'center'}); }
     }catch(e){ console.warn('No se pudo incluir el mapa del período:', e); }
@@ -7822,27 +7834,22 @@ async function generarPdfAnalisis(soloResumen, opciones){
       return `${dias[new Date(Date.UTC(y, m - 1, dd)).getUTCDay()]} ${String(dd).padStart(2, '0')} de ${meses[m - 1]} de ${y}`;
     };
     const rangoLargo = `${fmtLarga(ini)} al ${fmtLarga(fin)}`;
-    // Encabezado
-    conOpacidad(0.93, () => { pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F'); });
+    // Encabezado: título del informe con el peso que le corresponde y el logo municipal
+    const logoP = await cargarLogoPdf();
+    pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 50, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 50, ancho, 1.2, 'F');
     pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
     pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
-    pdf.setFont('helvetica', 'bold'); {
-      pdf.setFontSize(9);
-      const anchoGen = pdf.getTextWidth('Generado por el Sistema de Gestión de Fallas');
-      const maxT = ancho - margen - 2 - anchoGen - 6 - (margen + 2);
-      let fs = 24; pdf.setFontSize(fs);
-      const tituloP = perEt.mes ? 'Informe mensual de fallas de alumbrado' : 'Informe de fallas de alumbrado';
-      while(fs > 12 && pdf.getTextWidth(tituloP) > maxT){ fs -= 0.5; pdf.setFontSize(fs); }
-      pdf.text(tituloP, margen + 2, 22);
+    if(logoP){ try{ pdf.addImage(logoP, 'PNG', ancho - margen - 2 - 56, 8, 56, 56 * 163 / 400); }catch(eL){ console.warn('No se pudo dibujar el logo:', eL); } }
+    {
+      const lin = perEt.mes ? ['Informe mensual', 'de fallas de alumbrado'] : ['Informe de fallas', 'de alumbrado'];
+      let fs = 30; pdf.setFont('helvetica', 'bold'); pdf.setFontSize(fs);
+      const maxT = ancho - margen * 2 - 62;
+      while(fs > 16 && Math.max(...lin.map(l => pdf.getTextWidth(l))) > maxT){ fs -= 0.5; pdf.setFontSize(fs); }
+      pdf.text(lin[0], margen + 2, 24); pdf.text(lin[1], margen + 2, 34);
     }
-    pdf.setFontSize(12); pdf.setTextColor(...LIMA);
-    if(perEt.mes) pdf.text(`Mes de ${perEt.txt}`, margen + 2, 31);
-    else { pdf.setFontSize(10.5); pdf.text(`Período: ${fmtLarga(ini)} al`, margen + 2, 29.5); pdf.text(fmtLarga(fin), margen + 2, 35); }
-    etiquetaContrato(35);
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
-    pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
-    pdf.text(fechaGeneracionPdf(), ancho - margen - 2, 20, {align: 'right'});
-    pdf.text(`extraído por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 25, {align: 'right'});
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...LIMA);
+    if(perEt.mes) pdf.text(`Mes de ${perEt.txt}`, margen + 2, 44);
+    else pdf.text(`Período: ${fmtLarga(ini)} al ${fmtLarga(fin)}`, margen + 2, 44);
 
     // Panel de indicadores (cifras de las fallas informadas en el período, sin filtros: son las mismas del mapa y la leyenda)
     const py = alto - 68, ph = 56;
@@ -7876,20 +7883,23 @@ async function generarPdfAnalisis(soloResumen, opciones){
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.8); pdf.setTextColor(...gris);
     pdf.text(pdf.splitTextToSize('Cifras de las fallas informadas dentro del período, sin filtros.', ancho - margen * 2 - 8), margen + 4, py + 52.5);
     conOpacidad(0.85, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
-    pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 3.2);
 
     // ---------- HOJA 2: estadísticas ----------
     if(cid) pdf.deletePage(pdf.internal.getCurrentPageInfo().pageNumber);   // el contrato no lleva la hoja del mapa
     pdf.addPage();
     const pgHoja2 = pdf.internal.getCurrentPageInfo().pageNumber; let pgRep = null;
-    pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F');
-    pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
-    pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text(cid ? `Estadísticas Contrato ${nombre}` : 'Resumen ejecutivo', margen + 2, 22);
-    pdf.setFontSize(12); pdf.setTextColor(...LIMA);
-    pdf.text(perTxt, margen + 2, 31);
-    etiquetaContrato(35);
+    if(cid){
+      bandaPagina(`Estadísticas Contrato ${nombre}`);
+      // el contenido de la hoja se sube 14 mm (la banda es más baja)
+      pdf.internal.write('q'); pdf.internal.write('1 0 0 1 0 ' + (14 * pdf.internal.scaleFactor).toFixed(3) + ' cm');
+    } else {
+      pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F');
+      pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
+      pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text('Resumen ejecutivo', margen + 2, 22);
+      pdf.setFontSize(12); pdf.setTextColor(...LIMA);
+      pdf.text(perTxt, margen + 2, 31);
+    }
     const tarjeta = (x, y, w, h, titulo) => {
       pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x, y, w, h, 3, 3, 'FD');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...VERDE); pdf.text(titulo, x + 5, y + 8);
@@ -8208,7 +8218,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     }
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor(...gris);
     pdf.text(`Verde: mejora respecto de ${esMesCompleto ? etiquetaAnt : 'el período anterior'}; rojo: empeora. ${esMesCompleto ? '' : 'Período anterior = la misma cantidad de días inmediatamente anteriores. '}pp = puntos porcentuales.`, margen + 5, yc + hc - 1.6);
-    pdf.setFontSize(8); pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
+    if(cid) pdf.internal.write('Q');
 
     // Una hoja por cada operativo del período (si los hubo): se suma a las cifras de siempre, no las excluye. Solo en el informe general (no en cada contrato)
     if(!cid) try{
@@ -8723,8 +8733,9 @@ async function generarPdfAnalisis(soloResumen, opciones){
     // Pie de página
     const paginas = pdf.internal.getNumberOfPages();
     for(let p = 1; p <= paginas; p++){
-      pdf.setPage(p); pdf.setFontSize(8); pdf.setTextColor(...gris);
-      pdf.text(`Página ${p} de ${paginas}`, ancho - margen, alto - 7, {align: 'right'});
+      pdf.setPage(p); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
+      pdf.text(textoPieGeneracion(), margen, alto - 7);
+      pdf.setFontSize(8); pdf.text(`Página ${p} de ${paginas}`, ancho - margen, alto - 7, {align: 'right'});
     }
     pdf.save(`${soloResumen ? (opciones.generico ? 'informe_resumido_fallas' : 'informe_fallas') : 'analisis_fallas'}_${ini}_a_${fin}.pdf`);
   }catch(e){
