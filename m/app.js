@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.36.2';
+const VERSION_APP = '1.36.3';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1528,6 +1528,7 @@ async function editarReparacionApp(p, est) {
     <div class="hint">${esc(est.tipo_falla)}${est.segundos == null ? ' · sin límite de tiempo (admin)' : ''}</div>
     <h3>Trabajo realizado</h3>
     <div class="codigos">${CAT_CIERRES.map((x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>
+    <div class="hint">Lo marcado se agrega aquí abajo (puedes editarlo):</div>
     <textarea id="rDesc" class="campo"></textarea>
     <h3>Código de falla</h3>${htmlCodigos(cat)}
     <textarea id="rOtro" class="campo" placeholder="Describe la falla (obligatorio si eliges OTRO)" ${codigo === 'OTRO' ? '' : 'hidden'}></textarea>
@@ -1552,10 +1553,17 @@ async function editarReparacionApp(p, est) {
   $('#rOtro', h).value = est.descripcion_otro || '';
   const m = /^([SE])-(.*)$/.exec(est.orden_externa || '');
   if (m) { $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
+  // Los códigos de trabajo se marcan/desmarcan (como al registrar) y reflejan lo escrito en el cuadro
+  const lineasRep = () => $('#rDesc', h).value.split('\n').map((x) => x.trim());
+  const marcarCodigosRep = () => { const ls = lineasRep(); $$('.codigos .codigo[data-t]', h).forEach((b) => b.classList.toggle('sel', ls.includes(b.dataset.t))); };
+  marcarCodigosRep();
   $$('.codigos .codigo[data-t]', h).forEach((b) => b.addEventListener('click', () => {
-    const t = b.dataset.t, ta = $('#rDesc', h);
-    if (!ta.value.includes(t)) ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + t;
+    const t = b.dataset.t, ta = $('#rDesc', h), ls = lineasRep();
+    if (ls.includes(t)) ta.value = ta.value.split('\n').filter((x) => x.trim() !== t).join('\n');
+    else ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + t;
+    marcarCodigosRep();
   }));
+  $('#rDesc', h).addEventListener('input', marcarCodigosRep);
   $$('.codigo[data-c]', h).forEach((b) => {
     if (b.dataset.c === codigo) b.classList.add('sel');
     b.addEventListener('click', () => { $$('.codigo[data-c]', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c; $('#rOtro', h).hidden = codigo !== 'OTRO'; });
