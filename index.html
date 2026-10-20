@@ -1094,6 +1094,7 @@
         <input type="text" id="libNuevoGrupo" class="popup-input" maxlength="40" autocomplete="off" list="libGrupos" placeholder="Grupo" style="width:190px; margin:0; display:none;">
         <datalist id="libGrupos"></datalist>
         <button type="button" class="popup-btn" id="libAgregarBtn" style="width:auto; margin:0; padding:7px 16px;">Agregar</button>
+        <button type="button" class="popup-btn" id="libOrdenarBtn" title="Ordena toda la lista por número de código" style="width:auto; margin:0; padding:7px 14px; background:#fff; color:var(--primary); border:1.5px solid var(--primary);">Ordenar por código</button>
       </form>
       <div style="overflow-x:auto;">
         <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
@@ -9582,14 +9583,34 @@ async function libAgregar(){
   if(!codigo || !desc){ alert('Escribe el código y la descripción.'); return; }
   if(esCierre && !/^[0-9]{3}$/.test(codigo)){ alert('El código de cierre debe tener 3 dígitos (ej. 140).'); return; }
   if(LIB.filas.some(f => f.codigo === codigo)){ alert('Ese código ya existe en esta lista' + (LIB.filas.find(f => f.codigo === codigo).activo ? '.' : ' (está desactivado: reactívalo).')); return; }
-  const mayor = Math.max(0, ...LIB.filas.filter(f => f.orden < 99).map(f => f.orden));
-  const fila = esCierre ? {codigo, descripcion: desc, grupo, orden: mayor + 1} : {categoria: LIB.cat, codigo, descripcion: desc, orden: mayor + 1};
-  await libAccion(() => db.insert(esCierre ? 'codigos_cierre' : 'codigos_falla', fila));
+  // El código nuevo queda en su lugar por número (antes del primer código mayor); OTRO / 999 siguen al final
+  const fila = esCierre ? {codigo, descripcion: desc, grupo} : {categoria: LIB.cat, codigo, descripcion: desc};
+  const esFin = (f) => f.codigo === 'OTRO' || f.codigo === '999';
+  const cmp = (x, y) => x.localeCompare(y, 'es', {numeric: true});
+  let pos = LIB.filas.findIndex(f => !esFin(f) && cmp(f.codigo, codigo) > 0);
+  if(pos < 0){ pos = LIB.filas.findIndex(esFin); if(pos < 0) pos = LIB.filas.length; }
+  const lista = LIB.filas.slice(); lista.splice(pos, 0, fila);
+  const ordenDe = (f, k) => esFin(f) ? 99 : k + 1;
+  fila.orden = ordenDe(fila, pos);
+  await libAccion(async () => {
+    await db.insert(esCierre ? 'codigos_cierre' : 'codigos_falla', fila);
+    for(let k = 0; k < lista.length; k++){
+      if(lista[k] === fila) continue;
+      const n = ordenDe(lista[k], k);
+      if(lista[k].orden !== n) await libActualizar(lista[k], {orden: n});
+    }
+  });
   document.getElementById('libNuevoCodigo').value = ''; document.getElementById('libNuevoDesc').value = ''; document.getElementById('libNuevoGrupo').value = '';
 }
 document.querySelectorAll('.lib-tab').forEach(b => b.onclick = () => libMostrarTab(b.dataset.tab));
 document.querySelectorAll('.lib-cat').forEach(b => b.onclick = () => { LIB.cat = b.dataset.cat; document.querySelectorAll('.lib-cat').forEach(x => x.classList.toggle('active', x === b)); libCargarCodigos(); });
 document.getElementById('libAgregarBtn').onclick = libAgregar;
+document.getElementById('libOrdenarBtn').onclick = async () => {
+  if(!confirm('¿Ordenar toda esta lista por número de código? Se pierde el orden manual que hayas dado.')) return;
+  const esFin = (f) => f.codigo === 'OTRO' || f.codigo === '999';
+  const arr = LIB.filas.slice().sort((x, y) => (esFin(x) - esFin(y)) || x.codigo.localeCompare(y.codigo, 'es', {numeric: true}));
+  await libAccion(async () => { for(let k = 0; k < arr.length; k++){ const n = esFin(arr[k]) ? 99 : k + 1; if(arr[k].orden !== n) await libActualizar(arr[k], {orden: n}); } });
+};
 
 function mensajeErrorNotificador(e){
   const m = String((e && e.message) || e);
