@@ -7901,7 +7901,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     // ---------- HOJA 2: estadísticas ----------
     if(cid) pdf.deletePage(pdf.internal.getCurrentPageInfo().pageNumber);   // el contrato no lleva la hoja del mapa
     pdf.addPage();
-    const pgHoja2 = pdf.internal.getCurrentPageInfo().pageNumber; let pgRep = null;
+    const pgHoja2 = pdf.internal.getCurrentPageInfo().pageNumber; let pgRep = null, pgAn = null, pgInsIni = null, pgInsFin = null;
     if(cid){
       bandaPagina(`Estadísticas Contrato ${nombre}`);
       // el contenido de la hoja se sube 14 mm (la banda es más baja)
@@ -8256,7 +8256,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     // Título de la banda de las hojas de detalle (cambia por sección) y salto a una hoja nueva con la misma banda
     let tituloDet = cid ? `Detalle de fallas Contrato ${nombre}` : 'Análisis de Mantenimiento';
     const hojaDet = () => { pdf.addPage(); bandaPagina(tituloDet); y = 34; };
-    hojaDet();
+    hojaDet(); pgAn = pdf.internal.getCurrentPageInfo().pageNumber;
 
     const estilosTabla = {
       margin: {left: margen, right: margen},
@@ -8450,7 +8450,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
 
     if(!cid){
     // 7) Operativos del período (esta parte parte siempre en una hoja nueva)
-    tituloDet = 'Inspecciones Nocturnas y Operativos'; hojaDet();
+    tituloDet = 'Inspecciones Nocturnas y Operativos'; hojaDet(); pgInsIni = pdf.internal.getCurrentPageInfo().pageNumber;
     const cob = d.cobertura || {};
     const diasCob = cob.por_dia || [];
     if(opsDet.length){
@@ -8533,6 +8533,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
         });
       } else vacio('Sin inspecciones registradas en este rango.');
     }
+    pgInsFin = pdf.internal.getNumberOfPages();
     tituloDet = 'Puntos críticos y pendientes'; hojaDet();
     seccionPendientes();
     }
@@ -8604,6 +8605,8 @@ async function generarPdfAnalisis(soloResumen, opciones){
     }catch(e){ console.warn('No se pudo incluir el mapa de calor en el PDF:', e); }
     // En cada contrato, las estadísticas van después del detalle de fallas y antes del detalle de reparaciones
     if(cid && pgRep && pgRep > pgHoja2) pdf.movePage(pgHoja2, pgRep - 1);
+    // En el informe general, 'Inspecciones Nocturnas y Operativos' va justo después de los informes de operativo (antes del Análisis de Mantenimiento)
+    if(!cid && pgAn && pgInsIni && pgInsFin && pgInsIni > pgAn) for(let k = 0; k <= pgInsFin - pgInsIni; k++) pdf.movePage(pgInsIni + k, pgAn + k);
 
     }
 
