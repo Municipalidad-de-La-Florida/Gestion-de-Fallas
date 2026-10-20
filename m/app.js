@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.37.3';
+const VERSION_APP = '1.37.4';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2367,7 +2367,7 @@ function pintarCuadrillas() {
   } else {
     const x = todasLas.find((y) => y.c.id === selId); if (!x) { cont.innerHTML = ''; return; }
     const { c, r } = x;
-    html += `<h3 style="margin:0 0 8px">${esc(c.nombre)}</h3><div class="cu-kpis">${kpi('Inició con', `${r.inicio}`, '#2563a8')}${kpi('Total', r.total, '#9aa5b1')}${kpi('Atenciones', r.reparadas + r.pendientes, CU_COL.reparada)}${kpi('Reparadas', r.reparadas, CU_COL.reparada)}${kpi('Dejó pendientes', r.pendientes, CU_COL.pendiente)}${kpi('Sin atender', r.sin, CU_COL.sin)}${kpi('Cumplimiento', r.cumplimiento == null ? '—' : r.cumplimiento + '%', '#7a5ca8')}</div>
+    html += `<h3 style="margin:0 0 8px">${esc(c.nombre)}</h3><div class="cu-kpis">${kpi('Inició con', `${r.inicio}`, '#2563a8')}${kpi('Total', r.total, '#9aa5b1')}${kpi('Atenciones', r.reparadas + r.pendientes, CU_COL.reparada)}${kpi('Reparadas', r.reparadas, CU_COL.reparada)}${kpi('Dejó pendientes', r.pendientes, CU_COL.pendiente)}${kpi('Sin atender', r.sin, CU_COL.sin)}${kpi('Aportes', r.aportes || 0, '#6b4fa0')}${kpi('Cumplimiento', r.cumplimiento == null ? '—' : r.cumplimiento + '%', '#7a5ca8')}</div>
       <div class="s" style="margin:-4px 2px 8px;font-size:12.5px;color:var(--tinta-2)">Tiempo medio entre reparaciones: <b>${cuDur(r.medio)}</b></div>`;
     if (r.aportes) html += `<div class="cu-sec" style="color:#6b4fa0">Aportes del turno (${r.aportes}) · extra al trabajo normal</div>` + r.aps.slice().sort((p, q) => new Date(q.reparada_en) - new Date(p.reparada_en)).map((i) =>
       `<button class="cu-fila" data-f="${esc(i.falla_id)}"><b>${esc(cuHora(i.reparada_en))}</b> · OS ${esc(i.ot || '—')} · ${esc(i.tipo_falla || '')}<div class="s">${esc(i.direccion || '—')}</div><div class="s" style="color:#6b4fa0;font-weight:600">🛠 Aporte · ${esc(i.maestro || 'maestro')}</div></button>`).join('');
