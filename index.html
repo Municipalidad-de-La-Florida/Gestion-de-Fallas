@@ -8499,6 +8499,58 @@ function cuadEtiquetaContr(r){
   return t.length ? `<span style="display:inline-block; background:#fff1d9; color:#8a5200; border-radius:10px; padding:2px 8px; font-size:11px; margin:4px 4px 0 0;">🔧 ${t.join(' · ')}</span>` : '';
 }
 
+// ---- Aportes del mes por maestro (Rendimiento de cuadrillas) ----
+const CUAD_MES = {mes: null, filas: null, cargando: false, error: null, abiertos: new Set()};
+function cuadMesActual(){ const h = new Date(); return h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0'); }
+async function cuadMesCargar(){
+  if(CUAD_MES.cargando) return;
+  if(!CUAD_MES.mes) CUAD_MES.mes = cuadMesActual();
+  CUAD_MES.cargando = true; CUAD_MES.error = null; CUAD_MES.filas = null;
+  try{
+    cuadPintar();
+    const [y, m] = CUAD_MES.mes.split('-').map(Number);
+    const d = new Date(y, m - 1, 1).toISOString(), h = new Date(y, m, 1).toISOString();
+    CUAD_MES.filas = await db.select('fallas', `select=id,ot,tipo,tipo_falla,fecha_falla,contrato_id,asignado_camion_id,maestro:maestros(nombre)&es_aporte=eq.true&cascada=eq.false&fecha_falla=gte.${d}&fecha_falla=lt.${h}&order=fecha_falla.desc&limit=2000`) || [];
+  }catch(e){ CUAD_MES.error = e.message || 'No se pudo cargar'; }
+  CUAD_MES.cargando = false;
+  try{ cuadPintar(); }catch(e){ console.warn(e); }
+}
+function cuadMesHtml(ctSel){
+  const mes = CUAD_MES.mes || cuadMesActual();
+  const cab = `<div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:10px 16px; background:#6b4fa0; color:#fff;"><b style="font-size:12px; letter-spacing:.3px;">APORTES DEL MES POR MAESTRO</b><input type="month" id="cuadMesInput" value="${mes}" style="padding:2px 6px; border-radius:6px; border:0; font-size:12px;"></div>`;
+  let cuerpo;
+  if(CUAD_MES.cargando) cuerpo = '<div class="hint" style="margin:12px 16px;">Cargando…</div>';
+  else if(CUAD_MES.error) cuerpo = `<div class="hint" style="margin:12px 16px;">No se pudo cargar: ${escHtml(CUAD_MES.error)}</div>`;
+  else if(!CUAD_MES.filas) cuerpo = '';
+  else{
+    const filas = CUAD_MES.filas.filter(f => !ctSel || f.contrato_id === ctSel);
+    if(!filas.length) cuerpo = '<div class="hint" style="margin:12px 16px;">Sin aportes en este mes.</div>';
+    else{
+      const pm = {};
+      filas.forEach(f => { const k = (f.maestro && f.maestro.nombre) || 'Sin maestro'; (pm[k] = pm[k] || []).push(f); });
+      const nomCuad = id => ((CUAD.datos && CUAD.datos.cuadrillas || []).find(c => c.id === id) || {}).nombre || '—';
+      const fmt = iso => new Date(iso).toLocaleString('es-CL', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'});
+      cuerpo = `<div style="padding:8px 16px; font-size:12px; color:var(--ink-soft);">Total del mes: <b style="color:#6b4fa0;">${filas.length}</b> aporte${filas.length > 1 ? 's' : ''} · ${Object.keys(pm).length} maestro${Object.keys(pm).length > 1 ? 's' : ''} · toca un maestro para ver sus aportes y una fila para abrir la falla</div>` +
+        Object.entries(pm).sort((a, b) => b[1].length - a[1].length).map(([n, fs]) => {
+          const cod = {}; fs.forEach(f => { cod[f.tipo_falla] = (cod[f.tipo_falla] || 0) + 1; });
+          const abierto = CUAD_MES.abiertos.has(n);
+          return `<div data-mes-m="${escHtml(n)}" style="border-top:1px solid #eef1ef; padding:10px 16px; cursor:pointer;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;"><b>${escHtml(n)}</b><span><b style="color:#6b4fa0; font-size:18px;">${fs.length}</b> <span style="color:var(--ink-soft);">${abierto ? '▾' : '▸'}</span></span></div>
+            <div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:4px;">${Object.entries(cod).sort((a, b) => b[1] - a[1]).map(([c, k]) => `<span title="${escHtml(descCodigoSimple(c))}" style="background:#efe8fb; color:#6b4fa0; border-radius:10px; padding:1px 8px; font-size:11.5px;"><b>${escHtml(c)}</b> ${k}</span>`).join('')}</div>
+            ${abierto ? `<table class="cu-t" style="margin-top:8px;"><thead><tr><th>Fecha</th><th>OS</th><th>Código</th><th>Cuadrilla</th><th></th></tr></thead><tbody>${fs.map(f => `<tr class="cu-fila" data-mes-f="${escHtml(f.id)}" title="Ver la falla"><td>${fmt(f.fecha_falla)}</td><td>${escHtml(f.ot || '—')}</td><td>${escHtml(f.tipo_falla || '')}</td><td>${escHtml(nomCuad(f.asignado_camion_id))}</td><td style="color:#6b4fa0;">Ver ›</td></tr>`).join('')}</tbody></table>` : ''}
+          </div>`;
+        }).join('');
+    }
+  }
+  return `<div style="margin-top:16px; background:#fff; border-radius:14px; box-shadow:0 1px 4px #0001; overflow:hidden;">${cab}${cuerpo}</div>`;
+}
+function cuadMesEnlazar(cont){
+  const inp = cont.querySelector('#cuadMesInput');
+  if(inp) inp.onchange = () => { if(inp.value){ CUAD_MES.mes = inp.value; CUAD_MES.abiertos.clear(); cuadMesCargar(); } };
+  cont.querySelectorAll('[data-mes-m]').forEach(el => el.onclick = () => { const n = el.dataset.mesM; if(CUAD_MES.abiertos.has(n)) CUAD_MES.abiertos.delete(n); else CUAD_MES.abiertos.add(n); cuadPintar(); });
+  cont.querySelectorAll('[data-mes-f]').forEach(tr => tr.onclick = ev => { ev.stopPropagation(); enfocarFalla(tr.dataset.mesF, true); });
+  if(inp && !CUAD_MES.filas && !CUAD_MES.cargando && !CUAD_MES.error) cuadMesCargar();
+}
 function cuadAportesMaestros(apItems){
   if(!apItems.length) return '';
   const pm = {};
@@ -8594,7 +8646,7 @@ function cuadPintar(){
         <div style="text-align:center;">${(r.total || r.aportes) ? `${cuadPildora(r)}<div style="display:flex; height:10px; border-radius:5px; overflow:hidden; background:#e6ebe8;"><div style="width:${100 * r.reparadas / t}%; background:${CUAD_COLOR.reparada};"></div><div style="width:${100 * r.pendientes / t}%; background:${CUAD_COLOR.pendiente};"></div><div style="width:${100 * r.sin / t}%; background:${CUAD_COLOR.sin};"></div></div>
           <div style="margin-top:6px; font-size:11.5px;"><span style="color:${CUAD_COLOR.reparada};">● ${r.reparadas} reparadas</span> &nbsp;<span style="color:#b36b00;">● ${r.pendientes} pend.</span> &nbsp;<span style="color:${CUAD_COLOR.sin};">● ${r.sin} sin atender</span></div>${cuadEtiquetaContr(r)}` : '<span class="hint" style="margin:0;">Sin fallas en este turno</span>'}</div>
         <div style="font-size:20px; font-weight:700; color:${r.cumplimiento == null ? 'var(--ink-soft)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')};">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</div><div style="font-weight:600; display:flex; align-items:center; justify-content:space-between;">${cuadDur(r.medio)}<span class="cu-go">›</span></div></div>`; }).join('') +
-      `</div>` + cuadAportesMaestros(apItems) + `<div class="hint" style="margin-top:8px;">Haz clic en una cuadrilla (fila con ›) para ver su detalle. Solo cuenta lo que cerró o dejó pendiente un camión; lo que hizo un contratista se muestra aparte y la falla sigue como «sin atender» para la cuadrilla. Cada falla se cuenta una vez, para la cuadrilla que la tiene asignada (si se reasigna a otra sin que la repare, no suma). Las asignaciones anteriores al historial se reconstruyen con la última asignación de cada falla.</div>`;
+      `</div>` + cuadAportesMaestros(apItems) + cuadMesHtml(ctSel) + `<div class="hint" style="margin-top:8px;">Haz clic en una cuadrilla (fila con ›) para ver su detalle. Solo cuenta lo que cerró o dejó pendiente un camión; lo que hizo un contratista se muestra aparte y la falla sigue como «sin atender» para la cuadrilla. Cada falla se cuenta una vez, para la cuadrilla que la tiene asignada (si se reasigna a otra sin que la repare, no suma). Las asignaciones anteriores al historial se reconstruyen con la última asignación de cada falla.</div>`;
     todas.forEach(({c, r}) => r.items.forEach(i => mapaItems.push({...i, cuadrilla: c.nombre})));
   } else {
     const {c, r} = todas.find(x => x.c.id === selId) || {};
@@ -8620,6 +8672,7 @@ function cuadPintar(){
     r.items.forEach(i => mapaItems.push({...i, cuadrilla: c.nombre}));
   }
   cont.innerHTML = html;
+  if(!selId || ctSel) cuadMesEnlazar(cont);
   cont.querySelectorAll('[data-id]').forEach(tr => tr.onclick = () => { document.getElementById('cuadSel').value = tr.dataset.id; cuadPintar(); });
   cont.querySelectorAll('tr[data-falla]').forEach(tr => tr.onclick = () => cuadEnfocar(tr.dataset.falla));
   cuadPintarMapa(mapaItems);
