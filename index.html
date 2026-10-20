@@ -8530,14 +8530,14 @@ function cuadMesHtml(ctSel){
       filas.forEach(f => { const k = (f.maestro && f.maestro.nombre) || 'Sin maestro'; (pm[k] = pm[k] || []).push(f); });
       const nomCuad = id => ((CUAD.datos && CUAD.datos.cuadrillas || []).find(c => c.id === id) || {}).nombre || '—';
       const fmt = iso => new Date(iso).toLocaleString('es-CL', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'});
-      cuerpo = `<div style="padding:8px 16px; font-size:12px; color:var(--ink-soft);">Total del mes: <b style="color:#6b4fa0;">${filas.length}</b> aporte${filas.length > 1 ? 's' : ''} · ${Object.keys(pm).length} maestro${Object.keys(pm).length > 1 ? 's' : ''}</div>` +
+      cuerpo = `<div style="padding:8px 16px; font-size:12px; color:var(--ink-soft);">Total del mes: <b style="color:#6b4fa0;">${filas.length}</b> aporte${filas.length > 1 ? 's' : ''} · ${Object.keys(pm).length} maestro${Object.keys(pm).length > 1 ? 's' : ''} · toca un maestro para ver sus aportes y una fila para abrir la falla</div>` +
         Object.entries(pm).sort((a, b) => b[1].length - a[1].length).map(([n, fs]) => {
           const cod = {}; fs.forEach(f => { cod[f.tipo_falla] = (cod[f.tipo_falla] || 0) + 1; });
           const abierto = CUAD_MES.abiertos.has(n);
           return `<div data-mes-m="${escHtml(n)}" style="border-top:1px solid #eef1ef; padding:10px 16px; cursor:pointer;">
             <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;"><b>${escHtml(n)}</b><span><b style="color:#6b4fa0; font-size:18px;">${fs.length}</b> <span style="color:var(--ink-soft);">${abierto ? '▾' : '▸'}</span></span></div>
             <div style="margin-top:4px; display:flex; flex-wrap:wrap; gap:4px;">${Object.entries(cod).sort((a, b) => b[1] - a[1]).map(([c, k]) => `<span title="${escHtml(descCodigoSimple(c))}" style="background:#efe8fb; color:#6b4fa0; border-radius:10px; padding:1px 8px; font-size:11.5px;"><b>${escHtml(c)}</b> ${k}</span>`).join('')}</div>
-            ${abierto ? `<table class="cu-t" style="margin-top:8px;"><thead><tr><th>Fecha</th><th>OS</th><th>Código</th><th>Cuadrilla</th></tr></thead><tbody>${fs.map(f => `<tr><td>${fmt(f.fecha_falla)}</td><td>${escHtml(f.ot || '—')}</td><td>${escHtml(f.tipo_falla || '')}</td><td>${escHtml(nomCuad(f.asignado_camion_id))}</td></tr>`).join('')}</tbody></table>` : ''}
+            ${abierto ? `<table class="cu-t" style="margin-top:8px;"><thead><tr><th>Fecha</th><th>OS</th><th>Código</th><th>Cuadrilla</th><th></th></tr></thead><tbody>${fs.map(f => `<tr class="cu-fila" data-mes-f="${escHtml(f.id)}" title="Ver la falla"><td>${fmt(f.fecha_falla)}</td><td>${escHtml(f.ot || '—')}</td><td>${escHtml(f.tipo_falla || '')}</td><td>${escHtml(nomCuad(f.asignado_camion_id))}</td><td style="color:#6b4fa0;">Ver ›</td></tr>`).join('')}</tbody></table>` : ''}
           </div>`;
         }).join('');
     }
@@ -8548,6 +8548,7 @@ function cuadMesEnlazar(cont){
   const inp = cont.querySelector('#cuadMesInput');
   if(inp) inp.onchange = () => { if(inp.value){ CUAD_MES.mes = inp.value; CUAD_MES.abiertos.clear(); cuadMesCargar(); } };
   cont.querySelectorAll('[data-mes-m]').forEach(el => el.onclick = () => { const n = el.dataset.mesM; if(CUAD_MES.abiertos.has(n)) CUAD_MES.abiertos.delete(n); else CUAD_MES.abiertos.add(n); cuadPintar(); });
+  cont.querySelectorAll('[data-mes-f]').forEach(tr => tr.onclick = ev => { ev.stopPropagation(); enfocarFalla(tr.dataset.mesF, true); });
   if(inp && !CUAD_MES.filas && !CUAD_MES.cargando && !CUAD_MES.error) cuadMesCargar();
 }
 function cuadAportesMaestros(apItems){
