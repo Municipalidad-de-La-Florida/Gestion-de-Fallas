@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.36.4';
+const VERSION_APP = '1.37.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -280,7 +280,7 @@ async function comprimirFoto(file) {
   }
   return blob;
 }
-async function subirFoto(fallaId, blob) {
+async function subirFoto(fallaId, blob, soloSubir) {
   const ruta = `${fallaId}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2))}.jpg`;
   const token = await tokenVigente();
   let res;
@@ -290,6 +290,7 @@ async function subirFoto(fallaId, blob) {
     });
   } catch (e) { throw new Error('Sin conexión al subir la foto. Intenta de nuevo.'); }
   if (!res.ok) throw new Error('No se pudo subir la foto (' + res.status + ').');
+  if (soloSubir) return ruta;   // aporte: la falla aún no existe; la foto se registra dentro de registrar_aporte
   await rpc('registrar_foto_falla', { p_falla_id: fallaId, p_ruta: ruta, p_bytes: blob.size });
 }
 async function urlFoto(ruta) {
@@ -1154,6 +1155,7 @@ function accionesReporte(textoReportar, geom) {
   const c = geom ? centroGeom(geom) : null;
   return `<div class="acciones acc-fila" id="accFalla">
     ${puedeReportar() ? `<button id="bReportar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}${esc(textoReportar)}</button>` : ''}
+    ${rol() === 'camion' ? `<button id="bAporte" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}Registrar aporte</button>` : ''}
     ${c ? `<a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>` : ''}
   </div>`;
 }
@@ -1175,6 +1177,13 @@ function abrirPunto(p, geom) {
     if (dup) return avisoDuplicado(dup);
     formReportePunto(p);
   }));
+  const ba = $('#bAporte', h);
+  if (ba) ba.addEventListener('click', ocupar(ba, async () => {
+    ba.textContent = 'Revisando…';
+    const dup = await hayFallaActiva('ref_punto_gid', p.gid);
+    if (dup) return avisoDuplicado(dup);
+    await formAporte('punto', p);
+  }));
 }
 function abrirCircuito(p, geom) {
   const h = abrirHoja(`
@@ -1192,11 +1201,159 @@ function abrirCircuito(p, geom) {
     if (dup) return avisoDuplicado(dup);
     formReporteCircuito(p);
   }));
+  const ba = $('#bAporte', h);
+  if (ba) ba.addEventListener('click', ocupar(ba, async () => {
+    ba.textContent = 'Revisando…';
+    const dup = await hayFallaActiva('ref_circuito_gid', p.gid);
+    if (dup) return avisoDuplicado(dup);
+    await formAporte('circuito', p);
+  }));
 }
 async function hayFallaActiva(campo, gid) {
   // No se confía solo en "estado": también se revisa si ya existe una reparación registrada.
   const ex = await select('fallas', `${campo}=eq.${gid}&select=id,tipo_falla,estado,reparaciones(id)`);
   return (ex || []).find((f) => f.estado !== 'reparada' && !(f.reparaciones && f.reparaciones.length));
+}
+
+/* ------------------------------ aportes ------------------------------ */
+// El camión marca un punto o circuito, indica la falla y registra de inmediato la reparación (antes + después + maestro).
+async function cargarMisContratos() {
+  const uc = await select('usuario_contratos', `usuario_id=eq.${sesion.user_id}&select=contrato_id`);
+  const ids = (uc || []).map((x) => x.contrato_id);
+  if (!ids.length) return [];
+  const cs = await select('contratos', `id=in.(${ids.join(',')})&activo=eq.true&select=id,nombre&order=nombre.asc`);
+  return cs || [];
+}
+async function formAporte(tipo, p) {
+  let contratos = [], maestros = [];
+  try { contratos = await cargarMisContratos(); maestros = await select('maestros', 'activo=eq.true&select=id,nombre,contrato_id&order=nombre.asc'); }
+  catch (e) { toast('No se pudo cargar tu contrato o los maestros.', 'error'); return; }
+  if (!contratos.length) { toast('Tu usuario no tiene un contrato asignado. Avisa al administrador.', 'error'); return; }
+  const mono = tipo === 'punto' && String(p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
+  const cat = tipo === 'circuito' ? CAT_CIRCUITO : (mono ? CAT_MONOPOSTE : CAT_PUNTO);
+  const fallaId = crypto.randomUUID();
+  let codigo = null, card = null, trabajos = [];
+  const fotos = { antes: null, despues: null };   // { blob, url, ruta }
+  const h = abrirHoja(`
+    <h2>Registrar aporte</h2>
+    <div class="hint">${tipo === 'punto' ? `Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}` : `Circuito ${esc(p.id ?? '')} · ${esc(p.cantidad_luminarias_cliente ?? '—')} luminarias`}</div>
+    <div class="aviso">Se registra la falla y su reparación juntas. Quedará como aporte de tu cuadrilla y del maestro que elijas.</div>
+    ${contratos.length > 1 ? `<h3>Contrato</h3><select id="aContrato" class="campo">${contratos.map((c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')}</select>` : ''}
+    <h3>Maestro</h3>
+    <select id="aMaestro" class="campo"></select>
+    <div id="aSinMaestro" class="hint" hidden>No hay maestros en este contrato. Pide a tu contratista que los agregue desde el menú.</div>
+    <h3>Código de falla</h3>${htmlCodigos(cat)}
+    ${tipo === 'punto' ? `<h3>Cardinalidad (opcional)</h3>
+    <div class="rosca" id="aCard"><button type="button" data-r="N">N</button><button type="button" data-r="S">S</button><button type="button" data-r="O">O</button><button type="button" data-r="P">P</button></div>` : ''}
+    <h3>Comentario de la falla</h3>
+    <textarea id="aDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+    <h3>Trabajo realizado</h3>
+    <div class="codigos">${CAT_CIERRES.map((x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>
+    <textarea id="aRep" class="campo" placeholder="Detalle de lo realizado (opcional si marcaste un trabajo)"></textarea>
+    <h3>Fotografías <span class="req">obligatorias</span></h3>
+    <div class="fotos" id="aFotos">
+      ${['antes', 'despues'].map((m) => `<div class="foto-slot" data-m="${m}"><div class="hint" style="font-weight:600">${m === 'antes' ? 'ANTES' : 'DESPUÉS'}</div><div class="vista"></div><div class="fila-btns"><button type="button" class="btn btn-secundario" data-cam="${m}">📷 Tomar</button><button type="button" class="btn btn-secundario" data-gal="${m}">🖼 Galería</button></div><input type="file" accept="image/*" hidden data-in="${m}"></div>`).join('')}
+    </div>
+    <div class="acciones fija"><button id="aOk" class="btn btn-primario">Registrar aporte</button></div>`);
+  const selM = $('#aMaestro', h);
+  const pintarMaestros = () => {
+    const cid = contratos.length > 1 ? $('#aContrato', h).value : contratos[0].id;
+    const ms = maestros.filter((m) => m.contrato_id === cid);
+    selM.innerHTML = ms.length ? `<option value="">Elige el maestro…</option>` + ms.map((m) => `<option value="${esc(m.id)}">${esc(m.nombre)}</option>`).join('') : '<option value="">—</option>';
+    $('#aSinMaestro', h).hidden = !!ms.length;
+  };
+  pintarMaestros();
+  if (contratos.length > 1) $('#aContrato', h).addEventListener('change', pintarMaestros);
+  const codigosFalla = $$('.codigos', h)[0], codigosTrab = $$('.codigos', h)[1];
+  $$('.codigo', codigosFalla).forEach((b) => b.addEventListener('click', () => {
+    $$('.codigo', codigosFalla).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
+  }));
+  $$('.codigo', codigosTrab).forEach((b) => b.addEventListener('click', () => {
+    const t = b.dataset.t, i = trabajos.indexOf(t);
+    if (i >= 0) { trabajos.splice(i, 1); b.classList.remove('sel'); } else { trabajos.push(t); b.classList.add('sel'); }
+  }));
+  $$('#aCard button', h).forEach((b) => b.addEventListener('click', () => {
+    const on = b.classList.contains('sel');
+    $$('#aCard button', h).forEach((x) => x.classList.remove('sel'));
+    card = on ? null : b.dataset.r; if (!on) b.classList.add('sel');
+  }));
+  const pintarSlot = (m) => {
+    const sl = $(`.foto-slot[data-m="${m}"]`, h), f = fotos[m];
+    $('.vista', sl).innerHTML = f ? `<div class="foto"><img src="${f.url}" alt="Foto ${m}"><button type="button" aria-label="Quitar foto">✕</button></div>` : '<div class="hint">Sin foto</div>';
+    const q = $('.vista button', sl);
+    if (q) q.addEventListener('click', () => { URL.revokeObjectURL(f.url); fotos[m] = null; pintarSlot(m); });
+  };
+  const poner = async (m, file) => {
+    try { const blob = await comprimirFoto(file); if (fotos[m]) URL.revokeObjectURL(fotos[m].url); fotos[m] = { blob, url: URL.createObjectURL(blob), ruta: null }; pintarSlot(m); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+  ['antes', 'despues'].forEach((m) => {
+    pintarSlot(m);
+    const inp = $(`input[data-in="${m}"]`, h);
+    $(`[data-cam="${m}"]`, h).addEventListener('click', async () => {
+      const r = await abrirCamara();
+      if (r === undefined) { inp.setAttribute('capture', 'environment'); inp.click(); } else if (r) poner(m, r);
+    });
+    $(`[data-gal="${m}"]`, h).addEventListener('click', () => { inp.removeAttribute('capture'); inp.click(); });
+    inp.addEventListener('change', (e) => { if (e.target.files[0]) poner(m, e.target.files[0]); e.target.value = ''; });
+  });
+  const ok = $('#aOk', h);
+  ok.addEventListener('click', ocupar(ok, async () => {
+    const cid = contratos.length > 1 ? $('#aContrato', h).value : contratos[0].id;
+    const maestro = selM.value;
+    const desc = $('#aDesc', h).value.trim();
+    const libre = $('#aRep', h).value.trim();
+    const rep = [...trabajos, ...(libre ? [libre] : [])].join('\n');
+    if (!maestro) { toast('Elige el maestro que realizó el trabajo.', 'error'); return; }
+    if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
+    if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
+    if (!rep) { toast('Elige o describe el trabajo realizado.', 'error'); return; }
+    if (!fotos.antes || !fotos.despues) { toast('Faltan las fotos de antes y de después.', 'error'); return; }
+    const lista = [];
+    for (const m of ['antes', 'despues']) {
+      ok.textContent = `Subiendo foto ${m === 'antes' ? 'de antes' : 'de después'}…`;
+      if (!fotos[m].ruta) fotos[m].ruta = await subirFoto(fallaId, fotos[m].blob, true);
+      lista.push({ ruta: fotos[m].ruta, bytes: fotos[m].blob.size, momento: m });
+    }
+    ok.textContent = 'Guardando…';
+    const r = await rpc('registrar_aporte', {
+      p_falla_id: fallaId, p_contrato_id: cid, p_tipo: tipo, p_gid: p.gid, p_tipo_falla: codigo,
+      p_cardinalidad: card, p_comentario: desc || null, p_maestro_id: maestro, p_reparacion: rep, p_fotos: lista,
+    });
+    cerrarHoja();
+    toast(`Aporte registrado · OS ${r.ot}`, 'ok');
+    cargarFallas();
+  }));
+}
+
+// Maestros del contrato (los mantiene el contratista; el admin ve todos). No se borran: se desactivan.
+async function abrirMaestros() {
+  const h = abrirHoja('<h2>Maestros</h2><div class="hint">Cargando…</div>');
+  let contratos = [], ms = [];
+  try {
+    contratos = rol() === 'admin' ? await select('contratos', 'activo=eq.true&select=id,nombre&order=nombre.asc') : await cargarMisContratos();
+    ms = await select('maestros', 'select=id,nombre,contrato_id,activo&order=nombre.asc');
+  } catch (e) { h.innerHTML = '<h2>Maestros</h2><div class="aviso peligro">No se pudo cargar. ¿Ya se ejecutó el SQL de aportes?</div>'; return; }
+  const pintar = () => {
+    h.innerHTML = `<h2>Maestros</h2><div class="hint">Personal que realiza las reparaciones. Los camiones eligen de esta lista al registrar un aporte.</div>
+      ${contratos.map((c) => `<h3>${esc(c.nombre)}</h3>
+        ${ms.filter((m) => m.contrato_id === c.id).map((m) => `<div class="tarjeta" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;${m.activo ? '' : 'opacity:.55'}"><b>${esc(m.nombre)}</b><button type="button" class="btn btn-secundario" data-t="${esc(m.id)}" style="width:auto;margin:0">${m.activo ? 'Desactivar' : 'Activar'}</button></div>`).join('') || '<div class="hint">Sin maestros.</div>'}
+        <div class="fila" style="margin-top:8px"><input class="campo" data-n="${esc(c.id)}" placeholder="Nombre del maestro" maxlength="60"><button type="button" class="btn btn-primario" data-a="${esc(c.id)}" style="width:auto;margin:0">Agregar</button></div>`).join('')}`;
+    $$('[data-t]', h).forEach((b) => b.addEventListener('click', ocupar(b, async () => {
+      const m = ms.find((x) => x.id === b.dataset.t);
+      await api(`/rest/v1/maestros?id=eq.${m.id}`, { method: 'PATCH', body: { activo: !m.activo } });
+      m.activo = !m.activo; pintar();
+    })));
+    $$('[data-a]', h).forEach((b) => b.addEventListener('click', ocupar(b, async () => {
+      const cid = b.dataset.a, inp = $(`[data-n="${cid}"]`, h), nombre = inp.value.trim().replace(/\s+/g, ' ');
+      if (nombre.length < 2) { toast('Escribe el nombre del maestro.', 'error'); return; }
+      try {
+        const r = await api('/rest/v1/maestros', { method: 'POST', body: { contrato_id: cid, nombre }, prefer: 'return=representation' });
+        ms.push(r[0]); ms.sort((a, b2) => a.nombre.localeCompare(b2.nombre)); pintar();
+      } catch (e) { toast(/duplicate|unique/i.test(e.message) ? 'Ese maestro ya está en la lista.' : e.message, 'error'); }
+    })));
+  };
+  pintar();
 }
 function avisoDuplicado(f) {
   abrirHoja(`
@@ -2731,6 +2888,7 @@ $('#btnMenu').addEventListener('click', () => {
       ${rol() === 'camion' ? '<div class="hint" style="margin:4px 6px 8px">📍 Tu ubicación se comparte con el administrador mientras la app está abierta.</div>' : ''}
       ${puedeUbicacion() && !puedeCuadrillas() ? `<button id="mCamiones" class="m-fila"><span class="m-ico m-azul">${ico('<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>')}</span><span class="t">Camiones en el mapa</span>${chev}</button>` : ''}
       ${puedeCuadrillas() ? `<button id="mCuadrillas" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M3 17h13V7H3z"/><path d="M16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>')}</span><span class="t">Cuadrillas</span>${chev}</button>` : ''}
+      ${['contratista', 'contratista2', 'contratista3', 'admin'].includes(rol()) ? `<button id="mMaestros" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-4 3-6 7-6s6.5 2 7 6"/>')}</span><span class="t">Maestros</span>${chev}</button>` : ''}
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
     </div>`);
@@ -2755,6 +2913,8 @@ $('#btnMenu').addEventListener('click', () => {
   if (mcm) mcm.addEventListener('click', () => { cerrarHoja(); mostrarCamionesMapa(); });
   const mcu = $('#mCuadrillas', h);
   if (mcu) mcu.addEventListener('click', () => abrirCuadrillas());
+  const mma = $('#mMaestros', h);
+  if (mma) mma.addEventListener('click', () => abrirMaestros());
   const mu = $('#mUsuarios', h);
   if (mu) mu.addEventListener('click', () => abrirUsuarios());
   $('#mActualizar', h).addEventListener('click', () => { $('#mActualizar', h).querySelector('.t').textContent = 'Actualizando…'; forzarActualizacion(); });
