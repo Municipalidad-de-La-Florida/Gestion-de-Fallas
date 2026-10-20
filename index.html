@@ -8485,6 +8485,7 @@ function cuadCalcular(filas, desde, hasta){
     items, total, inicio: items.filter(i => i.inicio).length, inicioPend: items.filter(i => i.inicioPend).length, asignadas: items.filter(i => !i.inicio).length,
     reparadas: rep, pendientes: pen, sin: total - rep - pen,
     contrRep: items.filter(i => i.porContr === 'reparada').length, contrPend: items.filter(i => i.porContr === 'pendiente').length,
+    aportes: items.filter(i => i.es_aporte && i.reparada).length,
     cumplimiento: total ? Math.round(100 * rep / total) : null, medio
   };
 }
@@ -8495,6 +8496,14 @@ function cuadEtiquetaContr(r){
   return t.length ? `<span style="display:inline-block; background:#fff1d9; color:#8a5200; border-radius:10px; padding:2px 8px; font-size:11px; margin:4px 4px 0 0;">🔧 ${t.join(' · ')}</span>` : '';
 }
 
+function cuadAportesMaestros(apItems){
+  if(!apItems.length) return '';
+  const pm = {};
+  apItems.forEach(i => { const k = i.maestro || 'Sin maestro'; const m = pm[k] || (pm[k] = {n: 0, c: {}}); m.n++; m.c[i.cuad] = (m.c[i.cuad] || 0) + 1; });
+  const filas = Object.entries(pm).sort((p, q) => q[1].n - p[1].n).map(([n, m]) =>
+    `<div style="display:grid; grid-template-columns:2fr .8fr 3fr; padding:10px 16px; border-bottom:1px solid #eef1ef; align-items:center;"><b>${escHtml(n)}</b><div style="font-weight:700; color:#6b4fa0;">${m.n}</div><div style="font-size:12px; color:var(--ink-soft);">${Object.entries(m.c).map(([c, k]) => escHtml(c) + ' (' + k + ')').join(' · ')}</div></div>`).join('');
+  return `<div style="margin-top:16px; background:#fff; border-radius:14px; box-shadow:0 1px 4px #0001; overflow:hidden;"><div style="display:grid; grid-template-columns:2fr .8fr 3fr; padding:10px 16px; background:#6b4fa0; color:#fff; font-size:11.5px; font-weight:600; letter-spacing:.3px;"><div>APORTES POR MAESTRO</div><div>TOTAL</div><div>CUADRILLA</div></div>${filas}</div>`;
+}
 function cuadKpi(l, v, color){ return `<div class="cu-kpi" style="border-top-color:${color};"><div class="l">${l}</div><div class="v">${v}</div></div>`; }
 // Atenciones del turno = reparadas + pendientes que dejó la cuadrilla. La píldora usa el mismo relleno que la barra (verde reparadas, ámbar pendientes).
 function cuadPildora(r){
@@ -8560,6 +8569,7 @@ function cuadPintar(){
   let html = `<div class="hint" style="margin:0 0 10px;">${escHtml(titulo.charAt(0).toUpperCase() + titulo.slice(1))}</div>`;
   let mapaItems = [];
   if(!selId || ctSel){
+    const apItems = todas.flatMap(x => x.r.items.filter(i => i.es_aporte && i.reparada).map(i => ({...i, cuad: x.c.nombre})));
     const G = {total: todas.reduce((n, x) => n + x.r.total, 0), rep: todas.reduce((n, x) => n + x.r.reparadas, 0), contr: todas.reduce((n, x) => n + x.r.contrRep, 0) + todas.reduce((n, x) => n + x.r.contrPend, 0)};
     const kp = (l, v, bg, col, sub) => `<div style="background:${bg}; border-radius:12px; padding:10px 12px; box-shadow:0 1px 3px #0001;"><div style="font-size:11px; color:${col || 'var(--ink-soft)'};">${l}</div><div style="font-size:24px; font-weight:700; color:${col || 'inherit'};">${v}</div>${sub ? `<div style="font-size:10.5px; color:var(--ink-soft);">${sub}</div>` : ''}</div>`;
     // Fallas activas del contrato (o de todos): abiertas al inicio del turno + ingresadas durante el turno
@@ -8567,7 +8577,7 @@ function cuadPintar(){
     const acts = (CUAD.datos.activas || []).filter(a => !ctSel || a.contrato_id === ctSel);
     const aIni = acts.reduce((n, a) => n + a.inicio, 0), aIng = acts.reduce((n, a) => n + a.ingresadas, 0), aTot = aIni + aIng;
     if((CUAD.datos.contratos || []).length) html += `<div style="margin:0 0 8px; font-weight:700; color:#1f4d3d;">${ctNombre ? 'Contrato: ' + escHtml(ctNombre) : 'Todos los contratos'}</div>`;
-    html += `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:10px; margin-bottom:14px;">${hayAct ? kp('Fallas activas', aTot, '#fff', '#1f4d3d', `${aIni} al inicio del turno · ${aIng} ingresadas en el turno`) : ''}${kp('Asignadas a cuadrillas', G.total, '#fff', null, hayAct ? `de ${aTot} activas` : '')}${kp('Reparadas por camión', G.rep, '#fff', CUAD_COLOR.reparada)}${kp('Cumplimiento de las asignadas', G.total ? Math.round(100 * G.rep / G.total) + '%' : '—', '#fff', '#1f4d3d', G.total ? `${G.rep} de ${G.total}` : '')}${kp('Atendidas por contratista', G.contr, '#fff7e8', '#b36b00')}</div>`;
+    html += `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:10px; margin-bottom:14px;">${hayAct ? kp('Fallas activas', aTot, '#fff', '#1f4d3d', `${aIni} al inicio del turno · ${aIng} ingresadas en el turno`) : ''}${kp('Asignadas a cuadrillas', G.total, '#fff', null, hayAct ? `de ${aTot} activas` : '')}${kp('Reparadas por camión', G.rep, '#fff', CUAD_COLOR.reparada)}${apItems.length ? kp('Aportes', apItems.length, '#fff', '#6b4fa0', 'ya incluidos en las reparadas') : ''}${kp('Cumplimiento de las asignadas', G.total ? Math.round(100 * G.rep / G.total) + '%' : '—', '#fff', '#1f4d3d', G.total ? `${G.rep} de ${G.total}` : '')}${kp('Atendidas por contratista', G.contr, '#fff7e8', '#b36b00')}</div>`;
     if(!todas.length) html += '<div class="empty-state">Este contrato aún no tiene cuadrillas.</div>';
     const PAL = [['#e3f1ea', '#1f7a52'], ['#e6eefb', '#2a5db0'], ['#f3edff', '#7c3aed'], ['#fff1d9', '#8a5200'], ['#fbe7e5', '#c1443c']];
     const ini = n => (n.match(/[A-Za-zÁÉÍÓÚÑ0-9]+/g) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
@@ -8576,9 +8586,9 @@ function cuadPintar(){
         return `<div class="cu-fila" data-id="${c.id}" style="display:grid; grid-template-columns:2.1fr 3fr .9fr 1.1fr; padding:14px 16px; align-items:center; border-bottom:1px solid #eef1ef;">
         <div style="display:flex; gap:10px; align-items:center;"><div style="width:34px; height:34px; border-radius:50%; background:${pc[0]}; color:${pc[1]}; font-weight:700; display:flex; align-items:center; justify-content:center;">${escHtml(ini(c.nombre))}</div><div><b>${escHtml(c.nombre)}</b><div style="font-size:11px; color:var(--ink-soft);">Inició con ${r.inicio} (${r.inicio - r.inicioPend} rep. · ${r.inicioPend} pend.) · +${r.asignadas} asignadas</div></div></div>
         <div style="text-align:center;">${r.total ? `${cuadPildora(r)}<div style="display:flex; height:10px; border-radius:5px; overflow:hidden; background:#e6ebe8;"><div style="width:${100 * r.reparadas / t}%; background:${CUAD_COLOR.reparada};"></div><div style="width:${100 * r.pendientes / t}%; background:${CUAD_COLOR.pendiente};"></div><div style="width:${100 * r.sin / t}%; background:${CUAD_COLOR.sin};"></div></div>
-          <div style="margin-top:6px; font-size:11.5px;"><span style="color:${CUAD_COLOR.reparada};">● ${r.reparadas} reparadas</span> &nbsp;<span style="color:#b36b00;">● ${r.pendientes} pend.</span> &nbsp;<span style="color:${CUAD_COLOR.sin};">● ${r.sin} sin atender</span></div>${cuadEtiquetaContr(r)}` : '<span class="hint" style="margin:0;">Sin fallas en este turno</span>'}</div>
+          <div style="margin-top:6px; font-size:11.5px;"><span style="color:${CUAD_COLOR.reparada};">● ${r.reparadas} reparadas</span> &nbsp;<span style="color:#b36b00;">● ${r.pendientes} pend.</span> &nbsp;<span style="color:${CUAD_COLOR.sin};">● ${r.sin} sin atender</span></div>${r.aportes ? `<span style="display:inline-block; background:#efe8fb; color:#6b4fa0; border-radius:10px; padding:2px 8px; font-size:11px; margin:4px 4px 0 0;">🛠 ${r.aportes} aporte${r.aportes > 1 ? 's' : ''}</span>` : ''}${cuadEtiquetaContr(r)}` : '<span class="hint" style="margin:0;">Sin fallas en este turno</span>'}</div>
         <div style="font-size:20px; font-weight:700; color:${r.cumplimiento == null ? 'var(--ink-soft)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')};">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</div><div style="font-weight:600; display:flex; align-items:center; justify-content:space-between;">${cuadDur(r.medio)}<span class="cu-go">›</span></div></div>`; }).join('') +
-      `</div><div class="hint" style="margin-top:8px;">Haz clic en una cuadrilla (fila con ›) para ver su detalle. Solo cuenta lo que cerró o dejó pendiente un camión; lo que hizo un contratista se muestra aparte y la falla sigue como «sin atender» para la cuadrilla. Cada falla se cuenta una vez, para la cuadrilla que la tiene asignada (si se reasigna a otra sin que la repare, no suma). Las asignaciones anteriores al historial se reconstruyen con la última asignación de cada falla.</div>`;
+      `</div>` + cuadAportesMaestros(apItems) + `<div class="hint" style="margin-top:8px;">Haz clic en una cuadrilla (fila con ›) para ver su detalle. Solo cuenta lo que cerró o dejó pendiente un camión; lo que hizo un contratista se muestra aparte y la falla sigue como «sin atender» para la cuadrilla. Cada falla se cuenta una vez, para la cuadrilla que la tiene asignada (si se reasigna a otra sin que la repare, no suma). Las asignaciones anteriores al historial se reconstruyen con la última asignación de cada falla.</div>`;
     todas.forEach(({c, r}) => r.items.forEach(i => mapaItems.push({...i, cuadrilla: c.nombre})));
   } else {
     const {c, r} = todas.find(x => x.c.id === selId) || {};
@@ -8592,7 +8602,7 @@ function cuadPintar(){
       html += titulo('Atendidas en el turno', hechas.length, '#3a8a5c', 'más recientes primero');
       html += hechas.length
         ? `<div style="background:#f3f9f5; border-radius:10px; padding:2px 8px;"><table class="cu-t"><thead><tr><th>Hora</th><th>OS</th><th>Dirección</th><th>Tipo</th><th>Resultado</th></tr></thead><tbody>` +
-          hechas.map(i => `<tr class="cu-fila" data-falla="${i.falla_id}"><td><b>${cuadHora(i.reparada ? i.reparada_en : i.fecha_pendiente)}</b></td>${ot(i)}<td style="color:${CUAD_TXT[i.resultado][1]}; font-weight:600;">${CUAD_TXT[i.resultado][0]}${i.pendiente && i.motivo_pendiente ? `<div style="font-weight:400; color:var(--ink-soft);">${escHtml(i.motivo_pendiente)}</div>` : ''}</td></tr>`).join('') + '</tbody></table></div>'
+          hechas.map(i => `<tr class="cu-fila" data-falla="${i.falla_id}"><td><b>${cuadHora(i.reparada ? i.reparada_en : i.fecha_pendiente)}</b>${i.es_aporte ? `<div style="font-size:11px; color:#6b4fa0;">🛠 aporte · ${escHtml(i.maestro || 'maestro')}</div>` : ''}</td>${ot(i)}<td style="color:${CUAD_TXT[i.resultado][1]}; font-weight:600;">${CUAD_TXT[i.resultado][0]}${i.pendiente && i.motivo_pendiente ? `<div style="font-weight:400; color:var(--ink-soft);">${escHtml(i.motivo_pendiente)}</div>` : ''}</td></tr>`).join('') + '</tbody></table></div>'
         : '<div class="hint" style="margin:0;">Aún no ha atendido ninguna en este turno.</div>';
       html += titulo('Por atender', porAtender.length, '#c1443c', 'trabajos que siguen en su lista');
       html += porAtender.length
