@@ -8521,7 +8521,7 @@ function cuadPildora(r){
 }
 function cuadKpis(c){
   return `<div class="cu-kpis">${cuadKpi('Inició el turno con', `${c.inicio}<div style="font-size:10.5px; font-weight:400; color:var(--ink-soft);">${c.inicio - c.inicioPend} reportadas · ${c.inicioPend} pendientes</div>`, '#64748b')}${cuadKpi('Asignadas en el turno', c.asignadas, '#2563a8')}${cuadKpi('Total del turno', c.total, '#1f4d3d')}
-    ${cuadKpi('Atenciones', c.reparadas + c.pendientes, '#1f7a52')}${cuadKpi('Reparadas', c.reparadas, CUAD_COLOR.reparada)}${cuadKpi('Dejó pendientes', c.pendientes, CUAD_COLOR.pendiente)}${cuadKpi('Sin atender', c.sin, CUAD_COLOR.sin)}
+    ${cuadKpi('Atenciones', c.reparadas + c.pendientes, '#1f7a52')}${cuadKpi('Reparadas', c.reparadas, CUAD_COLOR.reparada)}${cuadKpi('Dejó pendientes', c.pendientes, CUAD_COLOR.pendiente)}${cuadKpi('Sin atender', c.sin, CUAD_COLOR.sin)}${cuadKpi('Aportes', c.aportes || 0, '#6b4fa0')}
     ${cuadKpi('% de cumplimiento', c.cumplimiento == null ? '—' : c.cumplimiento + '%', '#7a5ca8')}${cuadKpi('Tiempo medio entre reparaciones', cuadDur(c.medio), '#8a5200')}</div>` + (cuadEtiquetaContr(c) ? `<div style="margin-top:8px;">${cuadEtiquetaContr(c)}</div>` : '');
 }
 const CUAD_TXT = {reparada: ['✔ Reparada', CUAD_COLOR.reparada], pendiente: ['● Pendiente', CUAD_COLOR.pendiente], sin: ['● Sin atender', CUAD_COLOR.sin]};
