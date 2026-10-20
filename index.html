@@ -8434,9 +8434,9 @@ async function generarPdfAnalisis(soloResumen, opciones){
         columnStyles: {0: {cellWidth: 29}, 2: {halign: 'right', cellWidth: 16}, 3: {halign: 'right', cellWidth: 20}}
       });
     }
-    // 8) Inspecciones nocturnas regulares: calendario mensual con la inicial de cada ITO que inspeccionó
+    // 8) Inspecciones nocturnas: calendario mensual con la inicial de cada ITO que inspeccionó
     const habilesSin = diasCob.filter(x => x.dow >= 1 && x.dow <= 5 && !x.inspecciones).length;
-    titulo('Inspecciones nocturnas regulares', `${habilesSin} día(s) hábil(es) sin inspección registrada (puede incluir feriados). Cada círculo es un ITO que inspeccionó esa noche.`);
+    titulo('Inspecciones nocturnas', `${habilesSin} día(s) hábil(es) sin inspección registrada (puede incluir feriados). Cada círculo es un ITO que inspeccionó esa noche.`);
     {
       const PALETA = ['#2563a8', '#c0392b', '#e67e22', '#16a085', '#8e44ad', '#34495e', '#b8860b', '#27ae60', '#7f8c8d', '#b03a8c', '#1abc9c', '#d35400'];
       const nombresIto = [];
