@@ -7762,6 +7762,10 @@ async function generarPdfAnalisis(soloResumen, opciones){
       const prom = serie.length ? serie.reduce((a, b) => a + b, 0) / serie.length : 0;
       const x0 = margen + 6, wTot = wDia - 12, wPlot = wTot - 11, paso = wPlot / n, bw = Math.min(6, paso * 0.78), base = 124, hMax = 14;   // wPlot deja a la derecha el espacio del promedio
       const iMax = serie.indexOf(mx);
+      // Escala: si un día se dispara (más de 2,2 veces el siguiente), su barra se corta para que el resto de los días se pueda leer
+      const ordS = [...serie].sort((a, b) => b - a);
+      const mxE = (ordS.length > 3 && ordS[0] > ordS[1] * 2.2) ? Math.max(1, Math.round(ordS[1] * 1.3)) : mx;
+      const hayCorte = mxE < mx;
       // Días hábiles (lun-vie) con al menos 1 falla: el de menos fallas (todos los empates si son 3 o menos)
       const habiles = diasP.map((x, i) => i).filter(i => diasP[i].dow >= 1 && diasP[i].dow <= 5 && serie[i] > 0);
       const mn = habiles.length ? Math.min(...habiles.map(i => serie[i])) : 0;
@@ -7772,14 +7776,15 @@ async function generarPdfAnalisis(soloResumen, opciones){
       serie.forEach((v, i) => {
         if(!v) return;
         const bx = x0 + i * paso + (paso - bw) / 2;
-        const hp = P[i] / mx * hMax, hc = C[i] / mx * hMax;
+        const esc = Math.min(v, mxE) / v, hp = P[i] * esc / mxE * hMax, hc = C[i] * esc / mxE * hMax;
         if(P[i]){ pdf.setFillColor(...LIMA); pdf.rect(bx, base - hp, bw, hp, 'F'); }
         if(C[i]){ pdf.setFillColor(...VERDE); pdf.rect(bx, base - hp - hc, bw, hc, 'F'); }
+        if(v > mxE){ const yk = base - hMax * 0.55; pdf.setDrawColor(255, 255, 255); pdf.setLineWidth(0.7); pdf.line(bx - 0.5, yk + 0.9, bx + bw + 0.5, yk - 0.5); pdf.line(bx - 0.5, yk + 2.1, bx + bw + 0.5, yk + 0.7); }
       });
       pdf.setDrawColor(219, 226, 220); pdf.setLineWidth(0.2); pdf.line(x0, base + 0.2, x0 + wPlot, base + 0.2);
       // Promedio diario (línea punteada)
       if(prom > 0){
-        const yp = base - prom / mx * hMax;
+        const yp = base - Math.min(prom, mxE) / mxE * hMax;
         pdf.setDrawColor(85, 102, 92); pdf.setLineWidth(0.25); pdf.setLineDashPattern([1, 0.8], 0);
         pdf.line(x0, yp, x0 + wPlot + 1.5, yp); pdf.setLineDashPattern([], 0);
         // Símbolo de promedio (x con barra) y el valor, a la derecha de la línea
@@ -7795,7 +7800,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       serie.forEach((v, i) => {
         if(!v) return;
         if(n > 45 && !(i === iMax || v >= prom * 1.8)) return;
-        pdf.text(String(v), x0 + i * paso + paso / 2, base - v / mx * hMax - 0.8, {align: 'center'});
+        pdf.text(String(v), x0 + i * paso + paso / 2, base - Math.min(v, mxE) / mxE * hMax - 0.8, {align: 'center'});
       });
       // Letra del día de la semana; círculo lleno = día con más fallas, círculo hueco = día hábil con menos
       const LET = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
@@ -7822,7 +7827,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       const medirRep = (typeof FILTROS_EST !== 'undefined' && FILTROS_EST.medir === 'reparacion');
       const notaDia = medirRep
         ? 'Fallas reparadas en el período, ubicadas en su día de ingreso (las ingresadas antes del período no aparecen). Un circuito cuenta como una falla.'
-        : 'Fallas ingresadas cada día; un circuito cuenta como una falla. ' + (iMin.length ? `Círculo lleno: día con más fallas (${mx}). Círculo hueco: día hábil con menos (${mn})${empates.length > iMin.length ? ', primero de ' + empates.length : ''}.` : '');
+        : 'Fallas informadas cada día; un circuito cuenta como una falla. ' + (hayCorte ? 'Barra cortada: no está a escala (la cifra es la real). ' : '') + (iMin.length ? `Círculo lleno: día con más fallas (${mx}). Círculo hueco: día hábil con menos (${mn})${empates.length > iMin.length ? ', primero de ' + empates.length : ''}.` : '');
       pdf.text(pdf.splitTextToSize(notaDia, wTot), x0, base + 11.5);
     }
 
