@@ -1,4 +1,4 @@
--- Editar / quitar una reparación: solo quien la registró, dentro de los 10 minutos siguientes (el admin siempre).
+-- Editar / quitar una reparación: solo quien la registró, dentro de los 30 minutos siguientes (el admin siempre).
 -- Ejecutar completo en el SQL Editor (elegir "Run without RLS" si pregunta). Idempotente.
 
 -- Registro de las reparaciones quitadas (trazabilidad; solo lo ve el admin)
@@ -12,7 +12,7 @@ drop policy if exists reparaciones_anuladas_admin on public.reparaciones_anulada
 create policy reparaciones_anuladas_admin on public.reparaciones_anuladas for select to authenticated
   using (public.mi_rol() = 'admin');
 
--- ¿Puede el usuario actual editar/quitar la reparación de esta falla? (ventana de 10 minutos desde que se registró)
+-- ¿Puede el usuario actual editar/quitar la reparación de esta falla? (ventana de 30 minutos desde que se registró)
 create or replace function public.reparacion_estado(p_falla_id uuid)
 returns jsonb language plpgsql stable security definer set search_path to 'public' as $$
 declare v_rol text; f public.fallas%rowtype; r public.reparaciones%rowtype; v_seg integer; v_otra boolean;
@@ -25,8 +25,8 @@ begin
   if v_rol = 'admin' then
     v_seg := null;
   elsif v_rol in ('contratista','contratista2','contratista3','camion') and r.reparado_por = auth.uid()
-        and r.creado_en > now() - interval '10 minutes' then
-    v_seg := greatest(0, extract(epoch from (r.creado_en + interval '10 minutes' - now()))::integer);
+        and r.creado_en > now() - interval '30 minutes' then
+    v_seg := greatest(0, extract(epoch from (r.creado_en + interval '30 minutes' - now()))::integer);
   else
     return jsonb_build_object('puede', false);
   end if;
@@ -45,7 +45,7 @@ declare r public.reparaciones; v jsonb;
 begin
   v := public.reparacion_estado(p_falla_id);
   if not coalesce((v->>'puede')::boolean, false) then
-    raise exception 'No puedes modificar esta reparación (solo quien la registró, dentro de 10 minutos, o el admin)';
+    raise exception 'No puedes modificar esta reparación (solo quien la registró, dentro de 30 minutos, o el admin)';
   end if;
   select * into r from public.reparaciones where falla_id = p_falla_id order by creado_en desc limit 1;
   return r;

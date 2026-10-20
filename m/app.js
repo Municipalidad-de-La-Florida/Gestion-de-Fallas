@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.36.2';
+const VERSION_APP = '1.38.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -73,6 +73,56 @@ const CAT_CIERRES = [
 ];
 const DESC_CODIGO = {};
 [...CAT_PUNTO, ...CAT_MONOPOSTE, ...CAT_CIRCUITO].forEach((x) => { DESC_CODIGO[x.c] = x.d; });
+// ---- Librería de códigos (tablas codigos_falla / codigos_cierre), con las listas fijas de arriba como respaldo ----
+const LIBRERIA = { falla: { punto: null, monoposte: null, circuito: null }, cierre: null, desc: { punto: {}, monoposte: {}, circuito: {}, cierre: {} }, frec: null };
+const LS_LIBRERIA = 'fm_libreria_v1';
+function libreriaAplicar(d) {
+  ['punto', 'monoposte', 'circuito'].forEach((cat) => {
+    const filas = (d.falla || []).filter((f) => f.categoria === cat);
+    LIBRERIA.desc[cat] = Object.fromEntries(filas.map((f) => [f.codigo, f.descripcion]));
+    LIBRERIA.falla[cat] = filas.filter((f) => f.activo).sort((a, b) => (a.orden - b.orden) || a.codigo.localeCompare(b.codigo)).map((f) => ({ c: f.codigo, d: f.descripcion }));
+    filas.forEach((f) => { DESC_CODIGO[f.codigo] = f.descripcion; });
+  });
+  const ci = d.cierre || [];
+  LIBRERIA.desc.cierre = Object.fromEntries(ci.map((f) => [f.codigo, f.descripcion]));
+  LIBRERIA.cierre = ci.filter((f) => f.activo).sort((a, b) => (a.orden - b.orden) || a.codigo.localeCompare(b.codigo)).map((f) => ({ c: f.codigo, d: f.descripcion }));
+  LIBRERIA.frec = d.frec || null;
+}
+async function cargarLibreria() {
+  try {
+    const [falla, cierre] = await Promise.all([select('codigos_falla', 'select=categoria,codigo,descripcion,orden,activo'), select('codigos_cierre', 'select=codigo,descripcion,orden,activo')]);
+    let frec = null; try { frec = await rpc('codigos_frecuentes', { p_dias: 90 }); } catch (e) { /* sin frecuentes */ }
+    const d = { falla, cierre, frec };
+    libreriaAplicar(d);
+    try { localStorage.setItem(LS_LIBRERIA, JSON.stringify(d)); } catch (e) { /* sin almacenamiento */ }
+  } catch (e) {
+    try { const c = localStorage.getItem(LS_LIBRERIA); if (c) libreriaAplicar(JSON.parse(c)); } catch (e2) { /* se usan las listas fijas */ }
+  }
+}
+// Códigos activos de una lista (punto, monoposte, circuito o cierre). Con "incluir", ese código aparece aunque esté desactivado.
+function catalogoActivo(cat, incluir) {
+  const lib = cat === 'cierre' ? LIBRERIA.cierre : LIBRERIA.falla[cat];
+  const fijo = cat === 'cierre' ? CAT_CIERRES : cat === 'circuito' ? CAT_CIRCUITO : cat === 'monoposte' ? CAT_MONOPOSTE : CAT_PUNTO;
+  const lista = (lib && lib.length ? lib : fijo).slice();
+  if (incluir && !lista.some((x) => x.c === incluir)) {
+    const d = LIBRERIA.desc[cat] && LIBRERIA.desc[cat][incluir];
+    if (d) lista.push({ c: incluir, d });
+  }
+  return lista;
+}
+// Con más de 6 códigos: los 6 más usados primero y luego el resto (OTRO / 999 al final)
+function htmlCodigosGrupo(cat, items, fila) {
+  const esOtro = (x) => x.c === 'OTRO' || (cat === 'cierre' && x.c === '999');
+  const norm = items.filter((x) => !esOtro(x)), otros = items.filter(esOtro);
+  const frec = (LIBRERIA.frec && LIBRERIA.frec[cat]) || [];
+  const top = frec.map((c) => norm.find((x) => x.c === c)).filter(Boolean).slice(0, 6).sort((x, y) => x.c.localeCompare(y.c, 'es', { numeric: true }));
+  if (norm.length <= 6 || top.length < 3) return items.map(fila).join('');
+  const resto = norm.filter((x) => !top.includes(x)).concat(otros);
+  const sec = (t) => `<div class="codigos-sec">${t}</div>`;
+  return sec('Más frecuentes') + top.map(fila).join('') + sec('Otros códigos') + resto.map(fila).join('');
+}
+const filaCierre = (x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`;
+const htmlCierres = () => `<div class="codigos">${htmlCodigosGrupo('cierre', catalogoActivo('cierre'), filaCierre)}</div>`;
 const ETIQUETA_ESTADO = { reportada: 'Reportada', pendiente: 'Pendiente', reiterada: 'Reiterada', reparada: 'Reparada' };
 const COLOR_ESTADO = { reportada: '#f2b705', pendiente: '#2fa8d8', reiterada: '#7b3fe4', reparada: '#2e9e57', vencida: '#d33a2c' };
 // Amarillo reportada, morado reiterada, celeste pendiente; pasan a rojo con más de 48 h (reportada/reiterada,
@@ -280,7 +330,7 @@ async function comprimirFoto(file) {
   }
   return blob;
 }
-async function subirFoto(fallaId, blob) {
+async function subirFoto(fallaId, blob, soloSubir) {
   const ruta = `${fallaId}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2))}.jpg`;
   const token = await tokenVigente();
   let res;
@@ -290,6 +340,7 @@ async function subirFoto(fallaId, blob) {
     });
   } catch (e) { throw new Error('Sin conexión al subir la foto. Intenta de nuevo.'); }
   if (!res.ok) throw new Error('No se pudo subir la foto (' + res.status + ').');
+  if (soloSubir) return ruta;   // aporte: la falla aún no existe; la foto se registra dentro de registrar_aporte
   await rpc('registrar_foto_falla', { p_falla_id: fallaId, p_ruta: ruta, p_bytes: blob.size });
 }
 async function urlFoto(ruta) {
@@ -552,8 +603,8 @@ const COMUNA_CONTORNO = [[-70.61562,-33.54644],[-70.61561,-33.54617],[-70.61545,
 function iniciarMapa() {
   definirMarcadorForma();
   if (map) { map.invalidateSize(); return; }
-  map = L.map('map', { zoomControl: false, attributionControl: true, maxZoom: 20 }).setView([-33.52, -70.58], 14);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 20, maxNativeZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
+  map = L.map('map', { zoomControl: false, attributionControl: true, maxZoom: 21 }).setView([-33.52, -70.58], 14);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   rend = L.canvas({ padding: 0.5, tolerance: 12 });
   rendSvg = L.svg({ padding: 0.5 });
   capaCircuitos = L.geoJSON(null, { renderer: rend });
@@ -1154,6 +1205,7 @@ function accionesReporte(textoReportar, geom) {
   const c = geom ? centroGeom(geom) : null;
   return `<div class="acciones acc-fila" id="accFalla">
     ${puedeReportar() ? `<button id="bReportar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}${esc(textoReportar)}</button>` : ''}
+    ${rol() === 'camion' ? `<button id="bAporte" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}Registrar aporte</button>` : ''}
     ${c ? `<a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>` : ''}
   </div>`;
 }
@@ -1175,6 +1227,13 @@ function abrirPunto(p, geom) {
     if (dup) return avisoDuplicado(dup);
     formReportePunto(p);
   }));
+  const ba = $('#bAporte', h);
+  if (ba) ba.addEventListener('click', ocupar(ba, async () => {
+    ba.textContent = 'Revisando…';
+    const dup = await hayFallaActiva('ref_punto_gid', p.gid);
+    if (dup) return avisoDuplicado(dup);
+    await formAporte('punto', p);
+  }));
 }
 function abrirCircuito(p, geom) {
   const h = abrirHoja(`
@@ -1192,11 +1251,160 @@ function abrirCircuito(p, geom) {
     if (dup) return avisoDuplicado(dup);
     formReporteCircuito(p);
   }));
+  const ba = $('#bAporte', h);
+  if (ba) ba.addEventListener('click', ocupar(ba, async () => {
+    ba.textContent = 'Revisando…';
+    const dup = await hayFallaActiva('ref_circuito_gid', p.gid);
+    if (dup) return avisoDuplicado(dup);
+    await formAporte('circuito', p);
+  }));
 }
 async function hayFallaActiva(campo, gid) {
   // No se confía solo en "estado": también se revisa si ya existe una reparación registrada.
   const ex = await select('fallas', `${campo}=eq.${gid}&select=id,tipo_falla,estado,reparaciones(id)`);
   return (ex || []).find((f) => f.estado !== 'reparada' && !(f.reparaciones && f.reparaciones.length));
+}
+
+/* ------------------------------ aportes ------------------------------ */
+// El camión marca un punto o circuito, indica la falla y registra de inmediato la reparación (antes + después + maestro).
+async function cargarMisContratos() {
+  const uc = await select('usuario_contratos', `usuario_id=eq.${sesion.user_id}&select=contrato_id`);
+  const ids = (uc || []).map((x) => x.contrato_id);
+  if (!ids.length) return [];
+  const cs = await select('contratos', `id=in.(${ids.join(',')})&activo=eq.true&select=id,nombre&order=nombre.asc`);
+  return cs || [];
+}
+async function formAporte(tipo, p) {
+  let contratos = [], maestros = [];
+  try { contratos = await cargarMisContratos(); maestros = await select('maestros', 'activo=eq.true&select=id,nombre,contrato_id&order=nombre.asc'); }
+  catch (e) { toast('No se pudo cargar tu contrato o los maestros.', 'error'); return; }
+  if (!contratos.length) { toast('Tu usuario no tiene un contrato asignado. Avisa al administrador.', 'error'); return; }
+  const mono = tipo === 'punto' && String(p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
+  const nomCat = tipo === 'circuito' ? 'circuito' : (mono ? 'monoposte' : 'punto');
+  const cat = catalogoActivo(nomCat);
+  const fallaId = crypto.randomUUID();
+  let codigo = null, card = null, trabajos = [];
+  const fotos = { antes: null, despues: null };   // { blob, url, ruta }
+  const h = abrirHoja(`
+    <h2>Registrar aporte</h2>
+    <div class="hint">${tipo === 'punto' ? `Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}` : `Circuito ${esc(p.id ?? '')} · ${esc(p.cantidad_luminarias_cliente ?? '—')} luminarias`}</div>
+    <div class="aviso">Se registra la falla y su reparación juntas. Quedará como aporte de tu cuadrilla y del maestro que elijas.</div>
+    ${contratos.length > 1 ? `<h3>Contrato</h3><select id="aContrato" class="campo">${contratos.map((c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')}</select>` : ''}
+    <h3>Maestro</h3>
+    <select id="aMaestro" class="campo"></select>
+    <div id="aSinMaestro" class="hint" hidden>No hay maestros en este contrato. Pide a tu contratista que los agregue desde el menú.</div>
+    <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
+    ${tipo === 'punto' ? `<h3>Cardinalidad (opcional)</h3>
+    <div class="rosca" id="aCard"><button type="button" data-r="N">N</button><button type="button" data-r="S">S</button><button type="button" data-r="O">O</button><button type="button" data-r="P">P</button></div>` : ''}
+    <h3>Comentario de la falla</h3>
+    <textarea id="aDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+    <h3>Trabajo realizado</h3>
+    ${htmlCierres()}
+    <textarea id="aRep" class="campo" placeholder="Detalle de lo realizado (opcional si marcaste un trabajo)"></textarea>
+    <h3>Fotografías <span class="req">obligatorias</span></h3>
+    <div class="fotos" id="aFotos">
+      ${['antes', 'despues'].map((m) => `<div class="foto-slot" data-m="${m}"><div class="hint" style="font-weight:600">${m === 'antes' ? 'ANTES' : 'DESPUÉS'}</div><div class="vista"></div><div class="fila-btns"><button type="button" class="btn btn-secundario" data-cam="${m}">📷 Tomar</button><button type="button" class="btn btn-secundario" data-gal="${m}">🖼 Galería</button></div><input type="file" accept="image/*" hidden data-in="${m}"></div>`).join('')}
+    </div>
+    <div class="acciones fija"><button id="aOk" class="btn btn-primario">Registrar aporte</button></div>`);
+  const selM = $('#aMaestro', h);
+  const pintarMaestros = () => {
+    const cid = contratos.length > 1 ? $('#aContrato', h).value : contratos[0].id;
+    const ms = maestros.filter((m) => m.contrato_id === cid);
+    selM.innerHTML = ms.length ? `<option value="">Elige el maestro…</option>` + ms.map((m) => `<option value="${esc(m.id)}">${esc(m.nombre)}</option>`).join('') : '<option value="">—</option>';
+    $('#aSinMaestro', h).hidden = !!ms.length;
+  };
+  pintarMaestros();
+  if (contratos.length > 1) $('#aContrato', h).addEventListener('change', pintarMaestros);
+  const codigosFalla = $$('.codigos', h)[0], codigosTrab = $$('.codigos', h)[1];
+  $$('.codigo', codigosFalla).forEach((b) => b.addEventListener('click', () => {
+    $$('.codigo', codigosFalla).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
+  }));
+  $$('.codigo', codigosTrab).forEach((b) => b.addEventListener('click', () => {
+    const t = b.dataset.t, i = trabajos.indexOf(t);
+    if (i >= 0) { trabajos.splice(i, 1); b.classList.remove('sel'); } else { trabajos.push(t); b.classList.add('sel'); }
+  }));
+  $$('#aCard button', h).forEach((b) => b.addEventListener('click', () => {
+    const on = b.classList.contains('sel');
+    $$('#aCard button', h).forEach((x) => x.classList.remove('sel'));
+    card = on ? null : b.dataset.r; if (!on) b.classList.add('sel');
+  }));
+  const pintarSlot = (m) => {
+    const sl = $(`.foto-slot[data-m="${m}"]`, h), f = fotos[m];
+    $('.vista', sl).innerHTML = f ? `<div class="foto"><img src="${f.url}" alt="Foto ${m}"><button type="button" aria-label="Quitar foto">✕</button></div>` : '<div class="hint">Sin foto</div>';
+    const q = $('.vista button', sl);
+    if (q) q.addEventListener('click', () => { URL.revokeObjectURL(f.url); fotos[m] = null; pintarSlot(m); });
+  };
+  const poner = async (m, file) => {
+    try { const blob = await comprimirFoto(file); if (fotos[m]) URL.revokeObjectURL(fotos[m].url); fotos[m] = { blob, url: URL.createObjectURL(blob), ruta: null }; pintarSlot(m); }
+    catch (e) { toast(e.message, 'error'); }
+  };
+  ['antes', 'despues'].forEach((m) => {
+    pintarSlot(m);
+    const inp = $(`input[data-in="${m}"]`, h);
+    $(`[data-cam="${m}"]`, h).addEventListener('click', async () => {
+      const r = await abrirCamara();
+      if (r === undefined) { inp.setAttribute('capture', 'environment'); inp.click(); } else if (r) poner(m, r);
+    });
+    $(`[data-gal="${m}"]`, h).addEventListener('click', () => { inp.removeAttribute('capture'); inp.click(); });
+    inp.addEventListener('change', (e) => { if (e.target.files[0]) poner(m, e.target.files[0]); e.target.value = ''; });
+  });
+  const ok = $('#aOk', h);
+  ok.addEventListener('click', ocupar(ok, async () => {
+    const cid = contratos.length > 1 ? $('#aContrato', h).value : contratos[0].id;
+    const maestro = selM.value;
+    const desc = $('#aDesc', h).value.trim();
+    const libre = $('#aRep', h).value.trim();
+    const rep = [...trabajos, ...(libre ? [libre] : [])].join('\n');
+    if (!maestro) { toast('Elige el maestro que realizó el trabajo.', 'error'); return; }
+    if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
+    if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
+    if (!rep) { toast('Elige o describe el trabajo realizado.', 'error'); return; }
+    if (!fotos.antes || !fotos.despues) { toast('Faltan las fotos de antes y de después.', 'error'); return; }
+    const lista = [];
+    for (const m of ['antes', 'despues']) {
+      ok.textContent = `Subiendo foto ${m === 'antes' ? 'de antes' : 'de después'}…`;
+      if (!fotos[m].ruta) fotos[m].ruta = await subirFoto(fallaId, fotos[m].blob, true);
+      lista.push({ ruta: fotos[m].ruta, bytes: fotos[m].blob.size, momento: m });
+    }
+    ok.textContent = 'Guardando…';
+    const r = await rpc('registrar_aporte', {
+      p_falla_id: fallaId, p_contrato_id: cid, p_tipo: tipo, p_gid: p.gid, p_tipo_falla: codigo,
+      p_cardinalidad: card, p_comentario: desc || null, p_maestro_id: maestro, p_reparacion: rep, p_fotos: lista,
+    });
+    cerrarHoja();
+    toast(`Aporte registrado · OS ${r.ot}`, 'ok');
+    cargarFallas();
+  }));
+}
+
+// Maestros del contrato (los mantiene el contratista; el admin ve todos). No se borran: se desactivan.
+async function abrirMaestros() {
+  const h = abrirHoja('<h2>Maestros</h2><div class="hint">Cargando…</div>');
+  let contratos = [], ms = [];
+  try {
+    contratos = rol() === 'admin' ? await select('contratos', 'activo=eq.true&select=id,nombre&order=nombre.asc') : await cargarMisContratos();
+    ms = await select('maestros', 'select=id,nombre,contrato_id,activo&order=nombre.asc');
+  } catch (e) { h.innerHTML = '<h2>Maestros</h2><div class="aviso peligro">No se pudo cargar. ¿Ya se ejecutó el SQL de aportes?</div>'; return; }
+  const pintar = () => {
+    h.innerHTML = `<h2>Maestros</h2><div class="hint">Personal que realiza las reparaciones. Los camiones eligen de esta lista al registrar un aporte.</div>
+      ${contratos.map((c) => `<h3>${esc(c.nombre)}</h3>
+        ${ms.filter((m) => m.contrato_id === c.id).map((m) => `<div class="tarjeta" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;${m.activo ? '' : 'opacity:.55'}"><b>${esc(m.nombre)}</b><button type="button" class="btn btn-secundario" data-t="${esc(m.id)}" style="width:auto;margin:0">${m.activo ? 'Desactivar' : 'Activar'}</button></div>`).join('') || '<div class="hint">Sin maestros.</div>'}
+        <div class="fila" style="margin-top:8px"><input class="campo" data-n="${esc(c.id)}" placeholder="Nombre del maestro" maxlength="60"><button type="button" class="btn btn-primario" data-a="${esc(c.id)}" style="width:auto;margin:0">Agregar</button></div>`).join('')}`;
+    $$('[data-t]', h).forEach((b) => b.addEventListener('click', ocupar(b, async () => {
+      const m = ms.find((x) => x.id === b.dataset.t);
+      await api(`/rest/v1/maestros?id=eq.${m.id}`, { method: 'PATCH', body: { activo: !m.activo } });
+      m.activo = !m.activo; pintar();
+    })));
+    $$('[data-a]', h).forEach((b) => b.addEventListener('click', ocupar(b, async () => {
+      const cid = b.dataset.a, inp = $(`[data-n="${cid}"]`, h), nombre = inp.value.trim().replace(/\s+/g, ' ');
+      if (nombre.length < 2) { toast('Escribe el nombre del maestro.', 'error'); return; }
+      try {
+        const r = await api('/rest/v1/maestros', { method: 'POST', body: { contrato_id: cid, nombre }, prefer: 'return=representation' });
+        ms.push(r[0]); ms.sort((a, b2) => a.nombre.localeCompare(b2.nombre)); pintar();
+      } catch (e) { toast(/duplicate|unique/i.test(e.message) ? 'Ese maestro ya está en la lista.' : e.message, 'error'); }
+    })));
+  };
+  pintar();
 }
 function avisoDuplicado(f) {
   abrirHoja(`
@@ -1206,8 +1414,9 @@ function avisoDuplicado(f) {
   $('#bOk').addEventListener('click', () => cerrarHoja());
 }
 
-function htmlCodigos(cat) {
-  return `<div class="codigos">${cat.map((x) => `<button type="button" class="codigo" data-c="${esc(x.c)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>`;
+function htmlCodigos(cat, nombreCat) {
+  const fila = (x) => `<button type="button" class="codigo" data-c="${esc(x.c)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`;
+  return `<div class="codigos">${nombreCat ? htmlCodigosGrupo(nombreCat, cat, fila) : cat.map(fila).join('')}</div>`;
 }
 function htmlOrdenExterna() {
   return `<div class="fila">
@@ -1227,13 +1436,14 @@ function leerOrdenExterna(h) {
 
 function formReportePunto(p) {
   const mono = String(p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
-  const cat = mono ? CAT_MONOPOSTE : CAT_PUNTO;
+  const nomCat = mono ? 'monoposte' : 'punto';
+  const cat = catalogoActivo(nomCat);
   let codigo = null, card = null;
   const h = abrirHoja(`
     ${htmlBotonMasivo()}
     <h2>Reportar falla</h2>
     <div class="hint">Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}${mono ? ' · monoposte' : ''}</div>
-    <h3>Código de falla</h3>${htmlCodigos(cat)}
+    <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
     <h3>Cardinalidad (opcional)</h3>
     <div class="rosca" id="fCard">
       <button type="button" data-r="N">N</button><button type="button" data-r="S">S</button>
@@ -1277,7 +1487,7 @@ function formReporteCircuito(p) {
     <h2>Reportar falla de circuito</h2>
     <div class="hint">Circuito ${esc(p.id ?? '')} · ${esc(p.cantidad_luminarias_cliente ?? '—')} luminarias</div>
     <div class="aviso">Se crea una falla por cada punto del circuito. Al reparar el circuito se cierran todas juntas.</div>
-    <h3>Código de falla</h3>${htmlCodigos(CAT_CIRCUITO)}
+    <h3>Código de falla</h3>${htmlCodigos(catalogoActivo('circuito'), 'circuito')}
     <h3>Comentario</h3>
     <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
@@ -1331,13 +1541,14 @@ async function editarFallaApp(p) {
   catch (e) { toast('No se pudo cargar la falla: ' + e.message, 'error'); return; }
   if (!fila) { toast('No se encontró la falla.', 'error'); return; }
   const esCircuito = fila.tipo === 'linea';
-  const cat = esCircuito ? CAT_CIRCUITO : (['F02', 'F03'].includes(fila.tipo_falla) ? CAT_MONOPOSTE : CAT_PUNTO);
+  const nomCat = esCircuito ? 'circuito' : (['F02', 'F03'].includes(fila.tipo_falla) ? 'monoposte' : 'punto');
+  const cat = catalogoActivo(nomCat, fila.tipo_falla);
   let codigo = fila.tipo_falla;
   const h = abrirHoja(`
     ${htmlBotonMasivo()}
     <h2>Editar falla · OS ${esc(p.ot || '—')}</h2>
     <div class="hint">${esc(tipoLabel(p))}${p.tipo === 'punto' ? ` · llave ${esc(p.llave ?? '—')}` : ''}. La ubicación no se puede cambiar: si está mal, elimina la falla y vuelve a informarla.${esCircuito ? ' Los cambios también se aplican a sus puntos afectados.' : ''}</div>
-    <h3>Código de falla</h3>${htmlCodigos(cat)}
+    <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
     <h3>Comentario</h3>
     <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
@@ -1508,7 +1719,7 @@ async function abrirFalla(p, geom) {
   }
 }
 
-/* Editar / quitar una reparación: quien la registró, dentro de 10 minutos (el admin siempre). La base lo exige igual. */
+/* Editar / quitar una reparación: quien la registró, dentro de 30 minutos (el admin siempre). La base lo exige igual. */
 async function ofrecerEdicionReparacion(p, h) {
   if (!PUEDE_CERRAR.includes(rol()) || p.cascada || p.estado !== 'reparada') return;
   let est;
@@ -1520,16 +1731,18 @@ async function ofrecerEdicionReparacion(p, h) {
   $('#bEditRep', h).addEventListener('click', () => editarReparacionApp(p, est));
 }
 async function editarReparacionApp(p, est) {
-  const cat = est.tipo === 'linea' ? CAT_CIRCUITO : (['F02', 'F03'].includes(est.tipo_falla) ? CAT_MONOPOSTE : CAT_PUNTO);
+  const nomCat = est.tipo === 'linea' ? 'circuito' : (['F02', 'F03'].includes(est.tipo_falla) ? 'monoposte' : 'punto');
+  const cat = catalogoActivo(nomCat, est.tipo_falla);
   const bloq = !!est.bloqueada_por_otra_falla;
   let codigo = est.tipo_falla;
   const h = abrirHoja(`
     <h2>Editar reparación · OS ${esc(p.ot || '—')}</h2>
     <div class="hint">${esc(est.tipo_falla)}${est.segundos == null ? ' · sin límite de tiempo (admin)' : ''}</div>
     <h3>Trabajo realizado</h3>
-    <div class="codigos">${CAT_CIERRES.map((x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>
+    ${htmlCierres()}
+    <div class="hint">Lo marcado se agrega aquí abajo (puedes editarlo):</div>
     <textarea id="rDesc" class="campo"></textarea>
-    <h3>Código de falla</h3>${htmlCodigos(cat)}
+    <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
     <textarea id="rOtro" class="campo" placeholder="Describe la falla (obligatorio si eliges OTRO)" ${codigo === 'OTRO' ? '' : 'hidden'}></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
     <h3>Fotografías</h3>
@@ -1552,10 +1765,17 @@ async function editarReparacionApp(p, est) {
   $('#rOtro', h).value = est.descripcion_otro || '';
   const m = /^([SE])-(.*)$/.exec(est.orden_externa || '');
   if (m) { $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
+  // Los códigos de trabajo se marcan/desmarcan (como al registrar) y reflejan lo escrito en el cuadro
+  const lineasRep = () => $('#rDesc', h).value.split('\n').map((x) => x.trim());
+  const marcarCodigosRep = () => { const ls = lineasRep(); $$('.codigos .codigo[data-t]', h).forEach((b) => b.classList.toggle('sel', ls.includes(b.dataset.t))); };
+  marcarCodigosRep();
   $$('.codigos .codigo[data-t]', h).forEach((b) => b.addEventListener('click', () => {
-    const t = b.dataset.t, ta = $('#rDesc', h);
-    if (!ta.value.includes(t)) ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + t;
+    const t = b.dataset.t, ta = $('#rDesc', h), ls = lineasRep();
+    if (ls.includes(t)) ta.value = ta.value.split('\n').filter((x) => x.trim() !== t).join('\n');
+    else ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + t;
+    marcarCodigosRep();
   }));
+  $('#rDesc', h).addEventListener('input', marcarCodigosRep);
   $$('.codigo[data-c]', h).forEach((b) => {
     if (b.dataset.c === codigo) b.classList.add('sel');
     b.addEventListener('click', () => { $$('.codigo[data-c]', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c; $('#rOtro', h).hidden = codigo !== 'OTRO'; });
@@ -1666,7 +1886,7 @@ function formCierre(p, borr) {
     <h2>Registrar reparación</h2>
     <div class="hint">${esc(p.tipo_falla)} · OS ${esc(p.ot || '—')} · ${esc(tipoLabel(p))}${p.tipo === 'linea' ? ' · se cerrarán también sus ' + esc(p.puntos_afectados ?? '') + ' puntos' : ''}</div>
     <h3>Trabajo realizado</h3>
-    <div class="codigos">${CAT_CIERRES.map((x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>
+    ${htmlCierres()}
     <h3>Información adicional</h3>
     <textarea id="cDesc" class="campo" placeholder="Ej: detalle de lo realizado. Obligatorio si dejas la falla pendiente."></textarea>
     <h3>Fotografías ${exigeFoto ? '<span class="req">obligatoria</span>' : '<span class="hint" style="font-weight:400;">(opcional)</span>'}</h3>
@@ -2095,11 +2315,16 @@ function cuDur(ms) { if (ms == null) return '—'; const min = Math.round(ms / 6
 // Atenciones del turno = reparadas + pendientes que dejó la cuadrilla. La píldora usa el mismo relleno que la barra.
 function cuPildora(r) {
   const a = r.reparadas + r.pendientes, txt = a + (a === 1 ? ' atención' : ' atenciones');
-  if (!a) return `<div class="cu-pill cero">${txt}</div>`;
-  const pr = 100 * r.reparadas / a;
-  return `<div class="cu-pill" style="background:linear-gradient(90deg,${CU_COL.reparada} ${pr}%,${CU_COL.pendiente} ${pr}%)">${txt}</div>`;
+  const nombres = [...new Set((r.aps || []).map((x) => x.maestro).filter(Boolean))].join(', ');
+  const ap = r.aportes ? `<div class="cu-pill cu-ap">🛠 + ${r.aportes} aporte${r.aportes > 1 ? 's' : ''}${nombres ? ' · ' + esc(nombres) : ''}</div>` : '';
+  const pr = a ? 100 * r.reparadas / a : 0;
+  const base = a ? `<div class="cu-pill" style="background:linear-gradient(90deg,${CU_COL.reparada} ${pr}%,${CU_COL.pendiente} ${pr}%)">${txt}</div>` : `<div class="cu-pill cero">${txt}</div>`;
+  return `<div class="cu-pills">${base}${ap}</div>`;
 }
-function cuCalcular(filas, desde, hasta) {
+function cuCalcular(todasFilas, desde, hasta) {
+  // Los aportes son un extra al trabajo normal: no entran en atenciones, cumplimiento ni tiempos
+  const aps = todasFilas.filter((r) => r.es_aporte && r.reparada_en && new Date(r.reparada_en) >= desde && new Date(r.reparada_en) < hasta);
+  const filas = todasFilas.filter((r) => !r.es_aporte);
   const items = filas.map((r) => {
     const a = new Date(r.asignado_en), rep = r.reparada_en ? new Date(r.reparada_en) : null, fp = r.fecha_pendiente ? new Date(r.fecha_pendiente) : null;
     const repEnTurno = !!(rep && rep >= desde && rep < hasta), pendEnTurno = !!(fp && fp >= a && fp >= desde && fp < hasta);
@@ -2115,6 +2340,7 @@ function cuCalcular(filas, desde, hasta) {
   return {
     items, total, inicio: items.filter((i) => i.inicio).length, inicioPend: items.filter((i) => i.inicioPend).length,
     reparadas: rep, pendientes: pen, sin: total - rep - pen,
+    aportes: aps.length, aps,
     contrRep: items.filter((i) => i.porContr === 'reparada').length, contrPend: items.filter((i) => i.porContr === 'pendiente').length,
     cumplimiento: total ? Math.round(100 * rep / total) : null, medio,
   };
@@ -2173,31 +2399,40 @@ function pintarCuadrillas() {
   const kpi = (l, v, col, sub) => `<div class="cu-kpi" style="border-top-color:${col}"><div class="l">${l}</div><div class="v">${v}</div>${sub ? `<div class="l" style="font-size:10.5px">${sub}</div>` : ''}</div>`;
   let html = '';
   if (!selId || ctSel) {
+    const apItems = todas.flatMap((x) => x.r.aps.map((i) => ({ ...i, cuad: x.c.nombre })));
     const G = todas.reduce((g, x) => ({ t: g.t + x.r.total, r: g.r + x.r.reparadas, c: g.c + x.r.contrRep + x.r.contrPend }), { t: 0, r: 0, c: 0 });
     // Fallas activas del contrato (o de todos): abiertas al inicio del turno + ingresadas durante el turno
     const hayAct = Array.isArray(CU.datos.activas);
     const acts = (CU.datos.activas || []).filter((a) => !ctSel || a.contrato_id === ctSel);
     const aIni = acts.reduce((n, a) => n + a.inicio, 0), aIng = acts.reduce((n, a) => n + a.ingresadas, 0), aTot = aIni + aIng;
     if ((CU.datos.contratos || []).length) html += `<div class="cu-sec" style="margin-top:0">${ctNombre ? 'Contrato: ' + esc(ctNombre) : 'Todos los contratos'}</div>`;
-    html += `<div class="cu-kpis">${hayAct ? kpi('Fallas activas', aTot, '#1f4d3d', `${aIni} al inicio del turno · ${aIng} ingresadas en el turno`) : ''}${kpi('Asignadas a cuadrillas', G.t, '#9aa5b1', hayAct ? `de ${aTot} activas` : '')}${kpi('Reparadas por camión', G.r, CU_COL.reparada)}${kpi('Cumplimiento de las asignadas', G.t ? Math.round(100 * G.r / G.t) + '%' : '—', '#7a5ca8', G.t ? `${G.r} de ${G.t}` : '')}${kpi('Atendidas por contratista', G.c, '#d98e2f')}</div>`;
+    html += `<div class="cu-kpis">${hayAct ? kpi('Fallas activas', aTot, '#1f4d3d', `${aIni} al inicio del turno · ${aIng} ingresadas en el turno`) : ''}${kpi('Asignadas a cuadrillas', G.t, '#9aa5b1', hayAct ? `de ${aTot} activas` : '')}${kpi('Reparadas por camión', G.r, CU_COL.reparada)}${apItems.length ? kpi('Aportes', apItems.length, '#7a5ca8', 'extra al trabajo normal') : ''}${kpi('Cumplimiento de las asignadas', G.t ? Math.round(100 * G.r / G.t) + '%' : '—', '#7a5ca8', G.t ? `${G.r} de ${G.t}` : '')}${kpi('Atendidas por contratista', G.c, '#d98e2f')}</div>`;
     if (!todas.length) html += '<div class="u-vacio">Este contrato aún no tiene cuadrillas.</div>';
     html += todas.map(({ c, r }) => { const t = r.total || 1;
       return `<button class="cu-card" data-c="${esc(c.id)}"><div class="top"><span>${esc(c.nombre)}</span><span style="color:${r.cumplimiento == null ? 'var(--tinta-2)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')}">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</span></div>
-        ${r.total ? `<div class="cu-centro">${cuPildora(r)}</div><div class="cu-barra"><i style="width:${100 * r.reparadas / t}%;background:${CU_COL.reparada}"></i><i style="width:${100 * r.pendientes / t}%;background:${CU_COL.pendiente}"></i><i style="width:${100 * r.sin / t}%;background:${CU_COL.sin}"></i></div>
+        ${(r.total || r.aportes) ? `<div class="cu-centro">${cuPildora(r)}</div><div class="cu-barra"><i style="width:${100 * r.reparadas / t}%;background:${CU_COL.reparada}"></i><i style="width:${100 * r.pendientes / t}%;background:${CU_COL.pendiente}"></i><i style="width:${100 * r.sin / t}%;background:${CU_COL.sin}"></i></div>
         <div class="cu-leyenda"><span style="color:${CU_COL.reparada}">● ${r.reparadas} reparadas</span><span style="color:#b36b00">● ${r.pendientes} pend.</span><span style="color:${CU_COL.sin}">● ${r.sin} sin atender</span></div>` : '<div class="s" style="margin-top:6px;color:var(--tinta-2)">Sin fallas en este turno</div>'}
         ${(r.contrRep || r.contrPend) ? `<div class="s" style="margin-top:6px;font-size:12px;color:#8a5200">🔧 ${r.contrRep ? r.contrRep + ' cerrada' + (r.contrRep > 1 ? 's' : '') + ' por contratista' : ''}${r.contrRep && r.contrPend ? ' · ' : ''}${r.contrPend ? r.contrPend + ' pendiente' + (r.contrPend > 1 ? 's' : '') + ' por contratista' : ''}</div>` : ''}</button>`; }).join('') || '<div class="u-vacio">No hay cuadrillas.</div>';
+    if (apItems.length) {
+      const pm = {};
+      apItems.forEach((i) => { const k = i.maestro || 'Sin maestro'; const m = pm[k] || (pm[k] = { n: 0, c: {} }); m.n++; m.c[i.cuad] = (m.c[i.cuad] || 0) + 1; });
+      html += `<div class="cu-sec" style="color:#6b4fa0">Aportes por maestro (${apItems.length})</div>` + Object.entries(pm).sort((p, q) => q[1].n - p[1].n).map(([n, m]) =>
+        `<div class="cu-fila" style="cursor:default"><b>${esc(n)}</b> · ${m.n} aporte${m.n > 1 ? 's' : ''}<div class="s">${Object.entries(m.c).map(([c, k]) => esc(c) + ' (' + k + ')').join(' · ')}</div></div>`).join('');
+    }
   } else {
     const x = todasLas.find((y) => y.c.id === selId); if (!x) { cont.innerHTML = ''; return; }
     const { c, r } = x;
-    html += `<h3 style="margin:0 0 8px">${esc(c.nombre)}</h3><div class="cu-kpis">${kpi('Inició con', `${r.inicio}`, '#2563a8')}${kpi('Total', r.total, '#9aa5b1')}${kpi('Atenciones', r.reparadas + r.pendientes, CU_COL.reparada)}${kpi('Reparadas', r.reparadas, CU_COL.reparada)}${kpi('Dejó pendientes', r.pendientes, CU_COL.pendiente)}${kpi('Sin atender', r.sin, CU_COL.sin)}${kpi('Cumplimiento', r.cumplimiento == null ? '—' : r.cumplimiento + '%', '#7a5ca8')}</div>
+    html += `<h3 style="margin:0 0 8px">${esc(c.nombre)}</h3><div class="cu-kpis">${kpi('Inició con', `${r.inicio}`, '#2563a8')}${kpi('Total', r.total, '#9aa5b1')}${kpi('Atenciones', r.reparadas + r.pendientes, CU_COL.reparada)}${kpi('Reparadas', r.reparadas, CU_COL.reparada)}${kpi('Dejó pendientes', r.pendientes, CU_COL.pendiente)}${kpi('Sin atender', r.sin, CU_COL.sin)}${kpi('Aportes', r.aportes || 0, '#6b4fa0')}${kpi('Cumplimiento', r.cumplimiento == null ? '—' : r.cumplimiento + '%', '#7a5ca8')}</div>
       <div class="s" style="margin:-4px 2px 8px;font-size:12.5px;color:var(--tinta-2)">Tiempo medio entre reparaciones: <b>${cuDur(r.medio)}</b></div>`;
+    if (r.aportes) html += `<div class="cu-sec" style="color:#6b4fa0">Aportes del turno (${r.aportes}) · extra al trabajo normal</div>` + r.aps.slice().sort((p, q) => new Date(q.reparada_en) - new Date(p.reparada_en)).map((i) =>
+      `<button class="cu-fila" data-f="${esc(i.falla_id)}"><b>${esc(cuHora(i.reparada_en))}</b> · OS ${esc(i.ot || '—')} · ${esc(i.tipo_falla || '')}<div class="s">${esc(i.direccion || '—')}</div><div class="s" style="color:#6b4fa0;font-weight:600">🛠 Aporte · ${esc(i.maestro || 'maestro')}</div></button>`).join('');
     if (!r.total) html += '<div class="u-vacio">Esta cuadrilla no tuvo fallas en este turno.</div>';
     else {
       const hechas = r.items.filter((i) => i.reparada || i.pendiente).sort((p, q) => (q.reparada ? q.rep : new Date(q.fecha_pendiente)) - (p.reparada ? p.rep : new Date(p.fecha_pendiente)));
       const por = r.items.filter((i) => !i.reparada && !i.pendiente).sort((p, q) => p.a - q.a);
       const fila = (i, izq, etq, col) => `<button class="cu-fila" data-f="${esc(i.falla_id)}"><b>${esc(izq)}</b> · OS ${esc(i.ot || '—')} · ${esc(i.tipo_falla || '')}<div class="s">${esc(i.direccion || '—')}</div><div class="s" style="color:${col};font-weight:600">${etq}</div></button>`;
       html += `<div class="cu-sec" style="color:#3a8a5c">Atendidas en el turno (${hechas.length})</div>` + (hechas.length
-        ? hechas.map((i) => fila(i, cuHora(i.reparada ? i.reparada_en : i.fecha_pendiente), '', CU_COL[i.resultado]).replace('<div class="s" style="color:' + CU_COL[i.resultado] + ';font-weight:600"></div>', `<div class="s" style="color:${CU_COL[i.resultado]};font-weight:600">${i.reparada ? '✔ Reparada' : '● Pendiente'}</div>`)).join('')
+        ? hechas.map((i) => fila(i, cuHora(i.reparada ? i.reparada_en : i.fecha_pendiente) + (i.es_aporte ? ' · 🛠 aporte de ' + (i.maestro || 'maestro') : ''), '', CU_COL[i.resultado]).replace('<div class="s" style="color:' + CU_COL[i.resultado] + ';font-weight:600"></div>', `<div class="s" style="color:${CU_COL[i.resultado]};font-weight:600">${i.reparada ? '✔ Reparada' : '● Pendiente'}</div>`)).join('')
         : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">Aún no ha atendido ninguna.</div>');
       html += `<div class="cu-sec" style="color:#c1443c">Por atender (${por.length})</div>` + (por.length
         ? por.map((i) => fila(i, i.inicio ? (i.inicioPend ? 'Antes del turno (ya pendiente)' : 'Antes del turno') : 'Asignada ' + cuHora(i.asignado_en), '● Sin atender', CU_COL.sin)).join('')
@@ -2723,6 +2958,7 @@ $('#btnMenu').addEventListener('click', () => {
       ${rol() === 'camion' ? '<div class="hint" style="margin:4px 6px 8px">📍 Tu ubicación se comparte con el administrador mientras la app está abierta.</div>' : ''}
       ${puedeUbicacion() && !puedeCuadrillas() ? `<button id="mCamiones" class="m-fila"><span class="m-ico m-azul">${ico('<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>')}</span><span class="t">Camiones en el mapa</span>${chev}</button>` : ''}
       ${puedeCuadrillas() ? `<button id="mCuadrillas" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M3 17h13V7H3z"/><path d="M16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>')}</span><span class="t">Cuadrillas</span>${chev}</button>` : ''}
+      ${['contratista', 'contratista2', 'contratista3', 'admin'].includes(rol()) ? `<button id="mMaestros" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-4 3-6 7-6s6.5 2 7 6"/>')}</span><span class="t">Maestros</span>${chev}</button>` : ''}
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
     </div>`);
@@ -2747,6 +2983,8 @@ $('#btnMenu').addEventListener('click', () => {
   if (mcm) mcm.addEventListener('click', () => { cerrarHoja(); mostrarCamionesMapa(); });
   const mcu = $('#mCuadrillas', h);
   if (mcu) mcu.addEventListener('click', () => abrirCuadrillas());
+  const mma = $('#mMaestros', h);
+  if (mma) mma.addEventListener('click', () => abrirMaestros());
   const mu = $('#mUsuarios', h);
   if (mu) mu.addEventListener('click', () => abrirUsuarios());
   $('#mActualizar', h).addEventListener('click', () => { $('#mActualizar', h).querySelector('.t').textContent = 'Actualizando…'; forzarActualizacion(); });
@@ -2758,6 +2996,7 @@ window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.in
 async function entrarApp() {
   if (typeof L === 'undefined') throw new Error('No se pudo cargar el mapa. Revisa tu conexión y recarga la página.');
   await cargarPerfil();
+  cargarLibreria();   // códigos de falla y de cierre de la Librería (sin bloquear la entrada)
   iniciarUbicacion();
   $('#pantallaLogin').hidden = true;
   $('#pantallaApp').hidden = false;
