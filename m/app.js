@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.37.4';
+const VERSION_APP = '1.38.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -73,6 +73,56 @@ const CAT_CIERRES = [
 ];
 const DESC_CODIGO = {};
 [...CAT_PUNTO, ...CAT_MONOPOSTE, ...CAT_CIRCUITO].forEach((x) => { DESC_CODIGO[x.c] = x.d; });
+// ---- Librería de códigos (tablas codigos_falla / codigos_cierre), con las listas fijas de arriba como respaldo ----
+const LIBRERIA = { falla: { punto: null, monoposte: null, circuito: null }, cierre: null, desc: { punto: {}, monoposte: {}, circuito: {}, cierre: {} }, frec: null };
+const LS_LIBRERIA = 'fm_libreria_v1';
+function libreriaAplicar(d) {
+  ['punto', 'monoposte', 'circuito'].forEach((cat) => {
+    const filas = (d.falla || []).filter((f) => f.categoria === cat);
+    LIBRERIA.desc[cat] = Object.fromEntries(filas.map((f) => [f.codigo, f.descripcion]));
+    LIBRERIA.falla[cat] = filas.filter((f) => f.activo).sort((a, b) => (a.orden - b.orden) || a.codigo.localeCompare(b.codigo)).map((f) => ({ c: f.codigo, d: f.descripcion }));
+    filas.forEach((f) => { DESC_CODIGO[f.codigo] = f.descripcion; });
+  });
+  const ci = d.cierre || [];
+  LIBRERIA.desc.cierre = Object.fromEntries(ci.map((f) => [f.codigo, f.descripcion]));
+  LIBRERIA.cierre = ci.filter((f) => f.activo).sort((a, b) => (a.orden - b.orden) || a.codigo.localeCompare(b.codigo)).map((f) => ({ c: f.codigo, d: f.descripcion }));
+  LIBRERIA.frec = d.frec || null;
+}
+async function cargarLibreria() {
+  try {
+    const [falla, cierre] = await Promise.all([select('codigos_falla', 'select=categoria,codigo,descripcion,orden,activo'), select('codigos_cierre', 'select=codigo,descripcion,orden,activo')]);
+    let frec = null; try { frec = await rpc('codigos_frecuentes', { p_dias: 90 }); } catch (e) { /* sin frecuentes */ }
+    const d = { falla, cierre, frec };
+    libreriaAplicar(d);
+    try { localStorage.setItem(LS_LIBRERIA, JSON.stringify(d)); } catch (e) { /* sin almacenamiento */ }
+  } catch (e) {
+    try { const c = localStorage.getItem(LS_LIBRERIA); if (c) libreriaAplicar(JSON.parse(c)); } catch (e2) { /* se usan las listas fijas */ }
+  }
+}
+// Códigos activos de una lista (punto, monoposte, circuito o cierre). Con "incluir", ese código aparece aunque esté desactivado.
+function catalogoActivo(cat, incluir) {
+  const lib = cat === 'cierre' ? LIBRERIA.cierre : LIBRERIA.falla[cat];
+  const fijo = cat === 'cierre' ? CAT_CIERRES : cat === 'circuito' ? CAT_CIRCUITO : cat === 'monoposte' ? CAT_MONOPOSTE : CAT_PUNTO;
+  const lista = (lib && lib.length ? lib : fijo).slice();
+  if (incluir && !lista.some((x) => x.c === incluir)) {
+    const d = LIBRERIA.desc[cat] && LIBRERIA.desc[cat][incluir];
+    if (d) lista.push({ c: incluir, d });
+  }
+  return lista;
+}
+// Con más de 6 códigos: los 6 más usados primero y luego el resto (OTRO / 999 al final)
+function htmlCodigosGrupo(cat, items, fila) {
+  const esOtro = (x) => x.c === 'OTRO' || (cat === 'cierre' && x.c === '999');
+  const norm = items.filter((x) => !esOtro(x)), otros = items.filter(esOtro);
+  const frec = (LIBRERIA.frec && LIBRERIA.frec[cat]) || [];
+  const top = frec.map((c) => norm.find((x) => x.c === c)).filter(Boolean).slice(0, 6).sort((x, y) => x.c.localeCompare(y.c, 'es', { numeric: true }));
+  if (norm.length <= 6 || top.length < 3) return items.map(fila).join('');
+  const resto = norm.filter((x) => !top.includes(x)).concat(otros);
+  const sec = (t) => `<div class="codigos-sec">${t}</div>`;
+  return sec('Más frecuentes') + top.map(fila).join('') + sec('Otros códigos') + resto.map(fila).join('');
+}
+const filaCierre = (x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`;
+const htmlCierres = () => `<div class="codigos">${htmlCodigosGrupo('cierre', catalogoActivo('cierre'), filaCierre)}</div>`;
 const ETIQUETA_ESTADO = { reportada: 'Reportada', pendiente: 'Pendiente', reiterada: 'Reiterada', reparada: 'Reparada' };
 const COLOR_ESTADO = { reportada: '#f2b705', pendiente: '#2fa8d8', reiterada: '#7b3fe4', reparada: '#2e9e57', vencida: '#d33a2c' };
 // Amarillo reportada, morado reiterada, celeste pendiente; pasan a rojo con más de 48 h (reportada/reiterada,
@@ -1230,7 +1280,8 @@ async function formAporte(tipo, p) {
   catch (e) { toast('No se pudo cargar tu contrato o los maestros.', 'error'); return; }
   if (!contratos.length) { toast('Tu usuario no tiene un contrato asignado. Avisa al administrador.', 'error'); return; }
   const mono = tipo === 'punto' && String(p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
-  const cat = tipo === 'circuito' ? CAT_CIRCUITO : (mono ? CAT_MONOPOSTE : CAT_PUNTO);
+  const nomCat = tipo === 'circuito' ? 'circuito' : (mono ? 'monoposte' : 'punto');
+  const cat = catalogoActivo(nomCat);
   const fallaId = crypto.randomUUID();
   let codigo = null, card = null, trabajos = [];
   const fotos = { antes: null, despues: null };   // { blob, url, ruta }
@@ -1242,13 +1293,13 @@ async function formAporte(tipo, p) {
     <h3>Maestro</h3>
     <select id="aMaestro" class="campo"></select>
     <div id="aSinMaestro" class="hint" hidden>No hay maestros en este contrato. Pide a tu contratista que los agregue desde el menú.</div>
-    <h3>Código de falla</h3>${htmlCodigos(cat)}
+    <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
     ${tipo === 'punto' ? `<h3>Cardinalidad (opcional)</h3>
     <div class="rosca" id="aCard"><button type="button" data-r="N">N</button><button type="button" data-r="S">S</button><button type="button" data-r="O">O</button><button type="button" data-r="P">P</button></div>` : ''}
     <h3>Comentario de la falla</h3>
     <textarea id="aDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
     <h3>Trabajo realizado</h3>
-    <div class="codigos">${CAT_CIERRES.map((x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>
+    ${htmlCierres()}
     <textarea id="aRep" class="campo" placeholder="Detalle de lo realizado (opcional si marcaste un trabajo)"></textarea>
     <h3>Fotografías <span class="req">obligatorias</span></h3>
     <div class="fotos" id="aFotos">
@@ -1363,8 +1414,9 @@ function avisoDuplicado(f) {
   $('#bOk').addEventListener('click', () => cerrarHoja());
 }
 
-function htmlCodigos(cat) {
-  return `<div class="codigos">${cat.map((x) => `<button type="button" class="codigo" data-c="${esc(x.c)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>`;
+function htmlCodigos(cat, nombreCat) {
+  const fila = (x) => `<button type="button" class="codigo" data-c="${esc(x.c)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`;
+  return `<div class="codigos">${nombreCat ? htmlCodigosGrupo(nombreCat, cat, fila) : cat.map(fila).join('')}</div>`;
 }
 function htmlOrdenExterna() {
   return `<div class="fila">
@@ -1384,13 +1436,14 @@ function leerOrdenExterna(h) {
 
 function formReportePunto(p) {
   const mono = String(p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
-  const cat = mono ? CAT_MONOPOSTE : CAT_PUNTO;
+  const nomCat = mono ? 'monoposte' : 'punto';
+  const cat = catalogoActivo(nomCat);
   let codigo = null, card = null;
   const h = abrirHoja(`
     ${htmlBotonMasivo()}
     <h2>Reportar falla</h2>
     <div class="hint">Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}${mono ? ' · monoposte' : ''}</div>
-    <h3>Código de falla</h3>${htmlCodigos(cat)}
+    <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
     <h3>Cardinalidad (opcional)</h3>
     <div class="rosca" id="fCard">
       <button type="button" data-r="N">N</button><button type="button" data-r="S">S</button>
@@ -1434,7 +1487,7 @@ function formReporteCircuito(p) {
     <h2>Reportar falla de circuito</h2>
     <div class="hint">Circuito ${esc(p.id ?? '')} · ${esc(p.cantidad_luminarias_cliente ?? '—')} luminarias</div>
     <div class="aviso">Se crea una falla por cada punto del circuito. Al reparar el circuito se cierran todas juntas.</div>
-    <h3>Código de falla</h3>${htmlCodigos(CAT_CIRCUITO)}
+    <h3>Código de falla</h3>${htmlCodigos(catalogoActivo('circuito'), 'circuito')}
     <h3>Comentario</h3>
     <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
@@ -1488,13 +1541,14 @@ async function editarFallaApp(p) {
   catch (e) { toast('No se pudo cargar la falla: ' + e.message, 'error'); return; }
   if (!fila) { toast('No se encontró la falla.', 'error'); return; }
   const esCircuito = fila.tipo === 'linea';
-  const cat = esCircuito ? CAT_CIRCUITO : (['F02', 'F03'].includes(fila.tipo_falla) ? CAT_MONOPOSTE : CAT_PUNTO);
+  const nomCat = esCircuito ? 'circuito' : (['F02', 'F03'].includes(fila.tipo_falla) ? 'monoposte' : 'punto');
+  const cat = catalogoActivo(nomCat, fila.tipo_falla);
   let codigo = fila.tipo_falla;
   const h = abrirHoja(`
     ${htmlBotonMasivo()}
     <h2>Editar falla · OS ${esc(p.ot || '—')}</h2>
     <div class="hint">${esc(tipoLabel(p))}${p.tipo === 'punto' ? ` · llave ${esc(p.llave ?? '—')}` : ''}. La ubicación no se puede cambiar: si está mal, elimina la falla y vuelve a informarla.${esCircuito ? ' Los cambios también se aplican a sus puntos afectados.' : ''}</div>
-    <h3>Código de falla</h3>${htmlCodigos(cat)}
+    <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
     <h3>Comentario</h3>
     <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
@@ -1677,17 +1731,18 @@ async function ofrecerEdicionReparacion(p, h) {
   $('#bEditRep', h).addEventListener('click', () => editarReparacionApp(p, est));
 }
 async function editarReparacionApp(p, est) {
-  const cat = est.tipo === 'linea' ? CAT_CIRCUITO : (['F02', 'F03'].includes(est.tipo_falla) ? CAT_MONOPOSTE : CAT_PUNTO);
+  const nomCat = est.tipo === 'linea' ? 'circuito' : (['F02', 'F03'].includes(est.tipo_falla) ? 'monoposte' : 'punto');
+  const cat = catalogoActivo(nomCat, est.tipo_falla);
   const bloq = !!est.bloqueada_por_otra_falla;
   let codigo = est.tipo_falla;
   const h = abrirHoja(`
     <h2>Editar reparación · OS ${esc(p.ot || '—')}</h2>
     <div class="hint">${esc(est.tipo_falla)}${est.segundos == null ? ' · sin límite de tiempo (admin)' : ''}</div>
     <h3>Trabajo realizado</h3>
-    <div class="codigos">${CAT_CIERRES.map((x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>
+    ${htmlCierres()}
     <div class="hint">Lo marcado se agrega aquí abajo (puedes editarlo):</div>
     <textarea id="rDesc" class="campo"></textarea>
-    <h3>Código de falla</h3>${htmlCodigos(cat)}
+    <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
     <textarea id="rOtro" class="campo" placeholder="Describe la falla (obligatorio si eliges OTRO)" ${codigo === 'OTRO' ? '' : 'hidden'}></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
     <h3>Fotografías</h3>
@@ -1831,7 +1886,7 @@ function formCierre(p, borr) {
     <h2>Registrar reparación</h2>
     <div class="hint">${esc(p.tipo_falla)} · OS ${esc(p.ot || '—')} · ${esc(tipoLabel(p))}${p.tipo === 'linea' ? ' · se cerrarán también sus ' + esc(p.puntos_afectados ?? '') + ' puntos' : ''}</div>
     <h3>Trabajo realizado</h3>
-    <div class="codigos">${CAT_CIERRES.map((x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`).join('')}</div>
+    ${htmlCierres()}
     <h3>Información adicional</h3>
     <textarea id="cDesc" class="campo" placeholder="Ej: detalle de lo realizado. Obligatorio si dejas la falla pendiente."></textarea>
     <h3>Fotografías ${exigeFoto ? '<span class="req">obligatoria</span>' : '<span class="hint" style="font-weight:400;">(opcional)</span>'}</h3>
@@ -2941,6 +2996,7 @@ window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.in
 async function entrarApp() {
   if (typeof L === 'undefined') throw new Error('No se pudo cargar el mapa. Revisa tu conexión y recarga la página.');
   await cargarPerfil();
+  cargarLibreria();   // códigos de falla y de cierre de la Librería (sin bloquear la entrada)
   iniciarUbicacion();
   $('#pantallaLogin').hidden = true;
   $('#pantallaApp').hidden = false;
