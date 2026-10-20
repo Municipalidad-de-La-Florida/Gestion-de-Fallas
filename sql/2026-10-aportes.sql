@@ -241,7 +241,7 @@ begin
   perform public.registrar_reparacion(p_falla_id, v_rep);
 
   -- Aviso a los contratistas del contrato
-  select array_agg(u.id) into v_dest from public.usuarios u
+  select array_agg(distinct u.id) into v_dest from public.usuarios u
    where u.rol in ('contratista', 'contratista2', 'contratista3')
      and exists (select 1 from public.usuario_contratos uc where uc.usuario_id = u.id and uc.contrato_id = p_contrato_id);
   if p_tipo = 'punto' then
