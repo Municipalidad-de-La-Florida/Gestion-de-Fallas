@@ -5485,9 +5485,10 @@ function copiarRangoACompartido(idIni, idFin){
 
 // ---- Filtros de Estadísticas y Análisis: medir por fecha informada o de reparación, subcontrato, asignador, ITO ----
 const FILTROS_EST = {medir: 'informada', masivo: 'todas', asignadores: new Set(), ito: ''};
-function extraFiltrosEst(conIto, contratoId){
+function extraFiltrosEst(conIto, contratoId, sinFiltros){
   const e = {};
   if(contratoId) e.p_contratos = [contratoId];
+  if(sinFiltros) return e;   // hoja 1 del PDF: siempre fallas informadas en el período, sin filtros
   if(FILTROS_EST.medir !== 'informada') e.p_medir = FILTROS_EST.medir;
   if(FILTROS_EST.masivo !== 'todas') e.p_masivo = FILTROS_EST.masivo === 'si';
   if(FILTROS_EST.asignadores.size) e.p_asignadores = [...FILTROS_EST.asignadores];
@@ -6614,6 +6615,11 @@ function operativoItemsMapa(det){
 }
 function quitarCapaOperativo(){ if(OPER.capa){ map.removeLayer(OPER.capa); OPER.capa = null; } }
 // Hojas del PDF con el resumen de UN operativo: mapa con sus fallas + estadísticas (como cualquier período, pero solo del operativo)
+const fechaGeneracionPdf = () => {
+  const MES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {timeZone: ZONA_CHILE, year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}).formatToParts(new Date()).map(x => [x.type, x.value]));
+  return `${Number(p.day)} ${MES[Number(p.month) - 1]} ${p.year}, ${p.hour === '24' ? '00' : p.hour}:${p.minute}`;
+};
 async function agregarHojasOperativo(pdf, det, primera){
   const ancho = pdf.internal.pageSize.getWidth(), alto = pdf.internal.pageSize.getHeight(), margen = 12, VERDE = [0, 49, 0], gris = [85, 102, 92], LIMA = [123, 211, 0];
   const c = operativoCalc(det);
@@ -6624,10 +6630,23 @@ async function agregarHojasOperativo(pdf, det, primera){
   const fechaLarga = `${dias[new Date(Date.UTC(yy, mm - 1, dd)).getUTCDay()]} ${String(dd).padStart(2, '0')} de ${meses[mm - 1]} de ${yy}`;
   const conOpacidad = (op, fn) => { pdf.saveGraphicsState(); pdf.setGState(new pdf.GState({opacity: op})); fn(); pdf.restoreGraphicsState(); };
   if(!primera) pdf.addPage();
+  // Tablas dentro del mismo panel (todo el operativo en una sola hoja)
+  const resumir = (arr, max) => arr.length <= max ? arr : arr.slice(0, max - 1).concat([['Otros', arr.slice(max - 1).reduce((a, [, v]) => ({n: a.n + v.n, rep: a.rep + v.rep}), {n: 0, rep: 0})]]);
+  // Tipos de falla: se muestran los 9 más frecuentes; el resto y la falla "OTRO" se agrupan en "Otros"
+  const resumirCodigos = (arr, max) => {
+    const normales = arr.filter(([k]) => String(k).split('|')[1] !== 'OTRO'), otro = arr.filter(([k]) => String(k).split('|')[1] === 'OTRO');
+    const resto = normales.slice(max).concat(otro);
+    if(!resto.length) return normales;
+    return normales.slice(0, max).concat([['Otros', resto.reduce((a, [, v]) => ({n: a.n + v.n, rep: a.rep + v.rep}), {n: 0, rep: 0})]]);
+  };
+  const bodyI = resumir(c.porInspector, 8), bodyT = resumirCodigos(c.porCodigo, 8);
+  // Autoajuste: el panel mide solo lo que necesita su contenido (indicadores + la tabla más larga) y queda pegado abajo
+  const ROWH = 6.6, nFilas = Math.max(bodyI.length, bodyT.length) + 1;
+  const ph = 52 + nFilas * ROWH + 11, py = alto - 12 - ph;
   // ---------- HOJA 1: mapa a página completa + encabezado + indicadores (igual que los demás informes) ----------
   pdf.setFillColor(238, 242, 238); pdf.rect(0, 0, ancho, alto, 'F');
   try{
-    const cv = await renderMapaCanvas(operativoItemsMapa(det), {w: 1588, h: 2246, padding: 100, padTop: 310, padBottom: 890, zMax: 17, simple: true, radio: 5, contorno: true});
+    const cv = await renderMapaCanvas(operativoItemsMapa(det), {w: 1588, h: 2246, padding: 100, padTop: 310, padBottom: Math.round((ph + 16) * 7.56), zMax: 17, simple: true, radio: 8, contorno: true});
     if(cv) pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
     else { pdf.setFontSize(10); pdf.setTextColor(...gris); pdf.text('Este operativo no tiene fallas con ubicación.', ancho / 2, alto / 2, {align: 'center'}); }
   }catch(e){ console.warn('No se pudo dibujar el mapa del operativo:', e); }
@@ -6641,15 +6660,17 @@ async function agregarHojasOperativo(pdf, det, primera){
   pdf.text(fechaLarga, margen + 2, 35);
   pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
   pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
-  pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 20, {align: 'right'});
+  pdf.text(fechaGeneracionPdf(), ancho - margen - 2, 20, {align: 'right'});
   pdf.text(`extraído por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 25, {align: 'right'});
   // Panel de indicadores
-  const py = alto - 116, ph = 104, pct = c.total ? Math.round(100 * c.reparadas / c.total) : 0;
+  const pct = c.total ? Math.round(100 * c.reparadas / c.total) : 0;
   conOpacidad(0.96, () => { pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(margen - 2, py, ancho - (margen - 2) * 2, ph, 4, 4, 'FD'); });
-  const kpi = (x, valor, etiqueta, sub) => {
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.setTextColor(...VERDE); pdf.text(String(valor), x, py + 17);
-    pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text(etiqueta, x, py + 31);
-    if(sub){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(sub, x, py + 35.5); }
+  const kpi = (x, valor, etiqueta, sub, col, w) => {
+    const cc = col || VERDE, x0 = x - 4, y0 = py + 8, h0 = 29;
+    pdf.setFillColor(243, 247, 244); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x0, y0, w, h0, 2.5, 2.5, 'FD'); pdf.setFillColor(...cc); pdf.rect(x0 + 0.1, y0 + 4, 1, h0 - 8, 'F');
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(21); pdf.setTextColor(...(col || VERDE)); pdf.text(String(valor), x, py + 19.5);
+    pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text(etiqueta, x, py + 26.5);
+    if(sub){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(sub, x, py + 31); }
   };
   const anilloPng = (px) => {
     const cv = document.createElement('canvas'); cv.width = cv.height = px;
@@ -6661,30 +6682,23 @@ async function agregarHojasOperativo(pdf, det, primera){
     x.fillText(pct + '%', px / 2, px / 2 + px * 0.02);
     return cv.toDataURL('image/png');
   };
-  kpi(margen + 6, c.total, 'Fallas', '');
-  kpi(margen + 40, c.puntos, 'Puntos afectados', '');
-  pdf.addImage(anilloPng(240), 'PNG', margen + 80, py + 4, 24, 24);
-  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text('Reparadas', margen + 92, py + 31, {align: 'center'});
-  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(`${c.reparadas} de ${c.total}`, margen + 92, py + 35.5, {align: 'center'});
-  kpi(margen + 113, c.total - c.reparadas, 'Sin atender', '');
-  kpi(margen + 142, fmtHorasOp(c.media_h), 'Tiempo promedio', 'de reparación');
+  kpi(margen + 6, c.total, 'Fallas', '', null, 32);
+  kpi(margen + 40, c.puntos, 'Puntos afectados', '', null, 36);
+  pdf.addImage(anilloPng(240), 'PNG', margen + 80, py + 6, 24, 24);
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text('Reparadas', margen + 92, py + 34.5, {align: 'center'});
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(`${c.reparadas} de ${c.total}`, margen + 92, py + 38.5, {align: 'center'});
+  kpi(margen + 113, c.total - c.reparadas, 'Sin atender', '', c.total - c.reparadas ? [192, 57, 43] : null, 27);
+  kpi(margen + 142, fmtHorasOp(c.media_h), 'Tiempo promedio', 'de reparación', null, 38);
   const leyenda = [['Reportada', colorEstado.reportada], ['Pendiente', colorEstado.pendiente], ['Reiterada', colorEstado.reiterada], ['Reparada', colorEstado.reparada], ['Vencida', colorEstado.vencida]];
   let lx = margen + 6;
-  leyenda.forEach(([t, col]) => { const rgb = [1, 3, 5].map(i => parseInt(col.slice(i, i + 2), 16)); pdf.setFillColor(...rgb); pdf.circle(lx + 1.5, py + 41, 1.5, 'F'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(t, lx + 4, py + 41.8); lx += 28; });
+  leyenda.forEach(([t, col]) => { const rgb = [1, 3, 5].map(i => parseInt(col.slice(i, i + 2), 16)); pdf.setFillColor(...rgb); pdf.circle(lx + 1.8, py + 45, 1.8, 'F'); pdf.setFontSize(8.5); pdf.setTextColor(...gris); pdf.text(t, lx + 5, py + 46.1); lx += 30; });
 
-  // Tablas dentro del mismo panel (todo el operativo en una sola hoja)
-  const resumir = (arr, max) => arr.length <= max ? arr : arr.slice(0, max - 1).concat([['Otros', arr.slice(max - 1).reduce((a, [, v]) => ({n: a.n + v.n, rep: a.rep + v.rep}), {n: 0, rep: 0})]]);
-  // Tipos de falla: se muestran los 9 más frecuentes; el resto y la falla "OTRO" se agrupan en "Otros"
-  const resumirCodigos = (arr, max) => {
-    const normales = arr.filter(([k]) => String(k).split('|')[1] !== 'OTRO'), otro = arr.filter(([k]) => String(k).split('|')[1] === 'OTRO');
-    const resto = normales.slice(max).concat(otro);
-    if(!resto.length) return normales;
-    return normales.slice(0, max).concat([['Otros', resto.reduce((a, [, v]) => ({n: a.n + v.n, rep: a.rep + v.rep}), {n: 0, rep: 0})]]);
-  };
-  const est = {theme: 'grid', styles: {fontSize: 7, cellPadding: 0.8, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1}, headStyles: {fillColor: VERDE, textColor: 255, fontStyle: 'bold'}, alternateRowStyles: {fillColor: [243, 247, 244]}};
-  const mitad = (ancho - 2 * margen) / 2 - 3, ty = py + 46;
-  pdf.autoTable({...est, startY: ty, margin: {left: margen + 2, right: ancho - margen - 2 - mitad}, head: [['Inspector', 'Fallas', 'Rep.']], columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}}, body: resumir(c.porInspector, 9).map(([k, v]) => [k, v.n, v.rep])});
-  pdf.autoTable({...est, startY: ty, margin: {left: margen + mitad + 6, right: margen + 2}, head: [['Tipo de falla', 'Fallas', 'Rep.']], columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}}, body: resumirCodigos(c.porCodigo, 9).map(([k, v]) => [k === 'Otros' ? k : etiquetaCodOp(k), v.n, v.rep])});
+  const est = {theme: 'grid', styles: {fontSize: 8.5, cellPadding: {top: 1.6, bottom: 1.6, left: 2, right: 2}, minCellHeight: ROWH, valign: 'middle', textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1}, headStyles: {fillColor: VERDE, textColor: LIMA, fontStyle: 'bold'}, alternateRowStyles: {fillColor: [243, 247, 244]}};
+  const colN = {1: {halign: 'right'}, 2: {halign: 'right', textColor: [46, 125, 79], fontStyle: 'bold'}, 3: {halign: 'right', fontStyle: 'bold'}};
+  const pinta = (d) => { if(d.section === 'body' && d.column.index === 3){ d.cell.styles.textColor = Number(d.cell.raw) > 0 ? [192, 57, 43] : [150, 160, 154]; } };
+  const mitad = (ancho - 2 * margen) / 2 - 3, ty = py + 52;
+  pdf.autoTable({...est, startY: ty, margin: {left: margen + 2, right: ancho - margen - 2 - mitad}, head: [['Inspector', 'Fallas', 'Rep.', 'Pend.']], columnStyles: colN, didParseCell: pinta, body: bodyI.map(([k, v]) => [k, v.n, v.rep, v.n - v.rep])});
+  pdf.autoTable({...est, startY: ty, margin: {left: margen + mitad + 6, right: margen + 2}, head: [['Tipo de falla', 'Fallas', 'Rep.', 'Pend.']], columnStyles: colN, didParseCell: pinta, body: bodyT.map(([k, v]) => [k === 'Otros' ? k : etiquetaCodOp(k), v.n, v.rep, v.n - v.rep])});
   pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
   pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
 }
@@ -6768,12 +6782,16 @@ function fmtPctPuntos(n, total){
   const p = Number(n) / Number(total) * 100;
   return (p >= 1 ? p.toFixed(1) : p.toFixed(2)).replace('.', ',') + ' %';
 }
+// Cierres (códigos de cierre) de las reparaciones del período, con los mismos filtros del análisis
+async function rpcAnalisisCierres(ini, fin, contratoId){
+  return await db.rpc('analisis_cierres', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true, contratoId)});
+}
 // Trae el análisis y le suma los puntos lumínicos afectados (función aparte en la base).
-async function rpcAnalisisFallas(ini, fin, contratoId){
-  const d = await db.rpc('analisis_fallas', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true, contratoId)});
+async function rpcAnalisisFallas(ini, fin, contratoId, sinFiltros){
+  const d = await db.rpc('analisis_fallas', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true, contratoId, sinFiltros)});
   if(d && d.resumen){
     try{
-      const p = await db.rpc('analisis_puntos_afectados', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true, contratoId)});
+      const p = await db.rpc('analisis_puntos_afectados', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true, contratoId, sinFiltros)});
       if(p){ d.resumen.puntos_afectados = p.puntos_afectados; d.resumen.total_puntos = p.total_puntos; }
     }catch(e){ console.warn('No se pudieron obtener los puntos lumínicos afectados:', e); }
   }
@@ -7253,6 +7271,64 @@ async function renderMapaCanvas(items, opciones = {}){
     ctx.fillStyle = '#333333'; ctx.fillText(atr0, W - 8, H - 5);
     return canvas;
   }
+  // Mapa de calor con curvas de nivel: densidad suavizada de las fallas, recortada a la comuna; luego se dibujan las marcas numeradas
+  if(opciones.calorContorno){
+    const pts = opciones.calorContorno.pts || [];
+    const lat0 = -33.54, kxm = 111320 * Math.cos(lat0 * Math.PI / 180);
+    const [xa, ya] = P(-70.58, lat0), [xb] = P(-70.58 + 1000 / kxm, lat0);
+    const pxm = Math.abs(xb - xa) / 1000;                       // píxeles del lienzo por metro
+    const sigma = (opciones.calorContorno.sigmaM || 400) * pxm, gstep = 5;
+    const gw = Math.ceil(W / gstep) + 1, gh = Math.ceil(H / gstep) + 1, campo = new Float32Array(gw * gh);
+    const rad = Math.ceil(3 * sigma / gstep);
+    pts.forEach(pt => {
+      const [px0, py0] = P(pt.lon, pt.lat);
+      const ci = Math.round(px0 / gstep), cj = Math.round(py0 / gstep);
+      for(let j = Math.max(0, cj - rad); j <= Math.min(gh - 1, cj + rad); j++){
+        for(let i = Math.max(0, ci - rad); i <= Math.min(gw - 1, ci + rad); i++){
+          const dx = i * gstep - px0, dy = j * gstep - py0;
+          campo[j * gw + i] += Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+        }
+      }
+    });
+    let vmax = 0; for(let k = 0; k < campo.length; k++) if(campo[k] > vmax) vmax = campo[k];
+    const FR = [0.10, 0.22, 0.36, 0.52, 0.70, 0.86], umbrales = FR.map(f => f * vmax);
+    const rgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const RELLENO = CALOR_COLORES.map(rgb), LINEA = ['#c9a400', '#d98a00', '#d45500', '#c02a10', '#9b0c1c', '#6d0010'];
+    ctx.save();
+    ctx.beginPath(); COMUNA_CONTORNO.forEach((c, i) => { const [x, y] = P(c[0], c[1]); if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.closePath(); ctx.clip();
+    if(vmax > 0){
+      // Relleno por bandas (suavizado al ampliar)
+      const oc = document.createElement('canvas'); oc.width = gw; oc.height = gh;
+      const octx = oc.getContext('2d'), im = octx.createImageData(gw, gh);
+      for(let k = 0; k < campo.length; k++){
+        let b = -1; for(let u = 0; u < umbrales.length; u++) if(campo[k] >= umbrales[u]) b = u;
+        if(b >= 0){ im.data[k * 4] = RELLENO[b][0]; im.data[k * 4 + 1] = RELLENO[b][1]; im.data[k * 4 + 2] = RELLENO[b][2]; im.data[k * 4 + 3] = 150; }
+      }
+      octx.putImageData(im, 0, 0);
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(oc, 0, 0, gw * gstep, gh * gstep);
+      // Curvas de nivel (marching squares)
+      const SEG = {1: [[3, 2]], 2: [[2, 1]], 3: [[3, 1]], 4: [[0, 1]], 5: [[0, 3], [1, 2]], 6: [[0, 2]], 7: [[0, 3]], 8: [[0, 3]], 9: [[0, 2]], 10: [[0, 1], [2, 3]], 11: [[0, 1]], 12: [[3, 1]], 13: [[2, 1]], 14: [[3, 2]]};
+      umbrales.forEach((t, u) => {
+        ctx.beginPath();
+        for(let j = 0; j < gh - 1; j++){
+          for(let i = 0; i < gw - 1; i++){
+            const tl = campo[j * gw + i], tr = campo[j * gw + i + 1], br = campo[(j + 1) * gw + i + 1], bl = campo[(j + 1) * gw + i];
+            const idx = (tl > t ? 8 : 0) | (tr > t ? 4 : 0) | (br > t ? 2 : 0) | (bl > t ? 1 : 0);
+            const seg = SEG[idx]; if(!seg) continue;
+            const lerp = (a, b) => (t - a) / ((b - a) || 1e-9);
+            const pe = (e) => e === 0 ? [(i + lerp(tl, tr)) * gstep, j * gstep] : e === 1 ? [(i + 1) * gstep, (j + lerp(tr, br)) * gstep] : e === 2 ? [(i + lerp(bl, br)) * gstep, (j + 1) * gstep] : [i * gstep, (j + lerp(tl, bl)) * gstep];
+            seg.forEach(([e1, e2]) => { const p1 = pe(e1), p2 = pe(e2); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); });
+          }
+        }
+        ctx.lineWidth = 2 + u * 0.5; ctx.strokeStyle = LINEA[u]; ctx.globalAlpha = 0.85; ctx.stroke(); ctx.globalAlpha = 1;
+      });
+    }
+    ctx.restore();
+    // Borde de la comuna por encima del calor
+    ctx.setLineDash([]); ctx.lineWidth = 7; ctx.strokeStyle = '#1f4d3d';
+    ctx.beginPath(); COMUNA_CONTORNO.forEach((c, i) => { const [x, y] = P(c[0], c[1]); if(i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.closePath(); ctx.stroke();
+  }
   // Circuitos primero (debajo de los puntos)
   validos.forEach(it => {
     const ls = lineas(it.geom);
@@ -7641,7 +7717,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     // Un bloque completo (hojas 1 y 2, detalle y mapas) por cada conjunto de datos: el total y luego cada contrato
     const bloque = async (d, cid, nombre, primero) => {
     if(!primero) pdf.addPage();
-    const etiquetaContrato = (yy) => { if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10.5); pdf.setTextColor(255, 255, 255); pdf.text('CONTRATO: ' + nombre.toUpperCase(), ancho - margen - 2, yy, {align: 'right'}); } };
+    const etiquetaContrato = (yy) => { if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10.5); pdf.setTextColor(255, 255, 255); pdf.text(cid ? 'CONTRATO: ' + nombre.toUpperCase() : 'CONTRATOS DE MANTENIMIENTO ACTIVOS', ancho - margen - 2, yy, {align: 'right'}); } };
     // ---------- HOJA 1: mapa del período + indicadores ----------
     const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
     const rr = d.resumen || {};
@@ -7653,7 +7729,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     const nDiasRango = Math.round((new Date(fin + 'T00:00:00Z') - new Date(ini + 'T00:00:00Z')) / 86400000) + 1;
     const pctRep = rr.fallas ? Math.round((rr.reparadas || 0) / rr.fallas * 100) : 0;
     const LIMA = [123, 211, 0];
-    const COLOR_EST_PDF = {reportada: [242, 183, 5], pendiente: [47, 168, 216], reiterada: [142, 68, 173], reparada: [58, 138, 92]};
+    const COLOR_EST_PDF = {reportada: [242, 183, 5], pendiente: [47, 168, 216], reiterada: [142, 68, 173], reparada: [58, 138, 92], vencida: [211, 58, 44]};
     const hexAPdf = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
     const conOpacidad = (op, fn) => { pdf.saveGraphicsState(); pdf.setGState(new pdf.GState({opacity: op})); fn(); pdf.restoreGraphicsState(); };
 
@@ -7670,6 +7746,28 @@ async function generarPdfAnalisis(soloResumen, opciones){
     const porEstado = {reportada: 0, pendiente: 0, reiterada: 0, reparada: 0};
     feats.forEach(f => { if(porEstado[f.properties.estado] !== undefined) porEstado[f.properties.estado]++; });
 
+    // HOJA 1: siempre las fallas informadas en el período, sin filtros (solo se separa por contrato). Mismas cifras para mapa, leyenda e indicadores.
+    let feats1 = feats, puntos1 = {puntos_afectados: rr.puntos_afectados, total_puntos: rr.total_puntos};
+    if(Object.keys(extraFiltrosEst(false, cid)).length !== Object.keys(extraFiltrosEst(false, cid, true)).length){
+      try{
+        const g1 = await db.rpc('fallas_geojson_periodo', {
+          fecha_inicio: fechaChileLocal(ini, 0, 0, 0).toISOString(),
+          fecha_fin: fechaChileLocal(sumarDiasStr(fin, 1), 0, 0, 0).toISOString(),
+          ...extraFiltrosEst(false, cid, true)
+        });
+        feats1 = ((g1 && g1.features) || []).filter(f => !(f.properties && f.properties.cascada));
+      }catch(e){ console.warn('No se pudieron obtener las fallas sin filtros para la hoja 1:', e); }
+      try{
+        const p1 = await db.rpc('analisis_puntos_afectados', {p_inicio: ini, p_fin: fin, ...extraFiltrosEst(true, cid, true)});
+        if(p1) puntos1 = p1;
+      }catch(e){ console.warn('No se pudieron obtener los puntos afectados sin filtros:', e); }
+    }
+    // Conteo por color tal como se ve en el mapa (el rojo = con atraso)
+    const porColor1 = {reportada: 0, pendiente: 0, reiterada: 0, vencida: 0, reparada: 0};
+    feats1.forEach(f => { const k = claveColorFalla(f.properties.estado, f.properties.fecha_falla_real || f.properties.fecha_falla, f.properties.fecha_pendiente); if(porColor1[k] !== undefined) porColor1[k]++; });
+    const total1 = feats1.length, reparadas1 = porColor1.reparada, sinSolucion1 = total1 - reparadas1;
+    const pctRep1 = total1 ? Math.round(reparadas1 / total1 * 100) : 0;
+
     const anilloPng = (pct, px) => {
       const c = document.createElement('canvas'); c.width = c.height = px;
       const x = c.getContext('2d'), w = px * 0.115, r = (px - w) / 2;
@@ -7684,8 +7782,8 @@ async function generarPdfAnalisis(soloResumen, opciones){
     // Mapa a página completa (si no se puede dibujar, queda un fondo liso)
     pdf.setFillColor(238, 242, 238); pdf.rect(0, 0, ancho, alto, 'F');
     try{
-      const items = feats.map(f => ({geom: f.geometry, color: colorFalla(f.properties.estado, f.properties.fecha_falla_real || f.properties.fecha_falla, f.properties.fecha_pendiente), label: ''}));
-      const cv = await renderMapaCanvas(items, {w: 1588, h: 2246, padding: 190, padTop: 460, padBottom: 570, zMax: 17, simple: true, contorno: true});
+      const items = feats1.map(f => ({geom: f.geometry, color: colorFalla(f.properties.estado, f.properties.fecha_falla_real || f.properties.fecha_falla, f.properties.fecha_pendiente), label: ''}));
+      const cv = await renderMapaCanvas(items, {w: 1588, h: 2246, padding: 150, padTop: 390, padBottom: 500, zMax: 17, simple: true, contorno: true});
       if(cv) pdf.addImage(cv.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
       else { pdf.setFontSize(10); pdf.setTextColor(...gris); pdf.text('No hay fallas con ubicación en este período.', ancho / 2, alto / 2, {align: 'center'}); }
     }catch(e){ console.warn('No se pudo incluir el mapa del período:', e); }
@@ -7710,40 +7808,45 @@ async function generarPdfAnalisis(soloResumen, opciones){
       pdf.text('Informe de fallas de Alumbrado Público', margen + 2, 22);
     }
     pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
-    pdf.text(`Periodo: ${fmtLarga(ini)} al`, margen + 2, 29.5);
+    pdf.text(`Período: ${fmtLarga(ini)} al`, margen + 2, 29.5);
     pdf.text(fmtLarga(fin), margen + 2, 35);
     etiquetaContrato(35);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
     pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
-    pdf.text(new Date().toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}), ancho - margen - 2, 20, {align: 'right'});
+    pdf.text(fechaGeneracionPdf(), ancho - margen - 2, 20, {align: 'right'});
     pdf.text(`extraído por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 25, {align: 'right'});
 
-    // Panel de indicadores
-    const py = alto - 56, ph = 44;
+    // Panel de indicadores (cifras de las fallas informadas en el período, sin filtros: son las mismas del mapa y la leyenda)
+    const py = alto - 68, ph = 56;
     conOpacidad(0.96, () => { pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(margen - 2, py, ancho - (margen - 2) * 2, ph, 4, 4, 'FD'); });
     const kpi = (x, valor, etiqueta, sub, color) => {
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.setTextColor(...(color || VERDE)); pdf.text(String(valor), x, py + 16);
       pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text(etiqueta, x, py + 22);
       if(sub){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(sub, x, py + 26.5); }
     };
-    kpi(margen + 6, num(rr.fallas || 0), 'Fallas', '');
-    kpi(margen + 46, rr.puntos_afectados === undefined ? '-' : fmtMiles(rr.puntos_afectados), 'Puntos afectados', '');
-    if(rr.puntos_afectados !== undefined && rr.total_puntos){
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
-      pdf.text(`${fmtPctPuntos(rr.puntos_afectados, rr.total_puntos)} del parque lumínico`, margen + 46, py + 26.5);
-      pdf.text('de la comuna', margen + 46, py + 30);
+    kpi(margen + 6, num(total1), 'Fallas detectadas', '');
+    kpi(margen + 46, puntos1.puntos_afectados === undefined ? '-' : fmtMiles(puntos1.puntos_afectados), 'Puntos afectados', '');
+    if(puntos1.puntos_afectados !== undefined && puntos1.total_puntos){
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris);
+      pdf.text(`${fmtPctPuntos(puntos1.puntos_afectados, puntos1.total_puntos)} del Parque lum.`, margen + 46, py + 26.5);
     }
-    pdf.addImage(anilloPng(pctRep, 300), 'PNG', margen + 92, py + 4, 22, 22);
+    pdf.addImage(anilloPng(pctRep1, 300), 'PNG', margen + 92, py + 4, 22, 22);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text('Reparadas', margen + 117, py + 14);
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(`${num(rr.reparadas || 0)} de ${num(rr.fallas || 0)}`, margen + 117, py + 18.5);
-    kpi(margen + 146, num(rr.abiertas || 0), 'Fallas sin atención', '', [211, 58, 44]);
-    // Leyenda
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(`${num(reparadas1)} de ${num(total1)}`, margen + 117, py + 18.5);
+    kpi(margen + 146, num(sinSolucion1), 'Fallas sin solución', '', [211, 58, 44]);
+    // Leyenda: los mismos colores del mapa; el rojo es una falla con atraso
     pdf.setDrawColor(219, 226, 220); pdf.line(margen + 4, py + 32, ancho - margen - 4, py + 32);
-    [['Reportada', 'reportada'], ['Pendiente', 'pendiente'], ['Reiterada', 'reiterada'], ['Reparada', 'reparada']].forEach(([t, k], i) => {
-      const lx = margen + 8 + i * 42;
-      pdf.setFillColor(...COLOR_EST_PDF[k]); pdf.circle(lx, py + 38, 1.6, 'F');
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(30, 40, 35); pdf.text(`${t} (${porEstado[k]})`, lx + 3.5, py + 39);
+    [['Reparadas', 'reparada'], ['Reportadas', 'reportada'], ['Reiteradas', 'reiterada'], ['Pendientes', 'pendiente'], ['Atrasadas', 'vencida']].forEach(([t, k], i) => {
+      const lx = margen + 8 + i * 35;
+      pdf.setFillColor(...COLOR_EST_PDF[k]); pdf.circle(lx, py + 42.5, 1.6, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(30, 40, 35); pdf.text(`${t} (${porColor1[k]})`, lx + 3.5, py + 43.5);
     });
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(...gris);
+    pdf.text('ESTADO ACTUAL AL MOMENTO DE GENERAR ESTE INFORME', margen + 4, py + 36.5);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.2); pdf.setTextColor(...VERDE);
+    pdf.text(`Fallas detectadas (${total1}) = Reparadas (${porColor1.reparada}) + Reportadas (${porColor1.reportada}) + Reiteradas (${porColor1.reiterada}) + Pendientes (${porColor1.pendiente}) + Atrasadas (${porColor1.vencida})`, margen + 4, py + 48.5);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.8); pdf.setTextColor(...gris);
+    pdf.text(pdf.splitTextToSize('Cifras de las fallas informadas dentro del período, sin filtros.', ancho - margen * 2 - 8), margen + 4, py + 52.5);
     conOpacidad(0.85, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
     pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 3.2);
@@ -7755,7 +7858,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text('Estadísticas del período', margen + 2, 22);
     pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
-    pdf.text(`Periodo: ${fmtLarga(ini)} al`, margen + 2, 29.5);
+    pdf.text(`Período: ${fmtLarga(ini)} al`, margen + 2, 29.5);
     pdf.text(fmtLarga(fin), margen + 2, 35);
     etiquetaContrato(35);
     const tarjeta = (x, y, w, h, titulo) => {
@@ -7765,33 +7868,66 @@ async function generarPdfAnalisis(soloResumen, opciones){
     const mitad = (ancho - margen * 2 - 12) / 3;   // tres tarjetas en la fila superior
 
     // Fila superior: estado de las fallas (anillo), tiempo de reparación y circuito / individuales
-    tarjeta(margen, 45, mitad, 46, 'Estado de las fallas');
+    // Calidad de servicio: primer reporte vs. reiterada (marca de la falla, se mantiene aunque luego se repare)
     {
-      const px = 360, c = document.createElement('canvas'); c.width = c.height = px;
-      const x = c.getContext('2d'), tot = Object.values(porEstado).reduce((a, b) => a + b, 0) || 1;
-      let ang = -Math.PI / 2;
-      ['reparada', 'reportada', 'pendiente', 'reiterada'].forEach(k => {
-        if(!porEstado[k]) return;
-        const a2 = ang + Math.PI * 2 * porEstado[k] / tot;
-        x.strokeStyle = colorEstado[k]; x.lineWidth = px * 0.17; x.beginPath(); x.arc(px / 2, px / 2, px * 0.385, ang, a2); x.stroke(); ang = a2;
+      const xq = margen + mitad + 6;
+      tarjeta(xq, 45, mitad, 46, 'Calidad de servicio');
+      const totN = feats.length || rr.fallas || 0;
+      const nReit = Math.min(rr.reiteradas || 0, totN), nPrim = totN - nReit;
+      const COL_PRIM = [187, 199, 205], COL_REIT = [142, 68, 173];
+      const pc = (v) => totN ? ` (${Math.round(v / totN * 100)}%)` : '';
+      const w = 360, h = 200, c = document.createElement('canvas'); c.width = w; c.height = h;
+      const g = c.getContext('2d'), cx = w / 2, cy = h - 12, r = 150;
+      g.lineWidth = 46; g.lineCap = 'butt';
+      g.strokeStyle = '#e6ece7'; g.beginPath(); g.arc(cx, cy, r, Math.PI, 2 * Math.PI); g.stroke();
+      if(totN){
+        const aPrim = Math.PI + Math.PI * nPrim / totN;
+        if(nPrim){ g.strokeStyle = `rgb(${COL_PRIM.join(',')})`; g.beginPath(); g.arc(cx, cy, r, Math.PI, aPrim); g.stroke(); }
+        if(nReit){ g.strokeStyle = `rgb(${COL_REIT.join(',')})`; g.beginPath(); g.arc(cx, cy, r, aPrim, 2 * Math.PI); g.stroke(); }
+      }
+      g.fillStyle = '#003100'; g.font = '800 66px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+      g.fillText(totN ? Math.round(nReit / totN * 100) + '%' : '-', cx, cy - 6);
+      pdf.addImage(c.toDataURL('image/png'), 'PNG', xq + (mitad - 34) / 2, 56, 34, 34 * h / w);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text('reiteradas', xq + mitad / 2, 77.3, {align: 'center'});
+      [['Primer reporte', nPrim, COL_PRIM], ['Reiteradas', nReit, COL_REIT]].forEach(([t, v, col], i) => {
+        const yy = 82 + i * 5.2;
+        pdf.setFillColor(...col); pdf.circle(xq + 6.3, yy - 1, 1.3, 'F');
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(t, xq + 9.5, yy);
+        pdf.setFont('helvetica', 'bold'); pdf.text(`${num(v)}${pc(v)}`, xq + mitad - 5, yy, {align: 'right'});
       });
-      x.fillStyle = '#003100'; x.font = `800 ${Math.round(px * 0.2)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(String(tot), px / 2, px / 2 + 4);
-      pdf.addImage(c.toDataURL('image/png'), 'PNG', margen + 3.5, 59, 25, 25);
     }
-    [['Reparadas', 'reparada'], ['Reportadas', 'reportada'], ['Pendientes', 'pendiente'], ['Reiteradas', 'reiterada']].forEach(([t, k], i) => {
-      pdf.setFillColor(...COLOR_EST_PDF[k]); pdf.circle(margen + 32, 62 + i * 6.5, 1.3, 'F');
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(t, margen + 34.8, 63 + i * 6.5);
-      pdf.setFont('helvetica', 'bold'); pdf.text(String(porEstado[k]), margen + mitad - 3, 63 + i * 6.5, {align: 'right'});
-    });
-    tarjeta(margen + mitad + 6, 45, mitad, 46, 'Tiempo de reparación');
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(26); pdf.setTextColor(...VERDE); pdf.text(fmtHoras(rr.media_recortada_dias_ing, '-'), margen + mitad + 11, 70);
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
-    pdf.text(pdf.splitTextToSize('promedio desde el ingreso al sistema', mitad - 12), margen + mitad + 11, 77);
+    // Media de reparación (general y por tipo de falla)
+    {
+      const xm = margen + 2 * (mitad + 6);
+      tarjeta(xm, 45, mitad, 46, 'Media de reparación');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(22); pdf.setTextColor(...VERDE); pdf.text(fmtHoras(rr.media_recortada_dias_ing, '-'), xm + 5, 64);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris);
+      pdf.text('media desde el ingreso al sistema', xm + 5, 69);
+      const mediaTipo = (linea) => {
+        const cs = codigos.filter(c => (c.tipo === 'linea') === linea && c.reparadas > 0 && c.media_rec_ing !== null && c.media_rec_ing !== undefined);
+        const n = cs.reduce((a, c) => a + c.reparadas, 0);
+        return n ? cs.reduce((a, c) => a + c.media_rec_ing * c.reparadas, 0) / n : null;
+      };
+      pdf.setDrawColor(219, 226, 220); pdf.setLineWidth(0.2); pdf.line(xm + 5, 73, xm + mitad - 5, 73);
+      [['Circuitos', VERDE, mediaTipo(true)], ['Individuales', LIMA, mediaTipo(false)]].forEach(([t, col, v], i) => {
+        const yy = 79.5 + i * 6;
+        pdf.setFillColor(...col); pdf.circle(xm + 6.3, yy - 1, 1.3, 'F');
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(t, xm + 9.5, yy);
+        pdf.setFont('helvetica', 'bold'); pdf.text(fmtHoras(v, '-'), xm + mitad - 5, yy, {align: 'right'});
+      });
+    }
 
     // Fallas por día
     const wDia = ancho - margen * 2;   // ahora el gráfico por día usa todo el ancho
-    tarjeta(margen, 97, wDia, 44, 'Fallas informadas por día');
-    {
+    // Días con operativo (se marcan con una sirena sobre su barra)
+    const fechasOp = new Set();
+    try{ const dOp = await traerOperativos(ini, fin); ((dOp && dOp.operativos) || []).forEach(o => fechasOp.add(String(o.fecha).slice(0, 10))); }catch(e){ console.warn('No se pudieron cargar los operativos para el gráfico por día:', e); }
+    // Casco amarillo (PNG con fondo transparente) para marcar los días con operativo
+    const CASCO_OPERATIVO_PNG = 'data:image/png;base64,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';
+    const dibujarSirena = (cx, cy) => { pdf.addImage(CASCO_OPERATIVO_PNG, 'PNG', cx - 2.2, cy - 2.2, 4.4, 4.4); };
+    const dividirDia = diasP.length > 20;   // períodos largos: dos gráficos de ancho completo, uno sobre otro
+    const DY = cid ? -50 : (dividirDia ? 21 : 0);          // lo que baja el resto de la hoja (en las hojas por contrato no va el gráfico por día)
+    if(!cid){
       // Fallas ingresadas cada día, separadas en individuales (lima) y circuitos (verde oscuro)
       const diaChile = (iso) => new Date(iso).toLocaleDateString('en-CA', {timeZone: 'America/Santiago'});
       const porDiaTipo = {};
@@ -7801,31 +7937,59 @@ async function generarPdfAnalisis(soloResumen, opciones){
         if(f.properties.tipo === 'linea') o.c++; else o.p++;
       });
       const hayTipos = feats.length > 0;
-      const P = diasP.map(x => hayTipos ? (porDiaTipo[String(x.fecha).slice(0, 10)] || {p: 0}).p : ((x.informadas !== undefined ? x.informadas : x.fallas) || 0));
-      const C = diasP.map(x => hayTipos ? (porDiaTipo[String(x.fecha).slice(0, 10)] || {c: 0}).c : 0);
-      const serie = P.map((v, i) => v + C[i]);
-      const mx = Math.max(1, ...serie), n = Math.max(1, serie.length);
-      const prom = serie.length ? serie.reduce((a, b) => a + b, 0) / serie.length : 0;
-      const x0 = margen + 6, wTot = wDia - 12, wPlot = wTot - 11, paso = wPlot / n, bw = Math.min(6, paso * 0.78), base = 124, hMax = 14;   // wPlot deja a la derecha el espacio del promedio
-      const iMax = serie.indexOf(mx);
+      const Pg = diasP.map(x => hayTipos ? (porDiaTipo[String(x.fecha).slice(0, 10)] || {p: 0}).p : ((x.informadas !== undefined ? x.informadas : x.fallas) || 0));
+      const Cg = diasP.map(x => hayTipos ? (porDiaTipo[String(x.fecha).slice(0, 10)] || {c: 0}).c : 0);
+      const serieG = Pg.map((v, i) => v + Cg[i]);
+      const mx = Math.max(1, ...serieG);
+      const prom = serieG.length ? serieG.reduce((a, b) => a + b, 0) / serieG.length : 0;
+      const iMaxG = serieG.indexOf(mx);
+      // Escala: si un día se dispara (más de 2,2 veces el siguiente), su barra se corta para que el resto de los días se pueda leer
+      const ordS = [...serieG].sort((a, b) => b - a);
+      const mxE = (ordS.length > 3 && ordS[0] > ordS[1] * 2.2) ? Math.max(1, Math.round(ordS[1] * 1.3)) : mx;
+      const hayCorte = mxE < mx;
       // Días hábiles (lun-vie) con al menos 1 falla: el de menos fallas (todos los empates si son 3 o menos)
-      const habiles = diasP.map((x, i) => i).filter(i => diasP[i].dow >= 1 && diasP[i].dow <= 5 && serie[i] > 0);
-      const mn = habiles.length ? Math.min(...habiles.map(i => serie[i])) : 0;
-      const empates = habiles.filter(i => serie[i] === mn);
-      const iMin = empates.length <= 3 ? empates : empates.slice(0, 1);
+      const habiles = diasP.map((x, i) => i).filter(i => diasP[i].dow >= 1 && diasP[i].dow <= 5 && serieG[i] > 0);
+      const mn = habiles.length ? Math.min(...habiles.map(i => serieG[i])) : 0;
+      const empates = habiles.filter(i => serieG[i] === mn);
+      const iMinG = empates.length <= 3 ? empates : empates.slice(0, 1);
+      // Períodos largos (más de 20 días): dos gráficos lado a lado, con la misma escala
+      const dividir = dividirDia;
+      const tramos = dividir ? [[0, Math.ceil(diasP.length / 2)], [Math.ceil(diasP.length / 2), diasP.length]] : [[0, diasP.length]];
+      const wCard = wDia;
+      const f2 = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7);
+      const LET = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+      const medirRep = (typeof FILTROS_EST !== 'undefined' && FILTROS_EST.medir === 'reparacion');
+      const notaDia = medirRep
+        ? 'Fallas reparadas en el período, ubicadas en su día de ingreso (las ingresadas antes del período no aparecen). Un circuito cuenta como una falla.'
+        : 'Fallas informadas cada día; un circuito cuenta como una falla. ' + (hayCorte ? 'Barra cortada: no está a escala (la cifra es la real). ' : '') + (iMinG.length ? `Marca llena: día con más fallas (${mx}). Marca hueca: día hábil con menos (${mn})${empates.length > iMinG.length ? ', primero de ' + empates.length : ''}.` : '');
+      const leyendaDia = (xFin, y) => {
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris);
+        let lx = xFin;
+        [['Circuitos', VERDE], ['Individuales', LIMA]].forEach(([t, col]) => {
+          const w = pdf.getTextWidth(t); lx -= w; pdf.text(t, lx, y); lx -= 3; pdf.setFillColor(...col); pdf.circle(lx, y - 0.9, 1.1, 'F'); lx -= 4.5;
+        });
+        if(fechasOp.size){ const w = pdf.getTextWidth('Operativo'); lx -= w; pdf.text('Operativo', lx, y); lx -= 5.2; dibujarSirena(lx + 1.3, y - 1.1); lx -= 3.4; }
+      };
+      tramos.forEach(([i0, i1], t) => {
+      const xc = margen, yc0 = 97, hCard = dividir ? 66.5 : 44, ry = dividir ? 103 + t * 27 : 97;
+      if(!dividir || t === 0) tarjeta(xc, yc0, wCard, hCard, 'Fallas informadas por día');
+      const dP = diasP.slice(i0, i1), P = Pg.slice(i0, i1), C = Cg.slice(i0, i1), serie = serieG.slice(i0, i1), n = Math.max(1, serie.length);
+      const iMax = iMaxG - i0, iMin = iMinG.map(i => i - i0);
+      const x0 = xc + 6, wTot = wCard - 12, wPlot = wTot - 11, paso = wPlot / n, bw = Math.min(6, paso * 0.78), base = dividir ? ry + 18 : 124, hMax = dividir ? 10 : 14;   // wPlot deja a la derecha el espacio del promedio
       // Fines de semana: franja gris muy clara
-      diasP.forEach((x, i) => { if(x.dow === 0 || x.dow === 6){ pdf.setFillColor(240, 242, 240); pdf.rect(x0 + i * paso, base - hMax - 3, paso, hMax + 3 + 0.5, 'F'); } });
+      dP.forEach((x, i) => { if(x.dow === 0 || x.dow === 6){ pdf.setFillColor(240, 242, 240); pdf.rect(x0 + i * paso, base - hMax - 3, paso, hMax + 3 + 0.5, 'F'); } });
       serie.forEach((v, i) => {
         if(!v) return;
         const bx = x0 + i * paso + (paso - bw) / 2;
-        const hp = P[i] / mx * hMax, hc = C[i] / mx * hMax;
+        const esc = Math.min(v, mxE) / v, hp = P[i] * esc / mxE * hMax, hc = C[i] * esc / mxE * hMax;
         if(P[i]){ pdf.setFillColor(...LIMA); pdf.rect(bx, base - hp, bw, hp, 'F'); }
         if(C[i]){ pdf.setFillColor(...VERDE); pdf.rect(bx, base - hp - hc, bw, hc, 'F'); }
+        if(v > mxE){ const yk = base - hMax * 0.55; [[yk + 0.9, yk - 0.5], [yk + 2.1, yk + 0.7]].forEach(([ya, yb]) => { pdf.setDrawColor(0, 0, 0); pdf.setLineWidth(0.8); pdf.line(bx - 0.5, ya, bx + bw + 0.5, yb); }); [[yk + 0.9, yk - 0.5], [yk + 2.1, yk + 0.7]].forEach(([ya, yb]) => { pdf.setDrawColor(255, 255, 255); pdf.setLineWidth(0.45); pdf.line(bx - 0.5, ya, bx + bw + 0.5, yb); }); }
       });
       pdf.setDrawColor(219, 226, 220); pdf.setLineWidth(0.2); pdf.line(x0, base + 0.2, x0 + wPlot, base + 0.2);
       // Promedio diario (línea punteada)
       if(prom > 0){
-        const yp = base - prom / mx * hMax;
+        const yp = base - Math.min(prom, mxE) / mxE * hMax;
         pdf.setDrawColor(85, 102, 92); pdf.setLineWidth(0.25); pdf.setLineDashPattern([1, 0.8], 0);
         pdf.line(x0, yp, x0 + wPlot + 1.5, yp); pdf.setLineDashPattern([], 0);
         // Símbolo de promedio (x con barra) y el valor, a la derecha de la línea
@@ -7841,43 +8005,50 @@ async function generarPdfAnalisis(soloResumen, opciones){
       serie.forEach((v, i) => {
         if(!v) return;
         if(n > 45 && !(i === iMax || v >= prom * 1.8)) return;
-        pdf.text(String(v), x0 + i * paso + paso / 2, base - v / mx * hMax - 0.8, {align: 'center'});
+        pdf.text(String(v), x0 + i * paso + paso / 2, base - Math.min(v, mxE) / mxE * hMax - 0.8, {align: 'center'});
       });
       // Letra del día de la semana; círculo lleno = día con más fallas, círculo hueco = día hábil con menos
-      const LET = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
-      const f2 = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7);
       const yl = base + 3.3;
-      diasP.forEach((x, i) => {
+      dP.forEach((x, i) => {
         const cx = x0 + i * paso + paso / 2;
+        if(fechasOp.has(String(x.fecha).slice(0, 10))) dibujarSirena(cx, base - Math.min(serie[i], mxE) / mxE * hMax - 5.2);
         const esMax = i === iMax && mx > 0, esMin = iMin.includes(i);
         pdf.setFont('helvetica', (esMax || esMin) ? 'bold' : 'normal');
+        if(n <= 20){
+          // Etiqueta "J-01": letra del día de la semana y día del mes, centrada bajo la barra
+          const et = `${LET[x.dow]}-${String(x.fecha).slice(8, 10)}`;
+          pdf.setFontSize(5); const wE = pdf.getTextWidth(et) + 2.2;
+          if(esMax){ pdf.setFillColor(...VERDE); pdf.roundedRect(cx - wE / 2, yl - 1.9, wE, 3.5, 1.7, 1.7, 'F'); pdf.setTextColor(255, 255, 255); }
+          else if(esMin){ pdf.setFillColor(255, 255, 255); pdf.setDrawColor(...VERDE); pdf.setLineWidth(0.3); pdf.roundedRect(cx - wE / 2, yl - 1.9, wE, 3.5, 1.7, 1.7, 'FD'); pdf.setTextColor(...VERDE); }
+          else pdf.setTextColor(...gris);
+          pdf.text(et, cx, yl + 0.55, {align: 'center'});
+        } else {
         if(esMax){ pdf.setFillColor(...VERDE); pdf.circle(cx, yl - 0.1, 1.55, 'F'); pdf.setTextColor(255, 255, 255); }
         else if(esMin){ pdf.setFillColor(255, 255, 255); pdf.setDrawColor(...VERDE); pdf.setLineWidth(0.3); pdf.circle(cx, yl - 0.1, 1.45, 'FD'); pdf.setTextColor(...VERDE); }
         else pdf.setTextColor(...gris);
         if(n <= 62 || esMax || esMin){ pdf.setFontSize(5); pdf.text(LET[x.dow], cx, yl + 0.55, {align: 'center'}); }
         if(x.dow === 1 || i === 0){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(4.8); pdf.setTextColor(...gris); pdf.text(f2(x.fecha), cx, base + 8, {align: 'center'}); }
+        }
       });
-      // Leyenda
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris);
-      let lx = x0 + wTot;
-      [['Circuitos', VERDE], ['Individuales', LIMA]].forEach(([t, col]) => {
-        const w = pdf.getTextWidth(t); lx -= w; pdf.text(t, lx, 104.6); lx -= 3; pdf.setFillColor(...col); pdf.circle(lx, 103.7, 1.1, 'F'); lx -= 4.5;
+      if(!dividir){
+        pdf.setFontSize(5.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...gris);
+        pdf.text(pdf.splitTextToSize(notaDia, wTot - 78), x0, base + 11.5);
+        leyendaDia(x0 + wTot, base + 12.4);
+      }
+      if(dividir && t === tramos.length - 1){
+        pdf.setFontSize(5.5); pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...gris);
+        pdf.text(pdf.splitTextToSize(notaDia, wDia - 12 - 78), margen + 6, 160.6);
+        leyendaDia(margen + wDia - 6, 161.5);
+      }
       });
-      // Nota
-      pdf.setFontSize(5.5);
-      const medirRep = (typeof FILTROS_EST !== 'undefined' && FILTROS_EST.medir === 'reparacion');
-      const notaDia = medirRep
-        ? 'Fallas reparadas en el período, ubicadas en su día de ingreso (las ingresadas antes del período no aparecen). Un circuito cuenta como una falla.'
-        : 'Fallas ingresadas cada día; un circuito cuenta como una falla. ' + (iMin.length ? `Círculo lleno: día con más fallas (${mx}). Círculo hueco: día hábil con menos (${mn})${empates.length > iMin.length ? ', primero de ' + empates.length : ''}.` : '');
-      pdf.text(pdf.splitTextToSize(notaDia, wTot), x0, base + 11.5);
     }
 
     // Circuito vs. individuales (mismos colores que "Fallas más frecuentes")
     {
-      const nCir = codigos.filter(c => c.tipo === 'linea').reduce((a, c) => a + (c.fallas || 0), 0);
-      const nPun = codigos.filter(c => c.tipo !== 'linea').reduce((a, c) => a + (c.fallas || 0), 0);
-      const tot = nCir + nPun, xp = margen + 2 * (mitad + 6);
-      tarjeta(xp, 45, mitad, 46, 'Circuito / individuales');
+      const nCir = feats.filter(f => f.properties.tipo === 'linea').length;   // mismo listado que el anillo de estados
+      const nPun = feats.length - nCir;
+      const tot = nCir + nPun, xp = margen;
+      tarjeta(xp, 45, mitad, 46, 'Tipo de falla');
       const px = 300, c = document.createElement('canvas'); c.width = c.height = px;
       const g = c.getContext('2d');
       if(tot){
@@ -7899,35 +8070,43 @@ async function generarPdfAnalisis(soloResumen, opciones){
     }
 
     // Fallas más frecuentes (definición completa) y por ITO
-    const wIzq = 118, wDer = ancho - margen * 2 - wIzq - 6;
-    const top = [...codigos].sort((a, b) => b.fallas - a.fallas).slice(0, 7);
-    tarjeta(margen, 147, wIzq, 12 + top.length * 10.5 + 2, 'Fallas más frecuentes');
+    const wIzq = cid ? ancho - margen * 2 : 108, wDer = cid ? 0 : ancho - margen * 2 - wIzq - 6;
+    const top = [...codigos].sort((a, b) => b.fallas - a.fallas).slice(0, cid ? 10 : 7);
+    const pasoF = dividirDia ? 7.5 : 10.5;   // en períodos largos las filas van más juntas (mismo tamaño de cuadro)
+    tarjeta(margen, 147 + DY, wIzq, 12 + top.length * pasoF + 2, 'Fallas más frecuentes');
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris);
-    pdf.setFillColor(...LIMA); pdf.rect(margen + wIzq - 47, 143.8 + 7, 2.2, 2.2, 'F'); pdf.text('punto', margen + wIzq - 44, 145.8 + 7.2);
-    pdf.setFillColor(...VERDE); pdf.rect(margen + wIzq - 31, 143.8 + 7, 2.2, 2.2, 'F'); pdf.text('circuito', margen + wIzq - 28, 145.8 + 7.2);
+    pdf.setFillColor(...LIMA); pdf.rect(margen + wIzq - 47, 143.8 + 7 + DY, 2.2, 2.2, 'F'); pdf.text('punto', margen + wIzq - 44, 145.8 + 7.2 + DY);
+    pdf.setFillColor(...VERDE); pdf.rect(margen + wIzq - 31, 143.8 + 7 + DY, 2.2, 2.2, 'F'); pdf.text('circuito', margen + wIzq - 28, 145.8 + 7.2 + DY);
     const maxCod = Math.max(1, ...top.map(c => c.fallas));
     top.forEach((c, i) => {
-      const yy = 163 + i * 10.5, esC = c.tipo === 'linea';
+      const yy = 163 + DY - (dividirDia ? 1 : 0) + i * pasoF, esC = c.tipo === 'linea';
       const desc = descripcionCodigoAnalisis(c.tipo, c.tipo_falla) || '';
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(...VERDE); pdf.text(String(c.tipo_falla), margen + 5, yy);
-      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(30, 40, 35);
-      const lineas = pdf.splitTextToSize(desc, 56).slice(0, 2);
-      pdf.text(lineas, margen + 14, yy);
-      pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text(esC ? 'circuito' : 'punto', margen + 14, yy + lineas.length * 3.3 + 0.3);
-      const bx = margen + 74, bwMax = wIzq - 74 - 14;
+      pdf.setFont('helvetica', 'normal'); pdf.setTextColor(30, 40, 35); pdf.setFontSize(dividirDia ? 7.2 : 8);
+      const lineas = pdf.splitTextToSize(desc, cid ? 90 : 41).slice(0, 2);   // si no cabe junto a la barra, baja una línea (pegadita a la anterior)
+      pdf.text(lineas, margen + 14, lineas.length > 1 ? yy - 1.2 : yy, {lineHeightFactor: 0.95});
+      const bx = margen + (cid ? 108 : 58), bwMax = wIzq - (cid ? 108 : 58) - 14;
       pdf.setFillColor(238, 242, 238); pdf.roundedRect(bx, yy - 3, bwMax, 3.6, 1.2, 1.2, 'F');
       pdf.setFillColor(...(esC ? VERDE : LIMA)); pdf.roundedRect(bx, yy - 3, Math.max(1.5, c.fallas / maxCod * bwMax), 3.6, 1.2, 1.2, 'F');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(30, 40, 35); pdf.text(String(c.fallas), margen + wIzq - 5, yy, {align: 'right'});
     });
-    const hIzq = 12 + top.length * 10.5 + 2;
+    const hIzq = 12 + top.length * pasoF + 2;
     // Todos los informadores del período: la tarjeta se ajusta a la cantidad (filas más compactas si son muchas)
-    const itos = [...(d.por_ito || [])].sort((a, b) => b.fallas - a.fallas);
+    // Los contratistas (cualquier tipo, incluidos camiones) se compilan en una sola fila "Contratista"
+    const rolesPorNombre = {};
+    if(!cid) try{ ((await db.select('usuarios', 'select=nombre,rol')) || []).forEach(u => { rolesPorNombre[u.nombre] = u.rol; }); }catch(e){ console.warn('No se pudieron cargar los roles para agrupar a los contratistas:', e); }
+    const esContr = (nom) => ['contratista', 'contratista2', 'contratista3', 'camion'].includes(rolesPorNombre[nom]);
+    const itosBase = (d.por_ito || []).filter(i => !esContr(i.nombre));
+    const nContr = (d.por_ito || []).filter(i => esContr(i.nombre)).reduce((a, i) => a + (i.fallas || 0), 0);
+    if(nContr) itosBase.push({nombre: 'Contratista', fallas: nContr});
+    const itos = itosBase.sort((a, b) => b.fallas - a.fallas);
     const pasoIto = itos.length ? Math.min(8, Math.max(3.8, (hIzq - 16) / itos.length)) : 8;
-    const hDer = Math.max(30, 12 + itos.length * pasoIto + 4);
-    tarjeta(margen + wIzq + 6, 147, wDer, hDer, itos.length > 5 ? `Quién informa (${itos.length})` : 'Quién informa');
+    const hDer = cid ? 0 : Math.max(30, 12 + itos.length * pasoIto + 4);
+    if(!cid){
+    tarjeta(margen + wIzq + 6, 147 + DY, wDer, hDer, itos.length > 5 ? `Quién informa (${itos.length})` : 'Quién informa');
     const maxIto = Math.max(1, ...itos.map(i => i.fallas));
     itos.forEach((it, i) => {
-      const yy = 160 + i * pasoIto;
+      const yy = 160 + DY + i * pasoIto;
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(Math.min(7.5, pasoIto * 1.9)); pdf.setTextColor(30, 40, 35);
       pdf.text(pdf.splitTextToSize(String(it.nombre || '-'), 30)[0], margen + wIzq + 11, yy);
       const bx = margen + wIzq + 42, bwMax = wDer - 36 - 18, bh = Math.min(3.2, pasoIto * 0.42);
@@ -7935,52 +8114,71 @@ async function generarPdfAnalisis(soloResumen, opciones){
       pdf.setFillColor(...VERDE); pdf.roundedRect(bx, yy - bh + 0.4, Math.max(1.2, it.fallas / maxIto * bwMax), bh, 1.2, 1.2, 'F');
       pdf.setFont('helvetica', 'bold'); pdf.text(String(it.fallas), margen + wIzq + wDer - 4, yy, {align: 'right'});
     });
+    }
 
-    // Comparación con el período inmediatamente anterior, de la misma cantidad de días
+    // Comparación con el período inmediatamente anterior (mismos días) o, si el período es un mes calendario completo, con el mes anterior
     const sumarDias = (f, n) => new Date(Date.UTC(...f.split('-').map((v, i) => i === 1 ? v - 1 : +v)) + n * 86400000).toISOString().slice(0, 10);
-    const prevFin = sumarDias(ini, -1), prevIni = sumarDias(prevFin, -(nDiasRango - 1));
+    const ultimoDiaMes = (f) => new Date(Date.UTC(+f.slice(0, 4), +f.slice(5, 7), 0)).toISOString().slice(0, 10);
+    const esMesCompleto = ini.slice(8, 10) === '01' && fin === ultimoDiaMes(ini);
+    const prevFin = sumarDias(ini, -1);
+    const prevIni = esMesCompleto ? prevFin.slice(0, 8) + '01' : sumarDias(prevFin, -(nDiasRango - 1));
+    const palAnt = esMesCompleto ? 'mes' : 'período';
+    const MESES_PDF = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    // Si se compara contra un mes completo, se dice el nombre del mes y el año (el rango de fechas se sobreentiende)
+    const etiquetaAnt = esMesCompleto ? `${MESES_PDF[+prevFin.slice(5, 7) - 1]} ${prevFin.slice(0, 4)}` : 'período anterior';
     let prev = null;
     try{ prev = await rpcAnalisisFallas(prevIni, prevFin, cid); }catch(e){ console.warn('No se pudo obtener el período anterior:', e); }
-    const yc = 147 + Math.max(hIzq, hDer) + 6, hc = 40;
-    tarjeta(margen, yc, ancho - margen * 2, hc, 'Comparación con el período anterior');
+    const yc = 147 + DY + Math.max(hIzq, hDer) + 6, hc = 44;
+    tarjeta(margen, yc, ancho - margen * 2, hc, esMesCompleto ? `Comparación con ${etiquetaAnt}` : `Comparación con el ${palAnt} anterior`);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris);
-    pdf.text(`Anterior: ${fmtF(prevIni)} al ${fmtF(prevFin)}  ·  Actual: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen - 5, yc + 8, {align: 'right'});
+    if(!esMesCompleto) pdf.text(`Anterior: ${fmtF(prevIni)} al ${fmtF(prevFin)}  ·  Actual: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen - 5, yc + 8, {align: 'right'});
     if(!prev || !prev.resumen){
       pdf.setFontSize(8.5); pdf.text('No se pudo obtener el período anterior para comparar.', margen + 5, yc + 22);
     } else {
       const pr = prev.resumen || {};
       const pctDe = (r) => r.fallas ? Math.round((r.reparadas || 0) / r.fallas * 100) : null;
+      const pctReit = (r) => r.fallas ? Math.round((r.reiteradas || 0) / r.fallas * 100) : null;
       const filasC = [
         {l: 'Fallas', a: rr.fallas || 0, b: pr.fallas || 0, t: 'n', bueno: 'menos'},
         {l: 'Puntos afectados', a: rr.puntos_afectados, b: pr.puntos_afectados, t: 'n', bueno: 'menos'},
         {l: 'Fallas reparadas', a: pctDe(rr), b: pctDe(pr), t: 'pp', bueno: 'mas'},
-        {l: 'Tiempo de reparación', a: rr.media_recortada_dias_ing, b: pr.media_recortada_dias_ing, t: 'h', bueno: 'menos'}
+        {l: 'Reiteradas', a: pctReit(rr), b: pctReit(pr), t: 'pp', bueno: 'menos'},
+        {l: 'Media de reparación', a: rr.media_recortada_dias_ing, b: pr.media_recortada_dias_ing, t: 'h', bueno: 'menos'}
       ];
-      const wt = (ancho - margen * 2 - 10 - 12) / 4;
+      const wt = (ancho - margen * 2 - 10 - 16) / 5;
       filasC.forEach((f, i) => {
         const tx = margen + 5 + i * (wt + 4);
-        pdf.setFillColor(245, 248, 245); pdf.roundedRect(tx, yc + 12, wt, 24, 2.5, 2.5, 'F');
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(30, 40, 35); pdf.text(f.l, tx + 4, yc + 18);
-        const fmtV = (v) => v === null || v === undefined ? '-' : (f.t === 'pp' ? v + '%' : (f.t === 'h' ? fmtHoras(v) : fmtMiles(v)));
-        pdf.setFontSize(15); pdf.setTextColor(...VERDE); pdf.text(fmtV(f.a), tx + 4, yc + 26);
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(`período anterior: ${fmtV(f.b)}`, tx + 4, yc + 30.5);
+        // Fondo de la tarjetita: verde claro si mejora, rojo claro si empeora, gris si no hay cambio
+        let col = gris, fondo = [245, 248, 245], palabra = '', dif = null;
         if(f.a !== null && f.a !== undefined && f.b !== null && f.b !== undefined){
-          const dif = f.a - f.b;
-          let txt = 'sin cambio', col = gris;
+          dif = f.a - f.b;
           if(dif !== 0){
             const mejora = (f.bueno === 'mas') === (dif > 0);
             col = mejora ? [46, 125, 79] : [192, 57, 43];
+            fondo = mejora ? [228, 243, 234] : [251, 231, 228];
+            palabra = mejora ? 'MEJORA' : 'EMPEORA';
+          }
+        }
+        pdf.setFillColor(...fondo); pdf.roundedRect(tx, yc + 12, wt, 28, 2.5, 2.5, 'F');
+        if(palabra){ pdf.setFillColor(...col); pdf.rect(tx + 0.1, yc + 15, 0.9, 22, 'F'); }
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.2); pdf.setTextColor(30, 40, 35); pdf.text(f.l, tx + 4, yc + 18);
+        const fmtV = (v) => v === null || v === undefined ? '-' : (f.t === 'pp' ? v + '%' : (f.t === 'h' ? fmtHoras(v) : fmtMiles(v)));
+        pdf.setFontSize(15); pdf.setTextColor(...VERDE); pdf.text(fmtV(f.a), tx + 4, yc + 26);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text(`${esMesCompleto ? etiquetaAnt : 'período anterior'}: ${fmtV(f.b)}`, tx + 4, yc + 35.2);
+        if(dif !== null){
+          let txt = 'sin cambio';
+          if(dif !== 0){
             const sg = dif > 0 ? '+' : '-';
             txt = f.t === 'pp' ? `${sg}${Math.abs(dif)} pp` : (f.t === 'h' ? `${sg}${fmtHoras(Math.abs(dif))}` : `${sg}${fmtMiles(Math.abs(dif))}`) + (f.t !== 'h' && f.b > 0 ? ` (${sg}${Math.abs(Math.round(dif / f.b * 100))}%)` : '');
             pdf.setFillColor(...col);
-            if(dif > 0) pdf.triangle(tx + 4, yc + 34.4, tx + 7.2, yc + 34.4, tx + 5.6, yc + 31.8, 'F'); else pdf.triangle(tx + 4, yc + 31.8, tx + 7.2, yc + 31.8, tx + 5.6, yc + 34.4, 'F');
+            if(dif > 0) pdf.triangle(tx + 4, yc + 31.4, tx + 7.2, yc + 31.4, tx + 5.6, yc + 28.8, 'F'); else pdf.triangle(tx + 4, yc + 28.8, tx + 7.2, yc + 28.8, tx + 5.6, yc + 31.4, 'F');
           }
-          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(...col); pdf.text(txt, tx + (dif !== 0 ? 9 : 4), yc + 34.4);
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(...col); pdf.text(txt, tx + (dif !== 0 ? 9 : 4), yc + 31.4);
         }
       });
     }
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris);
-    pdf.text('Verde: mejora respecto del período anterior; rojo: empeora. Período anterior = la misma cantidad de días inmediatamente anteriores. pp = puntos porcentuales.', margen, yc + hc + 4);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6); pdf.setTextColor(...gris);
+    pdf.text(`Verde: mejora respecto de ${esMesCompleto ? etiquetaAnt : 'el período anterior'}; rojo: empeora. ${esMesCompleto ? '' : 'Período anterior = la misma cantidad de días inmediatamente anteriores. '}pp = puntos porcentuales.`, margen + 5, yc + hc - 1.6);
     pdf.setFontSize(8); pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
 
     // Una hoja por cada operativo del período (si los hubo): se suma a las cifras de siempre, no las excluye
@@ -8000,80 +8198,210 @@ async function generarPdfAnalisis(soloResumen, opciones){
     // Las hojas de detalle (tablas y mapa de críticos) son solo del informe de la pestaña "Análisis"
     if(!soloResumen){
     pdf.addPage();
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...VERDE);
-    pdf.text('Detalle del análisis', margen, 16);
-    if(nombre){ pdf.setFontSize(10); pdf.text('Contrato: ' + nombre, ancho - margen, 16, {align: 'right'}); pdf.setFontSize(14); }
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gris);
-    pdf.text(`Período: ${fmtF(ini)} a ${fmtF(fin)}`, margen, 21);
-    pdf.setDrawColor(219, 226, 220); pdf.line(margen, 24, ancho - margen, 24);
-    let y = 29;
+    // Banda de encabezado de la hoja (mismo lenguaje visual que las hojas 1 y 2)
+    pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 24, 'F');
+    pdf.setFillColor(123, 211, 0); pdf.rect(0, 24, ancho, 1, 'F');
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(255, 255, 255); pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 7.5);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text('Detalle del análisis', margen, 16);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(123, 211, 0);
+    pdf.text(`Período: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen, 16, {align: 'right'});
+    if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(255, 255, 255); pdf.text('Contrato: ' + nombre, ancho - margen, 7.5, {align: 'right'}); }
+    let y = 34;
+    // Hoja nueva de la sección de detalle: repite la misma banda de encabezado
+    const hojaDet = () => {
+      pdf.addPage();
+      pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 24, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 24, ancho, 1, 'F');
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(255, 255, 255); pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 7.5);
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text('Detalle del análisis', margen, 16);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(123, 211, 0); pdf.text(`Período: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen, 16, {align: 'right'});
+      if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(255, 255, 255); pdf.text('Contrato: ' + nombre, ancho - margen, 7.5, {align: 'right'}); }
+      y = 34;
+    };
 
     const estilosTabla = {
       margin: {left: margen, right: margen},
-      styles: {fontSize: 8, cellPadding: 1.6, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1},
-      headStyles: {fillColor: VERDE, textColor: 255, fontSize: 8, fontStyle: 'bold'},
-      alternateRowStyles: {fillColor: [247, 248, 247]}
+      styles: {fontSize: 8.5, cellPadding: {top: 2, bottom: 2, left: 2.4, right: 2.4}, textColor: [30, 40, 35], lineColor: [226, 232, 227], lineWidth: 0.1, valign: 'middle'},
+      headStyles: {fillColor: VERDE, textColor: [123, 211, 0], fontSize: 8.5, fontStyle: 'bold', lineColor: VERDE, lineWidth: 0},
+      alternateRowStyles: {fillColor: [246, 249, 246]}
     };
+    // Título de subsección: barra lima + título + filete fino hasta el margen derecho; la nota va debajo
     const titulo = (texto, nota) => {
-      if(y > alto - 40){ pdf.addPage(); y = 16; }
-      pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text(texto, margen, y);
+      if(y > alto - 40) hojaDet();
+      pdf.setFillColor(123, 211, 0); pdf.roundedRect(margen, y - 4.6, 1.8, 6, 0.9, 0.9, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(...VERDE); pdf.text(texto, margen + 4.5, y);
+      const wT = pdf.getTextWidth(texto);
+      pdf.setDrawColor(222, 229, 223); pdf.setLineWidth(0.3); pdf.line(margen + 4.5 + wT + 3, y - 1.4, ancho - margen, y - 1.4); pdf.setLineWidth(0.2);
       y += 2;
-      if(nota){ pdf.setFontSize(8); pdf.setTextColor(...gris); const l = pdf.splitTextToSize(nota, ancho - margen * 2); pdf.text(l, margen, y + 3); y += 3 + l.length * 3.4; }
-      y += 1;
+      if(nota){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris); const l = pdf.splitTextToSize(nota, ancho - margen * 2 - 4.5); pdf.text(l, margen + 4.5, y + 3); y += 3 + l.length * 3.4; }
+      y += 2;
     };
-    const tabla = (opts) => { pdf.autoTable({...estilosTabla, startY: y, ...opts}); y = pdf.lastAutoTable.finalY + 8; };
-    const vacio = (t) => { pdf.setFontSize(8.5); pdf.setTextColor(...gris); pdf.text(t, margen, y + 3); y += 10; };
+    // Tabla con las esquinas redondeadas (se tapan las cuatro puntas y se dibuja el contorno)
+    const tabla = (opts) => {
+      const pg0 = pdf.internal.getCurrentPageInfo().pageNumber, yIni = y;
+      pdf.autoTable({...estilosTabla, startY: y, ...opts});
+      const t = pdf.lastAutoTable;
+      if(pdf.internal.getCurrentPageInfo().pageNumber === pg0 && t.body.length){
+        const x0 = t.settings.margin.left, x1 = ancho - t.settings.margin.right, y0 = yIni, y1 = t.finalY, R = 2.4;
+        // Cada punta se tapa con una pieza blanca (cuadrado menos un cuarto de círculo): no tapa el texto de la tabla
+        const K = 0.5523;
+        [[x0, y0, 1, 1], [x1, y0, -1, 1], [x0, y1, 1, -1], [x1, y1, -1, -1]].forEach(([ox, oy, sx, sy]) => {
+          pdf.setFillColor(255, 255, 255);
+          pdf.lines([[sx * R, 0], [-sx * K * R, 0, -sx * R, sy * (R - K * R), -sx * R, sy * R], [0, -sy * R]], ox, oy, [1, 1], 'F', true);
+        });
+        pdf.setDrawColor(214, 222, 216); pdf.setLineWidth(0.25); pdf.roundedRect(x0, y0, x1 - x0, y1 - y0, R, R, 'S'); pdf.setLineWidth(0.2);
+      }
+      y = t.finalY + 9;
+    };
+    const vacio = (t) => { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...gris); pdf.text(t, margen + 4.5, y + 3); y += 11; };
 
-    // 1) Resumen
+    // 1) Resumen: tarjetas de indicadores (el tiempo de reparación se mide siempre desde el ingreso de la falla)
     const r = d.resumen || {};
     const pct = r.fallas ? Math.round((r.reiteradas || 0) / r.fallas * 100) : 0;
-    titulo('Resumen del período', '"Desde la inspección" cuenta desde el día en que el ITO vio la falla; "desde el ingreso" cuenta desde que se registró en el sistema. Un circuito cuenta como una falla.');
-    tabla({
-      head: [['Indicador', 'Valor']],
-      body: [
-        ['Fallas del período', num(r.fallas)],
-        ['Reparadas', num(r.reparadas)],
-        ['Abiertas', num(r.abiertas)],
-        ['Reiteradas', `${num(r.reiteradas)} (${pct}% de las fallas)`],
-        ['Puntos lumínicos afectados', r.puntos_afectados === undefined ? '-' : `${fmtMiles(r.puntos_afectados)}${r.total_puntos ? ` (${fmtPctPuntos(r.puntos_afectados, r.total_puntos)} de ${fmtMiles(r.total_puntos)} puntos)` : ''}`],
-        ['Tiempo de reparación desde el ingreso (promedio sin el 5% de cada extremo)', dias(r.media_recortada_dias_ing)],
-        ['Tiempo de reparación desde la inspección (promedio sin el 5% de cada extremo)', dias(r.media_recortada_dias_insp)],
-        ['Antigüedad mediana de las fallas abiertas', dias(r.antiguedad_mediana_abiertas)]
-      ],
-      columnStyles: {1: {halign: 'right', cellWidth: 45}}
-    });
+    const pctRep = r.fallas ? Math.round((r.reparadas || 0) / r.fallas * 100) : 0;
+    let opsDet = [];
+    if(!cid){ try{ const dO = await traerOperativos(ini, fin); opsDet = (dO && dO.operativos) || []; }catch(e){ console.warn('No se pudieron cargar los operativos:', e); } }
+    titulo('Resumen del período', 'Un circuito cuenta como una falla. El tiempo de reparación se cuenta desde que la falla se registró en el sistema (promedio sin el 5% de cada extremo).');
+    {
+      const VR = [46, 125, 79], RJ = [192, 57, 43], MO = [142, 68, 173], AZ = [37, 99, 168];
+      const tarjetas = [
+        {t: 'Fallas del período', v: num(r.fallas), col: VERDE},
+        {t: 'Reparadas', v: r.fallas ? pctRep + '%' : '-', sub: `${num(r.reparadas)} de ${num(r.fallas)}`, col: VR},
+        {t: 'Abiertas', v: num(r.abiertas), sub: 'sin reparar', col: RJ},
+        {t: 'Reiteradas', v: num(r.reiteradas), sub: `${pct}% de las fallas`, col: MO},
+        {t: 'Puntos afectados', v: r.puntos_afectados === undefined ? '-' : fmtMiles(r.puntos_afectados), sub: r.total_puntos ? `${fmtPctPuntos(r.puntos_afectados, r.total_puntos)} de ${fmtMiles(r.total_puntos)}` : '', col: VERDE},
+        {t: 'Tiempo de reparación', v: dias(r.media_recortada_dias_ing), sub: 'desde el ingreso', col: AZ},
+        {t: 'Antigüedad abiertas', v: dias(r.antiguedad_mediana_abiertas), sub: 'mediana', col: RJ}
+      ];
+      if(!cid) tarjetas.push({t: 'Operativos', v: String(opsDet.length), sub: 'en el período', col: [196, 140, 0]});
+      const nCol = 4, gap = 4, wC = (ancho - margen * 2 - gap * (nCol - 1)) / nCol, hC = 22;
+      tarjetas.forEach((it, i) => {
+        const x = margen + (i % nCol) * (wC + gap), yy = y + Math.floor(i / nCol) * (hC + gap);
+        pdf.setFillColor(243, 247, 244); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x, yy, wC, hC, 2.5, 2.5, 'FD');
+        pdf.setFillColor(...it.col); pdf.rect(x + 0.1, yy + 4, 1, hC - 8, 'F');
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(it.t, x + 4, yy + 6.5);
+        pdf.setFontSize(16); pdf.setTextColor(...it.col); pdf.text(String(it.v), x + 4, yy + 14.5);
+        if(it.sub){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(it.sub, x + 4, yy + 19); }
+      });
+      y += Math.ceil(tarjetas.length / nCol) * (hC + gap) + 4;
+    }
 
-    // 2) Tiempos por código
-    titulo('Tiempo de reparación por código de falla', 'Promedio sin el 5% más rápido ni el 5% más lento. * = menos de 20 reparaciones: promedio simple, sin recorte.');
+    // Barra horizontal dentro de la celda de tiempo (proporcional al mayor de la tabla)
+    const barraTiempo = (valores, colIdx) => {
+      const mx = Math.max(0, ...valores.map(v => Number(v) || 0));
+      return (h) => {
+        if(h.section !== 'body' || h.column.index !== colIdx) return;
+        const v = Number(valores[h.row.index]) || 0;
+        if(!mx || !v) return;
+        const wMax = h.cell.width - 22, wB = Math.max(0.8, wMax * v / mx);
+        pdf.setFillColor(168, 224, 94); pdf.roundedRect(h.cell.x + 2, h.cell.y + h.cell.height / 2 - 1.3, wB, 2.6, 1.2, 1.2, 'F');
+      };
+    };
+    // 2) Detalle de fallas por código
+    titulo('Detalle de fallas', 'Frecuencia de cada tipo de falla, cuántas fueron reiteradas y reparadas, y el tiempo medio de reparación desde el ingreso.');
     if((d.por_codigo || []).length){
       tabla({
-        head: [['Código', 'Descripción', 'Fallas', 'Rep.', 'Reit.', 'Prom. insp.', 'Prom. ing.', 'Máx. insp.']],
-        body: d.por_codigo.map(c => [c.tipo_falla + (c.tipo === 'linea' ? ' (circ.)' : ''), descripcionCodigoAnalisis(c.tipo, c.tipo_falla), c.fallas, c.reparadas, c.reiteradas, pdfProm(c.media_rec_insp, c.reparadas), pdfProm(c.media_rec_ing, c.reparadas), dias(c.max_insp)]),
-        columnStyles: {2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}, 6: {halign: 'right'}, 7: {halign: 'right'}}
+        head: [['Código', 'Descripción', 'Frecuencia', 'Reiteradas', 'Reparadas', 'Tiempo medio de reparación']],
+        body: d.por_codigo.map(c => [c.tipo_falla + (c.tipo === 'linea' ? ' (circ.)' : ''), descripcionCodigoAnalisis(c.tipo, c.tipo_falla), c.fallas, c.reiteradas || 0, c.reparadas, dias(c.media_rec_ing)]),
+        columnStyles: {0: {fontStyle: 'bold', textColor: VERDE, cellWidth: 20}, 2: {halign: 'right', cellWidth: 23}, 3: {halign: 'right', cellWidth: 22, textColor: [142, 68, 173]}, 4: {halign: 'right', cellWidth: 22}, 5: {halign: 'right', cellWidth: 46}},
+        didDrawCell: window.__sinBarras ? undefined : barraTiempo(d.por_codigo.map(c => c.media_rec_ing), 5)
       });
     } else vacio('Sin fallas en este rango.');
 
+    if(!cid){
     // 3) Por ITO
-    titulo('Por ITO que informa');
-    if((d.por_ito || []).length){
+    titulo('Quién informa las fallas', 'Los contratistas y camiones se agrupan en una sola fila "Contratista".');
+    // Contratistas y camiones: una sola fila; el tiempo es el promedio ponderado por las reparadas
+    const itosDet = (d.por_ito || []).filter(i => !esContr(i.nombre));
+    {
+      const cs = (d.por_ito || []).filter(i => esContr(i.nombre));
+      if(cs.length){
+        const rep = cs.reduce((a, i) => a + (i.reparadas || 0), 0);
+        const conT = cs.filter(i => i.media_rec_ing !== null && i.media_rec_ing !== undefined && i.reparadas);
+        const pesos = conT.reduce((a, i) => a + i.reparadas, 0);
+        itosDet.push({nombre: 'Contratista', fallas: cs.reduce((a, i) => a + (i.fallas || 0), 0), reparadas: rep, media_rec_ing: pesos ? conT.reduce((a, i) => a + i.media_rec_ing * i.reparadas, 0) / pesos : null});
+      }
+      itosDet.sort((a, b) => b.fallas - a.fallas);
+    }
+    if(itosDet.length){
       tabla({
-        head: [['ITO', 'Fallas', 'Reparadas', 'Reiteradas', 'Prom. insp.', 'Prom. ing.']],
-        body: d.por_ito.map(i => [i.nombre, i.fallas, i.reparadas, i.reiteradas, pdfProm(i.media_rec_insp, i.reparadas), pdfProm(i.media_rec_ing, i.reparadas)]),
-        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}}
+        head: [['Quién informa', 'Fallas', 'Tiempo de reparación']],
+        body: itosDet.map(i => [i.nombre, i.fallas, dias(i.media_rec_ing)]),
+        styles: {...estilosTabla.styles, cellPadding: {top: 1.4, bottom: 1.4, left: 2.4, right: 2.4}},
+        columnStyles: {0: {fontStyle: 'bold'}, 1: {halign: 'right', cellWidth: 18}, 2: {halign: 'right', cellWidth: 52}},
+        didDrawCell: window.__sinBarras ? undefined : barraTiempo(itosDet.map(i => i.media_rec_ing), 2)
       });
     } else vacio('Sin datos.');
 
-    // 4) Por quien repara
-    titulo('Por quien repara');
-    if((d.por_camion || []).length){
-      tabla({
-        head: [['Quién repara', 'Reparadas', 'Prom. insp.', 'Prom. ing.', 'Máx. insp.', 'Máx. ing.']],
-        body: d.por_camion.map(c => [c.nombre, c.reparadas, pdfProm(c.media_rec_insp, c.reparadas), pdfProm(c.media_rec_ing, c.reparadas), dias(c.max_insp), dias(c.max_ing)]),
-        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}}
-      });
-    } else vacio('Sin reparaciones en este rango.');
+    }
 
-    // 6) Pendientes
+    // 2b) Cierres de las reparaciones, agrupados por tipo de causa
+    {
+      let cie = null;
+      try{ cie = await rpcAnalisisCierres(ini, fin, cid); }catch(e){ console.warn('No se pudieron obtener los cierres:', e); }
+      if(cie && (cie.por_codigo || []).length){
+        hojaDet(); // las reparaciones siempre arrancan en hoja propia
+        const COL_GRUPO = {'Equipo de la luminaria': [63, 108, 143], 'Red y conexiones': [217, 138, 28], 'Tablero y protecciones': [181, 71, 58], 'Infraestructura': [122, 106, 92], 'Funcionamiento normal': [46, 125, 79], 'Otros': [154, 165, 159]};
+        const colG = (g) => COL_GRUPO[g] || [150, 160, 154];
+        const totCod = cie.por_codigo.reduce((a, c) => a + c.veces, 0) || 1;
+        titulo('Detalle de reparaciones', `${num(cie.con_codigo)} de ${num(cie.total_reparadas)} reparaciones tienen código de cierre. Una reparación puede llevar más de un código.`);
+        const grupos = cie.por_grupo || [];
+        const gw = ancho - margen * 2, pctT = (v) => (v * 100 / totCod).toFixed(1).replace('.', ',') + '%';
+        // Anillo por grupo (izquierda) + total por grupo (derecha)
+        {
+          const cx = margen + 21, cy = y + 21, Re = 20, Ri = 12.5;
+          let ang = -Math.PI / 2;
+          grupos.forEach((g) => {
+            const da = 2 * Math.PI * g.veces / totCod; if(da <= 0) return;
+            const n = Math.max(2, Math.ceil(da / 0.05)), pts = [];
+            for(let k = 0; k <= n; k++){ const t = ang + da * k / n; pts.push([cx + Re * Math.cos(t), cy + Re * Math.sin(t)]); }
+            for(let k = n; k >= 0; k--){ const t = ang + da * k / n; pts.push([cx + Ri * Math.cos(t), cy + Ri * Math.sin(t)]); }
+            pdf.setFillColor(...colG(g.grupo)); pdf.setDrawColor(255, 255, 255); pdf.setLineWidth(0.5);
+            pdf.lines(pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], 'FD', true);
+            ang += da;
+          });
+          pdf.setLineWidth(0.2);
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15); pdf.setTextColor(...VERDE); pdf.text(String(num(cie.con_codigo)), cx, cy + 1, {align: 'center'});
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text('con código', cx, cy + 5, {align: 'center'});
+          const lx = margen + 52, lw = gw - 52;
+          grupos.forEach((g, i) => {
+            const ly = y + 6 + i * 6.4;
+            pdf.setFillColor(...colG(g.grupo)); pdf.roundedRect(lx, ly - 2.7, 3.4, 3.4, 0.8, 0.8, 'F');
+            pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text(g.grupo, lx + 6, ly);
+            pdf.setFont('helvetica', 'bold'); pdf.text(String(num(g.veces)), lx + lw - 20, ly, {align: 'right'});
+            pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...gris); pdf.text(pctT(g.veces), lx + lw, ly, {align: 'right'});
+            if(i < grupos.length - 1){ pdf.setDrawColor(230, 235, 231); pdf.setLineWidth(0.15); pdf.line(lx, ly + 2.2, lx + lw, ly + 2.2); pdf.setLineWidth(0.2); }
+          });
+        }
+        y += 48;
+        // Detalle: un bloque por grupo, con barras comparables entre sí
+        const maxV = Math.max(...cie.por_codigo.map(c => c.veces), 1), RH = 5.6;
+        grupos.forEach((g) => {
+          const cods = cie.por_codigo.filter(c => c.grupo === g.grupo); if(!cods.length) return;
+          const hB = 7 + cods.length * RH + 2;
+          if(y + hB > alto - 16) hojaDet();
+          const col = colG(g.grupo), x0 = margen;
+          pdf.setDrawColor(214, 222, 216); pdf.setLineWidth(0.25); pdf.roundedRect(x0, y, gw, hB, 2.4, 2.4, 'S');
+          pdf.setFillColor(...col); pdf.roundedRect(x0, y, gw, 7, 2.4, 2.4, 'F'); pdf.rect(x0, y + 3.5, gw, 3.5, 'F');
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9.5); pdf.setTextColor(255, 255, 255); pdf.text(g.grupo, x0 + 4, y + 4.9);
+          pdf.text(`${num(g.veces)} · ${pctT(g.veces)}`, x0 + gw - 4, y + 4.9, {align: 'right'});
+          cods.forEach((c, i) => {
+            const ry = y + 7 + 1 + i * RH + RH / 2 + 1.1;
+            pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(...VERDE); pdf.text(String(c.codigo), x0 + 4, ry);
+            pdf.setFont('helvetica', 'normal'); pdf.setTextColor(30, 40, 35); pdf.text(pdf.splitTextToSize(c.descripcion || '', 62)[0], x0 + 17, ry);
+            const bx = x0 + 82, bw = gw - 82 - 32;
+            pdf.setFillColor(238, 242, 238); pdf.roundedRect(bx, ry - 2.2, bw, 2.6, 1.3, 1.3, 'F');
+            pdf.setFillColor(...col); pdf.roundedRect(bx, ry - 2.2, Math.max(1.4, bw * c.veces / maxV), 2.6, 1.3, 1.3, 'F');
+            pdf.setFont('helvetica', 'bold'); pdf.setTextColor(30, 40, 35); pdf.text(String(num(c.veces)), x0 + gw - 17, ry, {align: 'right'});
+            pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...gris); pdf.text(pctT(c.veces), x0 + gw - 4, ry, {align: 'right'});
+          });
+          y += hB + 4;
+        });
+        y += 5;
+      }
+    }
+
+    // 6) Pendientes (en el informe general va al final de la hoja de inspecciones nocturnas)
+    const seccionPendientes = () => {
     const pen = d.pendientes || {};
     titulo('Pendientes', `${pen.total_alguna_vez || 0} falla(s) quedaron pendientes alguna vez; ${pen.actuales || 0} siguen pendientes (antigüedad mediana ${dias(pen.antiguedad_mediana_actuales)}).`);
     if((pen.motivos || []).length){
@@ -8083,42 +8411,98 @@ async function generarPdfAnalisis(soloResumen, opciones){
         columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}}
       });
     } else vacio('Ninguna falla del rango quedó pendiente con un motivo registrado.');
+    };
 
     if(!cid){
-    // 7) Cobertura
+    // 7) Operativos del período (esta parte parte siempre en una hoja nueva)
+    hojaDet();
     const cob = d.cobertura || {};
     const diasCob = cob.por_dia || [];
-    const habilesSin = diasCob.filter(x => x.dow >= 1 && x.dow <= 5 && !x.inspecciones).length;
-    titulo('Cobertura de inspecciones', `${habilesSin} día(s) hábil(es) sin inspección registrada (puede incluir feriados). Filas naranjas: día hábil sin inspección.`);
-    if(diasCob.length){
+    if(opsDet.length){
+      titulo('Operativos del período');
       tabla({
-        head: [['Día', 'Inspecciones', 'Fallas', 'ITO']],
-        body: diasCob.map(x => [DIAS_SEM_CORTO[x.dow] + ' ' + fmtF(x.fecha), x.inspecciones, x.fallas, x.itos || '-']),
-        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}},
-        didParseCell: (h) => {
-          if(h.section !== 'body') return;
-          const x = diasCob[h.row.index];
-          if(x && !x.inspecciones){
-            const finde = x.dow === 0 || x.dow === 6;
-            if(finde) h.cell.styles.textColor = [140, 150, 145];
-            else h.cell.styles.fillColor = [253, 243, 226];
-          }
-        }
+        head: [['Fecha', 'Operativo', 'Fallas', 'Reparadas', 'Inspectores']],
+        body: opsDet.map(o => { const f = String(o.fecha).slice(0, 10); return [DIAS_SEM_CORTO[new Date(f + 'T12:00:00Z').getUTCDay()] + ' ' + fmtF(f), o.nombre || 'Operativo', o.fallas || 0, o.fallas ? Math.round(100 * (o.reparadas || 0) / o.fallas) + '%' : '-', o.inspectores || '-']; }),
+        columnStyles: {0: {cellWidth: 29}, 2: {halign: 'right', cellWidth: 16}, 3: {halign: 'right', cellWidth: 20}}
       });
     }
-    titulo('Cobertura por ITO');
-    if((cob.por_ito || []).length){
-      tabla({
-        head: [['ITO', 'Inspecciones', 'Sin fallas', 'Fallas', 'Días distintos']],
-        body: cob.por_ito.map(i => [i.nombre, i.inspecciones, i.sin_fallas, i.fallas, i.dias_distintos]),
-        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}}
-      });
-    } else vacio('Sin inspecciones registradas en este rango.');
-
+    // 8) Inspecciones nocturnas: calendario mensual con la inicial de cada ITO que inspeccionó
+    const habilesSin = diasCob.filter(x => x.dow >= 1 && x.dow <= 5 && !x.inspecciones).length;
+    titulo('Inspecciones nocturnas', `${habilesSin} día(s) hábil(es) sin inspección registrada (puede incluir feriados). Cada círculo es un ITO que inspeccionó esa noche.`);
+    {
+      const PALETA = ['#2563a8', '#c0392b', '#e67e22', '#16a085', '#8e44ad', '#34495e', '#b8860b', '#27ae60', '#7f8c8d', '#b03a8c', '#1abc9c', '#d35400'];
+      const nombresIto = [];
+      (cob.por_ito || []).forEach(i => { if(!nombresIto.includes(i.nombre)) nombresIto.push(i.nombre); });
+      diasCob.forEach(x => String(x.itos || '').split(', ').filter(Boolean).forEach(n => { if(!nombresIto.includes(n)) nombresIto.push(n); }));
+      const colIto = {}; nombresIto.forEach((n, i) => { colIto[n] = hexAPdf(PALETA[i % PALETA.length]); });
+      const inicialesIto = (n) => { const p = String(n).trim().split(/\s+/); return (p[0][0] + (p[1] ? p[1][0] : '')).toUpperCase(); };
+      const porFecha = {}; diasCob.forEach(x => { porFecha[String(x.fecha).slice(0, 10)] = x; });
+      const fechasOpC = new Set(opsDet.map(o => String(o.fecha).slice(0, 10)));
+      const wC = (ancho - margen * 2) / 7, hC = 19;
+      // Meses cubiertos por el período
+      const meses = [];
+      { let [yy, mm] = [+ini.slice(0, 4), +ini.slice(5, 7)]; const [yf, mf] = [+fin.slice(0, 4), +fin.slice(5, 7)];
+        while(yy < yf || (yy === yf && mm <= mf)){ meses.push([yy, mm]); mm++; if(mm > 12){ mm = 1; yy++; } } }
+      for(const [yy, mm] of meses){
+        const primero = new Date(Date.UTC(yy, mm - 1, 1)), nDias = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+        const off = (primero.getUTCDay() + 6) % 7;   // lunes = 0
+        const nSem = Math.ceil((off + nDias) / 7);
+        if(y + 14 + nSem * hC > alto - 16) hojaDet();
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...VERDE); pdf.text(`${MESES_PDF[mm - 1]} ${yy}`, margen, y + 2);
+        y += 5;
+        ['L', 'M', 'M', 'J', 'V', 'S', 'D'].forEach((t, i) => { pdf.setFillColor(...VERDE); pdf.roundedRect(margen + i * wC + 0.6, y, wC - 1.2, 5.4, 2.7, 2.7, 'F'); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5); pdf.setTextColor(...(i >= 5 ? [190, 205, 195] : [123, 211, 0])); pdf.text(t, margen + i * wC + wC / 2, y + 3.8, {align: 'center'}); });
+        y += 7;
+        for(let dd = 1; dd <= nDias; dd++){
+          const idx = off + dd - 1, cx0 = margen + (idx % 7) * wC, cy0 = y + Math.floor(idx / 7) * hC;
+          const iso = `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+          const enRango = iso >= ini && iso <= fin, x = porFecha[iso], dow = (idx % 7) + 1 === 7 ? 0 : (idx % 7) + 1;
+          const hay = x && x.inspecciones, esOp = fechasOpC.has(iso), finde = dow === 0 || dow === 6;
+          // Fines de semana en gris (aunque haya inspección); día hábil sin inspección en naranja; operativo en amarillo
+          let fondo = [255, 255, 255];
+          if(!enRango) fondo = [249, 250, 249];
+          else if(esOp) fondo = [255, 246, 214];
+          else if(finde) fondo = [236, 240, 237];
+          else if(!hay) fondo = [253, 232, 205];
+          pdf.setFillColor(...fondo); pdf.setDrawColor(...(enRango ? [214, 222, 216] : [236, 240, 237])); pdf.setLineWidth(0.2); pdf.roundedRect(cx0 + 0.6, cy0 + 0.6, wC - 1.2, hC - 1.2, 2.6, 2.6, 'FD');
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(...(enRango ? (finde ? [120, 132, 125] : (hay || esOp ? [30, 40, 35] : [150, 120, 80])) : [190, 198, 193])); pdf.text(String(dd), cx0 + 3, cy0 + 4.6);
+          if(esOp) pdf.addImage(CASCO_OPERATIVO_PNG, 'PNG', cx0 + wC - 7, cy0 + 1.2, 5, 5);
+          const lista = hay ? String(x.itos || '').split(', ').filter(Boolean) : [];
+          const dC = 4.6, sep = 0.7, porFila = Math.floor((wC - 2) / (dC + sep));
+          lista.slice(0, porFila * 2).forEach((n, k) => {
+            const fila = Math.floor(k / porFila), col = k % porFila, nF = Math.min(porFila, lista.length - fila * porFila);
+            const x0 = cx0 + (wC - nF * (dC + sep) + sep) / 2 + col * (dC + sep) + dC / 2, y0 = cy0 + 8.5 + fila * (dC + sep) + dC / 2 - (lista.length > porFila ? 1.5 : 0);
+            pdf.setFillColor(...(colIto[n] || [120, 130, 125])); pdf.circle(x0, y0, dC / 2, 'F');
+            pdf.setFont('helvetica', 'bold'); pdf.setFontSize(4.4); pdf.setTextColor(255, 255, 255); pdf.text(inicialesIto(n), x0, y0 + 0.9, {align: 'center'});
+          });
+        }
+        y += nSem * hC + 5;
+      }
+      // Leyenda
+      pdf.addImage(CASCO_OPERATIVO_PNG, 'PNG', margen, y - 1, 4.2, 4.2); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text('Día con operativo', margen + 5.5, y + 2);
+      pdf.setFillColor(253, 232, 205); pdf.roundedRect(margen + 38, y - 0.5, 5, 3.6, 1, 1, 'F'); pdf.text('Día hábil sin inspección', margen + 45, y + 2);
+      pdf.setFillColor(236, 240, 237); pdf.roundedRect(margen + 82, y - 0.5, 5, 3.6, 1, 1, 'F'); pdf.text('Fin de semana', margen + 89, y + 2);
+      y += 9;
+      titulo('Inspecciones nocturnas por ITO');
+      if((cob.por_ito || []).length){
+        tabla({
+          head: [['ITO', 'Inspecciones', 'Sin fallas', 'Fallas', 'Noches']],
+          body: cob.por_ito.map(i => [i.nombre, i.inspecciones, i.sin_fallas, i.fallas, i.dias_distintos]),
+          columnStyles: {0: {cellPadding: {left: 14, top: 1.6, bottom: 1.6, right: 1.6}}, 1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}},
+          didDrawCell: (h) => {
+            if(h.section !== 'body' || h.column.index !== 0) return;
+            const n = cob.por_ito[h.row.index].nombre, cy = h.cell.y + h.cell.height / 2;
+            pdf.setFillColor(...(colIto[n] || [120, 130, 125])); pdf.circle(h.cell.x + 6, cy, 2.3, 'F');
+            pdf.setFont('helvetica', 'bold'); pdf.setFontSize(4.6); pdf.setTextColor(255, 255, 255); pdf.text(inicialesIto(n), h.cell.x + 6, cy + 0.9, {align: 'center'});
+          }
+        });
+      } else vacio('Sin inspecciones registradas en este rango.');
+    }
+    seccionPendientes();
     }
 
     // 8) Críticos (al final del informe): con número temporal, el mismo que lleva el mapa siguiente
     const cPuntos = d.criticos_puntos || [], cCirc = d.criticos_circuitos || [];
+    if(!cid){
     titulo('Puntos críticos', 'Puntos con 2 o más fallas en el período, o con alguna reiterada. El N.º es temporal (solo de este informe) y es el mismo que lleva el mapa.');
     if(cPuntos.length){
       tabla({
@@ -8135,51 +8519,54 @@ async function generarPdfAnalisis(soloResumen, opciones){
         columnStyles: {0: {halign: 'center', fontStyle: 'bold', cellWidth: 11, textColor: [37, 99, 168]}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}}
       });
     } else vacio('Ningún circuito se repite en este rango.');
+    }
 
-    // 9) Mapa con los críticos (si se puede dibujar)
+    // 9) Mapa de puntos y circuitos críticos (hoja propia, recortado a la comuna)
+    // Encabezado y nota de lectura comunes a las dos hojas de mapa
+    const hojaMapa = (titulo, leyenda, cv, titNota, nota) => {
+      pdf.addPage();
+      pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 24, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 24, ancho, 1, 'F');
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(255, 255, 255); pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 7.5);
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text(titulo, margen, 16);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(123, 211, 0); pdf.text(`Período: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen, 16, {align: 'right'});
+      if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(255, 255, 255); pdf.text('Contrato: ' + nombre, ancho - margen, 7.5, {align: 'right'}); }
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
+      leyenda();
+      const w = ancho - margen * 2, h = Math.min(cv.height * w / cv.width, alto - 38 - 36);
+      pdf.addImage(cv.toDataURL('image/jpeg', 0.88), 'JPEG', margen, 37, w, h);
+      pdf.setDrawColor(214, 222, 216); pdf.setLineWidth(0.25); pdf.roundedRect(margen, 37, w, h, 2.4, 2.4, 'S');
+      const yn = 37 + h + 5;
+      pdf.setFillColor(243, 247, 244); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(margen, yn, w, 24, 2.5, 2.5, 'FD');
+      pdf.setFillColor(123, 211, 0); pdf.rect(margen + 0.1, yn + 4, 1, 16, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(...VERDE); pdf.text(titNota, margen + 5, yn + 6);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.8); pdf.setTextColor(30, 40, 35);
+      pdf.text(pdf.splitTextToSize(nota, w - 10), margen + 5, yn + 11, {lineHeightFactor: 1.35});
+    };
     try{
       const items = [];
       cPuntos.forEach((p, i) => { if(p.lat != null && p.lon != null) items.push({geom: {type: 'Point', coordinates: [p.lon, p.lat]}, color: '#8e44ad', label: i + 1}); });
       cCirc.forEach((c, i) => { if(c.lat != null && c.lon != null) items.push({geom: {type: 'Point', coordinates: [c.lon, c.lat]}, color: '#2563a8', label: cPuntos.length + i + 1}); });
-      const canvasMapa = await renderMapaCanvas(items, {w: 1400, h: 1800, padding: 140, zMax: 17});
-      if(canvasMapa){
-        pdf.addPage();
-        pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text('Mapa de puntos y circuitos críticos', margen, 16);
-        // Leyenda
-        pdf.setFontSize(8.5); pdf.setTextColor(...gris);
-        pdf.setFillColor(142, 68, 173); pdf.circle(margen + 1.5, 21.3, 1.5, 'F'); pdf.text('Punto crítico', margen + 5, 22.3);
-        pdf.setFillColor(37, 99, 168); pdf.circle(margen + 32, 21.3, 1.5, 'F'); pdf.text('Circuito crítico (en su centro)', margen + 35.5, 22.3);
-        pdf.text('El número es el de las tablas anteriores.', ancho - margen, 22.3, {align: 'right'});
-        const w = ancho - margen * 2;
-        const h = Math.min((canvasMapa.height * w) / canvasMapa.width, alto - 38);
-        pdf.addImage(canvasMapa.toDataURL('image/jpeg', 0.85), 'JPEG', margen, 26, w, h);
+      if(items.length && !cid){
+        const cvK = await renderMapaCanvas(items, {w: 1400, h: 1500, padding: 60, zMax: 17, contorno: true});
+        if(cvK) hojaMapa('Mapa de puntos y circuitos críticos', () => {
+          pdf.setFillColor(142, 68, 173); pdf.circle(margen + 1.6, 32, 1.6, 'F'); pdf.text('Punto crítico', margen + 5, 33);
+          pdf.setFillColor(37, 99, 168); pdf.circle(margen + 32, 32, 1.6, 'F'); pdf.text('Circuito crítico (en su centro)', margen + 35.5, 33);
+        }, cvK, 'Cómo leer este mapa', 'Los círculos numerados marcan los puntos (morado) y los circuitos (azul) con 2 o más fallas en el período o con alguna reiterada. El número es el mismo de las tablas anteriores. Si dos marcas quedan muy juntas se separan un poco y se unen con una línea a su ubicación real.');
       }
-    }catch(e){ console.warn('No se pudo incluir el mapa en el PDF:', e); }
+    }catch(e){ console.warn('No se pudo incluir el mapa de críticos en el PDF:', e); }
 
-    // 10) Mapa de calor (hexágonos de ~500 m sobre la comuna)
+    // 10) Mapa de calor con curvas de nivel (solo la concentración de fallas, sin marcas)
     try{
-      const gf = await fallasGeojsonAnalisis(ini, fin);
-      const modoC = ANA_CALOR.modo, reitC = ANA_CALOR.reit;
-      const {celdas, max} = calorCeldas(calorPuntos(gf, modoC));
-      if(celdas.length){
-        const cvC = await renderMapaCanvas([{geom: {type: 'Point', coordinates: [-70.58, -33.53]}, color: '#000', label: ''}],
-          {w: 1400, h: 1800, padding: 100, zMax: 17, contorno: true, calor: {celdas, max, reit: reitC}});
-        if(cvC){
-          pdf.addPage();
-          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text('Mapa de calor de fallas', margen, 16);
-          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...gris);
-          pdf.text(`Celdas de ~500 m. El número es la cantidad de ${modoC === 'puntos' ? 'puntos lumínicos afectados' : 'fallas (un circuito cuenta una vez)'} en la celda.`, margen, 21.5);
-          const n6 = CALOR_COLORES.length; let lx = margen;
-          CALOR_COLORES.forEach((c, i) => {
-            const a = Math.floor(max * i / n6) + 1, b = Math.round(max * (i + 1) / n6);
-            pdf.setFillColor(...hexAPdf(c)); pdf.rect(lx, 24, 6, 3.5, 'F');
-            const t = a >= b ? String(b) : a + '-' + b; pdf.text(t, lx + 7.5, 27); lx += 8.5 + pdf.getTextWidth(t) + 3;
-          });
-          if(reitC){ pdf.setDrawColor(127, 0, 0); pdf.setLineWidth(0.8); pdf.rect(lx + 2, 24, 6, 3.5); pdf.text('con alguna reiterada', lx + 10, 27); }
-          const w = ancho - margen * 2;
-          const h = Math.min((cvC.height * w) / cvC.width, alto - 38);
-          pdf.addImage(cvC.toDataURL('image/jpeg', 0.85), 'JPEG', margen, 31, w, h);
-        }
+      const gf = await fallasGeojsonAnalisis(ini, fin, cid);
+      const modoC = ANA_CALOR.modo;
+      const pts = calorPuntos(gf, modoC);
+      if(pts.length){
+        const cvC = await renderMapaCanvas([], {w: 1400, h: 1500, padding: 60, zMax: 17, contorno: true, calorContorno: {pts, sigmaM: 400}});
+        if(cvC) hojaMapa('Mapa de calor de fallas', () => {
+          pdf.text('Concentración de fallas', margen, 33); pdf.text('baja', margen + 38, 33);
+          CALOR_COLORES.forEach((c, i) => { pdf.setFillColor(...hexAPdf(c)); pdf.rect(margen + 46 + i * 7, 30.2, 7, 3.6, 'F'); });
+          pdf.text('alta', margen + 46 + CALOR_COLORES.length * 7 + 2, 33);
+        }, cvC, 'Cómo leer este mapa', `Las curvas funcionan como las de nivel de un mapa topográfico: cada una encierra los sectores con igual o mayor concentración de ${modoC === 'puntos' ? 'puntos lumínicos afectados' : 'fallas'} del período (un circuito cuenta una vez, en su centro). Mientras más rojo y más juntas están las curvas, más fallas se acumulan en ese sector. El color es relativo al sector más cargado de la comuna y se suaviza en ~400 m alrededor de cada falla. El mapa de calles se ve por debajo, porque los colores son semitransparentes.`);
       }
     }catch(e){ console.warn('No se pudo incluir el mapa de calor en el PDF:', e); }
 
@@ -8199,30 +8586,120 @@ async function generarPdfAnalisis(soloResumen, opciones){
     }
     await bloque(dGen, null, contratosPdf.length ? 'Resumen general' : null, true);
     if(contratosPdf.length){
-      // Hoja de comparación entre contratos
-      pdf.addPage();
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...VERDE);
-      pdf.text('Comparación por contrato', margen, 16);
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...gris);
-      pdf.text(`Período: ${fmtF(ini)} a ${fmtF(fin)}`, margen, 21);
-      pdf.setDrawColor(219, 226, 220); pdf.line(margen, 24, ancho - margen, 24);
-      const filaC = (n, x) => { const q = (x && x.resumen) || {}; return [n, num(q.fallas || 0), num(q.reparadas || 0), num(q.abiertas || 0), num(q.reiteradas || 0), q.puntos_afectados === undefined ? '-' : fmtMiles(q.puntos_afectados), fmtProm(q.media_recortada_dias_ing, q.reparadas || 0, '-'), dias(q.antiguedad_mediana_abiertas)]; };
-      const rg0 = dGen.resumen || {};
-      const sumaC = k => datosC.reduce((t, x) => t + (((x.d || {}).resumen || {})[k] || 0), 0);
-      const sinC = k => (rg0[k] || 0) - sumaC(k);
-      const cuerpo = [filaC('Total', dGen), ...datosC.map(x => filaC(x.c.nombre, x.d))];
-      if(sinC('fallas') > 0) cuerpo.push(['Sin contrato', num(sinC('fallas')), num(sinC('reparadas')), num(sinC('abiertas')), num(sinC('reiteradas')), '-', '-', '-']);
-      pdf.autoTable({
-        margin: {left: margen, right: margen}, startY: 29,
-        styles: {fontSize: 8.5, cellPadding: 2, textColor: [30, 40, 35], lineColor: [219, 226, 220], lineWidth: 0.1},
-        headStyles: {fillColor: VERDE, textColor: 255, fontSize: 8.5, fontStyle: 'bold'},
-        alternateRowStyles: {fillColor: [247, 248, 247]},
-        head: [['', 'Fallas', 'Reparadas', 'Abiertas', 'Reiteradas', 'Puntos afectados', 'Prom. reparación (desde ingreso)', 'Antigüedad abiertas']],
-        body: cuerpo,
-        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}, 6: {halign: 'right'}, 7: {halign: 'right'}}
-      });
-      pdf.setFontSize(7.5); pdf.setTextColor(...gris);
-      pdf.text('Cada contrato se informa por separado en las hojas siguientes. "Sin contrato" son fallas que aún no tienen contrato asignado.', margen, pdf.lastAutoTable.finalY + 6);
+      // Hoja de comparación entre contratos (mismo lenguaje visual que el resto del informe)
+      {
+        const gwC = ancho - margen * 2;
+        pdf.addPage();
+        pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 24, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 24, ancho, 1, 'F');
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(255, 255, 255); pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 7.5);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text('Comparación entre contratos', margen, 16);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(123, 211, 0); pdf.text(`Período: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen, 16, {align: 'right'});
+        const COL_C = [[37, 99, 168], [217, 138, 28], [142, 68, 173], [22, 160, 133], [181, 71, 58], [122, 106, 92]];
+        const lista = datosC.filter(x => x.d && x.d.resumen && x.d.resumen.fallas).map((x, i) => {
+          const q = x.d.resumen, cods = [...(x.d.por_codigo || [])].sort((p, r) => r.fallas - p.fallas);
+          return {nombre: x.c.nombre, id: x.c.id, col: COL_C[i % COL_C.length], fallas: q.fallas || 0, rep: q.reparadas || 0, reit: q.reiteradas || 0, pRep: q.fallas ? (q.reparadas || 0) / q.fallas * 100 : 0, pReit: q.fallas ? (q.reiteradas || 0) / q.fallas * 100 : 0, t: q.media_recortada_dias_ing, top: cods[0]};
+        });
+        const secC = (txt, yy) => {
+          pdf.setFillColor(123, 211, 0); pdf.roundedRect(margen, yy - 4.6, 1.8, 6, 0.9, 0.9, 'F');
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(...VERDE); pdf.text(txt, margen + 4.5, yy);
+          pdf.setDrawColor(222, 229, 223); pdf.setLineWidth(0.3); pdf.line(margen + 4.5 + pdf.getTextWidth(txt) + 3, yy - 1.4, ancho - margen, yy - 1.4); pdf.setLineWidth(0.2);
+        };
+        const cajaC = (x, yy, w, h) => { pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.setLineWidth(0.25); pdf.roundedRect(x, yy, w, h, 2.6, 2.6, 'FD'); pdf.setLineWidth(0.2); };
+        let yc = 35;
+        secC('Resumen comparativo', yc); yc += 6;
+        // Una tarjeta por contrato con lo más importante
+        const nC = Math.max(1, lista.length), wK = (gwC - (nC - 1) * 4) / nC;
+        lista.forEach((c, i) => {
+          const xk = margen + i * (wK + 4);
+          cajaC(xk, yc, wK, 41);
+          pdf.setFillColor(...c.col); pdf.roundedRect(xk, yc, 2.2, 41, 1.1, 1.1, 'F');
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...c.col); pdf.text(pdf.splitTextToSize(c.nombre, wK - 10)[0], xk + 6, yc + 7);
+          pdf.setFontSize(20); pdf.setTextColor(30, 40, 35); pdf.text(num(c.fallas), xk + 6, yc + 17); const wNum = pdf.getTextWidth(num(c.fallas));
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text('fallas del período', xk + 6 + wNum + 2.5, yc + 17);
+          const lns = [['Reparadas', `${Math.round(c.pRep)}%`], ['Reiteradas', `${Math.round(c.pReit)}%`], ['Reparación', dias(c.t)], ['Más frecuente', c.top ? String(c.top.tipo_falla) + ' (' + c.top.fallas + ')' : '-']];
+          lns.forEach(([k, v], j) => {
+            const ly = yc + 24 + j * 4.6;
+            pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris); pdf.text(k, xk + 6, ly);
+            pdf.setFont('helvetica', 'bold'); pdf.setTextColor(30, 40, 35); pdf.text(v, xk + wK - 4, ly, {align: 'right'});
+          });
+        });
+        yc += 41 + 9;
+        // Barras comparativas, de a dos métricas por fila
+        secC('Contrato contra contrato', yc); yc += 6;
+        const mets = [
+          ['Fallas del período', c => c.fallas, v => num(v)],
+          ['Fallas reparadas', c => c.pRep, v => Math.round(v) + '%'],
+          ['Fallas reiteradas', c => c.pReit, v => Math.round(v) + '%'],
+          ['Tiempo de reparación', c => c.t || 0, v => dias(v)]
+        ];
+        const wM = (gwC - 5) / 2, hM = 9 + lista.length * 6.2 + 2;
+        mets.forEach(([tit, fv, ft], k) => {
+          const xm = margen + (k % 2) * (wM + 5), ym = yc + Math.floor(k / 2) * (hM + 4);
+          cajaC(xm, ym, wM, hM);
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(...VERDE); pdf.text(tit, xm + 4, ym + 6);
+          const mx = Math.max(...lista.map(fv), 0.0001);
+          lista.forEach((c, i) => {
+            const ry = ym + 9 + i * 6.2 + 3.2, bx = xm + 30, bw = wM - 30 - 20;
+            pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(pdf.splitTextToSize(c.nombre, 24)[0], xm + 4, ry);
+            pdf.setFillColor(238, 242, 238); pdf.roundedRect(bx, ry - 2.6, bw, 3.2, 1.2, 1.2, 'F');
+            pdf.setFillColor(...c.col); pdf.roundedRect(bx, ry - 2.6, Math.max(1.4, bw * fv(c) / mx), 3.2, 1.2, 1.2, 'F');
+            pdf.setFont('helvetica', 'bold'); pdf.text(ft(fv(c)), xm + wM - 3, ry, {align: 'right'});
+          });
+        });
+        yc += Math.ceil(mets.length / 2) * (hM + 4) + 5;
+        // Tipo de cierre de cada contrato (barra 100 % por grupo)
+        const cierresC = [];
+        for(const c of lista){ try{ cierresC.push(await rpcAnalisisCierres(ini, fin, c.id)); }catch(e){ cierresC.push(null); } }
+        if(cierresC.some(z => z && (z.por_grupo || []).length)){
+          const COL_G = {'Equipo de la luminaria': [63, 108, 143], 'Red y conexiones': [217, 138, 28], 'Tablero y protecciones': [181, 71, 58], 'Infraestructura': [122, 106, 92], 'Funcionamiento normal': [46, 125, 79], 'Otros': [154, 165, 159]};
+          secC('Tipo de cierre por contrato', yc); yc += 4;
+          const hCz = 8 + lista.length * 9 + 12;
+          cajaC(margen, yc, gwC, hCz);
+          lista.forEach((c, i) => {
+            const z = cierresC[i], ry = yc + 8 + i * 9, bx = margen + 34, bw = gwC - 34 - 6;
+            pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(...c.col); pdf.text(pdf.splitTextToSize(c.nombre, 28)[0], margen + 4, ry + 3.6);
+            const tot = z ? (z.por_codigo || []).reduce((a, q) => a + q.veces, 0) : 0;
+            if(!tot){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text('Sin cierres con código', bx, ry + 3.6); return; }
+            let xx = bx;
+            z.por_grupo.forEach(g => {
+              const w = bw * g.veces / tot; if(w <= 0) return;
+              pdf.setFillColor(...(COL_G[g.grupo] || [154, 165, 159])); pdf.rect(xx, ry, w, 5.2, 'F');
+              if(w > 11){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.5); pdf.setTextColor(255, 255, 255); pdf.text(Math.round(g.veces / tot * 100) + '%', xx + w / 2, ry + 3.6, {align: 'center'}); }
+              xx += w;
+            });
+            [[bx, ry, 1, 1], [bx + bw, ry, -1, 1], [bx, ry + 5.2, 1, -1], [bx + bw, ry + 5.2, -1, -1]].forEach(([ox, oy, sx, sy]) => {
+              pdf.setFillColor(255, 255, 255); const R = 2.2, K = 0.5523;
+              pdf.lines([[sx * R, 0], [-sx * K * R, 0, -sx * R, sy * (R - K * R), -sx * R, sy * R], [0, -sy * R]], ox, oy, [1, 1], 'F', true);
+            });
+          });
+          let lx = margen + 6; const ly = yc + hCz - 4;
+          Object.keys(COL_G).forEach(g => {
+            pdf.setFillColor(...COL_G[g]); pdf.roundedRect(lx, ly - 2.4, 2.8, 2.8, 0.7, 0.7, 'F');
+            pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.4); pdf.setTextColor(...gris); pdf.text(g, lx + 4, ly); lx += pdf.getTextWidth(g) + 7.5;
+          });
+          yc += hCz + 6;
+        }
+        // Tabla de apoyo con todas las cifras
+        const filaC = (n, x) => { const q = (x && x.resumen) || {}; return [n, num(q.fallas || 0), num(q.reparadas || 0), num(q.abiertas || 0), num(q.reiteradas || 0), q.puntos_afectados === undefined ? '-' : fmtMiles(q.puntos_afectados), fmtProm(q.media_recortada_dias_ing, q.reparadas || 0, '-'), dias(q.antiguedad_mediana_abiertas)]; };
+        const rg0 = dGen.resumen || {};
+        const sumaC = k => datosC.reduce((t, x) => t + (((x.d || {}).resumen || {})[k] || 0), 0);
+        const sinC = k => (rg0[k] || 0) - sumaC(k);
+        const cuerpo = [filaC('Total', dGen), ...datosC.map(x => filaC(x.c.nombre, x.d))];
+        if(sinC('fallas') > 0) cuerpo.push(['Sin contrato', num(sinC('fallas')), num(sinC('reparadas')), num(sinC('abiertas')), num(sinC('reiteradas')), '-', '-', '-']);
+        if(yc + 14 + cuerpo.length * 7 > alto - 16){ pdf.addPage(); yc = 16; }
+        secC('Cifras del período', yc); yc += 4;
+        pdf.autoTable({
+          margin: {left: margen, right: margen}, startY: yc,
+          styles: {fontSize: 8.5, cellPadding: {top: 2, bottom: 2, left: 2.4, right: 2.4}, textColor: [30, 40, 35], lineColor: [226, 232, 227], lineWidth: 0.1, valign: 'middle'},
+          headStyles: {fillColor: VERDE, textColor: [123, 211, 0], fontSize: 8.5, fontStyle: 'bold', lineWidth: 0},
+          alternateRowStyles: {fillColor: [246, 249, 246]},
+          head: [['', 'Fallas', 'Reparadas', 'Abiertas', 'Reiteradas', 'Puntos afectados', 'Reparación (desde ingreso)', 'Antigüedad abiertas']],
+          body: cuerpo,
+          columnStyles: {0: {fontStyle: 'bold'}, 1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}, 5: {halign: 'right'}, 6: {halign: 'right'}, 7: {halign: 'right'}}
+        });
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris);
+        pdf.text('Cada contrato se informa por separado en las hojas siguientes. "Sin contrato" son fallas que aún no tienen contrato asignado.', margen, pdf.lastAutoTable.finalY + 6);
+      }
       for(const x of datosC){
         if(!x.d || !((x.d.resumen || {}).fallas)) continue;
         await bloque(x.d, x.c.id, x.c.nombre, false);
