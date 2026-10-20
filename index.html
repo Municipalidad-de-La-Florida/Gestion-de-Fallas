@@ -8295,53 +8295,6 @@ async function generarPdfAnalisis(soloResumen, opciones){
       });
     } else vacio('Sin fallas en este rango.');
 
-    // 2b) Cierres de las reparaciones, agrupados por tipo de causa
-    {
-      let cie = null;
-      try{ cie = await rpcAnalisisCierres(ini, fin, cid); }catch(e){ console.warn('No se pudieron obtener los cierres:', e); }
-      if(cie && (cie.por_codigo || []).length){
-        const COL_GRUPO = {'Equipo de la luminaria': [37, 99, 168], 'Red y conexiones': [230, 126, 34], 'Tablero y protecciones': [22, 160, 133], 'Infraestructura': [141, 110, 99], 'Funcionamiento normal': [46, 125, 79], 'Otros': [150, 160, 154]};
-        const colG = (g) => COL_GRUPO[g] || [150, 160, 154];
-        const totCod = cie.por_codigo.reduce((a, c) => a + c.veces, 0) || 1;
-        titulo('Cierres de las reparaciones', `${num(cie.con_codigo)} de ${num(cie.total_reparadas)} reparaciones tienen código de cierre. Una reparación puede llevar más de un código.`);
-        // Barra apilada por grupo + leyenda con cantidad y porcentaje
-        const gx = margen, gw = ancho - margen * 2;
-        let xx = gx;
-        const grupos = cie.por_grupo || [];
-        grupos.forEach((g) => {
-          const w = gw * g.veces / totCod; if(w <= 0) return;
-          pdf.setFillColor(...colG(g.grupo)); pdf.rect(xx, y, w, 6, 'F'); xx += w;
-        });
-        { // puntas redondeadas de la barra
-          const R = 3, K = 0.5523;
-          [[gx, y, 1, 1], [gx + gw, y, -1, 1], [gx, y + 6, 1, -1], [gx + gw, y + 6, -1, -1]].forEach(([ox, oy, sx, sy]) => {
-            pdf.setFillColor(255, 255, 255);
-            pdf.lines([[sx * R, 0], [-sx * K * R, 0, -sx * R, sy * (R - K * R), -sx * R, sy * R], [0, -sy * R]], ox, oy, [1, 1], 'F', true);
-          });
-        }
-        y += 11;
-        const nColL = 3, wL = gw / nColL;
-        grupos.forEach((g, i) => {
-          const lx = gx + (i % nColL) * wL, ly = y + Math.floor(i / nColL) * 10;
-          pdf.setFillColor(...colG(g.grupo)); pdf.circle(lx + 1.6, ly - 1, 1.6, 'F');
-          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text(g.grupo, lx + 5, ly);
-          pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...gris); pdf.text(`${num(g.veces)} · ${Math.round(g.veces / totCod * 100)}%`, lx + 5, ly + 3.6);
-        });
-        y += Math.ceil(grupos.length / nColL) * 10 + 3;
-        tabla({
-          head: [['Código', 'Descripción', 'Grupo', 'Frecuencia']],
-          body: cie.por_codigo.map(c => [c.codigo, c.descripcion, c.grupo, c.veces]),
-          columnStyles: {0: {fontStyle: 'bold', textColor: VERDE, cellWidth: 18}, 2: {cellWidth: 46}, 3: {halign: 'right', cellWidth: 42}},
-          didParseCell: (h) => { if(h.section === 'body' && h.column.index === 2){ h.cell.styles.textColor = colG(h.cell.raw); h.cell.styles.fontStyle = 'bold'; h.cell.styles.cellPadding = {top: 2, bottom: 2, left: 6.5, right: 2}; } },
-          didDrawCell: (h) => {
-            if(h.section !== 'body') return;
-            if(h.column.index === 2){ pdf.setFillColor(...colG(h.cell.raw)); pdf.circle(h.cell.x + 3.4, h.cell.y + h.cell.height / 2, 1.3, 'F'); }
-            if(h.column.index === 3){ const mx = cie.por_codigo[0].veces, v = cie.por_codigo[h.row.index].veces; pdf.setFillColor(...colG(cie.por_codigo[h.row.index].grupo)); pdf.roundedRect(h.cell.x + 2, h.cell.y + h.cell.height / 2 - 1.3, Math.max(0.8, (h.cell.width - 22) * v / mx), 2.6, 1.2, 1.2, 'F'); }
-          }
-        });
-      }
-    }
-
     // 3) Por ITO
     titulo('Quién informa las fallas', 'Los contratistas y camiones se agrupan en una sola fila "Contratista".');
     // Contratistas y camiones: una sola fila; el tiempo es el promedio ponderado por las reparadas
@@ -8360,10 +8313,77 @@ async function generarPdfAnalisis(soloResumen, opciones){
       tabla({
         head: [['Quién informa', 'Fallas', 'Tiempo de reparación']],
         body: itosDet.map(i => [i.nombre, i.fallas, dias(i.media_rec_ing)]),
+        styles: {...estilosTabla.styles, cellPadding: {top: 1.4, bottom: 1.4, left: 2.4, right: 2.4}},
         columnStyles: {0: {fontStyle: 'bold'}, 1: {halign: 'right', cellWidth: 18}, 2: {halign: 'right', cellWidth: 52}},
         didDrawCell: window.__sinBarras ? undefined : barraTiempo(itosDet.map(i => i.media_rec_ing), 2)
       });
     } else vacio('Sin datos.');
+
+    // 2b) Cierres de las reparaciones, agrupados por tipo de causa
+    {
+      let cie = null;
+      try{ cie = await rpcAnalisisCierres(ini, fin, cid); }catch(e){ console.warn('No se pudieron obtener los cierres:', e); }
+      if(cie && (cie.por_codigo || []).length){
+        pdf.addPage(); y = 16; // las reparaciones siempre arrancan en hoja propia
+        const COL_GRUPO = {'Equipo de la luminaria': [63, 108, 143], 'Red y conexiones': [217, 138, 28], 'Tablero y protecciones': [181, 71, 58], 'Infraestructura': [122, 106, 92], 'Funcionamiento normal': [46, 125, 79], 'Otros': [154, 165, 159]};
+        const colG = (g) => COL_GRUPO[g] || [150, 160, 154];
+        const totCod = cie.por_codigo.reduce((a, c) => a + c.veces, 0) || 1;
+        titulo('Cierres de las reparaciones', `${num(cie.con_codigo)} de ${num(cie.total_reparadas)} reparaciones tienen código de cierre. Una reparación puede llevar más de un código.`);
+        const grupos = cie.por_grupo || [];
+        const gw = ancho - margen * 2, pctT = (v) => (v * 100 / totCod).toFixed(1).replace('.', ',') + '%';
+        // Anillo por grupo (izquierda) + total por grupo (derecha)
+        {
+          const cx = margen + 21, cy = y + 21, Re = 20, Ri = 12.5;
+          let ang = -Math.PI / 2;
+          grupos.forEach((g) => {
+            const da = 2 * Math.PI * g.veces / totCod; if(da <= 0) return;
+            const n = Math.max(2, Math.ceil(da / 0.05)), pts = [];
+            for(let k = 0; k <= n; k++){ const t = ang + da * k / n; pts.push([cx + Re * Math.cos(t), cy + Re * Math.sin(t)]); }
+            for(let k = n; k >= 0; k--){ const t = ang + da * k / n; pts.push([cx + Ri * Math.cos(t), cy + Ri * Math.sin(t)]); }
+            pdf.setFillColor(...colG(g.grupo)); pdf.setDrawColor(255, 255, 255); pdf.setLineWidth(0.5);
+            pdf.lines(pts.slice(1).map((p, i) => [p[0] - pts[i][0], p[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], 'FD', true);
+            ang += da;
+          });
+          pdf.setLineWidth(0.2);
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15); pdf.setTextColor(...VERDE); pdf.text(String(num(cie.con_codigo)), cx, cy + 1, {align: 'center'});
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text('con código', cx, cy + 5, {align: 'center'});
+          const lx = margen + 52, lw = gw - 52;
+          grupos.forEach((g, i) => {
+            const ly = y + 6 + i * 6.4;
+            pdf.setFillColor(...colG(g.grupo)); pdf.roundedRect(lx, ly - 2.7, 3.4, 3.4, 0.8, 0.8, 'F');
+            pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text(g.grupo, lx + 6, ly);
+            pdf.setFont('helvetica', 'bold'); pdf.text(String(num(g.veces)), lx + lw - 20, ly, {align: 'right'});
+            pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...gris); pdf.text(pctT(g.veces), lx + lw, ly, {align: 'right'});
+            if(i < grupos.length - 1){ pdf.setDrawColor(230, 235, 231); pdf.setLineWidth(0.15); pdf.line(lx, ly + 2.2, lx + lw, ly + 2.2); pdf.setLineWidth(0.2); }
+          });
+        }
+        y += 48;
+        // Detalle: un bloque por grupo, con barras comparables entre sí
+        const maxV = Math.max(...cie.por_codigo.map(c => c.veces), 1), RH = 5.6;
+        grupos.forEach((g) => {
+          const cods = cie.por_codigo.filter(c => c.grupo === g.grupo); if(!cods.length) return;
+          const hB = 7 + cods.length * RH + 2;
+          if(y + hB > alto - 16){ pdf.addPage(); y = 16; }
+          const col = colG(g.grupo), x0 = margen;
+          pdf.setDrawColor(214, 222, 216); pdf.setLineWidth(0.25); pdf.roundedRect(x0, y, gw, hB, 2.4, 2.4, 'S');
+          pdf.setFillColor(...col); pdf.roundedRect(x0, y, gw, 7, 2.4, 2.4, 'F'); pdf.rect(x0, y + 3.5, gw, 3.5, 'F');
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9.5); pdf.setTextColor(255, 255, 255); pdf.text(g.grupo, x0 + 4, y + 4.9);
+          pdf.text(`${num(g.veces)} · ${pctT(g.veces)}`, x0 + gw - 4, y + 4.9, {align: 'right'});
+          cods.forEach((c, i) => {
+            const ry = y + 7 + 1 + i * RH + RH / 2 + 1.1;
+            pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(...VERDE); pdf.text(String(c.codigo), x0 + 4, ry);
+            pdf.setFont('helvetica', 'normal'); pdf.setTextColor(30, 40, 35); pdf.text(pdf.splitTextToSize(c.descripcion || '', 62)[0], x0 + 17, ry);
+            const bx = x0 + 82, bw = gw - 82 - 32;
+            pdf.setFillColor(238, 242, 238); pdf.roundedRect(bx, ry - 2.2, bw, 2.6, 1.3, 1.3, 'F');
+            pdf.setFillColor(...col); pdf.roundedRect(bx, ry - 2.2, Math.max(1.4, bw * c.veces / maxV), 2.6, 1.3, 1.3, 'F');
+            pdf.setFont('helvetica', 'bold'); pdf.setTextColor(30, 40, 35); pdf.text(String(num(c.veces)), x0 + gw - 17, ry, {align: 'right'});
+            pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...gris); pdf.text(pctT(c.veces), x0 + gw - 4, ry, {align: 'right'});
+          });
+          y += hB + 4;
+        });
+        y += 5;
+      }
+    }
 
     // 4) Por quien repara: solo en la evaluación de cada contrato
     if(cid){
