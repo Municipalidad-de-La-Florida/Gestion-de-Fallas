@@ -1983,7 +1983,7 @@ function iconoFalla(simbPoste, color, radio, parpadea){
 // ---------- MAPA ----------
 function initMap(){
   { const sb = document.getElementById('searchBox'), col = document.getElementById('colSuperior'); if(sb && col) col.appendChild(sb); }
-  map = L.map('map', {minZoom:12, maxZoom:19, zoomControl:false}).setView([-33.5384, -70.5973], 14);
+  map = L.map('map', {minZoom:12, maxZoom:21, zoomControl:false}).setView([-33.5384, -70.5973], 14);
   map.createPane('fallasPane');
   map.getPane('fallasPane').style.zIndex = 650; // por encima del markerPane (600), donde viven los símbolos de postes
   map.createPane('inspeccionPane');
@@ -1994,7 +1994,7 @@ function initMap(){
   // Fondo del mapa: mismas calles de OpenStreetMap (gratis y sin clave), en dos versiones:
   // "Suave" (gris y clarito, para que resalten las fallas) o "Color" (el original).
   const OSM_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-  const osmOpciones = {attribution:'&copy; OpenStreetMap contributors', subdomains:'abc', maxZoom:19};
+  const osmOpciones = {attribution:'&copy; OpenStreetMap contributors', subdomains:'abc', maxZoom:21, maxNativeZoom:19};
   const fondoSuave = L.tileLayer(OSM_URL, {...osmOpciones, className: 'mapa-suave'});
   const fondoColor = L.tileLayer(OSM_URL, osmOpciones);
   let fondoElegido = 'suave';
