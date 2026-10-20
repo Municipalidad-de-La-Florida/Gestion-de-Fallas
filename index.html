@@ -6620,7 +6620,16 @@ const fechaGeneracionPdf = () => {
   const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {timeZone: ZONA_CHILE, year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}).formatToParts(new Date()).map(x => [x.type, x.value]));
   return `${Number(p.day)} ${MES[Number(p.month) - 1]} ${p.year}, ${p.hour === '24' ? '00' : p.hour}:${p.minute}`;
 };
-async function agregarHojasOperativo(pdf, det, primera){
+const MESES_PDF_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+// Etiqueta del período para los encabezados: "octubre de 2026" si es un mes completo; si no, el rango de fechas
+function etiquetaPeriodoPdf(ini, fin){
+  const [y, m] = String(ini).slice(0, 7).split('-').map(Number);
+  const ult = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+  if(String(ini).slice(8, 10) === '01' && fin === ult) return {mes: true, txt: `${MESES_PDF_L[m - 1]} de ${y}`};
+  const f = (x) => String(x).slice(8, 10) + '-' + String(x).slice(5, 7) + '-' + String(x).slice(0, 4);
+  return {mes: false, txt: `${f(ini)} al ${f(fin)}`};
+}
+async function agregarHojasOperativo(pdf, det, primera, info){
   const ancho = pdf.internal.pageSize.getWidth(), alto = pdf.internal.pageSize.getHeight(), margen = 12, VERDE = [0, 49, 0], gris = [85, 102, 92], LIMA = [123, 211, 0];
   const c = operativoCalc(det);
   const fF = String(det.fecha).slice(8, 10) + '-' + String(det.fecha).slice(5, 7) + '-' + String(det.fecha).slice(0, 4);
@@ -6654,14 +6663,15 @@ async function agregarHojasOperativo(pdf, det, primera){
   pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
   pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
   pdf.setFont('helvetica', 'bold');
-  { let fs = 24; pdf.setFontSize(fs); const maxT = ancho - 2 * margen - 60; while(fs > 12 && pdf.getTextWidth('Informe de operativo') > maxT){ fs -= 0.5; pdf.setFontSize(fs); } pdf.text('Informe de operativo', margen + 2, 22); }
+  { // "Informe Operativo: Nombre" (el nombre en verde lima), ajustado al ancho de la hoja
+    const pre = 'Informe Operativo: ', nom = String(det.nombre || 'Operativo'); let fs = 24; pdf.setFontSize(fs);
+    while(fs > 12 && pdf.getTextWidth(pre + nom) > ancho - 2 * margen - 4){ fs -= 0.5; pdf.setFontSize(fs); }
+    pdf.text(pre, margen + 2, 22); const wPre = pdf.getTextWidth(pre);
+    pdf.setTextColor(...LIMA); pdf.text(nom, margen + 2 + wPre, 22);
+  }
   pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
-  pdf.text(String(det.nombre || 'Operativo'), margen + 2, 29.5);
-  pdf.text(fechaLarga, margen + 2, 35);
-  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
-  pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
-  pdf.text(fechaGeneracionPdf(), ancho - margen - 2, 20, {align: 'right'});
-  pdf.text(`extraído por ${currentUser ? currentUser.nombre : '-'}`, ancho - margen - 2, 25, {align: 'right'});
+  if(info && info.n){ pdf.text(`Operativo N.º ${info.n} del mes de ${MESES_PDF_L[mm - 1]} de ${yy}`, margen + 2, 29.5); pdf.text(fechaLarga, margen + 2, 35); }
+  else pdf.text(fechaLarga, margen + 2, 35);
   // Panel de indicadores
   const pct = c.total ? Math.round(100 * c.reparadas / c.total) : 0;
   conOpacidad(0.96, () => { pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(margen - 2, py, ancho - (margen - 2) * 2, ph, 4, 4, 'FD'); });
@@ -7713,11 +7723,28 @@ async function generarPdfAnalisis(soloResumen, opciones){
     const pdfProm = (v, n) => fmtProm(v, n, '-');
     const ini = d.rango ? d.rango.inicio : '', fin = d.rango ? d.rango.fin : '';
     const fmtF = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7) + '-' + String(s).slice(0, 4);
+    const perEt = etiquetaPeriodoPdf(ini, fin);
+    const perTxt = 'Período: ' + (perEt.mes ? perEt.txt.charAt(0).toUpperCase() + perEt.txt.slice(1) : perEt.txt);
+    // Banda de encabezado de las hojas de detalle: título y, debajo, el período
+    const bandaPagina = (tit) => {
+      pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 24, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 24, ancho, 1, 'F');
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(255, 255, 255); pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 7.5);
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text(tit, margen, 15.5);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(123, 211, 0); pdf.text(perTxt, margen, 21);
+    };
 
     // Un bloque completo (hojas 1 y 2, detalle y mapas) por cada conjunto de datos: el total y luego cada contrato
     const bloque = async (d, cid, nombre, primero) => {
+    // Si hay más de una fila "Contratista" (p. ej. un usuario con ese nombre), se unen en una sola
+    const unirContr = (arr) => {
+      const cs = arr.filter(i => i.nombre === 'Contratista'); if(cs.length < 2) return arr;
+      const r = arr.filter(i => i.nombre !== 'Contratista');
+      const rep = cs.reduce((a, i) => a + (i.reparadas || 0), 0), conT = cs.filter(i => i.media_rec_ing !== null && i.media_rec_ing !== undefined && i.reparadas), pesos = conT.reduce((a, i) => a + i.reparadas, 0);
+      r.push({nombre: 'Contratista', fallas: cs.reduce((a, i) => a + (i.fallas || 0), 0), reparadas: rep, media_rec_ing: pesos ? conT.reduce((a, i) => a + i.media_rec_ing * i.reparadas, 0) / pesos : null});
+      return r;
+    };
     if(!primero) pdf.addPage();
-    const etiquetaContrato = (yy) => { if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10.5); pdf.setTextColor(255, 255, 255); pdf.text(cid ? 'CONTRATO: ' + nombre.toUpperCase() : 'CONTRATOS DE MANTENIMIENTO ACTIVOS', ancho - margen - 2, yy, {align: 'right'}); } };
+    const etiquetaContrato = (yy) => {};
     // ---------- HOJA 1: mapa del período + indicadores ----------
     const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
     const rr = d.resumen || {};
@@ -7804,12 +7831,13 @@ async function generarPdfAnalisis(soloResumen, opciones){
       const anchoGen = pdf.getTextWidth('Generado por el Sistema de Gestión de Fallas');
       const maxT = ancho - margen - 2 - anchoGen - 6 - (margen + 2);
       let fs = 24; pdf.setFontSize(fs);
-      while(fs > 12 && pdf.getTextWidth('Informe de fallas de Alumbrado Público') > maxT){ fs -= 0.5; pdf.setFontSize(fs); }
-      pdf.text('Informe de fallas de Alumbrado Público', margen + 2, 22);
+      const tituloP = perEt.mes ? 'Informe mensual de fallas de alumbrado' : 'Informe de fallas de alumbrado';
+      while(fs > 12 && pdf.getTextWidth(tituloP) > maxT){ fs -= 0.5; pdf.setFontSize(fs); }
+      pdf.text(tituloP, margen + 2, 22);
     }
-    pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
-    pdf.text(`Período: ${fmtLarga(ini)} al`, margen + 2, 29.5);
-    pdf.text(fmtLarga(fin), margen + 2, 35);
+    pdf.setFontSize(12); pdf.setTextColor(...LIMA);
+    if(perEt.mes) pdf.text(`Mes de ${perEt.txt}`, margen + 2, 31);
+    else { pdf.setFontSize(10.5); pdf.text(`Período: ${fmtLarga(ini)} al`, margen + 2, 29.5); pdf.text(fmtLarga(fin), margen + 2, 35); }
     etiquetaContrato(35);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
     pdf.text('Generado por el Sistema de Gestión de Fallas', ancho - margen - 2, 15, {align: 'right'});
@@ -7852,14 +7880,15 @@ async function generarPdfAnalisis(soloResumen, opciones){
     pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 3.2);
 
     // ---------- HOJA 2: estadísticas ----------
+    if(cid) pdf.deletePage(pdf.internal.getCurrentPageInfo().pageNumber);   // el contrato no lleva la hoja del mapa
     pdf.addPage();
+    const pgHoja2 = pdf.internal.getCurrentPageInfo().pageNumber; let pgRep = null;
     pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 38, 'F');
     pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
     pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text('Estadísticas del período', margen + 2, 22);
-    pdf.setFontSize(10.5); pdf.setTextColor(...LIMA);
-    pdf.text(`Período: ${fmtLarga(ini)} al`, margen + 2, 29.5);
-    pdf.text(fmtLarga(fin), margen + 2, 35);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(24); pdf.text(cid ? `Estadísticas Contrato ${nombre}` : 'Resumen ejecutivo', margen + 2, 22);
+    pdf.setFontSize(12); pdf.setTextColor(...LIMA);
+    pdf.text(perTxt, margen + 2, 31);
     etiquetaContrato(35);
     const tarjeta = (x, y, w, h, titulo) => {
       pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x, y, w, h, 3, 3, 'FD');
@@ -8099,7 +8128,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     const itosBase = (d.por_ito || []).filter(i => !esContr(i.nombre));
     const nContr = (d.por_ito || []).filter(i => esContr(i.nombre)).reduce((a, i) => a + (i.fallas || 0), 0);
     if(nContr) itosBase.push({nombre: 'Contratista', fallas: nContr});
-    const itos = itosBase.sort((a, b) => b.fallas - a.fallas);
+    const itos = unirContr(itosBase).sort((a, b) => b.fallas - a.fallas);
     const pasoIto = itos.length ? Math.min(8, Math.max(3.8, (hIzq - 16) / itos.length)) : 8;
     const hDer = cid ? 0 : Math.max(30, 12 + itos.length * pasoIto + 4);
     if(!cid){
@@ -8181,15 +8210,17 @@ async function generarPdfAnalisis(soloResumen, opciones){
     pdf.text(`Verde: mejora respecto de ${esMesCompleto ? etiquetaAnt : 'el período anterior'}; rojo: empeora. ${esMesCompleto ? '' : 'Período anterior = la misma cantidad de días inmediatamente anteriores. '}pp = puntos porcentuales.`, margen + 5, yc + hc - 1.6);
     pdf.setFontSize(8); pdf.text('Municipalidad de La Florida · Alumbrado público', margen, alto - 7);
 
-    // Una hoja por cada operativo del período (si los hubo): se suma a las cifras de siempre, no las excluye
-    try{
+    // Una hoja por cada operativo del período (si los hubo): se suma a las cifras de siempre, no las excluye. Solo en el informe general (no en cada contrato)
+    if(!cid) try{
       const datOp = await traerOperativos(ini, fin);
       if(datOp && datOp.operativos && datOp.operativos.length){
         // Una sección por operativo: mapa con sus fallas + estadísticas (solo del operativo)
-        for(const o of datOp.operativos){
+        const ordMes = {};
+        for(const o of [...datOp.operativos].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))){
           try{
+            const mesO = String(o.fecha).slice(0, 7); ordMes[mesO] = (ordMes[mesO] || 0) + 1;
             const det = await db.rpc('operativo_detalle', {p_fecha: String(o.fecha).slice(0, 10)});
-            if(det && det.fallas && det.fallas.length) await agregarHojasOperativo(pdf, det, false);
+            if(det && det.fallas && det.fallas.length) await agregarHojasOperativo(pdf, det, false, {n: ordMes[mesO]});
           }catch(e1){ console.warn('No se pudo agregar el detalle del operativo ' + o.fecha, e1); }
         }
       }
@@ -8197,26 +8228,11 @@ async function generarPdfAnalisis(soloResumen, opciones){
 
     // Las hojas de detalle (tablas y mapa de críticos) son solo del informe de la pestaña "Análisis"
     if(!soloResumen){
-    pdf.addPage();
-    // Banda de encabezado de la hoja (mismo lenguaje visual que las hojas 1 y 2)
-    pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 24, 'F');
-    pdf.setFillColor(123, 211, 0); pdf.rect(0, 24, ancho, 1, 'F');
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(255, 255, 255); pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 7.5);
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text('Detalle del análisis', margen, 16);
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(123, 211, 0);
-    pdf.text(`Período: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen, 16, {align: 'right'});
-    if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(255, 255, 255); pdf.text('Contrato: ' + nombre, ancho - margen, 7.5, {align: 'right'}); }
     let y = 34;
-    // Hoja nueva de la sección de detalle: repite la misma banda de encabezado
-    const hojaDet = () => {
-      pdf.addPage();
-      pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 24, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 24, ancho, 1, 'F');
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(255, 255, 255); pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 7.5);
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text('Detalle del análisis', margen, 16);
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(123, 211, 0); pdf.text(`Período: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen, 16, {align: 'right'});
-      if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(255, 255, 255); pdf.text('Contrato: ' + nombre, ancho - margen, 7.5, {align: 'right'}); }
-      y = 34;
-    };
+    // Título de la banda de las hojas de detalle (cambia por sección) y salto a una hoja nueva con la misma banda
+    let tituloDet = cid ? `Detalle de fallas Contrato ${nombre}` : 'Análisis de Mantenimiento';
+    const hojaDet = () => { pdf.addPage(); bandaPagina(tituloDet); y = 34; };
+    hojaDet();
 
     const estilosTabla = {
       margin: {left: margen, right: margen},
@@ -8320,6 +8336,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
         const pesos = conT.reduce((a, i) => a + i.reparadas, 0);
         itosDet.push({nombre: 'Contratista', fallas: cs.reduce((a, i) => a + (i.fallas || 0), 0), reparadas: rep, media_rec_ing: pesos ? conT.reduce((a, i) => a + i.media_rec_ing * i.reparadas, 0) / pesos : null});
       }
+      itosDet.splice(0, itosDet.length, ...unirContr(itosDet));
       itosDet.sort((a, b) => b.fallas - a.fallas);
     }
     if(itosDet.length){
@@ -8339,7 +8356,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       let cie = null;
       try{ cie = await rpcAnalisisCierres(ini, fin, cid); }catch(e){ console.warn('No se pudieron obtener los cierres:', e); }
       if(cie && (cie.por_codigo || []).length){
-        hojaDet(); // las reparaciones siempre arrancan en hoja propia
+        tituloDet = cid ? `Detalle de reparaciones Contrato ${nombre}` : 'Análisis de Mantenimiento'; hojaDet(); pgRep = pdf.internal.getCurrentPageInfo().pageNumber; // las reparaciones siempre arrancan en hoja propia
         const COL_GRUPO = {'Equipo de la luminaria': [63, 108, 143], 'Red y conexiones': [217, 138, 28], 'Tablero y protecciones': [181, 71, 58], 'Infraestructura': [122, 106, 92], 'Funcionamiento normal': [46, 125, 79], 'Otros': [154, 165, 159]};
         const colG = (g) => COL_GRUPO[g] || [150, 160, 154];
         const totCod = cie.por_codigo.reduce((a, c) => a + c.veces, 0) || 1;
@@ -8415,7 +8432,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
 
     if(!cid){
     // 7) Operativos del período (esta parte parte siempre en una hoja nueva)
-    hojaDet();
+    tituloDet = 'Inspecciones Nocturnas y Operativos'; hojaDet();
     const cob = d.cobertura || {};
     const diasCob = cob.por_dia || [];
     if(opsDet.length){
@@ -8485,9 +8502,10 @@ async function generarPdfAnalisis(soloResumen, opciones){
       titulo('Inspecciones nocturnas por ITO');
       if((cob.por_ito || []).length){
         tabla({
-          head: [['ITO', 'Inspecciones', 'Sin fallas', 'Fallas', 'Noches']],
-          body: cob.por_ito.map(i => [i.nombre, i.inspecciones, i.sin_fallas, i.fallas, i.dias_distintos]),
-          columnStyles: {0: {cellPadding: {left: 14, top: 1.6, bottom: 1.6, right: 1.6}}, 1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}, 4: {halign: 'right'}},
+          head: [['ITO', 'Inspecciones', 'Fallas']],
+          body: cob.por_ito.map(i => [i.nombre, i.inspecciones, i.fallas]),
+          margin: {left: margen, right: ancho - margen - 105},
+          columnStyles: {0: {cellPadding: {left: 14, top: 1.6, bottom: 1.6, right: 1.6}}, 1: {halign: 'right', cellWidth: 26}, 2: {halign: 'right', cellWidth: 20}},
           didDrawCell: (h) => {
             if(h.section !== 'body' || h.column.index !== 0) return;
             const n = cob.por_ito[h.row.index].nombre, cy = h.cell.y + h.cell.height / 2;
@@ -8497,6 +8515,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
         });
       } else vacio('Sin inspecciones registradas en este rango.');
     }
+    tituloDet = 'Puntos críticos y pendientes'; hojaDet();
     seccionPendientes();
     }
 
@@ -8525,11 +8544,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     // Encabezado y nota de lectura comunes a las dos hojas de mapa
     const hojaMapa = (titulo, leyenda, cv, titNota, nota) => {
       pdf.addPage();
-      pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 24, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 24, ancho, 1, 'F');
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(255, 255, 255); pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 7.5);
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text(titulo, margen, 16);
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(123, 211, 0); pdf.text(`Período: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen, 16, {align: 'right'});
-      if(nombre){ pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(255, 255, 255); pdf.text('Contrato: ' + nombre, ancho - margen, 7.5, {align: 'right'}); }
+      bandaPagina(titulo);
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
       leyenda();
       const w = ancho - margen * 2, h = Math.min(cv.height * w / cv.width, alto - 38 - 36);
@@ -8548,7 +8563,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       cCirc.forEach((c, i) => { if(c.lat != null && c.lon != null) items.push({geom: {type: 'Point', coordinates: [c.lon, c.lat]}, color: '#2563a8', label: cPuntos.length + i + 1}); });
       if(items.length && !cid){
         const cvK = await renderMapaCanvas(items, {w: 1400, h: 1500, padding: 60, zMax: 17, contorno: true});
-        if(cvK) hojaMapa('Mapa de puntos y circuitos críticos', () => {
+        if(cvK) hojaMapa('Mapa de puntos críticos', () => {
           pdf.setFillColor(142, 68, 173); pdf.circle(margen + 1.6, 32, 1.6, 'F'); pdf.text('Punto crítico', margen + 5, 33);
           pdf.setFillColor(37, 99, 168); pdf.circle(margen + 32, 32, 1.6, 'F'); pdf.text('Circuito crítico (en su centro)', margen + 35.5, 33);
         }, cvK, 'Cómo leer este mapa', 'Los círculos numerados marcan los puntos (morado) y los circuitos (azul) con 2 o más fallas en el período o con alguna reiterada. El número es el mismo de las tablas anteriores. Si dos marcas quedan muy juntas se separan un poco y se unen con una línea a su ubicación real.');
@@ -8556,7 +8571,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     }catch(e){ console.warn('No se pudo incluir el mapa de críticos en el PDF:', e); }
 
     // 10) Mapa de calor con curvas de nivel (solo la concentración de fallas, sin marcas)
-    try{
+    if(!cid) try{
       const gf = await fallasGeojsonAnalisis(ini, fin, cid);
       const modoC = ANA_CALOR.modo;
       const pts = calorPuntos(gf, modoC);
@@ -8566,9 +8581,11 @@ async function generarPdfAnalisis(soloResumen, opciones){
           pdf.text('Concentración de fallas', margen, 33); pdf.text('baja', margen + 38, 33);
           CALOR_COLORES.forEach((c, i) => { pdf.setFillColor(...hexAPdf(c)); pdf.rect(margen + 46 + i * 7, 30.2, 7, 3.6, 'F'); });
           pdf.text('alta', margen + 46 + CALOR_COLORES.length * 7 + 2, 33);
-        }, cvC, 'Cómo leer este mapa', `Las curvas funcionan como las de nivel de un mapa topográfico: cada una encierra los sectores con igual o mayor concentración de ${modoC === 'puntos' ? 'puntos lumínicos afectados' : 'fallas'} del período (un circuito cuenta una vez, en su centro). Mientras más rojo y más juntas están las curvas, más fallas se acumulan en ese sector. El color es relativo al sector más cargado de la comuna y se suaviza en ~400 m alrededor de cada falla. El mapa de calles se ve por debajo, porque los colores son semitransparentes.`);
+        }, cvC, 'Cómo leer este mapa', `Mapa de densidad de fallas por estimación de núcleo (kernel gaussiano, radio de suavizado ≈ 400 m). Cada falla aporta un peso (un circuito cuenta una vez, en su centro) y la densidad resultante se normaliza respecto del máximo de la comuna. Las curvas unen zonas de igual densidad, en los niveles 10, 22, 36, 52, 70 y 86 % del máximo; cada banda de color agrupa los sectores entre dos niveles. Los colores indican densidad relativa (concentración), no el número absoluto de fallas.`);
       }
     }catch(e){ console.warn('No se pudo incluir el mapa de calor en el PDF:', e); }
+    // En cada contrato, las estadísticas van después del detalle de fallas y antes del detalle de reparaciones
+    if(cid && pgRep && pgRep > pgHoja2) pdf.movePage(pgHoja2, pgRep - 1);
 
     }
 
@@ -8590,10 +8607,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       {
         const gwC = ancho - margen * 2;
         pdf.addPage();
-        pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 24, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 24, ancho, 1, 'F');
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(255, 255, 255); pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 7.5);
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text('Comparación entre contratos', margen, 16);
-        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(123, 211, 0); pdf.text(`Período: ${fmtF(ini)} al ${fmtF(fin)}`, ancho - margen, 16, {align: 'right'});
+        bandaPagina('Comparación de Contratos');
         const COL_C = [[37, 99, 168], [217, 138, 28], [142, 68, 173], [22, 160, 133], [181, 71, 58], [122, 106, 92]];
         const lista = datosC.filter(x => x.d && x.d.resumen && x.d.resumen.fallas).map((x, i) => {
           const q = x.d.resumen, cods = [...(x.d.por_codigo || [])].sort((p, r) => r.fallas - p.fallas);
