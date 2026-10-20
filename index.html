@@ -7889,9 +7889,9 @@ async function generarPdfAnalisis(soloResumen, opciones){
       const desc = descripcionCodigoAnalisis(c.tipo, c.tipo_falla) || '';
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(...VERDE); pdf.text(String(c.tipo_falla), margen + 5, yy);
       pdf.setFont('helvetica', 'normal'); pdf.setTextColor(30, 40, 35); pdf.setFontSize(dividirDia ? 7.2 : 8);
-      const lineas = pdf.splitTextToSize(desc, 51).slice(0, 2);
-      pdf.text(lineas, margen + 14, yy);
-      const bx = margen + 68, bwMax = wIzq - 68 - 14;
+      const lineas = pdf.splitTextToSize(desc, 41).slice(0, 2);   // si no cabe junto a la barra, baja una línea (pegadita a la anterior)
+      pdf.text(lineas, margen + 14, lineas.length > 1 ? yy - 1.2 : yy, {lineHeightFactor: 0.95});
+      const bx = margen + 58, bwMax = wIzq - 58 - 14;
       pdf.setFillColor(238, 242, 238); pdf.roundedRect(bx, yy - 3, bwMax, 3.6, 1.2, 1.2, 'F');
       pdf.setFillColor(...(esC ? VERDE : LIMA)); pdf.roundedRect(bx, yy - 3, Math.max(1.5, c.fallas / maxCod * bwMax), 3.6, 1.2, 1.2, 'F');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(30, 40, 35); pdf.text(String(c.fallas), margen + wIzq - 5, yy, {align: 'right'});
