@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.37.0';
+const VERSION_APP = '1.37.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2280,6 +2280,7 @@ function cuCalcular(filas, desde, hasta) {
   return {
     items, total, inicio: items.filter((i) => i.inicio).length, inicioPend: items.filter((i) => i.inicioPend).length,
     reparadas: rep, pendientes: pen, sin: total - rep - pen,
+    aportes: items.filter((i) => i.es_aporte && i.reparada).length,
     contrRep: items.filter((i) => i.porContr === 'reparada').length, contrPend: items.filter((i) => i.porContr === 'pendiente').length,
     cumplimiento: total ? Math.round(100 * rep / total) : null, medio,
   };
@@ -2338,19 +2339,27 @@ function pintarCuadrillas() {
   const kpi = (l, v, col, sub) => `<div class="cu-kpi" style="border-top-color:${col}"><div class="l">${l}</div><div class="v">${v}</div>${sub ? `<div class="l" style="font-size:10.5px">${sub}</div>` : ''}</div>`;
   let html = '';
   if (!selId || ctSel) {
+    const apItems = todas.flatMap((x) => x.r.items.filter((i) => i.es_aporte && i.reparada).map((i) => ({ ...i, cuad: x.c.nombre })));
     const G = todas.reduce((g, x) => ({ t: g.t + x.r.total, r: g.r + x.r.reparadas, c: g.c + x.r.contrRep + x.r.contrPend }), { t: 0, r: 0, c: 0 });
     // Fallas activas del contrato (o de todos): abiertas al inicio del turno + ingresadas durante el turno
     const hayAct = Array.isArray(CU.datos.activas);
     const acts = (CU.datos.activas || []).filter((a) => !ctSel || a.contrato_id === ctSel);
     const aIni = acts.reduce((n, a) => n + a.inicio, 0), aIng = acts.reduce((n, a) => n + a.ingresadas, 0), aTot = aIni + aIng;
     if ((CU.datos.contratos || []).length) html += `<div class="cu-sec" style="margin-top:0">${ctNombre ? 'Contrato: ' + esc(ctNombre) : 'Todos los contratos'}</div>`;
-    html += `<div class="cu-kpis">${hayAct ? kpi('Fallas activas', aTot, '#1f4d3d', `${aIni} al inicio del turno · ${aIng} ingresadas en el turno`) : ''}${kpi('Asignadas a cuadrillas', G.t, '#9aa5b1', hayAct ? `de ${aTot} activas` : '')}${kpi('Reparadas por camión', G.r, CU_COL.reparada)}${kpi('Cumplimiento de las asignadas', G.t ? Math.round(100 * G.r / G.t) + '%' : '—', '#7a5ca8', G.t ? `${G.r} de ${G.t}` : '')}${kpi('Atendidas por contratista', G.c, '#d98e2f')}</div>`;
+    html += `<div class="cu-kpis">${hayAct ? kpi('Fallas activas', aTot, '#1f4d3d', `${aIni} al inicio del turno · ${aIng} ingresadas en el turno`) : ''}${kpi('Asignadas a cuadrillas', G.t, '#9aa5b1', hayAct ? `de ${aTot} activas` : '')}${kpi('Reparadas por camión', G.r, CU_COL.reparada)}${apItems.length ? kpi('Aportes', apItems.length, '#7a5ca8', 'ya incluidos en las reparadas') : ''}${kpi('Cumplimiento de las asignadas', G.t ? Math.round(100 * G.r / G.t) + '%' : '—', '#7a5ca8', G.t ? `${G.r} de ${G.t}` : '')}${kpi('Atendidas por contratista', G.c, '#d98e2f')}</div>`;
     if (!todas.length) html += '<div class="u-vacio">Este contrato aún no tiene cuadrillas.</div>';
     html += todas.map(({ c, r }) => { const t = r.total || 1;
       return `<button class="cu-card" data-c="${esc(c.id)}"><div class="top"><span>${esc(c.nombre)}</span><span style="color:${r.cumplimiento == null ? 'var(--tinta-2)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')}">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</span></div>
         ${r.total ? `<div class="cu-centro">${cuPildora(r)}</div><div class="cu-barra"><i style="width:${100 * r.reparadas / t}%;background:${CU_COL.reparada}"></i><i style="width:${100 * r.pendientes / t}%;background:${CU_COL.pendiente}"></i><i style="width:${100 * r.sin / t}%;background:${CU_COL.sin}"></i></div>
         <div class="cu-leyenda"><span style="color:${CU_COL.reparada}">● ${r.reparadas} reparadas</span><span style="color:#b36b00">● ${r.pendientes} pend.</span><span style="color:${CU_COL.sin}">● ${r.sin} sin atender</span></div>` : '<div class="s" style="margin-top:6px;color:var(--tinta-2)">Sin fallas en este turno</div>'}
+        ${r.aportes ? `<div class="s" style="margin-top:6px;font-size:12px;color:#6b4fa0">🛠 ${r.aportes} aporte${r.aportes > 1 ? 's' : ''}</div>` : ''}
         ${(r.contrRep || r.contrPend) ? `<div class="s" style="margin-top:6px;font-size:12px;color:#8a5200">🔧 ${r.contrRep ? r.contrRep + ' cerrada' + (r.contrRep > 1 ? 's' : '') + ' por contratista' : ''}${r.contrRep && r.contrPend ? ' · ' : ''}${r.contrPend ? r.contrPend + ' pendiente' + (r.contrPend > 1 ? 's' : '') + ' por contratista' : ''}</div>` : ''}</button>`; }).join('') || '<div class="u-vacio">No hay cuadrillas.</div>';
+    if (apItems.length) {
+      const pm = {};
+      apItems.forEach((i) => { const k = i.maestro || 'Sin maestro'; const m = pm[k] || (pm[k] = { n: 0, c: {} }); m.n++; m.c[i.cuad] = (m.c[i.cuad] || 0) + 1; });
+      html += `<div class="cu-sec" style="color:#6b4fa0">Aportes por maestro (${apItems.length})</div>` + Object.entries(pm).sort((p, q) => q[1].n - p[1].n).map(([n, m]) =>
+        `<div class="cu-fila" style="cursor:default"><b>${esc(n)}</b> · ${m.n} aporte${m.n > 1 ? 's' : ''}<div class="s">${Object.entries(m.c).map(([c, k]) => esc(c) + ' (' + k + ')').join(' · ')}</div></div>`).join('');
+    }
   } else {
     const x = todasLas.find((y) => y.c.id === selId); if (!x) { cont.innerHTML = ''; return; }
     const { c, r } = x;
@@ -2362,7 +2371,7 @@ function pintarCuadrillas() {
       const por = r.items.filter((i) => !i.reparada && !i.pendiente).sort((p, q) => p.a - q.a);
       const fila = (i, izq, etq, col) => `<button class="cu-fila" data-f="${esc(i.falla_id)}"><b>${esc(izq)}</b> · OS ${esc(i.ot || '—')} · ${esc(i.tipo_falla || '')}<div class="s">${esc(i.direccion || '—')}</div><div class="s" style="color:${col};font-weight:600">${etq}</div></button>`;
       html += `<div class="cu-sec" style="color:#3a8a5c">Atendidas en el turno (${hechas.length})</div>` + (hechas.length
-        ? hechas.map((i) => fila(i, cuHora(i.reparada ? i.reparada_en : i.fecha_pendiente), '', CU_COL[i.resultado]).replace('<div class="s" style="color:' + CU_COL[i.resultado] + ';font-weight:600"></div>', `<div class="s" style="color:${CU_COL[i.resultado]};font-weight:600">${i.reparada ? '✔ Reparada' : '● Pendiente'}</div>`)).join('')
+        ? hechas.map((i) => fila(i, cuHora(i.reparada ? i.reparada_en : i.fecha_pendiente) + (i.es_aporte ? ' · 🛠 aporte de ' + (i.maestro || 'maestro') : ''), '', CU_COL[i.resultado]).replace('<div class="s" style="color:' + CU_COL[i.resultado] + ';font-weight:600"></div>', `<div class="s" style="color:${CU_COL[i.resultado]};font-weight:600">${i.reparada ? '✔ Reparada' : '● Pendiente'}</div>`)).join('')
         : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">Aún no ha atendido ninguna.</div>');
       html += `<div class="cu-sec" style="color:#c1443c">Por atender (${por.length})</div>` + (por.length
         ? por.map((i) => fila(i, i.inicio ? (i.inicioPend ? 'Antes del turno (ya pendiente)' : 'Antes del turno') : 'Asignada ' + cuHora(i.asignado_en), '● Sin atender', CU_COL.sin)).join('')
