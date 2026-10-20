@@ -7649,7 +7649,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       pdf.setFontSize(9); pdf.setTextColor(30, 40, 35); pdf.text(etiqueta, x, py + 22);
       if(sub){ pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(sub, x, py + 26.5); }
     };
-    kpi(margen + 6, num(total1), 'Reportadas en total', '');
+    kpi(margen + 6, num(total1), 'Fallas detectadas', '');
     kpi(margen + 46, puntos1.puntos_afectados === undefined ? '-' : fmtMiles(puntos1.puntos_afectados), 'Puntos afectados', '');
     if(puntos1.puntos_afectados !== undefined && puntos1.total_puntos){
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris);
@@ -7669,7 +7669,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(...gris);
     pdf.text('ESTADO ACTUAL AL MOMENTO DE GENERAR ESTE INFORME', margen + 4, py + 36.5);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.2); pdf.setTextColor(...VERDE);
-    pdf.text(`Reportadas en total (${total1}) = Reparadas (${porColor1.reparada}) + Reportadas (${porColor1.reportada}) + Reiteradas (${porColor1.reiterada}) + Pendientes (${porColor1.pendiente}) + Atrasadas (${porColor1.vencida})`, margen + 4, py + 48.5);
+    pdf.text(`Fallas detectadas (${total1}) = Reparadas (${porColor1.reparada}) + Reportadas (${porColor1.reportada}) + Reiteradas (${porColor1.reiterada}) + Pendientes (${porColor1.pendiente}) + Atrasadas (${porColor1.vencida})`, margen + 4, py + 48.5);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.8); pdf.setTextColor(...gris);
     pdf.text(pdf.splitTextToSize('Cifras de las fallas informadas dentro del período, sin filtros.', ancho - margen * 2 - 8), margen + 4, py + 52.5);
     conOpacidad(0.85, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
