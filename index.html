@@ -7699,7 +7699,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       tarjeta(xq, 45, mitad, 46, 'Calidad de servicio');
       const totN = feats.length || rr.fallas || 0;
       const nReit = Math.min(rr.reiteradas || 0, totN), nPrim = totN - nReit;
-      const COL_PRIM = [37, 99, 168], COL_REIT = [230, 126, 34];
+      const COL_PRIM = [120, 144, 156], COL_REIT = [255, 167, 38];
       const pc = (v) => totN ? ` (${Math.round(v / totN * 100)}%)` : '';
       const w = 360, h = 200, c = document.createElement('canvas'); c.width = w; c.height = h;
       const g = c.getContext('2d'), cx = w / 2, cy = h - 12, r = 150;
