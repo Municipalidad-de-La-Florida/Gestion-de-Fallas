@@ -9219,7 +9219,6 @@ function cuadPintar(){
     const aIni = acts.reduce((n, a) => n + a.inicio, 0), aIng = acts.reduce((n, a) => n + a.ingresadas, 0), aTot = aIni + aIng;
     if((CUAD.datos.contratos || []).length) html += `<div style="margin:0 0 8px; font-weight:700; color:#1f4d3d;">${ctNombre ? 'Contrato: ' + escHtml(ctNombre) : 'Todos los contratos'}</div>`;
     html += `<div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(135px,1fr)); gap:10px; margin-bottom:14px;">${hayAct ? kp('Fallas activas', aTot, '#fff', '#1f4d3d', `${aIni} al inicio del turno · ${aIng} ingresadas en el turno`) : ''}${kp('Asignadas a cuadrillas', G.total, '#fff', null, hayAct ? `de ${aTot} activas` : '')}${kp('Reparadas por camión', G.rep, '#fff', CUAD_COLOR.reparada)}${apItems.length ? kp('Aportes', apItems.length, '#fff', '#6b4fa0', 'extra al trabajo normal') : ''}${kp('Cumplimiento de las asignadas', G.total ? Math.round(100 * G.rep / G.total) + '%' : '—', '#fff', '#1f4d3d', G.total ? `${G.rep} de ${G.total}` : '')}${kp('Atendidas por contratista', G.contr, '#fff7e8', '#b36b00')}</div>`;
-    const iniCuad = html.length;   // lo que sigue es la vista de cuadrillas; los aportes van en una vista aparte (botón)
     if(!todas.length) html += '<div class="empty-state">Este contrato aún no tiene cuadrillas.</div>';
     const PAL = [['#e3f1ea', '#1f7a52'], ['#e6eefb', '#2a5db0'], ['#f3edff', '#7c3aed'], ['#fff1d9', '#8a5200'], ['#fbe7e5', '#c1443c']];
     const ini = n => (n.match(/[A-Za-zÁÉÍÓÚÑ0-9]+/g) || ['?']).slice(0, 2).map(w => w[0].toUpperCase()).join('');
@@ -9231,10 +9230,10 @@ function cuadPintar(){
           <div style="margin-top:6px; font-size:11.5px;"><span style="color:${CUAD_COLOR.reparada};">● ${r.reparadas} reparadas</span> &nbsp;<span style="color:#b36b00;">● ${r.pendientes} pend.</span> &nbsp;<span style="color:${CUAD_COLOR.sin};">● ${r.sin} sin atender</span></div>${cuadEtiquetaContr(r)}` : '<span class="hint" style="margin:0;">Sin fallas en este turno</span>'}</div>
         <div style="font-size:20px; font-weight:700; color:${r.cumplimiento == null ? 'var(--ink-soft)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')};">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</div><div style="font-weight:600; display:flex; align-items:center; justify-content:space-between;">${cuadDur(r.medio)}<span class="cu-go">›</span></div></div>`; }).join('') +
       `</div>` + `<div class="hint" style="margin-top:8px;">Haz clic en una cuadrilla (fila con ›) para ver su detalle. Solo cuenta lo que cerró o dejó pendiente un camión; lo que hizo un contratista se muestra aparte y la falla sigue como «sin atender» para la cuadrilla. Cada falla se cuenta una vez, para la cuadrilla que la tiene asignada (si se reasigna a otra sin que la repare, no suma). Las asignaciones anteriores al historial se reconstruyen con la última asignación de cada falla.</div>`;
-    const htmlCuads = html.slice(iniCuad); html = html.slice(0, iniCuad);
-    const nAp = apItems.length, verAp = !!CUAD.verAportes;
-    html += `<button type="button" id="cuadAportesBtn" style="margin:0 0 12px; background:${verAp ? '#fff' : '#6b4fa0'}; color:${verAp ? '#6b4fa0' : '#fff'}; border:1.5px solid #6b4fa0; border-radius:20px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer;">${verAp ? '← Volver a cuadrillas' : '🛠 Aportes' + (nAp ? ' (' + nAp + ' en el turno)' : '')}</button>`;
-    html += verAp ? (cuadAportesMaestros(apItems) || '<div class="hint" style="margin:0 0 8px;">Sin aportes en este turno.</div>') + cuadMesHtml(ctSel) : htmlCuads;
+    const verMes = !!CUAD.verAportes;
+    const pos = html.lastIndexOf('<div class="hint" style="margin-top:8px;">Haz clic');
+    const bloque = cuadAportesMaestros(apItems) + `<button type="button" id="cuadAportesBtn" style="margin:12px 0 0; background:${verMes ? '#fff' : '#6b4fa0'}; color:${verMes ? '#6b4fa0' : '#fff'}; border:1.5px solid #6b4fa0; border-radius:20px; padding:6px 14px; font-size:12.5px; font-weight:600; cursor:pointer;">${verMes ? '✕ Ocultar aportes del mes' : '🛠 Aportes del mes'}</button>` + (verMes ? '<div style="margin-top:10px;">' + cuadMesHtml(ctSel) + '</div>' : '');
+    html = pos >= 0 ? html.slice(0, pos) + bloque + html.slice(pos) : html + bloque;
     todas.forEach(({c, r}) => r.items.forEach(i => mapaItems.push({...i, cuadrilla: c.nombre})));
   } else {
     const {c, r} = todas.find(x => x.c.id === selId) || {};
