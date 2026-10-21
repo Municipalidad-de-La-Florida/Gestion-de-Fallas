@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.46.0';
+const VERSION_APP = '1.47.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -542,6 +542,7 @@ function salir(msg) {
   guardarSesion(null);
   try { localStorage.removeItem(LS_PERFIL); localStorage.removeItem(LS_MODO); } catch (e) { /* */ }
   S.modo = { tipo: 'agregar', fecha: null, inspId: null };
+  S.modoHist = false;
   detenerGPS();
   clearInterval(S.timer);
   cerrarHoja();
@@ -907,7 +908,12 @@ function dibujarFallas() {
         capa = L.geoJSON(f.geometry, { renderer: rend, style: { color, weight: 7, opacity: reparada ? 0.45 : 0.9 }, interactive: true });
       }
     }
-    capa.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirFalla(p, f.geometry); });
+    capa.on('click', (e) => {
+      L.DomEvent.stopPropagation(e);
+      if (S.modoHist && p.ref_punto_gid != null) return abrirHistorial('punto', p.ref_punto_gid, 'Punto lumínico', f.geometry);
+      if (S.modoHist && p.ref_circuito_gid != null) return abrirHistorial('linea', p.ref_circuito_gid, 'Circuito', f.geometry);
+      abrirFalla(p, f.geometry);
+    });
     capaFallas.addLayer(capa);
   });
 }
@@ -1211,6 +1217,7 @@ function accionesReporte(textoReportar, geom) {
   </div>`;
 }
 function abrirPunto(p, geom) {
+  if (S.modoHist) return abrirHistorial('punto', p.gid, 'Punto lumínico ' + (p.llave ?? ''), geom);
   const h = abrirHoja(`
     <h2>Punto lumínico</h2>
     <dl class="kv">
@@ -1237,6 +1244,7 @@ function abrirPunto(p, geom) {
   }));
 }
 function abrirCircuito(p, geom) {
+  if (S.modoHist) return abrirHistorial('linea', p.gid, 'Circuito ' + (p.id ?? ''), geom);
   const h = abrirHoja(`
     <h2>Circuito ${esc(p.id ?? '')}</h2>
     <dl class="kv">
@@ -1260,6 +1268,44 @@ function abrirCircuito(p, geom) {
     await formAporte('circuito', p);
   }));
 }
+
+/* ------------------------- modo historial (admin) ------------------------- */
+// Con el modo activo, tocar un punto, un circuito o una falla muestra su historial en vez de la ficha normal.
+async function abrirHistorial(tipo, gid, titulo, geom) {
+  const h = abrirHoja(`<h2>Historial · ${esc(titulo)}</h2><div id="histEnt" class="hint">Cargando…</div>
+    <div class="acciones"><button id="bHistSalir" class="btn" style="margin-top:0">Salir del modo historial</button></div>`);
+  $('#bHistSalir', h).addEventListener('click', () => { cerrarHoja(); alternarModoHist(false); });
+  const caja = $('#histEnt', h);
+  try {
+    const filas = await rpc('historial_entidad', { tipo_entidad: tipo, entidad_gid: gid });
+    if (!filas || !filas.length) { caja.innerHTML = 'Sin fallas registradas para este elemento todavía.'; return; }
+    const ids = filas.map((f) => f.falla_id).filter((x) => x != null);
+    let coms = [], desc = [];
+    try { coms = await select('fallas_comentarios', `falla_id=in.(${ids.join(',')})&tipo=eq.asignacion&select=falla_id,comentario,autor_nombre,creado_en&order=creado_en.asc`) || []; } catch (e) { /* sin comentarios */ }
+    try { desc = await select('fallas', `id=in.(${ids.join(',')})&select=id,descripcion_otro`) || []; } catch (e) { /* sin descripción */ }
+    const dRep = {}; desc.forEach((r) => { if (r.descripcion_otro) dRep[r.id] = r.descripcion_otro; });
+    const ev = [];
+    filas.forEach((f) => {
+      const cod = esc(f.tipo_falla || '') + (f.cascada ? ' (por cascada de circuito)' : '');
+      ev.push({ t: f.fecha_falla, ot: f.ot, k: 'Reportada', c: 'rep', cod, q: f.nombre_creador, d: dRep[f.falla_id] });
+      if (f.pendiente_por_nombre) ev.push({ t: f.fecha_pendiente, ot: f.ot, k: 'Dejada pendiente', c: 'pen', cod: esc(f.tipo_falla || ''), q: f.pendiente_por_nombre, d: f.motivo_pendiente });
+      if (f.reparado_por_nombre) ev.push({ t: f.fecha_reparacion, ot: f.ot, k: 'Reparada', c: 'ok', cod: esc(f.tipo_falla || ''), q: f.reparado_por_nombre, d: f.descripcion_reparacion });
+      coms.filter((c) => c.falla_id === f.falla_id).forEach((c) => ev.push({ t: c.creado_en, ot: f.ot, k: 'Comentario de asignación', c: 'asi', cod: esc(f.tipo_falla || ''), q: c.autor_nombre, d: c.comentario }));
+    });
+    ev.sort((a, b) => new Date(b.t) - new Date(a.t));
+    const col = { rep: '#c1443c', pen: '#8a5200', ok: '#1f7a4d', asi: '#2563a8' };
+    caja.outerHTML = `<div class="m-lista">${ev.map((e) => `<div class="m-fila" style="display:block">
+      <div style="display:flex;justify-content:space-between;gap:8px"><b style="color:${col[e.c]}">${esc(e.k)}</b><span class="hint">${esc(fmtFechaHoraCorta(e.t))}</span></div>
+      <div class="hint">${e.ot ? 'OS ' + esc(e.ot) + ' · ' : ''}${e.cod}${e.q ? ' · ' + esc(e.q) : ''}</div>
+      ${e.d ? `<div style="margin-top:4px">${esc(e.d)}</div>` : ''}</div>`).join('')}</div>`;
+  } catch (e) { caja.textContent = 'No se pudo cargar el historial: ' + e.message; }
+}
+function alternarModoHist(on) {
+  S.modoHist = typeof on === 'boolean' ? on : !S.modoHist;
+  $('#navHist').classList.toggle('sel', !!S.modoHist);
+  if (S.modoHist) toast('Modo historial: toca un punto, circuito o falla para ver su historial.');
+}
+$('#navHist').addEventListener('click', () => { if (hojaAbierta) cerrarHoja(); alternarModoHist(); });
 async function hayFallaActiva(campo, gid) {
   // No se confía solo en "estado": también se revisa si ya existe una reparación registrada.
   const ex = await select('fallas', `${campo}=eq.${gid}&select=id,tipo_falla,estado,reparaciones(id)`);
@@ -2802,7 +2848,7 @@ function cerrarPorTiempo() {
 setInterval(() => { if (S.perfil && vencioModo()) cerrarPorTiempo(); }, 30000);
 /* Botones de la barra inferior que el admin puede ocultar (solo en este teléfono) */
 const LS_NAV_OCULTOS = 'fm_nav_ocultos_v1';
-const NAV_OPCIONES = [['navLista', 'Activas'], ['navInspC3', 'Inspecciones'], ['navInsp', 'Inspección'], ['navCuad', 'Cuadrillas']];
+const NAV_OPCIONES = [['navLista', 'Activas'], ['navInspC3', 'Inspecciones'], ['navInsp', 'Inspección'], ['navCuad', 'Cuadrillas'], ['navHist', 'Historial']];
 function navOcultos() { try { const v = JSON.parse(localStorage.getItem(LS_NAV_OCULTOS) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
 function aplicarNavOcultos() {
   if (rol() !== 'admin') return;
@@ -2824,6 +2870,8 @@ function pintarModo() {
   if (S.perfil && vencioModo()) { S.modo = { tipo: 'agregar', fecha: null, inspId: null }; guardarModo(); }
   $('#navInspC3').hidden = !(rol() === 'contratista3' || rol() === 'admin');
   $('#navCuad').hidden = !puedeCuadrillas();
+  $('#navHist').hidden = rol() !== 'admin';
+  if (rol() !== 'admin' && S.modoHist) alternarModoHist(false);
   const puede = PUEDE_MODO_INSPECCION.includes(rol());
   const c = $('#chipModo'), n = $('#navInsp');
   n.hidden = !puede;
