@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.45.0';
+const VERSION_APP = '1.46.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -941,7 +941,7 @@ function centrarSeguir(zoomMin) {
   setTimeout(() => { movProg = false; }, 800);
 }
 function marcarSeguir() { $('#btnUbicacion').classList.toggle('sigue', !!S.seguir); }
-function activarSeguir() { S.seguir = true; marcarSeguir(); centrarSeguir(18); }
+function activarSeguir() { S.sinAutoSeguir = false; S.seguir = true; marcarSeguir(); centrarSeguir(18); }
 function detenerSeguir() { S.seguir = false; marcarSeguir(); }
 function detenerGPS() {
   detenerSeguir();
@@ -962,7 +962,8 @@ function onPos(p) {
     } else {
       marcadorPos.setLatLng(ll); circuloPos.setLatLng(ll); circuloPos.setRadius(S.pos.prec);
     }
-    if (S.centrarAlFijar) { S.centrarAlFijar = false; activarSeguir(); }
+    // Primer GPS tras abrir: centra y sigue, salvo que ya haya una falla abierta o se venga de un aviso (ahí el mapa se queda en la falla)
+    if (S.centrarAlFijar) { S.centrarAlFijar = false; if (!hojaAbierta && !S.sinAutoSeguir) activarSeguir(); }
     else if (puedeAutoCentrar()) { movProg = true; map.panTo(ll, { animate: true }); setTimeout(() => { movProg = false; }, 800); }
   }
   if (S.vista === 'lista') renderLista();
@@ -2940,6 +2941,8 @@ function avisoDiag(estado, msg) { try { localStorage.setItem('fm_aviso_diag', JS
 async function abrirPendienteDeAviso() {
   const id = S.fallaPendiente; S.fallaPendiente = null;
   if (id) {
+    // Desde ya (no cuando termine de cargar la falla): sin seguimiento ni centrado automático sobre tu ubicación
+    S.sinAutoSeguir = true; S.centrarAlFijar = false; detenerSeguir();
     try { await abrirFallaPorId(id); avisoDiag('abierta'); }
     catch (e) { avisoDiag('error', e.message); toast('No se pudo abrir la falla del aviso.', 'error'); }
   }
@@ -3082,6 +3085,7 @@ async function entrarApp() {
   await cargarFallas();
   if (!habiaAviso) restaurarBorrador();
   cargarArea(true);
+  if (habiaAviso) S.sinAutoSeguir = true;
   S.centrarAlFijar = !habiaAviso;   // si se entró por un aviso, el mapa se queda en esa falla
   iniciarGPS();
   iniciarPush();
