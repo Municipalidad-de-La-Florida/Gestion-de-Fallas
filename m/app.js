@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.43.0';
+const VERSION_APP = '1.44.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -213,6 +213,20 @@ function distanciaM(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 function fmtDist(m) { return m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`; }
+// La ficha de la falla tapa la parte baja del mapa: se corre el mapa para que el punto quede visible,
+// en el centro de lo que se ve sobre la ficha (antes quedaba justo detrás y parecía que no se centraba).
+function verSobreFicha(ll) {
+  if (!map || !ll) return;
+  let aplicado = 0;   // cuánto se corrió ya (la ficha puede crecer cuando termina de cargar y hay que corregir)
+  const ajustar = () => {
+    if (!hojaAbierta) return;
+    const m = $('#map').getBoundingClientRect();
+    // la ficha sube desde abajo con una animación: se usa su alto final, no su posición del momento
+    const tapado = Math.min(Math.max(0, $('#hoja').offsetHeight - (window.innerHeight - m.bottom)), m.height * 0.7) / 2;
+    if (Math.abs(tapado - aplicado) > 1) { map.panBy([0, tapado - aplicado], { animate: false }); aplicado = tapado; }
+  };
+  setTimeout(ajustar, 150); setTimeout(ajustar, 900);
+}
 function centroGeom(g) {
   const pts = [];
   (function rec(c) { if (typeof c[0] === 'number') pts.push(c); else c.forEach(rec); })(g.coordinates);
@@ -2023,8 +2037,9 @@ function renderLista() {
   $$('#listaItems .tarjeta').forEach((b) => b.addEventListener('click', () => {
     const { f } = items[Number(b.dataset.i)];
     cambiarVista('mapa');
-    map.setView(f._c, Math.max(map.getZoom(), 18));
+    map.setView(f._c, Math.max(map.getZoom(), 18), { animate: false });
     abrirFalla(f.properties, f.geometry);
+    verSobreFicha(f._c);
   }));
 }
 $$('#listaAsig .fchip').forEach((c) => c.addEventListener('click', () => fijarFiltroOtros('asig', c.dataset.asig)));
@@ -2892,8 +2907,9 @@ async function abrirFallaPorId(id) {
   cambiarVista('mapa');
   // Entrando por un aviso el mapa se queda en la falla: sin centrado inicial en tu ubicación y sin seguimiento
   S.centrarAlFijar = false; detenerSeguir();
-  if (map && f._c) map.setView(f._c, Math.max(map.getZoom(), 18));
+  if (map && f._c) map.setView(f._c, Math.max(map.getZoom(), 18), { animate: false });   // sin animación: el ajuste por la ficha se aplica después
   abrirFalla(f.properties, f.geometry);
+  verSobreFicha(f._c);
 }
 async function avisoPendienteSW(consumir) {
   try {
