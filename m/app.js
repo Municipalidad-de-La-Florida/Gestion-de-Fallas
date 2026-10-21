@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.47.4';
+const VERSION_APP = '1.47.5';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2089,7 +2089,7 @@ function renderLista() {
   $$('#listaItems .tarjeta').forEach((b) => b.addEventListener('click', () => {
     const { f } = items[Number(b.dataset.i)];
     cambiarVista('mapa');
-    map.setView(f._c, Math.max(map.getZoom(), 18), { animate: false });
+    map.setView(f._c, Math.max(map.getZoom(), 20), { animate: false });
     abrirFalla(f.properties, f.geometry);
     verSobreFicha(f._c);
   }));
@@ -2961,7 +2961,7 @@ async function abrirFallaPorId(id) {
   cambiarVista('mapa');
   // Entrando por un aviso el mapa se queda en la falla: sin centrado inicial en tu ubicación y sin seguimiento
   S.centrarAlFijar = false; detenerSeguir();
-  if (map && f._c) map.setView(f._c, Math.max(map.getZoom(), 18), { animate: false });   // sin animación: el ajuste por la ficha se aplica después
+  if (map && f._c) map.setView(f._c, Math.max(map.getZoom(), 20), { animate: false });   // sin animación: el ajuste por la ficha se aplica después
   abrirFalla(f.properties, f.geometry);
   verSobreFicha(f._c);
 }
