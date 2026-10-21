@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.47.2';
+const VERSION_APP = '1.47.3';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2975,7 +2975,7 @@ async function recogerAvisoPendiente() {
   if (!S.perfil) return;
   const id = await avisoPendienteSW(true);
   if (!id) return;
-  S.fallaPendiente = id; cerrarHoja(); abrirPendienteDeAviso();
+  S.fallaPendiente = id; abrirPendienteDeAviso();
 }
 function fallaDeUrl() {
   try {
@@ -2988,7 +2988,10 @@ function fallaDeUrl() {
 function avisoDiag(estado, msg) { try { localStorage.setItem('fm_aviso_diag', JSON.stringify({ t: Date.now(), estado, msg: msg || '' })); } catch (e) { /* */ } }
 async function abrirPendienteDeAviso() {
   const id = S.fallaPendiente; S.fallaPendiente = null;
+  if (id && S._avisoAbriendo && S._avisoAbriendo.id === id && Date.now() - S._avisoAbriendo.t < 4000) return;   // mismo aviso llegado por dos vías a la vez
   if (id) {
+    S._avisoAbriendo = { id, t: Date.now() };
+    try { localStorage.setItem('fm_aviso_reciente', JSON.stringify({ id, t: Date.now() })); } catch (e) { /* */ }
     // Desde ya (no cuando termine de cargar la falla): sin seguimiento ni centrado automático sobre tu ubicación
     S.sinAutoSeguir = true; S.centrarAlFijar = false; detenerSeguir();
     try { await abrirFallaPorId(id); avisoDiag('abierta'); }
@@ -3005,6 +3008,7 @@ async function textoDiagAviso() {
     const d = JSON.parse(localStorage.getItem('fm_aviso_diag') || 'null');
     if (d) partes.push(`Resultado: ${d.estado === 'abierta' ? 'falla abierta' : d.estado === 'no-encontrada' ? 'no se encontró la falla' : 'error ' + d.msg} (${fmtFechaHoraCorta(new Date(d.t).toISOString())})`);
   } catch (e) { /* */ }
+  try { const t = Number(localStorage.getItem('fm_carga')); if (t) partes.push(`Última carga de la app: ${fmtFechaHoraCorta(new Date(t).toISOString())}`); } catch (e) { /* */ }
   return partes.join('\n');
 }
 
@@ -3127,6 +3131,14 @@ async function entrarApp() {
   // por el service worker y se recoge aquí, ya que al abrir de cero no hay ningún evento de "volver a la app".
   // Se abre ANTES de cargar todas las fallas (esa carga puede tardar o fallar y el aviso no debe depender de ella).
   if (!S.fallaPendiente) { try { const idp = await avisoPendienteSW(true); if (idp) S.fallaPendiente = idp; } catch (e) { /* */ } }
+  // iPhone: si el sistema recarga la app justo después de tocar el aviso, la falla se vuelve a abrir (sin centrar en tu ubicación)
+  if (!S.fallaPendiente) {
+    try {
+      const r = JSON.parse(localStorage.getItem('fm_aviso_reciente') || 'null');
+      if (r && r.id && /^[\w-]{1,64}$/.test(r.id) && Date.now() - r.t < 25000) S.fallaPendiente = r.id;
+    } catch (e) { /* */ }
+  }
+  try { localStorage.setItem('fm_carga', String(Date.now())); } catch (e) { /* */ }
   const habiaAviso = !!S.fallaPendiente;
   if (habiaAviso) toast('Abriendo la falla del aviso…', '');
   abrirPendienteDeAviso();
@@ -3163,7 +3175,7 @@ window.addEventListener('pageshow', () => setTimeout(recogerAvisoPendiente, 400)
       if (!id || !/^[\w-]{1,64}$/.test(id)) return;
       S.fallaPendiente = id;
       avisoPendienteSW(true); // ya llegó el mensaje directo: se descarta la copia anotada
-      if (S.perfil) { cerrarHoja(); abrirPendienteDeAviso(); }
+      if (S.perfil) abrirPendienteDeAviso();
     });
   }
   cargarSesion();
