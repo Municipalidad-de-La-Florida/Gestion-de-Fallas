@@ -388,3 +388,8 @@ textarea.campo{ min-height:70px; }
 #aFotos .foto{width:100%;height:110px}
 #aFotos .foto img{width:100%;height:100%;object-fit:cover}
 #aFotos .fila-btns{flex-direction:column;margin:4px 0}
+
+/* Barra inferior con 4 o más botones: ícono arriba y texto abajo, para que quepan */
+#navInferior.apretado .nav-btn{ flex-direction:column; gap:1px; font-size:10.5px; height:52px; padding:0 2px; }
+#navInferior.apretado .nav-btn svg{ width:21px; height:21px; }
+.m-grupo{ font-size:10.5px; letter-spacing:.6px; text-transform:uppercase; color:var(--tinta-2); font-weight:700; padding:12px 6px 3px; }

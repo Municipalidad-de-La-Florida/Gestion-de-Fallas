@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.39.0';
+const VERSION_APP = '1.40.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2071,7 +2071,7 @@ async function cargarInspC3() {
   try {
     const ini = new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10);
     const filas = await rpc('inspecciones_listado', { p_inicio: ini, p_fin: hoyISO(), p_ito: null });
-    $('#inspC3Resumen').textContent = `Inspecciones de los últimos 7 días (todos los ITOs). Las cifras consideran solo tu contrato.`;
+    $('#inspC3Resumen').textContent = `Inspecciones de los últimos 7 días (todos los ITOs). ${rol() === 'admin' ? '' : 'Las cifras consideran solo tu contrato.'}`;
     if (!filas || !filas.length) { cont.innerHTML = '<div class="vacio">No hay inspecciones en los últimos 7 días.</div>'; return; }
     cont.innerHTML = filas.map((i) => `<div class="tarjeta insp-c3" data-id="${esc(i.inspeccion_id)}">
       <div class="tarjeta-top"><b>${esc(i.ito_nombre)}</b><span class="dist">${esc(fmtFechaCorta(i.fecha))}</span></div>
@@ -2129,6 +2129,8 @@ async function asignarInspC3(id) {
   } catch (e) { h.innerHTML = `<div class="vacio">Error: ${esc(e.message)}</div>`; }
 }
 $('#navInspC3').addEventListener('click', () => cambiarVista('insp'));
+$('#navCuad').addEventListener('click', () => abrirCuadrillas());
+$('#navMas').addEventListener('click', () => $('#btnMenu').click());
 
 /* ------------------------- notificaciones push ------------------------- */
 const LS_PUSH_NO = 'fm_push_no_v1';
@@ -2247,11 +2249,13 @@ async function cargarConteoContratos() {
   U.conteo = m;
 }
 
-function abrirUsuarios() {
+function abrirUsuarios(modo) {
   if (rol() !== 'admin') return;
-  cerrarHoja(true);                      // el menú ya dejó una entrada en el historial: la reutiliza esta pantalla
+  if (hojaAbierta) cerrarHoja(true); else { try { history.pushState({ pant: 1 }, ''); } catch (e) { /* */ } }   // el menú ya dejó una entrada en el historial: la reutiliza esta pantalla
   usrHist = true;
-  U.tab = 'usuarios'; U.q = ''; U.filtro = 'todos'; U.conteo = null;
+  U.modo = modo === 'config' ? 'config' : 'usuarios';
+  $('#uTitulo').textContent = U.modo === 'config' ? 'Configuración' : 'Usuarios y permisos';
+  U.tab = U.modo === 'config' ? 'contratos' : 'usuarios'; U.q = ''; U.filtro = 'todos'; U.conteo = null;
   $('#pantallaUsuarios').hidden = false;
   $('#uCuerpo').innerHTML = '<div class="u-vacio">Cargando…</div>';
   pintarTabsU();
@@ -2264,7 +2268,7 @@ function cerrarUsuarios(desdePop) {
   usrHist = false;
 }
 window._usrPop = () => { if (usrVolviendo) { usrVolviendo = false; return; } if (!$('#pantallaUsuarios').hidden) cerrarUsuarios(true); };
-const formUsuarios = abrirUsuarios;
+const formUsuarios = () => abrirUsuarios();
 
 /* ------------------ Compartir ubicación (solo camiones, solo con la app abierta) ------------------ */
 const ubicActiva = () => true;   // los camiones comparten siempre mientras la app está abierta (el teléfono pide el permiso de GPS)
@@ -2333,7 +2337,7 @@ function cuCalcular(todasFilas, desde, hasta) {
 }
 function abrirCuadrillas() {
   if (!puedeCuadrillas()) return;
-  cerrarHoja(true);
+  if (hojaAbierta) cerrarHoja(true); else { try { history.pushState({ pant: 1 }, ''); } catch (e) { /* */ } }
   $('#cuMapa').hidden = !puedeUbicacion();
   CU.hist = true;
   $('#pantallaCuad').hidden = false;
@@ -2473,7 +2477,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function pintarTabsU() {
   const pend = U.notifs.filter((n) => !n.validado).length;
-  $('#uTabs').innerHTML = [['usuarios', 'Usuarios'], ['contratos', 'Contratos'], ['notificadores', 'Notificadores'], ['ajustes', 'Ajustes']]
+  const tabs = U.modo === 'config' ? [['contratos', 'Contratos'], ['notificadores', 'Notificadores'], ['ajustes', 'Enel y ajustes']] : [['usuarios', 'Usuarios']];
+  $('#uTabs').hidden = tabs.length < 2;
+  $('#uTabs').innerHTML = tabs
     .map(([k, t]) => `<button type="button" data-tab="${k}" class="${U.tab === k ? 'on' : ''}">${t}${k === 'notificadores' && pend ? `<b>${pend}</b>` : ''}</button>`).join('');
 }
 function pintarU() {
@@ -2779,10 +2785,12 @@ function cerrarPorTiempo() {
 setInterval(() => { if (S.perfil && vencioModo()) cerrarPorTiempo(); }, 30000);
 function pintarModo() {
   if (S.perfil && vencioModo()) { S.modo = { tipo: 'agregar', fecha: null, inspId: null }; guardarModo(); }
-  $('#navInspC3').hidden = rol() !== 'contratista3';
+  $('#navInspC3').hidden = !(rol() === 'contratista3' || rol() === 'admin');
+  $('#navCuad').hidden = !puedeCuadrillas();
   const puede = PUEDE_MODO_INSPECCION.includes(rol());
   const c = $('#chipModo'), n = $('#navInsp');
   n.hidden = !puede;
+  $('#navInferior').classList.toggle('apretado', $$('#navInferior .nav-btn:not([hidden])').length >= 4);
   if (!puede) { c.hidden = true; return; }
   const on = S.modo.tipo === 'inspeccion';
   n.classList.toggle('sel', on);
@@ -2939,12 +2947,15 @@ $('#btnMenu').addEventListener('click', () => {
     <div class="m-lista">
       ${S.instalar ? '<button id="mInstalar" class="btn btn-primario" style="margin:10px 0 6px;width:100%">Instalar la app en este teléfono</button>' : ''}
       ${!S.instalar && esIOS() && !esStandalone() ? '<div class="aviso">Para instalarla en iPhone: toca el botón <b>Compartir</b> de Safari y luego <b>Añadir a pantalla de inicio</b>.</div>' : ''}
-      <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
-      ${rol() === 'admin' ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Gestionar usuarios</span>${chev}</button>` : ''}
       ${rol() === 'camion' ? '<div class="hint" style="margin:4px 6px 8px">📍 Tu ubicación se comparte con el administrador mientras la app está abierta.</div>' : ''}
+      ${(puedeUbicacion() && !puedeCuadrillas()) || ['contratista', 'contratista2', 'contratista3', 'admin'].includes(rol()) ? '<div class="m-grupo">Operación</div>' : ''}
       ${puedeUbicacion() && !puedeCuadrillas() ? `<button id="mCamiones" class="m-fila"><span class="m-ico m-azul">${ico('<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>')}</span><span class="t">Camiones en el mapa</span>${chev}</button>` : ''}
-      ${puedeCuadrillas() ? `<button id="mCuadrillas" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M3 17h13V7H3z"/><path d="M16 10h3l2 3v4h-5"/><circle cx="7" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>')}</span><span class="t">Cuadrillas</span>${chev}</button>` : ''}
       ${['contratista', 'contratista2', 'contratista3', 'admin'].includes(rol()) ? `<button id="mMaestros" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-4 3-6 7-6s6.5 2 7 6"/>')}</span><span class="t">Maestros</span>${chev}</button>` : ''}
+      ${rol() === 'admin' ? '<div class="m-grupo">Administración</div>' : ''}
+      ${rol() === 'admin' ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Usuarios y permisos</span>${chev}</button>` : ''}
+      ${rol() === 'admin' ? `<button id="mConfig" class="m-fila"><span class="m-ico m-ambar">${ico('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>')}</span><span class="t">Configuración</span>${chev}</button>` : ''}
+      <div class="m-grupo">Cuenta</div>
+      <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
     </div>`);
@@ -2972,7 +2983,9 @@ $('#btnMenu').addEventListener('click', () => {
   const mma = $('#mMaestros', h);
   if (mma) mma.addEventListener('click', () => abrirMaestros());
   const mu = $('#mUsuarios', h);
-  if (mu) mu.addEventListener('click', () => abrirUsuarios());
+  if (mu) mu.addEventListener('click', () => abrirUsuarios('usuarios'));
+  const mcf = $('#mConfig', h);
+  if (mcf) mcf.addEventListener('click', () => abrirUsuarios('config'));
   $('#mActualizar', h).addEventListener('click', () => { $('#mActualizar', h).querySelector('.t').textContent = 'Actualizando…'; forzarActualizacion(); });
   $('#mSalir', h).addEventListener('click', async () => { try { await desactivarPush(); } catch (e) { /* */ } salir(); });
 });

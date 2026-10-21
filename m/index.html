@@ -42,7 +42,7 @@
       <span id="barraRol" class="rol-chip"></span>
     </div>
     <button id="btnActualizar" class="icon-btn" aria-label="Actualizar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
-    <button id="btnMenu" class="icon-btn" aria-label="Menú"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+    <button id="btnMenu" class="icon-btn" aria-label="Menú" style="display:none"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
   </header>
   <button id="avisoVersion" class="chip-modo" hidden style="width:100%"></button>
   <button id="chipModo" class="chip-modo insp" hidden></button>
@@ -110,12 +110,14 @@
     <button class="nav-btn" data-vista="lista"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>Activas <i id="navCuenta" class="cuenta" hidden>0</i></button>
     <button id="navInspC3" class="nav-btn" data-vista="insp" hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Inspecciones</button>
     <button id="navInsp" class="nav-btn" hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Inspección</button>
+    <button id="navCuad" class="nav-btn" hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="8" width="12" height="9" rx="1.5"/><path d="M14 11h4l3 3v3h-7z"/><circle cx="6.5" cy="18.5" r="1.8"/><circle cx="17.5" cy="18.5" r="1.8"/></svg>Cuadrillas</button>
+    <button id="navMas" class="nav-btn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>Más</button>
   </nav>
 </section>
 
 <!-- ============ GESTIÓN DE USUARIOS (solo admin) ============ -->
 <section id="pantallaUsuarios" class="pantalla" hidden>
-  <header class="u-bar"><button id="uAtras" class="icon-btn" aria-label="Volver"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div class="u-bar-t">Usuarios</div><button id="uMas" class="icon-btn" aria-label="Agregar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></header>
+  <header class="u-bar"><button id="uAtras" class="icon-btn" aria-label="Volver"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button><div class="u-bar-t" id="uTitulo"></div><div class="u-bar-t">Usuarios</div><button id="uMas" class="icon-btn" aria-label="Agregar"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button></header>
   <nav id="uTabs" class="u-tabs"></nav>
   <div id="uCuerpo" class="u-cuerpo"></div>
 </section>
