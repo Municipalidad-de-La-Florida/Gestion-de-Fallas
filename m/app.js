@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.38.1';
+const VERSION_APP = '1.39.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -614,8 +614,7 @@ function iniciarMapa() {
   // Espera a que el mapa se quede quieto antes de pedir datos (menos llamadas a la base mientras se arrastra)
   let _areaTimer = null;
   map.on('moveend', () => { clearTimeout(_areaTimer); _areaTimer = setTimeout(cargarArea, 300); });
-  map.on('dragstart dragend', pausarSeguir);
-  map.on('zoomstart', () => { if (!movProg) pausarSeguir(); });
+  map.on('dragstart', () => { if (S.seguir) { detenerSeguir(); toast('Seguimiento desactivado. Toca el botón de ubicación para volver a centrar.'); } });
   map.on('zoomend', () => { ajustarRadios(); dibujarFallas(); });
   map.on('click', () => { /* un toque en el vacío no hace nada */ });
   // Atenuar lo que queda fuera de la comuna (botón en el mapa, se recuerda la elección). No bloquea toques.
@@ -918,9 +917,9 @@ function comenzarGPS() {
   S.watchId = navigator.geolocation.watchPosition(onPos, onPosError, { enableHighAccuracy: true, maximumAge: 5000, timeout: 25000 });
 }
 /* Seguimiento: el mapa acompaña al GPS; si lo mueves para mirar algo, a los pocos segundos vuelve a centrarse solo. */
-const SEGUIR_ESPERA_MS = 8000;
-let seguirPausa = false, seguirTimer = null, movProg = false;
-function puedeAutoCentrar() { return S.seguir && !seguirPausa && !!map && !!S.pos && S.vista === 'mapa' && !hojaAbierta; }
+let movProg = false;
+// Estilo Google Maps: al tocar el botón se centra y el mapa te sigue; si mueves el mapa, el seguimiento se apaga hasta volver a tocar el botón.
+function puedeAutoCentrar() { return S.seguir && !!map && !!S.pos && S.vista === 'mapa' && !hojaAbierta; }
 function centrarSeguir(zoomMin) {
   if (!map || !S.pos) return;
   movProg = true;
@@ -928,22 +927,8 @@ function centrarSeguir(zoomMin) {
   setTimeout(() => { movProg = false; }, 800);
 }
 function marcarSeguir() { $('#btnUbicacion').classList.toggle('sigue', !!S.seguir); }
-function pausarSeguir() {
-  if (!S.seguir || movProg) return;
-  seguirPausa = true;
-  clearTimeout(seguirTimer);
-  seguirTimer = setTimeout(reanudarSeguir, SEGUIR_ESPERA_MS);
-}
-function reanudarSeguir() {
-  clearTimeout(seguirTimer);
-  if (!S.seguir) { seguirPausa = false; return; }
-  const libre = S.vista === 'mapa' && !hojaAbierta;
-  if (!libre) { seguirTimer = setTimeout(reanudarSeguir, 5000); return; }   // hay una ficha abierta: se espera
-  seguirPausa = false;
-  centrarSeguir();
-}
-function activarSeguir() { S.seguir = true; seguirPausa = false; clearTimeout(seguirTimer); marcarSeguir(); centrarSeguir(18); }
-function detenerSeguir() { S.seguir = false; seguirPausa = false; clearTimeout(seguirTimer); marcarSeguir(); }
+function activarSeguir() { S.seguir = true; marcarSeguir(); centrarSeguir(18); }
+function detenerSeguir() { S.seguir = false; marcarSeguir(); }
 function detenerGPS() {
   detenerSeguir();
   if (S.watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(S.watchId);
@@ -975,9 +960,8 @@ function onPosError(e) {
 }
 $('#btnUbicacion').addEventListener('click', () => {
   if (S.pos && map) {
-    // Primer toque: el mapa empieza a seguirte. Si lo habías movido, te devuelve al centro. Si ya te sigue, deja de seguirte.
-    if (S.seguir && !seguirPausa) { detenerSeguir(); toast('Seguimiento desactivado.'); }
-    else { activarSeguir(); toast('El mapa te sigue. Toca de nuevo para dejar de seguir.'); }
+    // Cada toque centra en tu ubicación y reactiva el seguimiento (se apaga solo al mover el mapa)
+    activarSeguir(); toast('El mapa te sigue. Muévelo para dejar de seguir.');
     return;
   }
   S.centrarAlFijar = true;
