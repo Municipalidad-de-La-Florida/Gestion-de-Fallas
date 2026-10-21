@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.41.0';
+const VERSION_APP = '1.42.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1596,6 +1596,7 @@ const ICO_ACC = {
   borrar: _ia('<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>'),
 };
 async function abrirFalla(p, geom) {
+  detenerSeguir();   // al mirar una falla, el mapa deja de seguirte (tocas el botón de ubicación para volver)
   const c = centroGeom(geom);
   const desc = DESC_CODIGO[p.tipo_falla];
   const kv = [
@@ -2889,6 +2890,8 @@ async function abrirFallaPorId(id) {
   }
   if (!f) { toast('No se encontró la falla del aviso (puede haber sido eliminada).', 'error'); return; }
   cambiarVista('mapa');
+  // Entrando por un aviso el mapa se queda en la falla: sin centrado inicial en tu ubicación y sin seguimiento
+  S.centrarAlFijar = false; detenerSeguir();
   if (map && f._c) map.setView(f._c, Math.max(map.getZoom(), 18));
   abrirFalla(f.properties, f.geometry);
 }
@@ -3039,7 +3042,7 @@ async function entrarApp() {
   abrirPendienteDeAviso();
   if (!habiaAviso) restaurarBorrador();
   cargarArea(true);
-  S.centrarAlFijar = true;
+  S.centrarAlFijar = !habiaAviso;   // si se entró por un aviso, el mapa se queda en esa falla
   iniciarGPS();
   iniciarPush();
   revisarVersion();
