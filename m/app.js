@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.47.4';
+const VERSION_APP = '1.48.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1430,6 +1430,42 @@ async function formAporte(tipo, p) {
 }
 
 // Maestros del contrato (los mantiene el contratista; el admin ve todos). No se borran: se desactivan.
+/* ------------------------- operativos (admin) ------------------------- */
+// Un operativo habilita una fecha para que TODOS los ITO inspeccionen, aunque no sea su día de la pauta. Solo lo activa el admin (la base lo exige).
+async function abrirOperativos() {
+  const h = abrirHoja('<h2>🚨 Operativo</h2><div class="hint">Cargando…</div>');
+  const fmt = (f) => { const d = new Date(String(f).slice(0, 10) + 'T12:00:00'); return d.toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: '2-digit' }); };
+  const pintar = async () => {
+    let lista;
+    try { lista = await select('operativos_inspeccion', `fecha=gte.${sumarDiasStr(hoyChileStr(), -DIAS_MAX_INSPECCION)}&select=fecha,motivo&order=fecha.desc`) || []; }
+    catch (e) { h.innerHTML = '<h2>🚨 Operativo</h2><div class="aviso peligro">No se pudo cargar los operativos.</div>'; return; }
+    h.innerHTML = `<h2>🚨 Operativo</h2>
+      <div class="hint">Al activarlo, <b>todos los ITO</b> pueden ingresar inspecciones esa fecha aunque no sea uno de sus días (siguen valiendo las 4 horas y el límite de 7 días atrás).</div>
+      <h3>Activar un operativo</h3>
+      <input type="date" id="opFecha" class="campo" value="${hoyChileStr()}">
+      <input type="text" id="opMotivo" class="campo" placeholder="Motivo (ej. temporal, emergencia)" maxlength="80" style="margin-top:8px">
+      <div class="acciones"><button id="opActivar" class="btn btn-primario" style="margin-top:8px">Activar operativo</button></div>
+      <h3>Operativos de los últimos 7 días</h3>
+      ${lista.length ? lista.map((o) => `<div class="tarjeta" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px"><span><b>${esc(fmt(o.fecha))}</b>${o.motivo ? '<br><span class="hint">' + esc(o.motivo) + '</span>' : ''}</span><button type="button" class="btn btn-secundario" data-q="${esc(String(o.fecha).slice(0, 10))}" style="width:auto;margin:0">Quitar</button></div>`).join('') : '<div class="hint">No hay operativos activos.</div>'}`;
+    const ba = $('#opActivar', h);
+    ba.addEventListener('click', ocupar(ba, async () => {
+      const fecha = $('#opFecha', h).value;
+      if (!fecha) { toast('Elige la fecha del operativo.', 'error'); return; }
+      if (fecha > sumarDiasStr(hoyChileStr(), 30)) { toast('La fecha es demasiado lejana.', 'error'); return; }
+      ba.textContent = 'Activando…';
+      await rpc('activar_operativo', { p_fecha: fecha, p_motivo: $('#opMotivo', h).value });
+      toast('Operativo activado', 'ok');
+      await pintar();
+    }));
+    $$('[data-q]', h).forEach((b) => b.addEventListener('click', ocupar(b, async () => {
+      if (!confirm('¿Quitar el operativo del ' + fmtFechaCorta(b.dataset.q) + '?')) return;
+      await rpc('quitar_operativo', { p_fecha: b.dataset.q });
+      toast('Operativo quitado', 'ok');
+      await pintar();
+    })));
+  };
+  await pintar();
+}
 async function abrirMaestros() {
   const h = abrirHoja('<h2>Maestros</h2><div class="hint">Cargando…</div>');
   let contratos = [], ms = [];
@@ -2089,7 +2125,7 @@ function renderLista() {
   $$('#listaItems .tarjeta').forEach((b) => b.addEventListener('click', () => {
     const { f } = items[Number(b.dataset.i)];
     cambiarVista('mapa');
-    map.setView(f._c, Math.max(map.getZoom(), 18), { animate: false });
+    map.setView(f._c, Math.max(map.getZoom(), 20), { animate: false });
     abrirFalla(f.properties, f.geometry);
     verSobreFicha(f._c);
   }));
@@ -2961,7 +2997,7 @@ async function abrirFallaPorId(id) {
   cambiarVista('mapa');
   // Entrando por un aviso el mapa se queda en la falla: sin centrado inicial en tu ubicación y sin seguimiento
   S.centrarAlFijar = false; detenerSeguir();
-  if (map && f._c) map.setView(f._c, Math.max(map.getZoom(), 18), { animate: false });   // sin animación: el ajuste por la ficha se aplica después
+  if (map && f._c) map.setView(f._c, Math.max(map.getZoom(), 20), { animate: false });   // sin animación: el ajuste por la ficha se aplica después
   abrirFalla(f.properties, f.geometry);
   verSobreFicha(f._c);
 }
@@ -3068,6 +3104,7 @@ $('#btnMenu').addEventListener('click', () => {
       ${(puedeUbicacion() && !puedeCuadrillas()) || ['contratista', 'contratista2', 'contratista3', 'admin'].includes(rol()) ? '<div class="m-grupo">Operación</div>' : ''}
       ${puedeUbicacion() && !puedeCuadrillas() ? `<button id="mCamiones" class="m-fila"><span class="m-ico m-azul">${ico('<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>')}</span><span class="t">Camiones en el mapa</span>${chev}</button>` : ''}
       ${['contratista', 'contratista2', 'contratista3', 'admin'].includes(rol()) ? `<button id="mMaestros" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-4 3-6 7-6s6.5 2 7 6"/>')}</span><span class="t">Maestros</span>${chev}</button>` : ''}
+      ${rol() === 'admin' ? `<button id="mOperativo" class="m-fila"><span class="m-ico m-ambar">${ico('<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>')}</span><span class="t">Operativo</span>${chev}</button>` : ''}
       ${rol() === 'admin' ? '<div class="m-grupo">Administración</div>' : ''}
       ${rol() === 'admin' ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Usuarios y permisos</span>${chev}</button>` : ''}
       ${rol() === 'admin' ? `<button id="mConfig" class="m-fila"><span class="m-ico m-ambar">${ico('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>')}</span><span class="t">Configuración</span>${chev}</button>` : ''}
@@ -3102,6 +3139,8 @@ $('#btnMenu').addEventListener('click', () => {
   if (mcu) mcu.addEventListener('click', () => abrirCuadrillas());
   const mma = $('#mMaestros', h);
   if (mma) mma.addEventListener('click', () => abrirMaestros());
+  const mop = $('#mOperativo', h);
+  if (mop) mop.addEventListener('click', () => abrirOperativos());
   const mu = $('#mUsuarios', h);
   if (mu) mu.addEventListener('click', () => abrirUsuarios('usuarios'));
   const mba = $('#mBarra', h);
