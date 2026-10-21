@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.44.0';
+const VERSION_APP = '1.45.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2903,7 +2903,7 @@ async function abrirFallaPorId(id) {
   } catch (e) {
     if (e.name === 'SesionExpirada') throw e;
   }
-  if (!f) { toast('No se encontró la falla del aviso (puede haber sido eliminada).', 'error'); return; }
+  if (!f) { avisoDiag('no-encontrada'); toast('No se encontró la falla del aviso (puede haber sido eliminada).', 'error'); return; }
   cambiarVista('mapa');
   // Entrando por un aviso el mapa se queda en la falla: sin centrado inicial en tu ubicación y sin seguimiento
   S.centrarAlFijar = false; detenerSeguir();
@@ -2935,9 +2935,26 @@ function fallaDeUrl() {
     return id && /^[\w-]{1,64}$/.test(id) ? id : null;
   } catch (e) { return null; }
 }
+// Anota qué pasó con el último aviso (se muestra en «Más») para poder ver por qué no abrió, si no abre
+function avisoDiag(estado, msg) { try { localStorage.setItem('fm_aviso_diag', JSON.stringify({ t: Date.now(), estado, msg: msg || '' })); } catch (e) { /* */ } }
 async function abrirPendienteDeAviso() {
   const id = S.fallaPendiente; S.fallaPendiente = null;
-  if (id) { try { await abrirFallaPorId(id); } catch (e) { toast('No se pudo abrir la falla del aviso.', 'error'); } }
+  if (id) {
+    try { await abrirFallaPorId(id); avisoDiag('abierta'); }
+    catch (e) { avisoDiag('error', e.message); toast('No se pudo abrir la falla del aviso.', 'error'); }
+  }
+}
+async function textoDiagAviso() {
+  const partes = [];
+  try {
+    const c = await caches.open('fm-aviso'), r = await c.match('ultimo');
+    if (r) { const d = await r.json(); partes.push(`Último toque de aviso: ${fmtFechaHoraCorta(new Date(d.t).toISOString())} (${d.via === 'foco' ? 'con la app abierta' : 'con la app cerrada'})`); }
+  } catch (e) { /* */ }
+  try {
+    const d = JSON.parse(localStorage.getItem('fm_aviso_diag') || 'null');
+    if (d) partes.push(`Resultado: ${d.estado === 'abierta' ? 'falla abierta' : d.estado === 'no-encontrada' ? 'no se encontró la falla' : 'error ' + d.msg} (${fmtFechaHoraCorta(new Date(d.t).toISOString())})`);
+  } catch (e) { /* */ }
+  return partes.join('\n');
 }
 
 /* ------------------------- actualización de la app ------------------------- */
@@ -2998,9 +3015,11 @@ $('#btnMenu').addEventListener('click', () => {
       <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
       ${rol() === 'admin' ? `<button id="mBarra" class="m-fila"><span class="m-ico m-azul">${ico('<rect x="3" y="15" width="18" height="5" rx="2"/><path d="M7 9h10M7 5h10"/>')}</span><span class="t">Botones de la barra</span>${chev}</button>` : ''}
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
+      <div id="mDiag" class="hint" style="margin:8px 6px 0;white-space:pre-line"></div>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
     </div>`);
   $('#hoja').classList.add('hoja-menu');
+  textoDiagAviso().then((t) => { const d = $('#mDiag', h); if (d && t) d.textContent = t; });
   const i = $('#mInstalar', h);
   if (i) i.addEventListener('click', async () => { S.instalar.prompt(); await S.instalar.userChoice; S.instalar = null; cerrarHoja(); });
   const mp = $('#mPush', h);
@@ -3053,12 +3072,14 @@ async function entrarApp() {
   iniciarSuministro();
   setTimeout(() => map.invalidateSize(), 80);
   cacheBbox = null;
-  await cargarFallas();
   // En iPhone, al tocar el aviso con la app cerrada, la dirección con la falla puede perderse: el aviso queda anotado
   // por el service worker y se recoge aquí, ya que al abrir de cero no hay ningún evento de "volver a la app".
+  // Se abre ANTES de cargar todas las fallas (esa carga puede tardar o fallar y el aviso no debe depender de ella).
   if (!S.fallaPendiente) { try { const idp = await avisoPendienteSW(true); if (idp) S.fallaPendiente = idp; } catch (e) { /* */ } }
   const habiaAviso = !!S.fallaPendiente;
+  if (habiaAviso) toast('Abriendo la falla del aviso…', '');
   abrirPendienteDeAviso();
+  await cargarFallas();
   if (!habiaAviso) restaurarBorrador();
   cargarArea(true);
   S.centrarAlFijar = !habiaAviso;   // si se entró por un aviso, el mapa se queda en esa falla

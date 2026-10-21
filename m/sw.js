@@ -2,7 +2,7 @@
 // - Archivos propios de la app: red primero (así las actualizaciones llegan de inmediato) y copia guardada de respaldo.
 // - Leaflet (CDN): copia guardada tras la primera carga.
 // - Supabase y mapas: siempre por red, nunca se guardan (datos siempre al día).
-const VERSION = 'fm-v75';
+const VERSION = 'fm-v76';
 const APP = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'badge-96.png'];
 
 self.addEventListener('install', (e) => {
@@ -77,12 +77,12 @@ self.addEventListener('notificationclick', (e) => {
       try { const c = await caches.open('fm-aviso'); await c.put('pendiente', new Response(JSON.stringify({ id, t: Date.now() }))); } catch (err) { /* */ }
     }
     const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const c of cs) {
-      if (c.url.startsWith(self.registration.scope) && 'focus' in c) {
-        try { await c.focus(); } catch (err) { /* */ }
-        if (id) c.postMessage({ tipo: 'abrir-falla', id });
-        return;
-      }
+    const mia = cs.find((c) => c.url.startsWith(self.registration.scope) && 'focus' in c);
+    try { const c = await caches.open('fm-aviso'); await c.put('ultimo', new Response(JSON.stringify({ t: Date.now(), id: id || null, n: cs.length, via: mia ? 'foco' : 'ventana' }))); } catch (err) { /* */ }
+    if (mia) {
+      try { await mia.focus(); } catch (err) { /* */ }
+      if (id) mia.postMessage({ tipo: 'abrir-falla', id });
+      return;
     }
     return self.clients.openWindow(destino.href);
   })());
