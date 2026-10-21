@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.47.3';
+const VERSION_APP = '1.47.4';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -218,12 +218,14 @@ function fmtDist(m) { return m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m /
 function verSobreFicha(ll) {
   if (!map || !ll) return;
   let aplicado = 0;   // cuánto se corrió ya (la ficha puede crecer cuando termina de cargar y hay que corregir)
+  const sf = S.sobreFicha = { aplicado: 0, movido: false };   // al cerrar la ficha se devuelve el mapa, salvo que lo hayas movido tú
+  if (!S._sfEscucha) { S._sfEscucha = true; map.on('dragstart zoomstart', () => { if (S.sobreFicha) S.sobreFicha.movido = true; }); }
   const ajustar = () => {
     if (!hojaAbierta) return;
     const m = $('#map').getBoundingClientRect();
     // la ficha sube desde abajo con una animación: se usa su alto final, no su posición del momento
     const tapado = Math.min(Math.max(0, $('#hoja').offsetHeight - (window.innerHeight - m.bottom)), m.height * 0.7) / 2;
-    if (Math.abs(tapado - aplicado) > 1) { map.panBy([0, tapado - aplicado], { animate: false }); aplicado = tapado; }
+    if (Math.abs(tapado - aplicado) > 1) { map.panBy([0, tapado - aplicado], { animate: false }); aplicado = tapado; sf.aplicado = tapado; }
   };
   setTimeout(ajustar, 150); setTimeout(ajustar, 900);
 }
@@ -499,6 +501,9 @@ function abrirHoja(html) {
 function cerrarHoja(desdePop) {
   if (!hojaAbierta) return;
   hojaAbierta = false;
+  // Se había corrido el mapa para ver la falla sobre la ficha: al cerrarla vuelve a quedar en el centro
+  const sf = S.sobreFicha; S.sobreFicha = null;
+  if (sf && sf.aplicado > 1 && !sf.movido && map) map.panBy([0, -sf.aplicado], { animate: true, duration: 0.25 });
   $('#hoja').hidden = true;
   $('#velo').hidden = true;
   $('#hojaContenido').innerHTML = '';
