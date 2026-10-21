@@ -2508,7 +2508,9 @@ async function refrescarFallas(manual){
   let capasFallaron = false;
   try{
     invalidarCacheTodasFallas();
-    const [, , capasOk] = await Promise.all([cargarFallasDelArea(), renderFallasOnMap(), manual ? cargarDatosDelArea(true) : true, cargarSuministro()]);
+    // Si el panel de Rendimiento de cuadrillas está abierto, el botón también lo recarga (antes había que salir y volver a entrar)
+    const cuadAbierto = manual && document.getElementById('sidebarCuad').style.display === 'flex';
+    const [, , capasOk] = await Promise.all([cargarFallasDelArea(), renderFallasOnMap(), manual ? cargarDatosDelArea(true) : true, cargarSuministro(), cuadAbierto ? cuadCargar() : true]);
     if(capasOk === false) capasFallaron = true;
     if(document.getElementById('sidebarStats').style.display === 'flex'){
       fallasPeriodoLayerGroup.eachLayer(l => l.bringToFront());
