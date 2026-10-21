@@ -614,7 +614,7 @@ function iniciarMapa() {
   // Espera a que el mapa se quede quieto antes de pedir datos (menos llamadas a la base mientras se arrastra)
   let _areaTimer = null;
   map.on('moveend', () => { clearTimeout(_areaTimer); _areaTimer = setTimeout(cargarArea, 300); });
-  map.on('dragstart', () => { if (S.seguir) { detenerSeguir(); toast('Seguimiento desactivado. Toca el botón de ubicación para volver a centrar.'); } });
+  map.on('dragstart', () => { if (S.seguir) { detenerSeguir(); } });
   map.on('zoomend', () => { ajustarRadios(); dibujarFallas(); });
   map.on('click', () => { /* un toque en el vacío no hace nada */ });
   // Atenuar lo que queda fuera de la comuna (botón en el mapa, se recuerda la elección). No bloquea toques.
@@ -961,7 +961,7 @@ function onPosError(e) {
 $('#btnUbicacion').addEventListener('click', () => {
   if (S.pos && map) {
     // Cada toque centra en tu ubicación y reactiva el seguimiento (se apaga solo al mover el mapa)
-    activarSeguir(); toast('El mapa te sigue. Muévelo para dejar de seguir.');
+    activarSeguir();
     return;
   }
   S.centrarAlFijar = true;
