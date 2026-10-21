@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.40.0';
+const VERSION_APP = '1.41.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2783,6 +2783,26 @@ function cerrarPorTiempo() {
   toast('La inspección se cerró sola al cumplir 4 horas. Usa "Agregar falla" o inicia otra en tu día de ronda.', 'error');
 }
 setInterval(() => { if (S.perfil && vencioModo()) cerrarPorTiempo(); }, 30000);
+/* Botones de la barra inferior que el admin puede ocultar (solo en este teléfono) */
+const LS_NAV_OCULTOS = 'fm_nav_ocultos_v1';
+const NAV_OPCIONES = [['navLista', 'Activas'], ['navInspC3', 'Inspecciones'], ['navInsp', 'Inspección'], ['navCuad', 'Cuadrillas']];
+function navOcultos() { try { const v = JSON.parse(localStorage.getItem(LS_NAV_OCULTOS) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+function aplicarNavOcultos() {
+  if (rol() !== 'admin') return;
+  const oc = navOcultos();
+  NAV_OPCIONES.forEach(([id]) => { if (oc.includes(id)) $('#' + id).hidden = true; });
+}
+function abrirOpcionesBarra() {
+  const oc = navOcultos();
+  const h = abrirHoja(`<h2>Botones de la barra</h2><div class="hint">Elige cuáles se muestran abajo. Solo cambia en este teléfono. «Mapa» y «Más» siempre están.</div>
+    <div class="m-lista">${NAV_OPCIONES.map(([id, t]) => `<label class="m-fila" style="cursor:pointer"><span class="t">${t}</span><input type="checkbox" data-nav="${id}" ${oc.includes(id) ? '' : 'checked'} style="width:22px;height:22px"></label>`).join('')}</div>`);
+  $$('[data-nav]', h).forEach((c) => c.addEventListener('change', () => {
+    const o = new Set(navOcultos());
+    if (c.checked) o.delete(c.dataset.nav); else o.add(c.dataset.nav);
+    try { localStorage.setItem(LS_NAV_OCULTOS, JSON.stringify([...o])); } catch (e) { /* */ }
+    pintarModo();
+  }));
+}
 function pintarModo() {
   if (S.perfil && vencioModo()) { S.modo = { tipo: 'agregar', fecha: null, inspId: null }; guardarModo(); }
   $('#navInspC3').hidden = !(rol() === 'contratista3' || rol() === 'admin');
@@ -2790,6 +2810,7 @@ function pintarModo() {
   const puede = PUEDE_MODO_INSPECCION.includes(rol());
   const c = $('#chipModo'), n = $('#navInsp');
   n.hidden = !puede;
+  aplicarNavOcultos();
   $('#navInferior').classList.toggle('apretado', $$('#navInferior .nav-btn:not([hidden])').length >= 4);
   if (!puede) { c.hidden = true; return; }
   const on = S.modo.tipo === 'inspeccion';
@@ -2956,6 +2977,7 @@ $('#btnMenu').addEventListener('click', () => {
       ${rol() === 'admin' ? `<button id="mConfig" class="m-fila"><span class="m-ico m-ambar">${ico('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>')}</span><span class="t">Configuración</span>${chev}</button>` : ''}
       <div class="m-grupo">Cuenta</div>
       <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
+      ${rol() === 'admin' ? `<button id="mBarra" class="m-fila"><span class="m-ico m-azul">${ico('<rect x="3" y="15" width="18" height="5" rx="2"/><path d="M7 9h10M7 5h10"/>')}</span><span class="t">Botones de la barra</span>${chev}</button>` : ''}
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
     </div>`);
@@ -2984,6 +3006,8 @@ $('#btnMenu').addEventListener('click', () => {
   if (mma) mma.addEventListener('click', () => abrirMaestros());
   const mu = $('#mUsuarios', h);
   if (mu) mu.addEventListener('click', () => abrirUsuarios('usuarios'));
+  const mba = $('#mBarra', h);
+  if (mba) mba.addEventListener('click', () => abrirOpcionesBarra());
   const mcf = $('#mConfig', h);
   if (mcf) mcf.addEventListener('click', () => abrirUsuarios('config'));
   $('#mActualizar', h).addEventListener('click', () => { $('#mActualizar', h).querySelector('.t').textContent = 'Actualizando…'; forzarActualizacion(); });
