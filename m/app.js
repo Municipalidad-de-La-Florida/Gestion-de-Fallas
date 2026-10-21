@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.42.0';
+const VERSION_APP = '1.43.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -2903,7 +2903,7 @@ async function avisoPendienteSW(consumir) {
     if (!r) return null;
     if (consumir) await c.delete('pendiente');
     const d = await r.json();
-    return d && d.id && /^[\w-]{1,64}$/.test(d.id) && Date.now() - (d.t || 0) < 120000 ? d.id : null;
+    return d && d.id && /^[\w-]{1,64}$/.test(d.id) && Date.now() - (d.t || 0) < 300000 ? d.id : null;
   } catch (e) { return null; }
 }
 async function recogerAvisoPendiente() {
@@ -3038,6 +3038,9 @@ async function entrarApp() {
   setTimeout(() => map.invalidateSize(), 80);
   cacheBbox = null;
   await cargarFallas();
+  // En iPhone, al tocar el aviso con la app cerrada, la dirección con la falla puede perderse: el aviso queda anotado
+  // por el service worker y se recoge aquí, ya que al abrir de cero no hay ningún evento de "volver a la app".
+  if (!S.fallaPendiente) { try { const idp = await avisoPendienteSW(true); if (idp) S.fallaPendiente = idp; } catch (e) { /* */ } }
   const habiaAviso = !!S.fallaPendiente;
   abrirPendienteDeAviso();
   if (!habiaAviso) restaurarBorrador();
@@ -3051,6 +3054,7 @@ async function entrarApp() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil) { cargarFallas(); revisarVersion(); setTimeout(recogerAvisoPendiente, 400); } });
 window.addEventListener('focus', () => setTimeout(recogerAvisoPendiente, 400));
+window.addEventListener('pageshow', () => setTimeout(recogerAvisoPendiente, 400));
 
 (async function iniciar() {
   if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
