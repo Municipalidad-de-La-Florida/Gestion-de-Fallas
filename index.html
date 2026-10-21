@@ -36,6 +36,7 @@
   header .brand-sep,.hb-sep{width:1px;height:26px;background:rgba(255,255,255,.25);flex:none;}
   header .userinfo{margin-left:auto;font-size:12px;display:flex;align-items:center;gap:8px;}
   header .userinfo .hb-sep{margin:0 4px;}
+  .hb .bt{white-space:nowrap;}
   .hb{display:flex;align-items:center;gap:8px;height:38px;padding:0 14px 0 6px;border:0;border-radius:10px;background:rgba(255,255,255,.1);color:#fff;font-size:13px;font-weight:500;cursor:pointer;}
   .hb:hover,.hb-ic:hover{background:rgba(255,255,255,.2);}
   .hb-chip{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex:none;}
@@ -307,6 +308,12 @@
   .chip-estado{display:inline-flex; align-items:center; gap:6px; padding:2px 9px; border:1.5px solid var(--line); border-radius:20px; background:#fff; cursor:pointer; font-size:11.5px; font-weight:600; color:var(--ink-soft);}
   .chip-estado:hover{border-color:var(--primary);}
   .chip-estado.activo{border-color:var(--primary); background:#eef5f1; color:var(--primary);}
+  .cfg-layout{display:grid; grid-template-columns:190px minmax(0,1fr); gap:16px; align-items:start;}
+  .cfg-side{display:flex; flex-direction:column; gap:2px; position:sticky; top:0;}
+  .cfg-g{font-size:10.5px; letter-spacing:.6px; text-transform:uppercase; color:var(--ink-soft); font-weight:700; padding:10px 10px 3px;}
+  .cfg-nav{display:flex; justify-content:space-between; align-items:center; gap:6px; border:0; background:none; text-align:left; border-radius:8px; padding:8px 10px; font-size:13px; font-weight:500; color:var(--ink); cursor:pointer;}
+  .cfg-nav:hover{background:#f1f4f2;} .cfg-nav.on{background:#e3f1ea; color:#1f4d3d; font-weight:700;}
+  @media (max-width:700px){ .cfg-layout{grid-template-columns:1fr;} .cfg-side{flex-direction:row; flex-wrap:wrap; position:static;} .cfg-g{display:none;} }
   .lib-tab, .lib-cat{padding:6px 14px; font-size:12.5px;}
   .lib-tab.active, .lib-cat.active{border-color:var(--primary); background:var(--primary); color:#fff;}
   .chip-estado .dot{width:9px; height:9px; border-radius:50%; flex-shrink:0;}
@@ -581,14 +588,14 @@
     <span class="hb-sep brand-sep"></span>
     <div class="brand"><div class="brand-t">Gestión de Fallas</div><div class="brand-s">Alumbrado Público</div></div>
     <div class="userinfo">
-      <button type="button" class="hb" id="statsBtn"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span class="bt">Estadísticas</span></button>
-      <button type="button" class="hb" id="cuadBtn" style="display:none;"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 6h13v10H1zM14 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></span><span class="bt">Cuadrillas</span></button>
-      <button type="button" class="hb" id="fiscBtn" style="display:none;"><span class="hb-chip" style="background:#fbe7e5;color:#c1443c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v3.5M11 14h.01"/></svg></span><span class="bt">Fiscalización</span></button>
-      <button type="button" class="hb" id="inspC3Btn" style="display:none;"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="bt">Inspecciones</span></button>
       <button type="button" class="hb" id="todasBtn" style="display:none;"><span class="hb-chip" style="background:#e6eefb;color:#2a5db0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg></span><span class="bt">Todas las fallas</span></button>
-      <button type="button" class="hb" id="toggleSearchBtn"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span><span class="bt">Buscador</span></button>
+      <button type="button" class="hb" id="inspC3Btn" style="display:none;"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="bt">Inspecciones</span></button>
+      <button type="button" class="hb" id="cuadBtn" title="Rendimiento de las cuadrillas" style="display:none;"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 6h13v10H1zM14 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></span><span class="bt">Rendimiento</span></button>
+      <button type="button" class="hb" id="fiscBtn" style="display:none;"><span class="hb-chip" style="background:#fbe7e5;color:#c1443c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v3.5M11 14h.01"/></svg></span><span class="bt">Fiscalización</span></button>
+      <button type="button" class="hb" id="statsBtn"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span class="bt">Estadísticas</span></button>
+      <button type="button" class="hb" id="usuariosBtn" style="display:none;"><span class="hb-chip" style="background:#e6eefb;color:#2a5db0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/></svg></span><span class="bt">Usuarios</span></button>
       <span class="hb-sep"></span>
-      <button type="button" class="hb-ic" id="fallasRapidoBtn" title="Ver todas las fallas" aria-label="Ver todas las fallas" style="display:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:#ffd54a"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></button>
+      <button type="button" class="hb-ic" id="toggleSearchBtn" title="Buscador" aria-label="Buscador"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
       <button type="button" class="hb-ic" id="historialModoBtn" title="Modo historial: clic en un punto o circuito para ver su historial" aria-label="Modo historial: clic en un punto o circuito para ver su historial" style="display:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:#b9a3f5"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
       <button type="button" class="hb-ic" id="toggleSidebarBtn" title="Mostrar/ocultar panel" aria-label="Mostrar/ocultar panel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:#9ee0c0"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
       <span class="hb-sep"></span>
@@ -601,6 +608,12 @@
         <div class="um-panel" id="userMenuPanel" hidden>
           <div class="um-head"><span class="um-av2" id="userAvatar2"></span><span class="um-ht"><span class="um-n2" id="userNombre2"></span><span class="um-r2" id="userRol2"></span></span></div>
           <div class="um-body">
+            <button type="button" class="um-item" id="cambiarPassBtn"><span class="um-ico" style="background:#eef2f0;color:#55665c;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg></span><span class="lbl">Cambiar contraseña</span></button>
+            <div class="um-div"></div>
+            <div class="um-lbl">Preferencias</div>
+            <button type="button" class="um-item" id="toggleModoDispositivoBtn" title="Cambiar entre modo Escritorio y modo Móvil"><span class="um-ico" style="background:#e3f1ea;color:#1f7a52;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span class="lbl">Modo: Escritorio</span></button>
+            <button type="button" class="um-item" id="repararAdminBtn" style="display:none;" title="Al pinchar una falla, mostrar u ocultar las opciones de reparación y de asignación a camión (solo para ti, en este navegador)"><span class="um-ico" style="background:#e3f1ea;color:#1f7a52;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.1-.6-.6-2.1z"/></svg></span><span class="lbl" id="repararAdminLbl">Reparar y asignar fallas: Sí</span></button>
+            <div class="um-div"></div>
             <div id="viewAsBox" style="display:none;">
               <div class="um-lbl">Ver como</div>
               <select id="viewAsSelect" class="um-sel">
@@ -613,11 +626,7 @@
               </select>
               <div class="um-div"></div>
             </div>
-            <button type="button" class="um-item" id="usuariosBtn" style="display:none;"><span class="um-ico" style="background:#e6eefb;color:#2a5db0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/></svg></span><span class="lbl">Usuarios</span></button>
-            <button type="button" class="um-item" id="notificadoresBtn" style="display:none;"><span class="um-ico" style="background:#fff1d9;color:#8a5200;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/></svg></span><span class="lbl">Librería</span></button>
-            <button type="button" class="um-item" id="repararAdminBtn" style="display:none;" title="Al pinchar una falla, mostrar u ocultar las opciones de reparación y de asignación a camión (solo para ti, en este navegador)"><span class="um-ico" style="background:#e3f1ea;color:#1f7a52;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.1-.6-.6-2.1z"/></svg></span><span class="lbl" id="repararAdminLbl">Reparar y asignar fallas: Sí</span></button>
-            <button type="button" class="um-item" id="cambiarPassBtn"><span class="um-ico" style="background:#eef2f0;color:#55665c;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></svg></span><span class="lbl">Cambiar contraseña</span></button>
-            <button type="button" class="um-item" id="toggleModoDispositivoBtn" title="Cambiar entre modo Escritorio y modo Móvil"><span class="um-ico" style="background:#e3f1ea;color:#1f7a52;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span class="lbl">Modo: Escritorio</span></button>
+            <button type="button" class="um-item" id="configBtn" style="display:none;"><span class="um-ico" style="background:#fff1d9;color:#8a5200;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span><span class="lbl">Configuración</span></button>
             <div class="um-div"></div>
             <button type="button" class="um-item um-out" id="logoutBtn"><span class="um-ico" style="background:#fbe7e5;color:#c1443c;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/></svg></span><span class="lbl">Salir</span></button>
           </div>
@@ -1022,14 +1031,7 @@
 <div id="usuariosModal" class="modal-overlay">
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeUsuariosBtn">×</button>
-    <h2>Gestión de usuarios</h2>
-    <div id="gestionTabs" style="display:flex; gap:4px; border-bottom:2px solid var(--line); margin:4px 0 12px; overflow-x:auto;">
-      <button type="button" class="gu-tab" data-tab="usuarios">👥 Usuarios</button>
-      <button type="button" class="gu-tab" data-tab="pauta">📅 Pauta inspecciones <span class="gu-dot" id="guDotPauta" style="display:none; color:#e08a00;">●</span></button>
-      <button type="button" class="gu-tab" data-tab="cuadrillas">🧰 Herramientas</button>
-      <button type="button" class="gu-tab" data-tab="contratos">📄 Contratos</button>
-      <button type="button" class="gu-tab" data-tab="ajustes">⚙️ Ajustes</button>
-    </div>
+    <h2>Usuarios</h2>
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><button id="guardarUsuariosBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;" disabled>Guardar cambios</button><span id="usuariosEstado" class="hint" style="margin:0;">Sin cambios</span></div>
     <div class="gu-pane" data-pane="usuarios">
     <details class="hint" style="margin-bottom:12px;"><summary style="cursor:pointer; font-weight:600;">ℹ️ Cómo funciona esta pantalla (crear usuarios, casillas y columnas)</summary><div style="margin-top:6px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Foto obligatoria</b> (solo contratistas) exige adjuntar al menos una fotografía al registrar una reparación, y esas reparaciones se hacen desde la app del teléfono. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). La columna <b>Contratos</b> (contratistas y camiones) indica a qué contratos pertenece cada usuario; puede ser más de uno. Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div></details>
@@ -1057,30 +1059,30 @@
       </table>
     </div>
     </div>
-    <div class="gu-pane" data-pane="pauta" style="display:none;">
-    <div id="pautaAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
-    <div id="operativoAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
-    </div>
-    <div class="gu-pane" data-pane="cuadrillas" style="display:none;">
-    <div id="cuadrillasAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
-    </div>
-    <div class="gu-pane" data-pane="contratos" style="display:none;">
-    <div id="contratosAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
-    </div>
-    <div class="gu-pane" data-pane="ajustes" style="display:none;">
-    <div id="ajustesAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
-    </div>
   </div>
 </div>
 
 <div id="notificadoresModal" class="modal-overlay">
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeNotificadoresBtn">×</button>
-    <h2>Librería</h2>
-    <div id="libTabs" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px;">
-      <button type="button" class="chip-estado lib-tab active" data-tab="notif">Notificadores</button>
-      <button type="button" class="chip-estado lib-tab" data-tab="falla">Códigos de falla</button>
-      <button type="button" class="chip-estado lib-tab" data-tab="cierre">Códigos de cierre</button>
+    <h2>⚙️ Configuración</h2>
+    <div class="cfg-layout"><nav class="cfg-side" id="cfgNav"><div class="cfg-g">Contratos</div><button type="button" class="cfg-nav" data-sec="contratos">Contratos</button><div class="cfg-g">Inspecciones</div><button type="button" class="cfg-nav" data-sec="pauta">Pauta y operativos<span class="gu-dot" id="guDotPauta" style="display:none; color:#e08a00;">●</span></button><div class="cfg-g">Equipos</div><button type="button" class="cfg-nav" data-sec="equipos">Cuadrillas y camiones</button><button type="button" class="cfg-nav" data-sec="maestros">Maestros</button><div class="cfg-g">Catálogos</div><button type="button" class="cfg-nav" data-sec="notif">Notificadores</button><button type="button" class="cfg-nav" data-sec="falla">Códigos de falla</button><button type="button" class="cfg-nav" data-sec="cierre">Códigos de cierre</button><div class="cfg-g">Integraciones</div><button type="button" class="cfg-nav" data-sec="enel">Enel / suministro</button></nav><div class="cfg-main">
+    <div class="cfg-pane" data-cpane="contratos" style="display:none;">
+    <div id="contratosAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    </div>
+    <div class="cfg-pane" data-cpane="pauta" style="display:none;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><button id="guardarUsuariosBtn2" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;" disabled>Guardar cambios</button><span id="usuariosEstado2" class="hint" style="margin:0;">Sin cambios</span></div>
+    <div id="pautaAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    <div id="operativoAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    </div>
+    <div class="cfg-pane" data-cpane="equipos" style="display:none;">
+    <div id="cuadrillasAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    </div>
+    <div class="cfg-pane" data-cpane="maestros" style="display:none;">
+    <div id="maestrosAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    </div>
+    <div class="cfg-pane" data-cpane="enel" style="display:none;">
+    <div id="ajustesAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     </div>
     <div id="libPaneCodigos" style="display:none;">
       <div id="libCategorias" style="display:none; gap:6px; flex-wrap:wrap; margin-bottom:10px;">
@@ -1128,6 +1130,7 @@
       </table>
     </div>
     </div>
+    </div></div>
   </div>
 </div>
 
@@ -1424,7 +1427,6 @@ async function cargarPerfilYIniciar(userId){
         modoVista = e.target.value || null;
         actualizarVisibilidadPorRol();
       };
-      document.getElementById('fallasRapidoBtn').style.display = '';
       document.getElementById('historialModoBtn').style.display = '';
     }
     actualizarVisibilidadPorRol();
@@ -1446,7 +1448,7 @@ function actualizarVisibilidadPorRol(){
   // El botón de gestión de usuarios sí sigue la simulación (un ITO/Contratista/Observador
   // real no vería este botón, así que tampoco debe verse al simular esos roles)
   document.getElementById('usuariosBtn').style.display = (rol === 'admin') ? '' : 'none';
-  document.getElementById('notificadoresBtn').style.display = (rol === 'admin') ? '' : 'none';
+  document.getElementById('configBtn').style.display = (rol === 'admin') ? '' : 'none';
   document.getElementById('reportSection').style.display = (rol === 'ito' || rol === 'ito2' || rol === 'admin' || esContratista2o3(rol)) ? 'block' : 'none';
   // Contratista2 solo puede ingresar fallas individuales ("Agregar falla"), no inspecciones
   document.getElementById('btnInformarInspeccion').style.display = esContratista2o3(rol) ? 'none' : '';
@@ -1454,7 +1456,7 @@ function actualizarVisibilidadPorRol(){
   document.getElementById('statsBtn').style.display = (rol === 'contratista' || esContratista2o3(rol)) ? 'none' : '';
   aplicarBotonesHerramientas();
   pintarBotonRepararAdmin();
-  document.getElementById('inspC3Btn').style.display = (rol === 'contratista3') ? '' : 'none';
+  document.getElementById('inspC3Btn').style.display = (rol === 'contratista3' || rol === 'admin') ? '' : 'none';
   document.getElementById('todasBtn').style.display = (rol === 'admin' || rol === 'ito' || rol === 'ito2' || rol === 'contratista' || esContratista2o3(rol)) ? '' : 'none';
   // si cambia el rol efectivo (ej. "ver como"), se sale de cualquier modo de reporte activo
   salirModoInformar();
@@ -4519,7 +4521,16 @@ async function abrirEditarReparacion(p, est, modo){
 
 // ---------- ESTADÍSTICAS (panel lateral) ----------
 document.getElementById('statsBtn').onclick = () => mostrarSidebarStats();
-document.getElementById('inspC3Btn').onclick = () => mostrarSidebarStats();
+document.getElementById('inspC3Btn').onclick = () => {
+  if(rolEfectivo() !== 'admin') return mostrarSidebarStats();
+  // Admin: abre el panel directo en la pestaña Inspecciones (sin cargar las estadísticas del período)
+  document.getElementById('sidebarNormal').style.display = 'none';
+  document.getElementById('sidebarStats').style.display = 'flex';
+  actualizarLayoutStats();
+  document.getElementById('tabInspecciones').style.display = '';
+  document.getElementById('tabAnalisis').style.display = '';
+  document.getElementById('tabInspecciones').click();
+};
 document.getElementById('backFromStats').onclick = () => ocultarSidebarStats();
 
 // Pantalla completa de estadísticas: datos a la izquierda y mapa a la derecha, con divisoria ajustable
@@ -4593,7 +4604,6 @@ function ocultarSidebarStats(){
 
 // ---------- TODAS LAS FALLAS (admin / ito) — panel inferior redimensionable ----------
 document.getElementById('todasBtn').onclick = () => mostrarModalTodas();
-document.getElementById('fallasRapidoBtn').onclick = () => mostrarModalTodas();
 document.getElementById('historialModoBtn').onclick = () => {
   modoHistorial = !modoHistorial;
   const btn = document.getElementById('historialModoBtn');
@@ -9957,14 +9967,15 @@ function refrescarCambiosUsuarios(){
   const dot = document.getElementById('guDotPauta');
   if(dot) dot.style.display = filasUsuariosModificadas().some(tr => { try{ return JSON.stringify(JSON.parse(tr.dataset.orig).dias) !== JSON.stringify(estadoFilaUsuario(tr).dias); }catch(e){ return false; } }) ? '' : 'none';
   document.getElementById('guardarUsuariosBtn').disabled = n === 0;
-  document.getElementById('usuariosEstado').textContent = n ? `${n} usuario${n>1?'s':''} con cambios sin guardar` : 'Sin cambios';
+  document.getElementById('guardarUsuariosBtn2').disabled = n === 0;
+  document.getElementById('usuariosEstado').textContent = document.getElementById('usuariosEstado2').textContent = n ? `${n} usuario${n>1?'s':''} con cambios sin guardar` : 'Sin cambios';
 }
 
 async function guardarUsuariosCambiados(){
   const filas = filasUsuariosModificadas();
   if(!filas.length) return;
   if(filas.some(tr => !estadoFilaUsuario(tr).nombre)){ alert('Hay un usuario con el nombre vacío; complétalo antes de guardar.'); return; }
-  document.getElementById('guardarUsuariosBtn').disabled = true;
+  document.getElementById('guardarUsuariosBtn').disabled = true; document.getElementById('guardarUsuariosBtn2').disabled = true;
   const errores = []; let ok = 0;
   for(const tr of filas){
     const id = tr.dataset.id, e = estadoFilaUsuario(tr);
@@ -9990,7 +10001,7 @@ async function guardarUsuariosCambiados(){
   }
   refrescarCambiosUsuarios();
   if(errores.length) alert(`Guardados: ${ok}. Con error:\n- ` + errores.join('\n- '));
-  else document.getElementById('usuariosEstado').textContent = `✓ ${ok} usuario${ok>1?'s':''} guardado${ok>1?'s':''}`;
+  else document.getElementById('usuariosEstado').textContent = document.getElementById('usuariosEstado2').textContent = `✓ ${ok} usuario${ok>1?'s':''} guardado${ok>1?'s':''}`;
 }
 document.getElementById('guardarUsuariosBtn').onclick = guardarUsuariosCambiados;
 
@@ -10011,15 +10022,64 @@ async function enviarResetPassword(email){
 // ---------- NOTIFICADORES EXTERNOS (solo admin) ----------
 // Personas sin cuenta que informan fallas. La base de datos exige las reglas (rol, modo activado,
 // fechas); aquí solo se administra la lista y el interruptor del modo.
-document.getElementById('notificadoresBtn').onclick = () => mostrarModalNotificadores();
+document.getElementById('configBtn').onclick = () => mostrarModalConfig();
 document.getElementById('closeNotificadoresBtn').onclick = () => document.getElementById('notificadoresModal').classList.remove('visible');
 document.getElementById('notificadoresModal').addEventListener('click', (e) => {
   if(e.target.id === 'notificadoresModal') document.getElementById('notificadoresModal').classList.remove('visible');
 });
 
-function mostrarModalNotificadores(){
+// ---------- CONFIGURACIÓN (solo admin): reúne lo que antes estaba en «Usuarios» (pauta, herramientas, contratos, ajustes) y en «Librería» ----------
+function cfgMostrar(sec){
+  CFG_SEC = sec;
+  document.querySelectorAll('#cfgNav .cfg-nav').forEach(b => b.classList.toggle('on', b.dataset.sec === sec));
+  document.querySelectorAll('#notificadoresModal .cfg-pane').forEach(p => p.style.display = p.dataset.cpane === sec ? '' : 'none');
+  const esLib = ['notif', 'falla', 'cierre'].includes(sec);
+  if(esLib){ libMostrarTab(sec); }
+  else{ document.getElementById('libPaneNotif').style.display = 'none'; document.getElementById('libPaneCodigos').style.display = 'none'; }
+  if(sec === 'maestros') pintarMaestrosAdmin();
+}
+let CFG_SEC = 'contratos';
+function mostrarModalConfig(sec){
   document.getElementById('notificadoresModal').classList.add('visible');
-  libMostrarTab(LIB.tab);
+  cargarUsuarios();            // rellena pauta, operativos, contratos y ajustes
+  pintarCuadrillasAdmin();
+  cfgMostrar(sec || CFG_SEC);
+}
+document.querySelectorAll('#cfgNav .cfg-nav').forEach(b => b.onclick = () => cfgMostrar(b.dataset.sec));
+document.getElementById('guardarUsuariosBtn2').onclick = () => guardarUsuariosCambiados();
+
+// Maestros (personal que hace los aportes): misma lista que en la app
+async function pintarMaestrosAdmin(){
+  const caja = document.getElementById('maestrosAdmin');
+  caja.innerHTML = '<div class="hint">Cargando…</div>';
+  let cts = [], ms = [];
+  try{
+    cts = await db.select('contratos', 'activo=eq.true&select=id,nombre&order=nombre.asc');
+    ms = await db.select('maestros', 'select=id,nombre,contrato_id,activo&order=nombre.asc');
+  }catch(e){ caja.innerHTML = '<div class="hint">No se pudo cargar la lista de maestros. ¿Ya se ejecutó el SQL de aportes?</div>'; return; }
+  const pintar = () => {
+    caja.innerHTML = `<div style="font-weight:700; margin-bottom:4px;">Maestros</div>
+      <div class="hint" style="margin:0 0 10px;">Personal que realiza las reparaciones. Los camiones eligen de esta lista al registrar un aporte (también se administra desde la app).</div>` +
+      cts.map(c => `<div style="font-weight:600; margin:10px 0 4px;">${escHtml(c.nombre)}</div>` +
+        (ms.filter(m => m.contrato_id === c.id).map(m => `<div style="display:flex; align-items:center; gap:10px; margin-bottom:4px; ${m.activo ? '' : 'opacity:.55;'}"><span style="min-width:220px;">${escHtml(m.nombre)}</span><button type="button" class="popup-btn" data-t="${m.id}" style="width:auto; margin:0; padding:4px 12px; background:#fff; color:var(--ink); border:1.5px solid var(--line);">${m.activo ? 'Desactivar' : 'Activar'}</button></div>`).join('') || '<div class="hint" style="margin:0 0 4px;">Sin maestros.</div>') +
+        `<div style="display:flex; gap:6px; margin-top:6px;"><input type="text" class="popup-input" data-n="${c.id}" maxlength="60" placeholder="Nombre del maestro" autocomplete="off" style="margin:0; max-width:260px;"><button type="button" class="popup-btn" data-a="${c.id}" style="width:auto; margin:0; padding:6px 14px;">Agregar</button></div>`).join('');
+    caja.querySelectorAll('[data-t]').forEach(b => b.onclick = async () => {
+      const m = ms.find(x => x.id === b.dataset.t); b.disabled = true;
+      try{ await db.update('maestros', `id=eq.${m.id}`, {activo: !m.activo}); m.activo = !m.activo; }catch(e){ alert('No se pudo cambiar: ' + e.message); }
+      pintar();
+    });
+    caja.querySelectorAll('[data-a]').forEach(b => b.onclick = async () => {
+      const cid = b.dataset.a, inp = caja.querySelector(`[data-n="${cid}"]`), nombre = inp.value.trim().replace(/\s+/g, ' ');
+      if(nombre.length < 2){ alert('Escribe el nombre del maestro.'); return; }
+      b.disabled = true;
+      try{
+        const r = await db.insert('maestros', {contrato_id: cid, nombre});
+        ms.push(Array.isArray(r) ? r[0] : r); ms.sort((x, y) => x.nombre.localeCompare(y.nombre));
+      }catch(e){ alert(/duplicate|unique/i.test(e.message) ? 'Ese maestro ya está en la lista.' : 'No se pudo agregar: ' + e.message); }
+      pintar();
+    });
+  };
+  pintar();
 }
 
 // ---------- LIBRERÍA: notificadores + códigos de falla y de cierre (solo admin) ----------
