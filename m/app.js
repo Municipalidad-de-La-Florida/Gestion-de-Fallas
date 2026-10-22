@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.48.0';
+const VERSION_APP = '1.48.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -917,6 +917,8 @@ function dibujarFallas() {
       L.DomEvent.stopPropagation(e);
       if (S.modoHist && p.ref_punto_gid != null) return abrirHistorial('punto', p.ref_punto_gid, 'Punto lumínico', f.geometry);
       if (S.modoHist && p.ref_circuito_gid != null) return abrirHistorial('linea', p.ref_circuito_gid, 'Circuito', f.geometry);
+      const abajo = elementoBajoFalla(p, e.latlng);
+      if (abajo) return abajo.tipo === 'punto' ? abrirPunto(abajo.f.properties, abajo.f.geometry) : abrirCircuito(abajo.f.properties, abajo.f.geometry);
       abrirFalla(p, f.geometry);
     });
     capaFallas.addLayer(capa);
@@ -1221,8 +1223,48 @@ function accionesReporte(textoReportar, geom) {
     ${c ? `<a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>` : ''}
   </div>`;
 }
+// Una falla ya reparada (verde) se dibuja sobre su punto o circuito y se llevaba el toque: quien reporta quería el punto o el circuito de abajo.
+// Desde esa ficha, «Ver la reparación reciente» abre la falla reparada.
+function elementoBajoFalla(p, ll) {
+  if (!map || !ll || p.estado !== 'reparada' || !puedeReportar() || S.modoHist) return null;
+  let punto = null;
+  if (p.ref_punto_gid != null) {
+    capaPuntos.eachLayer((l) => { if (l.feature && l.feature.properties.gid === p.ref_punto_gid) punto = l.feature; });
+  } else {
+    const tocado = map.latLngToContainerPoint(ll); let mejor = 26;   // el punto más cercano al dedo, si hay uno muy cerca
+    capaPuntos.eachLayer((l) => {
+      if (!l.feature || !l.getLatLng) return;
+      const d = tocado.distanceTo(map.latLngToContainerPoint(l.getLatLng()));
+      if (d < mejor) { mejor = d; punto = l.feature; }
+    });
+  }
+  if (punto) return { tipo: 'punto', f: punto };
+  if (p.ref_circuito_gid != null && !p.cascada) {
+    let circ = null;
+    capaCircuitos.eachLayer((l) => { if (l.feature && l.feature.properties.gid === p.ref_circuito_gid) circ = l.feature; });
+    if (circ) return { tipo: 'circuito', f: circ };
+  }
+  return null;
+}
+// Falla activa (no reparada) de un punto o circuito, según lo cargado en el mapa
+function fallaActivaCargada(tipo, gid) {
+  return S.features.find((x) => { const q = x.properties; return q.estado !== 'reparada' && (tipo === 'punto' ? q.ref_punto_gid === gid : (q.ref_circuito_gid === gid && !q.cascada)); });
+}
+function fallaReparadaCargada(tipo, gid) {
+  return S.features.find((x) => { const q = x.properties; return q.estado === 'reparada' && (tipo === 'punto' ? q.ref_punto_gid === gid : (q.ref_circuito_gid === gid && !q.cascada)); });
+}
+function botonVerReparada(h, tipo, gid) {
+  const f = fallaReparadaCargada(tipo, gid);
+  if (!f || !puedeReportar()) return;
+  const acc = $('#accFalla', h);
+  if (acc) acc.insertAdjacentHTML('afterend', '<div style="margin-top:6px"><button id="bVerRep" class="btn btn-secundario">Ver la reparación reciente</button></div>');
+  const b = $('#bVerRep', h);
+  if (b) b.addEventListener('click', () => abrirFalla(f.properties, f.geometry));
+}
 function abrirPunto(p, geom) {
   if (S.modoHist) return abrirHistorial('punto', p.gid, 'Punto lumínico ' + (p.llave ?? ''), geom);
+  // Si ya tiene una falla activa, se muestra esa en vez de ofrecer reportar otra
+  const act = fallaActivaCargada('punto', p.gid); if (act) return abrirFalla(act.properties, act.geometry);
   const h = abrirHoja(`
     <h2>Punto lumínico</h2>
     <dl class="kv">
@@ -1233,6 +1275,7 @@ function abrirPunto(p, geom) {
     </dl>
     ${infoSoloLectura()}
     ${accionesReporte('Reportar falla', geom)}`);
+  botonVerReparada(h, 'punto', p.gid);
   const b = $('#bReportar', h);
   if (b) b.addEventListener('click', ocupar(b, async () => {
     b.textContent = 'Revisando…';
@@ -1250,6 +1293,7 @@ function abrirPunto(p, geom) {
 }
 function abrirCircuito(p, geom) {
   if (S.modoHist) return abrirHistorial('linea', p.gid, 'Circuito ' + (p.id ?? ''), geom);
+  const act = fallaActivaCargada('circuito', p.gid); if (act) return abrirFalla(act.properties, act.geometry);
   const h = abrirHoja(`
     <h2>Circuito ${esc(p.id ?? '')}</h2>
     <dl class="kv">
@@ -1258,6 +1302,7 @@ function abrirCircuito(p, geom) {
     </dl>
     ${infoSoloLectura()}
     ${accionesReporte('Reportar falla de circuito', geom)}`);
+  botonVerReparada(h, 'circuito', p.gid);
   const b = $('#bReportar', h);
   if (b) b.addEventListener('click', ocupar(b, async () => {
     b.textContent = 'Revisando…';
@@ -3184,7 +3229,6 @@ async function entrarApp() {
   }
   try { localStorage.setItem('fm_carga', String(Date.now())); } catch (e) { /* */ }
   const habiaAviso = !!S.fallaPendiente;
-  if (habiaAviso) toast('Abriendo la falla del aviso…', '');
   abrirPendienteDeAviso();
   await cargarFallas();
   if (!habiaAviso) restaurarBorrador();
