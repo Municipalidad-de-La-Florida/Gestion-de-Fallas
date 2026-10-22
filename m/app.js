@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.48.1';
+const VERSION_APP = '1.48.2';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -635,7 +635,7 @@ function iniciarMapa() {
   let _areaTimer = null;
   map.on('moveend', () => { clearTimeout(_areaTimer); _areaTimer = setTimeout(cargarArea, 300); });
   map.on('dragstart', () => { if (S.seguir) { detenerSeguir(); } });
-  map.on('zoomend', () => { ajustarRadios(); dibujarFallas(); });
+  map.on('zoomend', () => { ajustarRadios(); dibujarFallas(); quitarEmpalmesLejos(); });
   map.on('click', () => { /* un toque en el vacío no hace nada */ });
   // Atenuar lo que queda fuera de la comuna (botón en el mapa, se recuerda la elección). No bloquea toques.
   // El círculo de precisión del GPS va BAJO las fallas: encima teñía de azul los puntos morados/rojos
@@ -689,6 +689,7 @@ async function cargarArea(forzar) {
     if (visible && !map.hasLayer(c)) c.addTo(map);
     if (!visible && map.hasLayer(c)) map.removeLayer(c);
   });
+  quitarEmpalmesLejos();
   if (!map.hasLayer(capaFallas)) capaFallas.addTo(map);
   capaFallas.bringToFront && capaFallas.bringToFront();
   if (!visible) return;
@@ -732,12 +733,18 @@ async function cargarArea(forzar) {
 }
 
 // Empalmes (medidores): estrella roja bajo los puntos, solo con mucho zoom; al tocarla muestra medidor y cliente.
+// Las estrellas tienen tamaño fijo en pantalla: si se quedan al alejarse tapan todo el mapa (pasaba al alejarse de golpe bajo el zoom de datos)
+function quitarEmpalmesLejos() {
+  if (map && map.getZoom() < ZOOM_EMPALMES && map.hasLayer(capaEmpalmes)) map.removeLayer(capaEmpalmes);
+}
 async function cargarEmpalmes(bbox, forzar) {
+  if (map.getZoom() < ZOOM_EMPALMES) return true;
   if (!map.hasLayer(capaEmpalmes)) capaEmpalmes.addTo(map);
   if (!forzar && contenido(cacheEmp, bbox)) return true;
   const grande = expandir(bbox, 0.4);
   try {
     const emp = await rpcReint('empalmes_en_area', { min_lon: grande[0], min_lat: grande[1], max_lon: grande[2], max_lat: grande[3] });
+    if (map.getZoom() < ZOOM_EMPALMES) { quitarEmpalmesLejos(); return true; }   // se alejó mientras cargaba: no se dibujan
     capaEmpalmes.clearLayers();
     if (emp) {
       L.geoJSON(emp, {
