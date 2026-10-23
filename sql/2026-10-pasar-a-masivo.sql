@@ -1,5 +1,5 @@
 -- Botón "Pasar a masivo" (solo para los usuarios habilitados en usuarios.puede_pasar_a_masivo).
--- Una falla abierta (no cascada, no masiva) pasa a Masivo y al contrato Elecnor; si estaba asignada a un camión, se desasigna.
+-- Una falla abierta (no cascada, no masiva) pasa a Masivo y al contrato Elecnor; si estaba asignada a un camión, se desasigna. No deja comentario ni registro.
 -- Si es una falla de circuito, sus puntos en cascada siguen al circuito (contrato y asignación) por los triggers existentes.
 -- Es independiente de 2026-10-mantenedor-luminarias.sql: el mantenedor de la falla no se toca.
 
@@ -13,12 +13,10 @@ language plpgsql security definer set search_path to 'public'
 as $function$
 declare
   v_ok boolean;
-  v_nombre text;
   v_elecnor uuid;
   f public.fallas%rowtype;
-  v_txt text;
 begin
-  select u.puede_pasar_a_masivo, u.nombre into v_ok, v_nombre from public.usuarios u where u.id = auth.uid();
+  select u.puede_pasar_a_masivo into v_ok from public.usuarios u where u.id = auth.uid();
   if not coalesce(v_ok, false) then
     raise exception 'No tienes permiso para pasar fallas a masivo.';
   end if;
@@ -34,9 +32,6 @@ begin
   select id into v_elecnor from public.contratos where lower(btrim(nombre)) = 'elecnor' and activo limit 1;
   if v_elecnor is null then raise exception 'No se encontró el contrato Elecnor.'; end if;
 
-  v_txt := 'Pasada a masivo por ' || coalesce(v_nombre, 'usuario') || ' (contrato Elecnor'
-           || case when f.asignado_camion_id is not null then '; se quitó la asignación al camión' else '' end || ')';
-
   perform set_config('app.editando_falla', '1', true);   -- evita el bloqueo de campos para contratistas
   update public.fallas
      set masivo = true,
@@ -47,9 +42,6 @@ begin
   -- Los puntos en cascada siguen al circuito: el contrato lo propaga el trigger; la asignación se quita aquí también por seguridad.
   update public.fallas set asignado_camion_id = null, asignado_por_id = null
    where circuito_origen_id = p_falla and asignado_camion_id is not null;
-
-  insert into public.fallas_comentarios (falla_id, tipo, comentario, autor_id, autor_nombre)
-  values (p_falla, 'masivo', v_txt, auth.uid(), v_nombre);
 end;
 $function$;
 
