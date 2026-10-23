@@ -1,10 +1,11 @@
--- Botón "Pasar a masivo" (solo para quien tenga el permiso, hoy Héctor Romero).
+-- Botón "Pasar a masivo" (solo para los usuarios habilitados en usuarios.puede_pasar_a_masivo).
 -- Una falla abierta (no cascada, no masiva) pasa a Masivo y al contrato Elecnor; si estaba asignada a un camión, se desasigna.
 -- Si es una falla de circuito, sus puntos en cascada siguen al circuito (contrato y asignación) por los triggers existentes.
 -- Es independiente de 2026-10-mantenedor-luminarias.sql: el mantenedor de la falla no se toca.
 
 alter table public.usuarios add column if not exists puede_pasar_a_masivo boolean not null default false;
-update public.usuarios set puede_pasar_a_masivo = true where id = '98275df7-1b8d-41ee-afb2-8866fcf225b8';  -- Héctor Romero
+-- Para habilitar a un usuario:  update public.usuarios set puede_pasar_a_masivo = true where id = '<id del usuario>';
+-- Para quitarlo:                update public.usuarios set puede_pasar_a_masivo = false where id = '<id del usuario>';
 
 create or replace function public.pasar_a_masivo(p_falla uuid)
 returns void
