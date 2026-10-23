@@ -1398,6 +1398,8 @@ async function cargarPerfilYIniciar(userId){
     cargarLibreria();   // códigos de falla y de cierre desde la Librería (sin bloquear el inicio)
     currentUser.ver_cuadrillas = false; currentUser.ver_ubicacion = false; currentUser.ubic_col = false;
     currentUser.ver_fiscalizacion = false; currentUser.fisc_col = false;
+    currentUser.puede_pasar_a_masivo = false;
+    try{ const um = await db.select('usuarios', `id=eq.${userId}&select=puede_pasar_a_masivo`); if(um && um[0]) currentUser.puede_pasar_a_masivo = !!um[0].puede_pasar_a_masivo; }catch(_){ /* sin la columna: no se muestra el botón */ }
     try{ const u2 = await db.select('usuarios', `id=eq.${userId}&select=ver_ubicacion`); if(u2 && u2[0]){ currentUser.ver_ubicacion = !!u2[0].ver_ubicacion; currentUser.ubic_col = true; } }catch(e0){ /* sin la columna: la ubicación sigue al permiso de Cuadrillas */ }
     try{
       const v = await db.select('usuarios', `id=eq.${userId}&select=ver_cuadrillas,ver_fiscalizacion`);
@@ -3635,6 +3637,13 @@ async function abrirPopupFalla(feat){
     </div>
   ` : '';
 
+  const puedePasarMasivo = !!currentUser.puede_pasar_a_masivo && !p.masivo && !p.cascada && !p._vistaHistorica && p.estado !== 'reparada';
+  const pasarMasivoHtml = puedePasarMasivo ? `
+    <div style="margin-top:8px;">
+      <button type="button" class="popup-btn" id="pasarMasivoBtn" style="background:#8a949d;">⇄ Pasar a masivo</button>
+    </div>
+  ` : '';
+
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
@@ -3656,6 +3665,7 @@ async function abrirPopupFalla(feat){
       ${infoGeneral}
       ${infoReparacion}
       ${asignarCamionHtml}
+      ${pasarMasivoHtml}
       <div id="cierrePreview" style="margin-top:8px; font-size:11.5px; color:var(--ink); font-weight:600; line-height:1.5;"></div>
       <div class="hint" style="margin-top:8px;">Información adicional:</div>
       <textarea class="popup-input" id="cierreDesc" placeholder="Ej: Información adicional" style="width:100%; min-height:120px; box-sizing:border-box;"></textarea>
@@ -3681,6 +3691,7 @@ async function abrirPopupFalla(feat){
       ${infoGeneral}
       ${infoReparacion}
       ${asignarCamionHtml}
+      ${pasarMasivoHtml}
       ${puedeComentar ? `<div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
         <div class="hint" style="margin-bottom:4px;">Agregar un comentario:</div>
         <textarea class="popup-input" id="comentarioNuevoInput" placeholder="Escribe un comentario sobre esta falla" style="width:100%; min-height:60px; box-sizing:border-box; margin-bottom:6px;"></textarea>
@@ -3736,6 +3747,21 @@ async function abrirPopupFalla(feat){
     };
     if(!puedeComentar) btnGuardarCom.style.display = 'none';
     protegerClick(btnGuardarCom);
+  }
+
+  const btnPasarMasivo = panel.querySelector('#pasarMasivoBtn');
+  if(btnPasarMasivo){
+    btnPasarMasivo.onclick = async () => {
+      const aviso = p.asignado_camion_id || p.asignado_camion_nombre ? '\n\nEstá asignada a un camión: se quitará la asignación.' : '';
+      if(!confirm('¿Pasar esta falla a Masivo? Cambiará al contrato Elecnor y dejará de verse en tu contrato.' + aviso)) return;
+      btnPasarMasivo.disabled = true;
+      try{
+        await db.rpc('pasar_a_masivo', {p_falla: p.id});
+        cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
+        cerrarPanel();
+      }catch(e){ btnPasarMasivo.disabled = false; alert('No se pudo pasar a masivo: ' + e.message); }
+    };
+    protegerClick(btnPasarMasivo);
   }
 
   const btnQuitarAsig = panel.querySelector('#quitarAsignacionBtn');
