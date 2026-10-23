@@ -563,6 +563,8 @@ async function cargarPerfil() {
     // Permiso para ver Cuadrillas (el admin siempre; los demás solo si el admin se lo habilitó)
     S.perfil.ver_cuadrillas = false; S.perfil.ver_ubicacion = false; S.perfil.ubic_col = false;
     try { const w = await select('usuarios', `id=eq.${sesion.user_id}&select=ver_ubicacion`); if (w && w[0]) { S.perfil.ver_ubicacion = !!w[0].ver_ubicacion; S.perfil.ubic_col = true; } } catch (e) { /* sin columna: sigue a Cuadrillas */ }
+    S.perfil.puede_pasar_a_masivo = false;
+    try { const m = await select('usuarios', `id=eq.${sesion.user_id}&select=puede_pasar_a_masivo`); if (m && m[0]) S.perfil.puede_pasar_a_masivo = !!m[0].puede_pasar_a_masivo; } catch (e) { /* sin columna: no se muestra el botón */ }
     try { const v = await select('usuarios', `id=eq.${sesion.user_id}&select=ver_cuadrillas`); if (v && v[0]) S.perfil.ver_cuadrillas = !!v[0].ver_cuadrillas; } catch (e) { /* sin columna */ }
     // Pauta de días de inspección (solo rol ito). Si la columna aún no existe, queda sin restricción.
     S.perfil.dias_inspeccion = null;
@@ -1745,6 +1747,7 @@ const ICO_ACC = {
   ok: _ia('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
   editar: _ia('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
   nueva: _ia('<path d="M12 5v14M5 12h14"/>'),
+  masivo: _ia('<path d="M7 4L3 8l4 4"/><path d="M3 8h14"/><path d="M17 20l4-4-4-4"/><path d="M21 16H7"/>'),
   camion: _ia('<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.7"/><circle cx="17" cy="17.5" r="1.7"/>'),
   ir: _ia('<path d="M12 21s-6-5.6-6-10.5a6 6 0 0112 0C18 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/>'),
   borrar: _ia('<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>'),
@@ -1776,6 +1779,7 @@ async function abrirFalla(p, geom) {
   const puedeCerrarEsta = puedeCerrar() && !p.cascada && p.estado !== 'reparada';
   const puedeNuevaAqui = puedeReportar() && p.estado === 'reparada';
   const puedeAsignarEsta = puedeAsignar() && !p.cascada && p.estado !== 'reparada';
+  const puedePasarMasivo = !!(S.perfil && S.perfil.puede_pasar_a_masivo) && !p.masivo && !p.cascada && p.estado !== 'reparada';
   // Eliminar: el creador su propia falla (no reparada) dentro de 15 min desde que la ingresó; el admin cualquiera (la base lo exige igual)
   const minDesdeIngreso = p.fecha_falla_real ? (Date.now() - new Date(p.fecha_falla_real).getTime()) / 60000 : Infinity;
   const puedeEliminarEsta = !p.cascada && !!S.perfil && (rol() === 'admin' || (p.creado_por === S.perfil.id && p.estado !== 'reparada' && minDesdeIngreso <= 15));
@@ -1801,6 +1805,7 @@ async function abrirFalla(p, geom) {
         ${puedeEditarEsta ? `<button id="bEditar" class="acc-t">${ICO_ACC.editar}<span>Editar${rol() === 'admin' ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
         ${puedeNuevaAqui ? `<button id="bNueva" class="acc-t">${ICO_ACC.nueva}<span>Nueva falla<small>${p.tipo === 'linea' ? 'en este circuito' : 'en este punto'}</small></span></button>` : ''}
         ${puedeAsignarEsta ? `<button id="bAsignar" class="acc-t">${ICO_ACC.camion}<span>${p.asignado_camion_id ? 'Cambiar camión' : 'Asignar camión'}</span></button>` : ''}
+        ${puedePasarMasivo ? `<button id="bMasivo" class="acc-t" style="background:#8a949d;color:#fff">${ICO_ACC.masivo.replace('<svg', '<svg style="color:#fff"')}<span>Pasar a masivo</span></button>` : ''}
         <a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>
         ${puedeEliminarEsta ? `<button id="bEliminar" class="acc-t acc-peligro">${ICO_ACC.borrar}<span>Eliminar${rol() === 'admin' ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
       </div>
@@ -1816,6 +1821,15 @@ async function abrirFalla(p, geom) {
   if (bn) bn.addEventListener('click', ocupar(bn, () => reportarNuevaSobre(p)));
   const ba = $('#bAsignar', h);
   if (ba) ba.addEventListener('click', () => formAsignar(p));
+  const bm = $('#bMasivo', h);
+  if (bm) bm.addEventListener('click', ocupar(bm, async () => {
+    const asignada = !!(p.asignado_camion_id || p.asignado_camion_nombre);
+    if (!confirm('¿Pasar esta falla a Masivo? Cambiará al contrato Elecnor y dejará de verse en tu contrato.' + (asignada ? '\n\nEstá asignada a un camión: se quitará la asignación.' : ''))) return;
+    await rpc('pasar_a_masivo', { p_falla: p.id });
+    cerrarHoja();
+    toast('Falla pasada a masivo', 'ok');
+    cargarFallas();
+  }));
   const bq = $('#bQuitarAsig', h);
   if (bq) bq.addEventListener('click', ocupar(bq, async () => {
     if (!confirm('¿Quitar la asignación de esta falla?')) return;
@@ -2385,7 +2399,7 @@ const msgContrato = (e) => (/duplicate|unique|contratos_nombre/i.test(e.message)
 
 async function cargarUsuariosAdmin() {
   const [us, cs, rel, ns] = await Promise.all([
-    select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
+    select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
     select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc').catch(() => []),
     select('usuario_contratos', 'select=usuario_id,contrato_id').catch(() => []),
     select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc').catch(() => []),
@@ -2728,7 +2742,8 @@ function editarUsuarioU(id) {
     const cont = $('#eHerr', h);
     if (u.rol === 'camion') { cont.innerHTML = ''; return; }
     const t = (k, tit, sub) => `<button type="button" class="u-tog ${u[k] ? 'on' : ''}" data-p="${k}" style="margin-top:8px"><span class="u-tx"><b>${tit}</b><span>${sub}</span></span><span class="u-sw ${u[k] ? 'on' : ''}"></span></button>`;
-    cont.innerHTML = `<div class="u-lbl" style="margin-top:14px">Herramientas</div>` + t('ver_cuadrillas', '🚚 Cuadrillas', 'Rendimiento de las cuadrillas por turno') + t('ver_ubicacion', '📍 Ubicación de camiones', 'Ver dónde están los camiones (permiso aparte)');
+    cont.innerHTML = `<div class="u-lbl" style="margin-top:14px">Herramientas</div>` + t('ver_cuadrillas', '🚚 Cuadrillas', 'Rendimiento de las cuadrillas por turno') + t('ver_ubicacion', '📍 Ubicación de camiones', 'Ver dónde están los camiones (permiso aparte)')
+      + (['contratista', 'contratista2', 'contratista3'].includes(u.rol) && u.puede_pasar_a_masivo !== undefined ? t('puede_pasar_a_masivo', '⇄ Pasar a masivo', 'Puede pasar una falla a Masivo (contrato Elecnor) y quitarle el camión') : '');
   };
   pintarHerr();
   $('#eHerr', h).addEventListener('click', async (ev) => {
