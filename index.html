@@ -8513,22 +8513,51 @@ async function generarPdfAnalisis(soloResumen, opciones){
       const inicialesIto = (n) => { const p = String(n).trim().split(/\s+/); return (p[0][0] + (p[1] ? p[1][0] : '')).toUpperCase(); };
       const porFecha = {}; diasCob.forEach(x => { porFecha[String(x.fecha).slice(0, 10)] = x; });
       const fechasOpC = new Set(opsDet.map(o => String(o.fecha).slice(0, 10)));
-      const wC = (ancho - margen * 2) / 7, hC = 19;
+      const wC = (ancho - margen * 2) / 7, HC_MAX = 19, HC_MIN = 13.5, H_2FILAS = 18;
+      const dC = 4.6, sep = 0.7, porFila = Math.floor((wC - 2) / (dC + sep));
       // Meses cubiertos por el período
       const meses = [];
       { let [yy, mm] = [+ini.slice(0, 4), +ini.slice(5, 7)]; const [yf, mf] = [+fin.slice(0, 4), +fin.slice(5, 7)];
         while(yy < yf || (yy === yf && mm <= mf)){ meses.push([yy, mm]); mm++; if(mm > 12){ mm = 1; yy++; } } }
-      for(const [yy, mm] of meses){
+      // Semanas de cada mes y cuáles necesitan dos filas de círculos (noches con muchos ITO, p. ej. operativos)
+      const semanasMes = meses.map(([yy, mm]) => {
+        const nDias = new Date(Date.UTC(yy, mm, 0)).getUTCDate(), off = (new Date(Date.UTC(yy, mm - 1, 1)).getUTCDay() + 6) % 7;
+        const nSem = Math.ceil((off + nDias) / 7), dos = new Array(nSem).fill(false);
+        for(let dd = 1; dd <= nDias; dd++){
+          const x = porFecha[`${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`];
+          if(x && x.inspecciones && String(x.itos || '').split(', ').filter(Boolean).length > porFila) dos[Math.floor((off + dd - 1) / 7)] = true;
+        }
+        return {nSem, dos};
+      });
+      // Ajuste para que calendario, estadística y tabla por ITO quepan en la misma hoja: primero se achica el alto de las semanas
+      // (hasta HC_MIN) y, si aún no alcanza, el relleno de las filas de la tabla por ITO. Si igual no cabe, sigue en la hoja siguiente.
+      const nSemTot = semanasMes.reduce((s, m) => s + m.nSem, 0), nSem2 = semanasMes.reduce((s, m) => s + m.dos.filter(Boolean).length, 0);
+      const nIto = (cob.por_ito || []).length;
+      const dispo = (alto - 18) - y - 17 * meses.length;   // alto libre para semanas, leyenda, estadística y tabla por ITO
+      const H_BLOQUE = 40;                                  // título + tarjetas + barra de la estadística de fallas
+      const calcHC = (cp) => {
+        const n1 = nSemTot - nSem2;
+        const libre = dispo - 9 - 4 - (nIto ? (nIto + 1) * (3.5 + 2 * cp) : 11) - H_BLOQUE - nSem2 * H_2FILAS;
+        return n1 > 0 ? libre / n1 : HC_MAX;
+      };
+      let cpIto = 2, hC1 = calcHC(cpIto);
+      for(const cp of [1.6, 1.0]) if(hC1 < 15){ cpIto = cp; hC1 = calcHC(cp); }
+      hC1 = Math.max(HC_MIN, Math.min(HC_MAX, Math.floor(hC1 * 10) / 10));
+      for(let im = 0; im < meses.length; im++){
+        const [yy, mm] = meses[im];
         const primero = new Date(Date.UTC(yy, mm - 1, 1)), nDias = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
         const off = (primero.getUTCDay() + 6) % 7;   // lunes = 0
-        const nSem = Math.ceil((off + nDias) / 7);
-        if(y + 14 + nSem * hC > alto - 16) hojaDet();
+        const {nSem, dos} = semanasMes[im];
+        const hS = dos.map(t => t ? Math.max(H_2FILAS, hC1) : hC1);   // alto de cada semana
+        const topS = []; hS.reduce((a, h, i) => { topS[i] = a; return a + h; }, 0);
+        const hMes = hS.reduce((a, h) => a + h, 0);
+        if(y + 14 + hMes > alto - 16) hojaDet();
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...VERDE); pdf.text(`${MESES_PDF[mm - 1]} ${yy}`, margen, y + 2);
         y += 5;
         ['L', 'M', 'M', 'J', 'V', 'S', 'D'].forEach((t, i) => { pdf.setFillColor(...VERDE); pdf.roundedRect(margen + i * wC + 0.6, y, wC - 1.2, 5.4, 2.7, 2.7, 'F'); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5); pdf.setTextColor(...(i >= 5 ? [190, 205, 195] : [123, 211, 0])); pdf.text(t, margen + i * wC + wC / 2, y + 3.8, {align: 'center'}); });
         y += 7;
         for(let dd = 1; dd <= nDias; dd++){
-          const idx = off + dd - 1, cx0 = margen + (idx % 7) * wC, cy0 = y + Math.floor(idx / 7) * hC;
+          const idx = off + dd - 1, sem = Math.floor(idx / 7), cx0 = margen + (idx % 7) * wC, cy0 = y + topS[sem], hH = hS[sem];
           const iso = `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
           const enRango = iso >= ini && iso <= fin, x = porFecha[iso], dow = (idx % 7) + 1 === 7 ? 0 : (idx % 7) + 1;
           const hay = x && x.inspecciones, esOp = fechasOpC.has(iso), finde = dow === 0 || dow === 6;
@@ -8538,32 +8567,57 @@ async function generarPdfAnalisis(soloResumen, opciones){
           else if(esOp) fondo = [255, 246, 214];
           else if(finde) fondo = [236, 240, 237];
           else if(!hay) fondo = [253, 232, 205];
-          pdf.setFillColor(...fondo); pdf.setDrawColor(...(enRango ? [214, 222, 216] : [236, 240, 237])); pdf.setLineWidth(0.2); pdf.roundedRect(cx0 + 0.6, cy0 + 0.6, wC - 1.2, hC - 1.2, 2.6, 2.6, 'FD');
+          pdf.setFillColor(...fondo); pdf.setDrawColor(...(enRango ? [214, 222, 216] : [236, 240, 237])); pdf.setLineWidth(0.2); pdf.roundedRect(cx0 + 0.6, cy0 + 0.6, wC - 1.2, hH - 1.2, 2.6, 2.6, 'FD');
           pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(...(enRango ? (finde ? [120, 132, 125] : (hay || esOp ? [30, 40, 35] : [150, 120, 80])) : [190, 198, 193])); pdf.text(String(dd), cx0 + 3, cy0 + 4.6);
           if(esOp) pdf.addImage(CASCO_OPERATIVO_PNG, 'PNG', cx0 + wC / 2 - 2.1, cy0 + 0.6 - 2.1, 4.2, 4.2);   // casco centrado sobre el borde superior del día
           const lista = hay ? String(x.itos || '').split(', ').filter(Boolean) : [];
-          const dC = 4.6, sep = 0.7, porFila = Math.floor((wC - 2) / (dC + sep));
+          const topC = Math.min(8.5, hH - 0.6 - dC - 0.5);   // con semanas bajas los círculos suben un poco
           lista.slice(0, porFila * 2).forEach((n, k) => {
             const fila = Math.floor(k / porFila), col = k % porFila, nF = Math.min(porFila, lista.length - fila * porFila);
-            const x0 = cx0 + (wC - nF * (dC + sep) + sep) / 2 + col * (dC + sep) + dC / 2, y0 = cy0 + 8.5 + fila * (dC + sep) + dC / 2 - (lista.length > porFila ? 1.5 : 0);
+            const x0 = cx0 + (wC - nF * (dC + sep) + sep) / 2 + col * (dC + sep) + dC / 2, y0 = cy0 + topC + fila * (dC + sep) + dC / 2 - (lista.length > porFila ? 1.5 : 0);
             pdf.setFillColor(...(colIto[n] || [120, 130, 125])); pdf.circle(x0, y0, dC / 2, 'F');
             pdf.setFont('helvetica', 'bold'); pdf.setFontSize(4.4); pdf.setTextColor(255, 255, 255); pdf.text(inicialesIto(n), x0, y0 + 0.9, {align: 'center'});
           });
         }
-        y += nSem * hC + 5;
+        y += hMes + 5;
       }
       // Leyenda
       pdf.addImage(CASCO_OPERATIVO_PNG, 'PNG', margen, y - 1, 4.2, 4.2); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text('Día con operativo', margen + 5.5, y + 2);
       pdf.setFillColor(253, 232, 205); pdf.roundedRect(margen + 38, y - 0.5, 5, 3.6, 1, 1, 'F'); pdf.text('Día hábil sin inspección', margen + 45, y + 2);
       pdf.setFillColor(236, 240, 237); pdf.roundedRect(margen + 82, y - 0.5, 5, 3.6, 1, 1, 'F'); pdf.text('Fin de semana', margen + 89, y + 2);
       y += 9;
+      // Estadística: fallas encontradas en inspecciones nocturnas respecto del total de fallas del período
+      {
+        const nIns = (cob.por_ito || []).reduce((s, i) => s + (i.inspecciones || 0), 0);
+        const fIns = (cob.por_ito || []).reduce((s, i) => s + (i.fallas || 0), 0);
+        const fTot = (d.resumen || {}).fallas || 0;
+        const pctIns = fTot ? Math.min(100, Math.round(fIns / fTot * 100)) : 0;
+        titulo('Fallas encontradas en inspecciones nocturnas');
+        const wT = (ancho - margen * 2 - 8) / 3, hT = 15;
+        [['Inspecciones nocturnas', String(nIns)], ['Fallas encontradas en ellas', String(fIns)], ['% del total de fallas del período', pctIns + ' %']].forEach(([t, v], k) => {
+          const x0 = margen + k * (wT + 4);
+          pdf.setFillColor(243, 246, 244); pdf.roundedRect(x0, y, wT, hT, 2.4, 2.4, 'F');
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(t, x0 + 3.5, y + 4.8);
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15); pdf.setTextColor(...VERDE); pdf.text(v, x0 + 3.5, y + 11.8);
+        });
+        y += hT + 4;
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris);
+        pdf.text(`${fIns} de ${fTot} fallas del período, en inspecciones nocturnas`, margen, y + 2);
+        pdf.text(`${Math.max(0, fTot - fIns)} informadas por otras vías`, ancho - margen, y + 2, {align: 'right'});
+        y += 4;
+        const wBarra = ancho - margen * 2;
+        pdf.setFillColor(228, 234, 230); pdf.roundedRect(margen, y, wBarra, 3.6, 1.8, 1.8, 'F');
+        if(fTot && fIns > 0){ pdf.setFillColor(123, 211, 0); pdf.roundedRect(margen, y, Math.max(3.6, wBarra * Math.min(1, fIns / fTot)), 3.6, 1.8, 1.8, 'F'); }
+        y += 3.6 + 8;
+      }
       titulo('Inspecciones nocturnas por ITO');
       if((cob.por_ito || []).length){
         tabla({
           head: [['ITO', 'Inspecciones', 'Fallas']],
           body: cob.por_ito.map(i => [i.nombre, i.inspecciones, i.fallas]),
           margin: {left: margen, right: ancho - margen - 105},
-          columnStyles: {0: {cellPadding: {left: 14, top: 1.6, bottom: 1.6, right: 1.6}}, 1: {halign: 'right', cellWidth: 26}, 2: {halign: 'right', cellWidth: 20}},
+          styles: {...estilosTabla.styles, cellPadding: {top: cpIto, bottom: cpIto, left: 2.4, right: 2.4}},
+          columnStyles: {0: {cellPadding: {left: 14, top: cpIto, bottom: cpIto, right: 1.6}}, 1: {halign: 'right', cellWidth: 26}, 2: {halign: 'right', cellWidth: 20}},
           didDrawCell: (h) => {
             if(h.section !== 'body' || h.column.index !== 0) return;
             const n = cob.por_ito[h.row.index].nombre, cy = h.cell.y + h.cell.height / 2;
