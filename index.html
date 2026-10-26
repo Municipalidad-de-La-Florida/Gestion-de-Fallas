@@ -1037,7 +1037,7 @@
     <details class="hint" style="margin-bottom:12px;"><summary style="cursor:pointer; font-weight:600;">ℹ️ Cómo funciona esta pantalla (crear usuarios, casillas y columnas)</summary><div style="margin-top:6px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Foto obligatoria</b> (solo contratistas) exige adjuntar al menos una fotografía al registrar una reparación, y esas reparaciones se hacen desde la app del teléfono. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). La columna <b>Contratos</b> (contratistas y camiones) indica a qué contratos pertenece cada usuario; puede ser más de uno. Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div></details>
       <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px;">
         <input type="text" id="usuariosBuscar" name="gu-filtro-tabla" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly')" placeholder="🔍 Buscar nombre o email…" style="font-size:12.5px; padding:6px 10px; width:260px; border:1.5px solid var(--line); border-radius:6px;">
-        <select id="usuariosFiltroRol" style="font-size:12.5px; padding:6px 8px; border:1.5px solid var(--line); border-radius:6px;"><option value="">Rol: todos</option></select>
+        <select id="usuariosFiltroRol" style="font-size:12.5px; padding:6px 8px; border:1.5px solid var(--line); border-radius:6px;"><option value="">Perfil: todos</option></select>
         <span id="usuariosContador" class="hint" style="margin:0;"></span>
       </div>
     <div style="overflow-x:auto;">
@@ -1046,7 +1046,7 @@
           <tr style="text-align:left; border-bottom:2px solid var(--line);">
             <th style="padding:8px 10px;">Nombre</th>
             <th style="padding:8px 10px;">Email</th>
-            <th style="padding:8px 10px;">Rol</th>
+            <th style="padding:8px 10px;">Perfil</th>
             <th style="padding:8px 10px;">Notificadores</th>
             <th style="padding:8px 10px;">Foto obligatoria</th>
             <th style="padding:8px 10px;">Pasar a masivo</th>
@@ -1067,7 +1067,10 @@
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeNotificadoresBtn">×</button>
     <h2>⚙️ Configuración</h2>
-    <div class="cfg-layout"><nav class="cfg-side" id="cfgNav"><div class="cfg-g">Contratos</div><button type="button" class="cfg-nav" data-sec="contratos">Contratos</button><div class="cfg-g">Inspecciones</div><button type="button" class="cfg-nav" data-sec="pauta">Pauta y operativos<span class="gu-dot" id="guDotPauta" style="display:none; color:#e08a00;">●</span></button><div class="cfg-g">Equipos</div><button type="button" class="cfg-nav" data-sec="equipos">Cuadrillas y camiones</button><button type="button" class="cfg-nav" data-sec="maestros">Maestros</button><div class="cfg-g">Catálogos</div><button type="button" class="cfg-nav" data-sec="notif">Notificadores</button><button type="button" class="cfg-nav" data-sec="falla">Códigos de falla</button><button type="button" class="cfg-nav" data-sec="cierre">Códigos de cierre</button><div class="cfg-g">Integraciones</div><button type="button" class="cfg-nav" data-sec="enel">Enel / suministro</button></nav><div class="cfg-main">
+    <div class="cfg-layout"><nav class="cfg-side" id="cfgNav"><div class="cfg-g">Perfiles</div><button type="button" class="cfg-nav" data-sec="perfiles">Perfiles y permisos</button><div class="cfg-g">Contratos</div><button type="button" class="cfg-nav" data-sec="contratos">Contratos</button><div class="cfg-g">Inspecciones</div><button type="button" class="cfg-nav" data-sec="pauta">Pauta y operativos<span class="gu-dot" id="guDotPauta" style="display:none; color:#e08a00;">●</span></button><div class="cfg-g">Equipos</div><button type="button" class="cfg-nav" data-sec="equipos">Cuadrillas y camiones</button><button type="button" class="cfg-nav" data-sec="maestros">Maestros</button><div class="cfg-g">Catálogos</div><button type="button" class="cfg-nav" data-sec="notif">Notificadores</button><button type="button" class="cfg-nav" data-sec="falla">Códigos de falla</button><button type="button" class="cfg-nav" data-sec="cierre">Códigos de cierre</button><div class="cfg-g">Integraciones</div><button type="button" class="cfg-nav" data-sec="enel">Enel / suministro</button></nav><div class="cfg-main">
+    <div class="cfg-pane" data-cpane="perfiles" style="display:none;">
+    <div id="perfilesAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
+    </div>
     <div class="cfg-pane" data-cpane="contratos" style="display:none;">
     <div id="contratosAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     </div>
@@ -9812,10 +9815,13 @@ function aplicarFiltroUsuarios(){
   });
   document.getElementById('usuariosContador').textContent = filas.length ? `${n} de ${filas.length}` : '';
 }
+function llenarFiltroPerfiles(){
+  const sel = document.getElementById('usuariosFiltroRol'), v = sel.value;
+  sel.innerHTML = '<option value="">Perfil: todos</option>' + PERFILES.map(p => `<option value="${escAttr(p.clave)}">${escAttr(p.nombre)}</option>`).join('');
+  sel.value = PERFILES.some(p => p.clave === v) ? v : '';
+}
 (function(){
-  const sel = document.getElementById('usuariosFiltroRol');
-  ['admin','ito','ito2','contratista','contratista2','contratista3','camion','observador'].forEach(r => { const o = document.createElement('option'); o.value = r; o.textContent = r; sel.appendChild(o); });
-  sel.onchange = aplicarFiltroUsuarios;
+  document.getElementById('usuariosFiltroRol').onchange = aplicarFiltroUsuarios;
   document.getElementById('usuariosBuscar').oninput = aplicarFiltroUsuarios;
 })();
 
@@ -9828,6 +9834,18 @@ function mostrarModalUsuarios(){
 }
 
 const ROLES_DISPONIBLES = ['admin','ito','ito2','contratista','contratista2','contratista3','camion','observador'];
+const NOMBRES_ROL = {admin:'Administrador', ito:'ITO', ito2:'ITO 2', contratista:'Contratista 1', contratista2:'Contratista 2', contratista3:'Contratista 3', camion:'Camión', observador:'Observador'};
+// Perfiles: cada usuario tiene uno; el perfil trae un "rol base" (el que ya leen las reglas de la base y el resto del código).
+// Si la base aún no tiene la tabla de perfiles (SQL de la etapa 1 sin ejecutar), se usan los 8 roles de siempre.
+let PERFILES = [];
+let PERFILES_DB = false;
+async function cargarPerfiles(){
+  try{ PERFILES = await db.select('perfiles', 'select=clave,nombre,base_rol,sistema,orden&order=orden.asc'); PERFILES_DB = PERFILES.length > 0; }
+  catch(e){ PERFILES = []; PERFILES_DB = false; }
+  if(!PERFILES.length) PERFILES = ROLES_DISPONIBLES.map((r, i) => ({clave: r, nombre: NOMBRES_ROL[r], base_rol: r, sistema: true, orden: i + 1}));
+  llenarFiltroPerfiles();
+}
+const baseRolDe = (clave) => (PERFILES.find(p => p.clave === clave) || {}).base_rol || clave;
 // Roles que pueden ingresar fallas: solo ellos pueden tener habilitado el notificador externo
 // (la base de datos también lo exige y lo apaga si el rol cambia a otro).
 const ROLES_CON_NOTIFICADOR = ['admin','ito','ito2','contratista2','contratista3'];
@@ -9906,7 +9924,7 @@ function refrescarCeldasContratos(){
   asegurarContratos(true);
   document.querySelectorAll('#usuariosTbody tr[data-id]').forEach(tr => {
     const celda = tr.querySelector('.contratos-celda'); if(!celda) return;
-    celda.innerHTML = htmlCeldaContratos(tr.querySelector('.rol-select').value, JSON.parse(tr.dataset.contr || '[]'));
+    celda.innerHTML = htmlCeldaContratos(baseRolDe(tr.querySelector('.rol-select').value), JSON.parse(tr.dataset.contr || '[]'));
     celda.querySelectorAll('.contrato-chk').forEach(ch => ch.onchange = () => { tr.dataset.contr = JSON.stringify([...celda.querySelectorAll('.contrato-chk:checked')].map(x => x.value)); });
   });
   refrescarCambiosUsuarios();
@@ -9957,13 +9975,15 @@ async function cargarUsuarios(){
   tbody.innerHTML = '<tr><td colspan="8" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
     let usuarios;
+    await cargarPerfiles();
+    const colPerfil = PERFILES_DB ? ',perfil' : '';
     try{
-      usuarios = await db.select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,dias_inspeccion&order=nombre.asc');
+      usuarios = await db.select('usuarios', `select=id,nombre,rol${colPerfil},email,notificador_externo_habilitado,foto_obligatoria,dias_inspeccion&order=nombre.asc`);
       PAUTA_DISPONIBLE = true;
     }catch(e){
       // Respaldo: si aún no se ejecutó sql/2026-10-pauta-inspecciones.sql, la gestión sigue funcionando sin la pauta
       PAUTA_DISPONIBLE = false;
-      usuarios = await db.select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc');
+      usuarios = await db.select('usuarios', `select=id,nombre,rol${colPerfil},email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc`);
     }
     const masivoDe = {};
     try{
@@ -9984,7 +10004,8 @@ async function cargarUsuarios(){
       return;
     }
     tbody.innerHTML = usuarios.map(u => {
-      const opciones = ROLES_DISPONIBLES.map(r => `<option value="${r}" ${r===u.rol?'selected':''}>${r}</option>`).join('');
+      const perfilU = u.perfil || u.rol;
+      const opciones = PERFILES.map(p => `<option value="${escAttr(p.clave)}" ${p.clave===perfilU?'selected':''}>${escAttr(p.nombre)}</option>`).join('');
       return `<tr data-id="${u.id}" data-notif="${u.notificador_externo_habilitado ? '1' : '0'}" data-foto="${u.foto_obligatoria ? '1' : '0'}" data-masivo="${masivoDe[u.id] ? '1' : '0'}" data-dias='${JSON.stringify(u.dias_inspeccion || [])}' data-contr='${JSON.stringify(contratosDe[u.id] || [])}'>
         <td><input type="text" class="popup-input nombre-input" value="${u.nombre||''}" style="margin:0; padding:6px 8px;"></td>
         <td>${u.email || '—'}</td>
@@ -10025,13 +10046,14 @@ async function cargarUsuarios(){
       });
       enlazarContratos();
       rolSelect.onchange = () => {
-        celdaContr.innerHTML = htmlCeldaContratos(rolSelect.value, JSON.parse(tr.dataset.contr || '[]'));
+        const rolBase = baseRolDe(rolSelect.value);
+        celdaContr.innerHTML = htmlCeldaContratos(rolBase, JSON.parse(tr.dataset.contr || '[]'));
         enlazarContratos();
-        celdaNotif.innerHTML = htmlCeldaNotificador(rolSelect.value, tr.dataset.notif === '1');
+        celdaNotif.innerHTML = htmlCeldaNotificador(rolBase, tr.dataset.notif === '1');
         enlazarCasilla();
-        celdaFoto.innerHTML = htmlCeldaFoto(rolSelect.value, tr.dataset.foto === '1');
+        celdaFoto.innerHTML = htmlCeldaFoto(rolBase, tr.dataset.foto === '1');
         enlazarFoto();
-        celdaMasivo.innerHTML = htmlCeldaMasivo(rolSelect.value, tr.dataset.masivo === '1');
+        celdaMasivo.innerHTML = htmlCeldaMasivo(rolBase, tr.dataset.masivo === '1');
         enlazarMasivo();
         pintarPautaInspecciones();
       };
@@ -10095,8 +10117,8 @@ function pintarPautaInspecciones(){
     cont.innerHTML = titulo + '<div class="hint" style="margin:0;">No disponible: falta ejecutar sql/2026-10-pauta-inspecciones.sql en Supabase.</div>';
     return;
   }
-  const itos = [...document.querySelectorAll('#usuariosTbody tr[data-id]')].filter(tr => tr.querySelector('.rol-select').value === 'ito');
-  if(!itos.length){ cont.innerHTML = titulo + '<div class="hint" style="margin:0;">No hay usuarios con rol ito.</div>'; return; }
+  const itos = [...document.querySelectorAll('#usuariosTbody tr[data-id]')].filter(tr => baseRolDe(tr.querySelector('.rol-select').value) === 'ito');
+  if(!itos.length){ cont.innerHTML = titulo + '<div class="hint" style="margin:0;">No hay usuarios con perfil ITO.</div>'; return; }
   cont.innerHTML = titulo + `<div class="hint" style="margin:0 0 8px;">Marca los días en que cada ITO puede ingresar inspecciones (se valida por la fecha de la inspección, hasta 7 días atrás). El resto de los días solo puede usar «Agregar falla»; una inspección se cierra sola 4 horas después de iniciada. Un ITO nuevo queda sin días hasta que lo habilites aquí. ITO2 y admin no tienen restricción. Se guarda con «Guardar cambios».</div>
     <table style="border-collapse:collapse; font-size:12.5px;"><thead><tr><th style="text-align:left; padding:4px 14px 4px 0;">ITO</th>${NOMBRES_DIAS_CORTO.map(d => `<th style="padding:4px 8px;">${d}</th>`).join('')}<th></th></tr></thead><tbody>${
       itos.map(tr => {
@@ -10122,9 +10144,11 @@ function pintarPautaInspecciones(){
 
 // Estado actual de una fila (para detectar qué cambió y guardar todo junto)
 function estadoFilaUsuario(tr){
-  const rol = tr.querySelector('.rol-select').value;
+  const perfil = tr.querySelector('.rol-select').value;
+  const rol = baseRolDe(perfil);
   return {
     nombre: tr.querySelector('.nombre-input').value.trim(),
+    perfil,
     rol,
     notif: ROLES_CON_NOTIFICADOR.includes(rol) && tr.dataset.notif === '1',
     foto: ROLES_CON_FOTO.includes(rol) && tr.dataset.foto === '1',
@@ -10158,7 +10182,9 @@ async function guardarUsuariosCambiados(){
   for(const tr of filas){
     const id = tr.dataset.id, e = estadoFilaUsuario(tr);
     try{
-      const cambios = {nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto};
+      // Con perfiles en la base, se guarda el perfil y un trigger deja el rol que le corresponde
+      const cambios = {nombre: e.nombre, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto};
+      if(PERFILES_DB) cambios.perfil = e.perfil; else cambios.rol = e.rol;
       if(e.rol === 'ito' && PAUTA_DISPONIBLE) cambios.dias_inspeccion = e.dias;
       if(MASIVO_DISPONIBLE) cambios.puede_pasar_a_masivo = e.masivo;
       const r = await db.update('usuarios', `id=eq.${id}`, cambios);
@@ -10168,9 +10194,9 @@ async function guardarUsuariosCambiados(){
         await db.rpc('set_contratos_usuario', {p_usuario: id, p_contratos: e.contratos});
       }
       ok++;
-      tr.dataset.orig = JSON.stringify({nombre: e.nombre, rol: e.rol, notif: !!r[0].notificador_externo_habilitado, foto: !!r[0].foto_obligatoria, masivo: MASIVO_DISPONIBLE && ROLES_CON_MASIVO.includes(e.rol) && !!r[0].puede_pasar_a_masivo, contratos: e.contratos, dias: e.dias});
+      tr.dataset.orig = JSON.stringify({nombre: e.nombre, perfil: e.perfil, rol: e.rol, notif: !!r[0].notificador_externo_habilitado, foto: !!r[0].foto_obligatoria, masivo: MASIVO_DISPONIBLE && ROLES_CON_MASIVO.includes(e.rol) && !!r[0].puede_pasar_a_masivo, contratos: e.contratos, dias: e.dias});
       if(id === currentUser.id){
-        currentUser.nombre = e.nombre; currentUser.rol = e.rol;
+        currentUser.nombre = e.nombre; currentUser.rol = r[0].rol || e.rol;
         currentUser.notificador_externo_habilitado = !!r[0].notificador_externo_habilitado;
         currentUser.foto_obligatoria = !!r[0].foto_obligatoria;
         if(MASIVO_DISPONIBLE) currentUser.puede_pasar_a_masivo = !!r[0].puede_pasar_a_masivo;
@@ -10217,6 +10243,7 @@ function cfgMostrar(sec){
   if(esLib){ libMostrarTab(sec); }
   else{ document.getElementById('libPaneNotif').style.display = 'none'; document.getElementById('libPaneCodigos').style.display = 'none'; }
   if(sec === 'maestros') pintarMaestrosAdmin();
+  if(sec === 'perfiles') pintarPerfilesAdmin();
 }
 let CFG_SEC = 'contratos';
 function mostrarModalConfig(sec){
@@ -10227,6 +10254,120 @@ function mostrarModalConfig(sec){
 }
 document.querySelectorAll('#cfgNav .cfg-nav').forEach(b => b.onclick = () => cfgMostrar(b.dataset.sec));
 document.getElementById('guardarUsuariosBtn2').onclick = () => guardarUsuariosCambiados();
+
+// ---------- PERFILES Y PERMISOS (solo admin): grilla perfil × función ----------
+const GRUPOS_FUNCIONES = ['Mapa y consulta', 'Informar', 'Inspecciones', 'Gestión de una falla', 'Reparación y terreno', 'Listados y estadísticas', 'Control de gestión', 'Notificaciones push', 'Administración'];
+const claveDePerfil = (nombre, usadas) => {
+  const base = String(nombre).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'perfil';
+  let c = base, n = 2;
+  while(usadas.includes(c)) c = base + '_' + (n++);
+  return c;
+};
+async function pintarPerfilesAdmin(){
+  const caja = document.getElementById('perfilesAdmin'); if(!caja) return;
+  caja.innerHTML = '<div style="font-weight:700; margin-bottom:6px;">Perfiles y permisos</div><div class="hint">Cargando…</div>';
+  let perfiles, funciones, filas, usuarios;
+  try{
+    perfiles = await db.select('perfiles', 'select=clave,nombre,base_rol,sistema,orden&order=orden.asc');
+    funciones = await db.select('funciones', 'select=clave,grupo,nombre,orden,por_usuario&order=orden.asc');
+    filas = await db.select('perfil_funciones', 'select=perfil,funcion,habilitado&limit=5000');
+    usuarios = await db.select('usuarios', 'select=perfil');
+  }catch(e){
+    caja.innerHTML = '<div style="font-weight:700; margin-bottom:6px;">Perfiles y permisos</div><div class="hint">No disponible: falta ejecutar sql/2026-10-perfiles-permisos-etapa1.sql en Supabase.</div>';
+    return;
+  }
+  const celdas = new Map(), orig = new Map();
+  filas.forEach(f => { celdas.set(f.perfil + '|' + f.funcion, !!f.habilitado); orig.set(f.perfil + '|' + f.funcion, !!f.habilitado); });
+  const nUsuarios = {}; usuarios.forEach(u => { nUsuarios[u.perfil] = (nUsuarios[u.perfil] || 0) + 1; });
+  const gruposOrden = GRUPOS_FUNCIONES.filter(g => funciones.some(f => f.grupo === g)).concat([...new Set(funciones.map(f => f.grupo))].filter(g => !GRUPOS_FUNCIONES.includes(g)));
+  const bloqueada = (p, f) => p.clave === 'admin' && f.clave === 'admin_perfiles';
+  const btnMini = 'border:1px solid var(--line); background:#fff; border-radius:6px; padding:1px 6px; font-size:11px; cursor:pointer; color:var(--ink-soft);';
+  caja.innerHTML = `<div style="font-weight:700; margin-bottom:4px;">Perfiles y permisos</div>
+    <div class="hint" style="margin:0 0 8px;">Cada perfil reúne las funciones que sus usuarios pueden usar. Marca o desmarca y guarda. El perfil de cada persona se elige en <b>Usuarios</b>. «por usuario» indica que además se puede dar o quitar a una persona con su casilla, sin cambiarle el perfil.</div>
+    <div style="background:#fff8e1; border:1.5px solid #e7c76a; border-radius:8px; padding:8px 10px; margin:0 0 10px; font-size:12.5px;"><b>Esta grilla ya se guarda, pero la web y la app todavía no la leen.</b> Lo que ve y puede hacer cada usuario sigue igual hasta que se active en la siguiente etapa.</div>
+    <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:0 0 10px;">
+      <button type="button" id="pfGuardar" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;" disabled>Guardar cambios</button>
+      <button type="button" id="pfDescartar" style="background:#fff; border:1.5px solid var(--line); border-radius:6px; padding:7px 14px; font-size:13px; cursor:pointer;" disabled>Descartar</button>
+      <span id="pfEstado" class="hint" style="margin:0; flex:1;">Sin cambios</span>
+      <button type="button" id="pfNuevo" style="background:#fff; border:1.5px solid var(--primary); color:var(--primary); border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer;">＋ Nuevo perfil</button>
+    </div>
+    <div id="pfNuevoForm" style="display:none; border:1.5px solid var(--line); border-radius:8px; padding:10px; margin:0 0 10px; gap:8px; flex-wrap:wrap; align-items:center;">
+      <input type="text" id="pfNuevoNombre" class="popup-input" maxlength="40" placeholder="Nombre del perfil" autocomplete="off" style="margin:0; max-width:220px;">
+      <label style="font-size:12.5px;">Copiar permisos de <select id="pfNuevoCopia" style="padding:5px 8px; border:1.5px solid var(--line); border-radius:6px; font-size:12.5px;">${perfiles.map(p => `<option value="${escAttr(p.clave)}">${escAttr(p.nombre)}</option>`).join('')}</select></label>
+      <button type="button" id="pfNuevoCrear" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer;">Crear</button>
+      <span id="pfNuevoMsg" class="hint" style="margin:0;"></span>
+    </div>
+    <div style="overflow-x:auto;">
+    <table style="border-collapse:collapse; font-size:12.5px; width:100%; min-width:${230 + perfiles.length * 82}px;">
+      <thead><tr style="border-bottom:2px solid var(--line);">
+        <th style="text-align:left; padding:8px 10px;">Función</th>
+        ${perfiles.map(p => `<th style="padding:6px 4px; text-align:center; vertical-align:bottom; width:82px;"><div style="font-weight:600;">${escAttr(p.nombre)}</div><div class="hint" style="margin:0; font-weight:400;">${nUsuarios[p.clave] || 0} usuario${(nUsuarios[p.clave] || 0) === 1 ? '' : 's'}</div><div style="margin-top:3px; display:flex; gap:3px; justify-content:center;"><button type="button" class="pf-ren" data-p="${escAttr(p.clave)}" title="Cambiar el nombre" style="${btnMini}">✎</button>${!p.sistema && !(nUsuarios[p.clave]) ? `<button type="button" class="pf-del" data-p="${escAttr(p.clave)}" title="Eliminar este perfil" style="${btnMini}">✕</button>` : ''}</div></th>`).join('')}
+      </tr></thead>
+      <tbody>${gruposOrden.map(g => `<tr><td colspan="${perfiles.length + 1}" style="background:#f1f4f2; font-weight:700; padding:6px 10px;">${escAttr(g)}</td></tr>` +
+        funciones.filter(f => f.grupo === g).map(f => `<tr style="border-bottom:1px solid var(--line);"><td style="padding:6px 10px;">${escAttr(f.nombre)}${f.por_usuario ? ' <span class="hint" style="margin:0 0 0 4px; border:1px solid var(--line); border-radius:6px; padding:0 6px;">por usuario</span>' : ''}</td>${perfiles.map(p => {
+          const k = p.clave + '|' + f.clave, lock = bloqueada(p, f);
+          return `<td data-k="${escAttr(k)}" style="text-align:center;"><input type="checkbox" class="pf-chk" data-k="${escAttr(k)}" ${celdas.get(k) ? 'checked' : ''} ${lock ? 'disabled title="El administrador no puede quitarse el acceso a esta pantalla"' : ''} aria-label="${escAttr(f.nombre + ' — ' + p.nombre)}" style="width:17px; height:17px;"></td>`;
+        }).join('')}</tr>`).join('')).join('')}</tbody>
+    </table></div>
+    <p class="hint" style="margin:10px 0 0;">Una celda marcada con fondo amarillo tiene cambios sin guardar. Un perfil nuevo parte como copia de otro y hereda su rol base, así que las reglas de seguridad de la base se comportan igual que con el perfil copiado.</p>`;
+  const est = caja.querySelector('#pfEstado'), bG = caja.querySelector('#pfGuardar'), bD = caja.querySelector('#pfDescartar');
+  const cambiadas = () => [...celdas.keys()].filter(k => celdas.get(k) !== orig.get(k));
+  const refrescar = () => {
+    caja.querySelectorAll('td[data-k]').forEach(td => { td.style.background = celdas.get(td.dataset.k) !== orig.get(td.dataset.k) ? '#fff3c4' : ''; });
+    const n = cambiadas().length;
+    bG.disabled = bD.disabled = n === 0;
+    est.textContent = n ? `${n} cambio${n > 1 ? 's' : ''} sin guardar` : 'Sin cambios';
+  };
+  caja.querySelectorAll('.pf-chk').forEach(c => c.onchange = () => { celdas.set(c.dataset.k, c.checked); refrescar(); });
+  bD.onclick = () => { celdas.forEach((_, k) => celdas.set(k, orig.get(k))); caja.querySelectorAll('.pf-chk').forEach(c => { c.checked = !!orig.get(c.dataset.k); }); refrescar(); };
+  bG.onclick = async () => {
+    const ks = cambiadas(); if(!ks.length) return;
+    bG.disabled = bD.disabled = true; est.textContent = 'Guardando…';
+    const errores = []; let ok = 0;
+    for(const k of ks){
+      const [p, f] = k.split('|');
+      try{
+        const r = await db.update('perfil_funciones', `perfil=eq.${encodeURIComponent(p)}&funcion=eq.${encodeURIComponent(f)}`, {habilitado: celdas.get(k)});
+        if(!Array.isArray(r) || !r.length) throw new Error('no se guardó (¿sin permiso?)');
+        orig.set(k, celdas.get(k)); ok++;
+      }catch(e){ errores.push(`${k.replace('|', ' / ')}: ${e.message}`); celdas.set(k, orig.get(k)); const c = caja.querySelector(`.pf-chk[data-k="${CSS.escape(k)}"]`); if(c) c.checked = !!orig.get(k); }
+    }
+    refrescar();
+    if(errores.length) alert(`Guardados: ${ok}. Con error:\n- ` + errores.join('\n- '));
+    else est.textContent = `✓ ${ok} cambio${ok > 1 ? 's' : ''} guardado${ok > 1 ? 's' : ''}`;
+  };
+  const form = caja.querySelector('#pfNuevoForm');
+  caja.querySelector('#pfNuevo').onclick = () => { form.style.display = form.style.display === 'none' ? 'flex' : 'none'; if(form.style.display === 'flex') caja.querySelector('#pfNuevoNombre').focus(); };
+  caja.querySelector('#pfNuevoCrear').onclick = async () => {
+    const nombre = caja.querySelector('#pfNuevoNombre').value.trim().replace(/\s+/g, ' '), msg = caja.querySelector('#pfNuevoMsg');
+    if(nombre.length < 2){ msg.textContent = 'Escribe el nombre del perfil.'; return; }
+    if(perfiles.some(p => p.nombre.toLowerCase() === nombre.toLowerCase())){ msg.textContent = 'Ya existe un perfil con ese nombre.'; return; }
+    if(cambiadas().length && !confirm('Hay cambios sin guardar en la grilla; se perderán al crear el perfil. ¿Seguir?')) return;
+    msg.textContent = 'Creando…';
+    try{
+      await db.rpc('crear_perfil', {p_clave: claveDePerfil(nombre, perfiles.map(p => p.clave)), p_nombre: nombre, p_copiar_de: caja.querySelector('#pfNuevoCopia').value});
+      await cargarPerfiles();
+      pintarPerfilesAdmin();
+    }catch(e){ msg.textContent = 'No se pudo crear: ' + e.message; }
+  };
+  caja.querySelectorAll('.pf-ren').forEach(b => b.onclick = async () => {
+    const p = perfiles.find(x => x.clave === b.dataset.p);
+    const nuevo = (prompt('Nuevo nombre del perfil:', p.nombre) || '').trim().replace(/\s+/g, ' ');
+    if(!nuevo || nuevo === p.nombre) return;
+    if(perfiles.some(x => x.clave !== p.clave && x.nombre.toLowerCase() === nuevo.toLowerCase())){ alert('Ya existe un perfil con ese nombre.'); return; }
+    try{
+      const r = await db.update('perfiles', `clave=eq.${encodeURIComponent(p.clave)}`, {nombre: nuevo});
+      if(!Array.isArray(r) || !r.length) throw new Error('no se guardó (¿sin permiso?)');
+      await cargarPerfiles(); pintarPerfilesAdmin();
+    }catch(e){ alert('No se pudo cambiar el nombre: ' + e.message); }
+  });
+  caja.querySelectorAll('.pf-del').forEach(b => b.onclick = async () => {
+    const p = perfiles.find(x => x.clave === b.dataset.p);
+    if(!confirm(`¿Eliminar el perfil «${p.nombre}»? No tiene usuarios asignados.`)) return;
+    try{ await db.delete('perfiles', `clave=eq.${encodeURIComponent(p.clave)}`); await cargarPerfiles(); pintarPerfilesAdmin(); }
+    catch(e){ alert('No se pudo eliminar: ' + e.message); }
+  });
+}
 
 // Maestros (personal que hace los aportes): misma lista que en la app
 async function pintarMaestrosAdmin(){
