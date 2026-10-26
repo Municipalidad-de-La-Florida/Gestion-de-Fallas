@@ -8589,7 +8589,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       titulo('Inspecciones nocturnas por ITO');
       // Cuadro a la izquierda de la tabla: fallas encontradas en inspecciones nocturnas respecto del total de fallas del período
       const yCard = y, pgCard = pdf.internal.getCurrentPageInfo().pageNumber, W_CARD = 75;
-      {
+      const dibujarCuadro = (yCard) => {
         const nIns = (cob.por_ito || []).reduce((s, i) => s + (i.inspecciones || 0), 0);
         const fIns = (cob.por_ito || []).reduce((s, i) => s + (i.fallas || 0), 0);
         const fTot = (d.resumen || {}).fallas || 0;
@@ -8617,8 +8617,11 @@ async function generarPdfAnalisis(soloResumen, opciones){
           pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(...VERDE); pdf.text(v, xc, yCard + 46.5, {align: 'center'});
           pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text(t, xc, yCard + 50, {align: 'center'});
         });
-      }
+      };
       if((cob.por_ito || []).length){
+        // El cuadro y la tabla quedan centrados entre sí: la más corta baja la mitad de la diferencia
+        const offT = Math.max(0, (H_CARD - (cob.por_ito.length + 1) * (3.5 + 2 * cpIto)) / 2);
+        y = yCard + offT;
         tabla({
           head: [['ITO', 'Inspecciones', 'Fallas']],
           body: cob.por_ito.map(i => [i.nombre, i.inspecciones, i.fallas]),
@@ -8632,7 +8635,15 @@ async function generarPdfAnalisis(soloResumen, opciones){
             pdf.setFont('helvetica', 'bold'); pdf.setFontSize(4.6); pdf.setTextColor(255, 255, 255); pdf.text(inicialesIto(n), h.cell.x + 6, cy + 0.9, {align: 'center'});
           }
         });
-      } else { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...gris); pdf.text('Sin inspecciones registradas en este rango.', margen + W_CARD + 6, y + 3); y += 11; }
+        if(pdf.internal.getCurrentPageInfo().pageNumber === pgCard){
+          dibujarCuadro(yCard + Math.max(0, (pdf.lastAutoTable.finalY - (yCard + offT) - H_CARD) / 2));
+        } else {
+          const pgAct = pdf.internal.getCurrentPageInfo().pageNumber; pdf.setPage(pgCard); dibujarCuadro(yCard); pdf.setPage(pgAct);
+        }
+      } else {
+        dibujarCuadro(yCard);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...gris); pdf.text('Sin inspecciones registradas en este rango.', margen + W_CARD + 6, y + 3); y += 11;
+      }
       // Si la tabla es más corta que el cuadro, lo que sigue parte debajo del cuadro
       if(pdf.internal.getCurrentPageInfo().pageNumber === pgCard) y = Math.max(y, yCard + H_CARD + 9);
     }
