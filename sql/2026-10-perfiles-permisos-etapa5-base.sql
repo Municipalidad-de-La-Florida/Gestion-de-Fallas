@@ -76,14 +76,14 @@ begin
     ('exigir_foto_reparacion', $q$coalesce((select foto_obligatoria from usuarios where id = new.reparado_por), false)$q$, $q$public.usuario_tiene_permiso(new.reparado_por, 'foto_obligatoria')$q$, $q$public.usuario_tiene_permiso(new.reparado_por, 'foto_obligatoria')$q$),
     ('quitar_foto_reparacion', $q$coalesce((select foto_obligatoria from public.usuarios where id = auth.uid()), false)$q$, $q$public.tiene_permiso('foto_obligatoria')$q$, $q$public.tiene_permiso('foto_obligatoria')$q$),
     ('registrar_reparacion', $q$coalesce((select foto_obligatoria from public.usuarios where id = v_uid), false)$q$, $q$public.usuario_tiene_permiso(v_uid, 'foto_obligatoria')$q$, $q$public.usuario_tiene_permiso(v_uid, 'foto_obligatoria')$q$),
-    ('fiscalizacion_fallas', $q$if public.mi_rol() not in ('admin','ito','ito2')
-     or not coalesce((select ver_fiscalizacion from public.usuarios where id = auth.uid()), false) then$q$, $q$if not public.tiene_permiso('fiscalizacion') then$q$, $q$tiene_permiso('fiscalizacion')$q$),
+    ('fiscalizacion_fallas', $q$if public.mi_rol() not in ('admin','ito','ito2')$q$, $q$if not public.tiene_permiso('fiscalizacion')$q$, $q$if not public.tiene_permiso('fiscalizacion')$q$),
+    ('fiscalizacion_fallas', $q$or not coalesce((select ver_fiscalizacion from public.usuarios where id = auth.uid()), false) then$q$, $q$then -- grilla$q$, $q$then -- grilla$q$),
     ('fusionar_notificadores', $q$if coalesce(public.mi_rol(), '') <> 'admin' then$q$, $q$if not public.tiene_permiso('admin_catalogos') then$q$, $q$if not public.tiene_permiso('admin_catalogos') then$q$),
     ('vincular_notificador_usuario', $q$if coalesce(public.mi_rol(),'') <> 'admin' then raise exception 'Solo el admin puede vincular notificadores'$q$, $q$if not public.tiene_permiso('admin_catalogos') then raise exception 'No tienes permiso para vincular notificadores'$q$, $q$if not public.tiene_permiso('admin_catalogos') then raise exception 'No tienes permiso para vincular notificadores'$q$),
     ('notificador_de_usuario', $q$exists (select 1 from public.usuarios u where u.id = auth.uid() and u.notificador_externo_habilitado)$q$, $q$public.tiene_permiso('notificador_externo')$q$, $q$public.tiene_permiso('notificador_externo')$q$),
     ('usuarios_notificables', $q$exists (select 1 from public.usuarios u where u.id = auth.uid() and u.notificador_externo_habilitado)$q$, $q$public.tiene_permiso('notificador_externo')$q$, $q$public.tiene_permiso('notificador_externo')$q$),
-    ('obtener_o_crear_notificador', $q$if not exists (select 1 from public.usuarios
-                 where id = auth.uid() and notificador_externo_habilitado) then$q$, $q$if not public.tiene_permiso('notificador_externo') then$q$, $q$if not public.tiene_permiso('notificador_externo') then$q$),
+    ('obtener_o_crear_notificador', $q$if not exists (select 1 from public.usuarios$q$, $q$if not public.tiene_permiso('notificador_externo') then -- grilla$q$, $q$if not public.tiene_permiso('notificador_externo') then -- grilla$q$),
+    ('obtener_o_crear_notificador', $q$where id = auth.uid() and notificador_externo_habilitado) then$q$, $q$-- (permiso por grilla)$q$, $q$-- (permiso por grilla)$q$),
     ('pasar_a_masivo', $q$select u.puede_pasar_a_masivo into v_ok from public.usuarios u where u.id = auth.uid();$q$, $q$v_ok := public.tiene_permiso('pasar_a_masivo');$q$, $q$v_ok := public.tiene_permiso('pasar_a_masivo');$q$),
     ('registrar_aporte', $q$if v_rol is null or v_rol not in ('camion', 'admin') then$q$, $q$if v_rol is null or not (public.tiene_permiso('aporte_registrar') or v_rol = 'admin') then$q$, $q$if v_rol is null or not (public.tiene_permiso('aporte_registrar') or v_rol = 'admin') then$q$),
     ('registrar_foto_falla', $q$if v_rol is null or v_rol not in ('admin','contratista','contratista2', 'contratista3','camion') then$q$, $q$if v_rol is null or not public.tiene_permiso('reparacion_cerrar') then$q$, $q$if v_rol is null or not public.tiene_permiso('reparacion_cerrar') then$q$),
@@ -96,8 +96,8 @@ begin
     ('suministro_actualizar_ahora', $q$if public.mi_rol() not in ('admin', 'ito', 'ito2') then$q$, $q$if not public.tiene_permiso('suministro_avisos') then$q$, $q$if not public.tiene_permiso('suministro_avisos') then$q$),
     ('suministro_estado', $q$if public.mi_rol() is distinct from 'admin' then$q$, $q$if not public.tiene_permiso('admin_catalogos') then$q$, $q$if not public.tiene_permiso('admin_catalogos') then$q$),
     ('suministro_set_activo', $q$if public.mi_rol() is distinct from 'admin' then$q$, $q$if not public.tiene_permiso('admin_catalogos') then$q$, $q$if not public.tiene_permiso('admin_catalogos') then$q$),
-    ('ubicaciones_camiones', $q$if not (public.mi_rol() = 'admin'
-          or coalesce((select ver_ubicacion from public.usuarios where id = auth.uid()), false)) then$q$, $q$if not public.tiene_permiso('ubicacion_camiones') then$q$, $q$tiene_permiso('ubicacion_camiones')$q$),
+    ('ubicaciones_camiones', $q$if not (public.mi_rol() = 'admin'$q$, $q$if not (public.tiene_permiso('ubicacion_camiones')$q$, $q$if not (public.tiene_permiso('ubicacion_camiones')$q$),
+    ('ubicaciones_camiones', $q$or coalesce((select ver_ubicacion from public.usuarios where id = auth.uid()), false)) then$q$, $q$) then -- grilla$q$, $q$) then -- grilla$q$),
     ('validar_contratista_reparacion', $q$if rol_actual not in ('contratista', 'contratista2', 'contratista3', 'camion', 'admin') then$q$, $q$if not public.usuario_tiene_permiso(new.reparado_por, 'reparacion_cerrar') then$q$, $q$if not public.usuario_tiene_permiso(new.reparado_por, 'reparacion_cerrar') then$q$),
     ('validar_creador_falla', $q$if rol_creador not in ('ito', 'ito2', 'admin', 'contratista2', 'contratista3') then$q$, $q$if not public.usuario_tiene_permiso(new.creado_por, 'informar_falla') then$q$, $q$if not public.usuario_tiene_permiso(new.creado_por, 'informar_falla') then$q$),
     ('validar_notificador_y_fecha_falla', $q$if not coalesce(v_hab, false) then$q$, $q$if not public.usuario_tiene_permiso(new.creado_por, 'notificador_externo') then$q$, $q$if not public.usuario_tiene_permiso(new.creado_por, 'notificador_externo') then$q$),
@@ -109,14 +109,14 @@ begin
     ('push_falla_nueva', $q$where u.rol in ('contratista','contratista2', 'contratista3')$q$, $q$where public.usuario_tiene_permiso(u.id, 'push_falla_informada')$q$, $q$where public.usuario_tiene_permiso(u.id, 'push_falla_informada')$q$),
     ('push_falla_reparada', $q$and u.rol in ('ito','ito2','admin'))$q$, $q$and coalesce(public.usuario_tiene_permiso(u.id, 'push_falla_reparada'), false))$q$, $q$coalesce(public.usuario_tiene_permiso(u.id, 'push_falla_reparada')$q$),
     ('push_falla_reparada', $q$and u.rol in ('contratista','contratista2', 'contratista3')$q$, $q$and public.usuario_tiene_permiso(u.id, 'push_falla_reparada')$q$, $q$and public.usuario_tiene_permiso(u.id, 'push_falla_reparada')$q$),
-    ('push_falla_asignada', $q$perform notificar_push(array[NEW.asignado_camion_id],$q$, $q$if not public.usuario_tiene_permiso(NEW.asignado_camion_id, 'push_falla_asignada') then return NEW; end if;
-  perform notificar_push(array[NEW.asignado_camion_id],$q$, $q$usuario_tiene_permiso(NEW.asignado_camion_id$q$),
+    ('push_falla_asignada', $q$perform notificar_push(array[NEW.asignado_camion_id],$q$, $q$if not public.usuario_tiene_permiso(NEW.asignado_camion_id, 'push_falla_asignada') then return NEW; end if; perform notificar_push(array[NEW.asignado_camion_id],$q$, $q$usuario_tiene_permiso(NEW.asignado_camion_id$q$),
     ('crear_perfil', $q$if public.mi_rol() is distinct from 'admin' then raise exception 'Solo el administrador puede crear perfiles.'$q$, $q$if not public.tiene_permiso('admin_perfiles') then raise exception 'No tienes permiso para crear perfiles.'$q$, $q$if not public.tiene_permiso('admin_perfiles') then raise exception 'No tienes permiso para crear perfiles.'$q$)
   ) as t(fn, viejo, nuevo, ya) loop
     select count(*) into v_n from pg_proc p where p.proname = r.fn and p.pronamespace = 'public'::regnamespace;
     if v_n <> 1 then raise exception 'La función % no existe o está repetida (%).', r.fn, v_n; end if;
     select p.oid into v_oid from pg_proc p where p.proname = r.fn and p.pronamespace = 'public'::regnamespace;
     v_def := replace(pg_get_functiondef(v_oid), E'\r', '');
+    r.viejo := replace(r.viejo, E'\r', ''); r.nuevo := replace(r.nuevo, E'\r', ''); r.ya := replace(r.ya, E'\r', '');   -- por si el editor pega saltos de línea de Windows
     if position(r.ya in v_def) > 0 then continue; end if;   -- ya estaba aplicado
     if position(r.viejo in v_def) = 0 then
       raise exception 'No encontré el texto esperado en la función % (¿cambió desde que se preparó este SQL?): %', r.fn, left(r.viejo, 70);
