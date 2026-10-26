@@ -8533,11 +8533,11 @@ async function generarPdfAnalisis(soloResumen, opciones){
       // (hasta HC_MIN) y, si aún no alcanza, el relleno de las filas de la tabla por ITO. Si igual no cabe, sigue en la hoja siguiente.
       const nSemTot = semanasMes.reduce((s, m) => s + m.nSem, 0), nSem2 = semanasMes.reduce((s, m) => s + m.dos.filter(Boolean).length, 0);
       const nIto = (cob.por_ito || []).length;
-      const dispo = (alto - 18) - y - 17 * meses.length;   // alto libre para semanas, leyenda, estadística y tabla por ITO
-      const H_BLOQUE = 40;                                  // título + tarjetas + barra de la estadística de fallas
+      const dispo = (alto - 18) - y - 17 * meses.length;   // alto libre para semanas, leyenda y tabla por ITO con su cuadro
+      const H_CARD = 53;                                    // alto del cuadro de estadística, a la izquierda de la tabla por ITO
       const calcHC = (cp) => {
         const n1 = nSemTot - nSem2;
-        const libre = dispo - 9 - 4 - (nIto ? (nIto + 1) * (3.5 + 2 * cp) : 11) - H_BLOQUE - nSem2 * H_2FILAS;
+        const libre = dispo - 9 - 4 - Math.max(nIto ? (nIto + 1) * (3.5 + 2 * cp) : 11, H_CARD) - nSem2 * H_2FILAS;
         return n1 > 0 ? libre / n1 : HC_MAX;
       };
       let cpIto = 2, hC1 = calcHC(cpIto);
@@ -8586,36 +8586,43 @@ async function generarPdfAnalisis(soloResumen, opciones){
       pdf.setFillColor(253, 232, 205); pdf.roundedRect(margen + 38, y - 0.5, 5, 3.6, 1, 1, 'F'); pdf.text('Día hábil sin inspección', margen + 45, y + 2);
       pdf.setFillColor(236, 240, 237); pdf.roundedRect(margen + 82, y - 0.5, 5, 3.6, 1, 1, 'F'); pdf.text('Fin de semana', margen + 89, y + 2);
       y += 9;
-      // Estadística: fallas encontradas en inspecciones nocturnas respecto del total de fallas del período
+      titulo('Inspecciones nocturnas por ITO');
+      // Cuadro a la izquierda de la tabla: fallas encontradas en inspecciones nocturnas respecto del total de fallas del período
+      const yCard = y, pgCard = pdf.internal.getCurrentPageInfo().pageNumber, W_CARD = 75;
       {
         const nIns = (cob.por_ito || []).reduce((s, i) => s + (i.inspecciones || 0), 0);
         const fIns = (cob.por_ito || []).reduce((s, i) => s + (i.fallas || 0), 0);
         const fTot = (d.resumen || {}).fallas || 0;
         const pctIns = fTot ? Math.min(100, Math.round(fIns / fTot * 100)) : 0;
-        titulo('Fallas encontradas en inspecciones nocturnas');
-        const wT = (ancho - margen * 2 - 8) / 3, hT = 15;
-        [['Inspecciones nocturnas', String(nIns)], ['Fallas encontradas en ellas', String(fIns)], ['% del total de fallas del período', pctIns + ' %']].forEach(([t, v], k) => {
-          const x0 = margen + k * (wT + 4);
-          pdf.setFillColor(243, 246, 244); pdf.roundedRect(x0, y, wT, hT, 2.4, 2.4, 'F');
-          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(t, x0 + 3.5, y + 4.8);
-          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(15); pdf.setTextColor(...VERDE); pdf.text(v, x0 + 3.5, y + 11.8);
-        });
-        y += hT + 4;
+        const x0 = margen, xi = x0 + 4, wi = W_CARD - 8, cx = x0 + W_CARD / 2;
+        pdf.setFillColor(243, 246, 244); pdf.roundedRect(x0, yCard, W_CARD, H_CARD, 2.4, 2.4, 'F');
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(...VERDE);
+        pdf.text('Fallas encontradas en', cx, yCard + 5.6, {align: 'center'}); pdf.text('inspecciones nocturnas', cx, yCard + 9.4, {align: 'center'});
+        // Anillo con el porcentaje (arco de trazos cortos sobre un anillo base)
+        const cy = yCard + 23, R = 9.5, grosor = 3.4;
+        pdf.setLineWidth(grosor); pdf.setDrawColor(225, 232, 227); pdf.circle(cx, cy, R, 'S');
+        const frac = fTot ? Math.min(1, fIns / fTot) : 0, pasos = Math.max(0, Math.round(frac * 120));
+        pdf.setDrawColor(123, 211, 0);
+        for(let k = 0; k < pasos; k++){
+          const a0 = -Math.PI / 2 + (k / 120) * 2 * Math.PI, a1 = -Math.PI / 2 + ((k + 1.6) / 120) * 2 * Math.PI;
+          pdf.line(cx + R * Math.cos(a0), cy + R * Math.sin(a0), cx + R * Math.cos(Math.min(a1, -Math.PI / 2 + frac * 2 * Math.PI)), cy + R * Math.sin(Math.min(a1, -Math.PI / 2 + frac * 2 * Math.PI)));
+        }
+        pdf.setLineWidth(0.2);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(11); pdf.setTextColor(...VERDE); pdf.text(pctIns + ' %', cx, cy + 1.6, {align: 'center'});
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris);
-        pdf.text(`${fIns} de ${fTot} fallas del período, en inspecciones nocturnas`, margen, y + 2);
-        pdf.text(`${Math.max(0, fTot - fIns)} informadas por otras vías`, ancho - margen, y + 2, {align: 'right'});
-        y += 4;
-        const wBarra = ancho - margen * 2;
-        pdf.setFillColor(228, 234, 230); pdf.roundedRect(margen, y, wBarra, 3.6, 1.8, 1.8, 'F');
-        if(fTot && fIns > 0){ pdf.setFillColor(123, 211, 0); pdf.roundedRect(margen, y, Math.max(3.6, wBarra * Math.min(1, fIns / fTot)), 3.6, 1.8, 1.8, 'F'); }
-        y += 3.6 + 8;
+        pdf.text(`${fIns} de ${fTot} fallas del período`, cx, yCard + 38, {align: 'center'});
+        pdf.setDrawColor(214, 222, 216); pdf.setLineWidth(0.2); pdf.line(xi, yCard + 40.5, xi + wi, yCard + 40.5); pdf.line(cx, yCard + 42, cx, yCard + H_CARD - 3);
+        [[String(nIns), 'inspecciones nocturnas'], [String(Math.max(0, fTot - fIns)), 'fallas por otras vías']].forEach(([v, t], k) => {
+          const xc = xi + wi / 4 + k * (wi / 2);
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(...VERDE); pdf.text(v, xc, yCard + 46.5, {align: 'center'});
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text(t, xc, yCard + 50, {align: 'center'});
+        });
       }
-      titulo('Inspecciones nocturnas por ITO');
       if((cob.por_ito || []).length){
         tabla({
           head: [['ITO', 'Inspecciones', 'Fallas']],
           body: cob.por_ito.map(i => [i.nombre, i.inspecciones, i.fallas]),
-          margin: {left: margen, right: ancho - margen - 105},
+          margin: {left: margen + W_CARD + 6, right: margen},
           styles: {...estilosTabla.styles, cellPadding: {top: cpIto, bottom: cpIto, left: 2.4, right: 2.4}},
           columnStyles: {0: {cellPadding: {left: 14, top: cpIto, bottom: cpIto, right: 1.6}}, 1: {halign: 'right', cellWidth: 26}, 2: {halign: 'right', cellWidth: 20}},
           didDrawCell: (h) => {
@@ -8625,7 +8632,9 @@ async function generarPdfAnalisis(soloResumen, opciones){
             pdf.setFont('helvetica', 'bold'); pdf.setFontSize(4.6); pdf.setTextColor(255, 255, 255); pdf.text(inicialesIto(n), h.cell.x + 6, cy + 0.9, {align: 'center'});
           }
         });
-      } else vacio('Sin inspecciones registradas en este rango.');
+      } else { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...gris); pdf.text('Sin inspecciones registradas en este rango.', margen + W_CARD + 6, y + 3); y += 11; }
+      // Si la tabla es más corta que el cuadro, lo que sigue parte debajo del cuadro
+      if(pdf.internal.getCurrentPageInfo().pageNumber === pgCard) y = Math.max(y, yCard + H_CARD + 9);
     }
     pgInsFin = pdf.internal.getNumberOfPages();
     tituloDet = 'Puntos críticos y pendientes'; hojaDet();
