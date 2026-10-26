@@ -308,6 +308,7 @@
   .chip-estado{display:inline-flex; align-items:center; gap:6px; padding:2px 9px; border:1.5px solid var(--line); border-radius:20px; background:#fff; cursor:pointer; font-size:11.5px; font-weight:600; color:var(--ink-soft);}
   .chip-estado:hover{border-color:var(--primary);}
   .chip-estado.activo{border-color:var(--primary); background:#eef5f1; color:var(--primary);}
+  #notificadoresModal .modal-card{width:96vw; max-width:none;}
   .cfg-layout{display:grid; grid-template-columns:190px minmax(0,1fr); gap:16px; align-items:start;}
   .cfg-side{display:flex; flex-direction:column; gap:2px; position:sticky; top:0;}
   .cfg-g{font-size:10.5px; letter-spacing:.6px; text-transform:uppercase; color:var(--ink-soft); font-weight:700; padding:10px 10px 3px;}
@@ -10329,6 +10330,8 @@ async function pintarPerfilesAdmin(){
   const nUsuarios = {}; usuarios.forEach(u => { nUsuarios[u.perfil] = (nUsuarios[u.perfil] || 0) + 1; });
   const gruposOrden = GRUPOS_FUNCIONES.filter(g => funciones.some(f => f.grupo === g)).concat([...new Set(funciones.map(f => f.grupo))].filter(g => !GRUPOS_FUNCIONES.includes(g)));
   const bloqueada = (p, f) => p.clave === 'admin' && f.clave === 'admin_perfiles';
+  const TINTE_PERFIL = {admin:['#efe9fb','#e0d5f7'], ito:['#e6f0fb','#d3e5f8'], ito2:['#e6f0fb','#d3e5f8'], contratista:['#e6f5ec','#d2ecdc'], contratista2:['#e6f5ec','#d2ecdc'], contratista3:['#e6f5ec','#d2ecdc'], camion:['#fdf1dc','#fae3b8'], observador:['#eceeed','#dde0de']};
+  const tinte = (p, cab) => (TINTE_PERFIL[p.base_rol] || ['#f4f4f4','#e8e8e8'])[cab ? 1 : 0];
   const btnMini = 'border:1px solid var(--line); background:#fff; border-radius:6px; padding:1px 6px; font-size:11px; cursor:pointer; color:var(--ink-soft);';
   caja.innerHTML = `<div style="font-weight:700; margin-bottom:4px;">Perfiles y permisos</div>
     <div class="hint" style="margin:0 0 8px;">Cada perfil reúne las funciones que sus usuarios pueden usar. Marca o desmarca y guarda. El perfil de cada persona se elige en <b>Usuarios</b>. «por usuario» indica que además se puede dar o quitar a una persona con su casilla, sin cambiarle el perfil.</div>
@@ -10349,19 +10352,19 @@ async function pintarPerfilesAdmin(){
     <table style="border-collapse:collapse; font-size:12.5px; width:100%; min-width:${230 + perfiles.length * 82}px;">
       <thead><tr style="border-bottom:2px solid var(--line);">
         <th style="text-align:left; padding:8px 10px;">Función</th>
-        ${perfiles.map(p => `<th style="padding:6px 4px; text-align:center; vertical-align:bottom; width:82px;"><div style="font-weight:600;">${escAttr(p.nombre)}</div><div class="hint" style="margin:0; font-weight:400;">${nUsuarios[p.clave] || 0} usuario${(nUsuarios[p.clave] || 0) === 1 ? '' : 's'}</div><div style="margin-top:3px; display:flex; gap:3px; justify-content:center;"><button type="button" class="pf-ren" data-p="${escAttr(p.clave)}" title="Cambiar el nombre" style="${btnMini}">✎</button>${!p.sistema && !(nUsuarios[p.clave]) ? `<button type="button" class="pf-del" data-p="${escAttr(p.clave)}" title="Eliminar este perfil" style="${btnMini}">✕</button>` : ''}</div></th>`).join('')}
+        ${perfiles.map(p => `<th style="padding:6px 4px; text-align:center; vertical-align:bottom; width:82px; background:${tinte(p, true)};"><div style="font-weight:600;">${escAttr(p.nombre)}</div><div class="hint" style="margin:0; font-weight:400;">${nUsuarios[p.clave] || 0} usuario${(nUsuarios[p.clave] || 0) === 1 ? '' : 's'}</div><div style="margin-top:3px; display:flex; gap:3px; justify-content:center;"><button type="button" class="pf-ren" data-p="${escAttr(p.clave)}" title="Cambiar el nombre" style="${btnMini}">✎</button>${!p.sistema && !(nUsuarios[p.clave]) ? `<button type="button" class="pf-del" data-p="${escAttr(p.clave)}" title="Eliminar este perfil" style="${btnMini}">✕</button>` : ''}</div></th>`).join('')}
       </tr></thead>
       <tbody>${gruposOrden.map(g => `<tr><td colspan="${perfiles.length + 1}" style="background:#f1f4f2; font-weight:700; padding:6px 10px;">${escAttr(g)}</td></tr>` +
         funciones.filter(f => f.grupo === g).map(f => `<tr style="border-bottom:1px solid var(--line);"><td style="padding:6px 10px;">${escAttr(f.nombre)}${f.por_usuario ? ' <span class="hint" style="margin:0 0 0 4px; border:1px solid var(--line); border-radius:6px; padding:0 6px;">por usuario</span>' : ''}</td>${perfiles.map(p => {
           const k = p.clave + '|' + f.clave, lock = bloqueada(p, f);
-          return `<td data-k="${escAttr(k)}" style="text-align:center;"><input type="checkbox" class="pf-chk" data-k="${escAttr(k)}" ${celdas.get(k) ? 'checked' : ''} ${lock ? 'disabled title="El administrador no puede quitarse el acceso a esta pantalla"' : ''} aria-label="${escAttr(f.nombre + ' — ' + p.nombre)}" style="width:17px; height:17px;"></td>`;
+          return `<td data-k="${escAttr(k)}" data-t="${tinte(p, false)}" style="text-align:center; background:${tinte(p, false)};"><input type="checkbox" class="pf-chk" data-k="${escAttr(k)}" ${celdas.get(k) ? 'checked' : ''} ${lock ? 'disabled title="El administrador no puede quitarse el acceso a esta pantalla"' : ''} aria-label="${escAttr(f.nombre + ' — ' + p.nombre)}" style="width:17px; height:17px;"></td>`;
         }).join('')}</tr>`).join('')).join('')}</tbody>
     </table></div>
     <p class="hint" style="margin:10px 0 0;">Una celda marcada con fondo amarillo tiene cambios sin guardar. Un perfil nuevo parte como copia de otro y hereda su rol base, así que las reglas de seguridad de la base se comportan igual que con el perfil copiado.</p>`;
   const est = caja.querySelector('#pfEstado'), bG = caja.querySelector('#pfGuardar'), bD = caja.querySelector('#pfDescartar');
   const cambiadas = () => [...celdas.keys()].filter(k => celdas.get(k) !== orig.get(k));
   const refrescar = () => {
-    caja.querySelectorAll('td[data-k]').forEach(td => { td.style.background = celdas.get(td.dataset.k) !== orig.get(td.dataset.k) ? '#fff3c4' : ''; });
+    caja.querySelectorAll('td[data-k]').forEach(td => { td.style.background = celdas.get(td.dataset.k) !== orig.get(td.dataset.k) ? '#fff3c4' : td.dataset.t; });
     const n = cambiadas().length;
     bG.disabled = bD.disabled = n === 0;
     est.textContent = n ? `${n} cambio${n > 1 ? 's' : ''} sin guardar` : 'Sin cambios';
