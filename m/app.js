@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '1.48.2';
+const VERSION_APP = '1.49.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -18,11 +18,8 @@ const ZOOM_DATOS = 17;          // desde este zoom se cargan y se pueden tocar p
 const REFRESCO_MS = 60000;      // actualización automática de fallas
 const DIAS_MAX_INSPECCION = 7;  // misma regla que la base (admin sin límite)
 
-const PUEDE_REPORTAR = ['ito', 'ito2', 'admin', 'contratista2', 'contratista3'];
-const PUEDE_CERRAR = ['contratista', 'contratista2', 'contratista3', 'camion', 'admin'];
 const LS_MODO = 'fm_modo_v1';
-const PUEDE_MODO_INSPECCION = ['ito', 'ito2', 'admin'];
-const PUEDE_ASIGNAR = ['contratista', 'contratista2', 'contratista3', 'admin'];
+const LS_FUNC = 'fm_funciones_v1';
 
 const CAT_PUNTO = [
   { c: 'F01', d: 'Luminaria vial apagada' },
@@ -460,6 +457,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrarFoto
 const S = {
   modo: { tipo: 'agregar', fecha: null, inspId: null },
   perfil: null,
+  funciones: null,
   features: [],       // fallas_geojson (todas las que devuelve la base)
   activas: [],        // no reparadas
   pos: null,          // {lat, lng, prec}
@@ -472,10 +470,45 @@ const S = {
   instalar: null,
 };
 const rol = () => (S.perfil ? S.perfil.rol : null);
+
+/* ---- Funciones por perfil: lo que cada usuario puede hacer lo define la grilla (Perfiles y permisos). tiene(f) = perfil + excepciones individuales ---- */
+const ORDEN_ROLES_LEGADO = ['admin', 'ito', 'ito2', 'contratista', 'contratista2', 'contratista3', 'camion', 'observador'];
+// Valores de fábrica (admin, ito, ito2, c1, c2, c3, camion, observador). Solo se usan si la base aún no tiene la grilla o no hay señal ni copia guardada.
+const FUNCIONES_LEGADO = {
+  mapa_ver: '11111111', suministro_indicador: '11111111', suministro_avisos: '11100000', filtro_asignacion: '10011100', modo_historial: '10000000', ver_fecha_real: '10000000',
+  informar_falla: '11101100', notificador_externo: '00000000', informar_inspeccion: '11100000',
+  inspecciones_propias: '11100000', inspecciones_todas: '10100100', inspeccion_editar: '10000000', inspeccion_asignar_lote: '10000100', operativo_activar: '10000000',
+  falla_editar_propia: '11101100', falla_editar_cualquiera: '10000000', falla_cambiar_contrato: '11101100', falla_comentar: '11111110', pasar_a_masivo: '00000000', asignacion_quitar: '10000000',
+  reparacion_asignar_camion: '10011100', reparacion_cerrar: '10011110', reparacion_editar_propia: '10011110', foto_obligatoria: '00000000', aporte_registrar: '00000010', maestros: '10011100', ubicacion_gps_compartir: '00000010',
+  todas_fallas: '11111100', columnas_asignacion: '10011100', exportar_csv: '11111100', estadisticas: '11100000', estadisticas_inspecciones: '11100000', analisis: '10100000',
+  rendimiento_cuadrillas: '10000000', fiscalizacion: '00000000', ubicacion_camiones: '10000000',
+  push_falla_informada: '00011100', push_falla_asignada: '00000010', push_falla_reparada: '11111100',
+  admin_usuarios: '10000000', admin_contratos: '10000000', admin_catalogos: '10000000', admin_perfiles: '10000000', ver_como: '10000000',
+};
+function tiene(f) {
+  if (S.funciones) return S.funciones.has(f);
+  const u = S.perfil || {};
+  const i = ORDEN_ROLES_LEGADO.indexOf(u.rol), bits = FUNCIONES_LEGADO[f];
+  const casilla = { pasar_a_masivo: u.puede_pasar_a_masivo, foto_obligatoria: u.foto_obligatoria, rendimiento_cuadrillas: u.ver_cuadrillas, ubicacion_camiones: u.ubic_col ? u.ver_ubicacion : u.ver_cuadrillas }[f];
+  return (!!bits && i >= 0 && bits[i] === '1') || !!casilla;
+}
+async function cargarFunciones() {
+  S.funciones = null;
+  try {
+    const r = await rpc('mis_funciones');
+    if (Array.isArray(r)) {
+      S.funciones = new Set(r);
+      try { localStorage.setItem(LS_FUNC, JSON.stringify({ uid: S.perfil.id, f: r })); } catch (e) { /* */ }
+      return;
+    }
+  } catch (e) { if (e.name === 'SesionExpirada') throw e; }
+  // Sin señal o sin la grilla en la base: última copia guardada de este mismo usuario
+  try { const c = JSON.parse(localStorage.getItem(LS_FUNC)); if (c && c.uid === S.perfil.id && Array.isArray(c.f)) S.funciones = new Set(c.f); } catch (e) { /* */ }
+}
 const rolVisible = () => (rol() === 'contratista2' || rol() === 'contratista3' ? 'contratista' : rol());
-const puedeReportar = () => PUEDE_REPORTAR.includes(rol());
-const puedeAsignar = () => PUEDE_ASIGNAR.includes(rol());
-const puedeCerrar = () => PUEDE_CERRAR.includes(rol());
+const puedeReportar = () => tiene('informar_falla');
+const puedeAsignar = () => tiene('reparacion_asignar_camion');
+const puedeCerrar = () => tiene('reparacion_cerrar');
 
 function ocupar(btn, fn) {
   return async (ev) => {
@@ -545,13 +578,13 @@ $('#loginOlvido').addEventListener('click', async () => {
 });
 function salir(msg) {
   guardarSesion(null);
-  try { localStorage.removeItem(LS_PERFIL); localStorage.removeItem(LS_MODO); } catch (e) { /* */ }
+  try { localStorage.removeItem(LS_PERFIL); localStorage.removeItem(LS_MODO); localStorage.removeItem(LS_FUNC); } catch (e) { /* */ }
   S.modo = { tipo: 'agregar', fecha: null, inspId: null };
   S.modoHist = false;
   detenerGPS();
   clearInterval(S.timer);
   cerrarHoja();
-  S.perfil = null; S.features = []; S.activas = [];
+  S.perfil = null; S.funciones = null; S.features = []; S.activas = [];
   mostrarLogin(msg);
 }
 
@@ -579,6 +612,7 @@ async function cargarPerfil() {
     try { p = JSON.parse(localStorage.getItem(LS_PERFIL)); } catch (e2) { /* */ }
     if (p && p.id === sesion.user_id) S.perfil = p; else throw e;
   }
+  await cargarFunciones();
 }
 
 /* ------------------------------ mapa ------------------------------ */
@@ -777,7 +811,7 @@ function abrirEmpalme(p) {
    No se guardan: se reinician al abrir la app. Los contadores muestran el estado actual de la comuna,
    sin importar los filtros puestos. */
 try { localStorage.removeItem('fa_sin_asignar'); localStorage.removeItem('fa_solo_masivo'); } catch (e) { /* */ }
-const puedeFiltrarSinAsignar = () => ['admin', 'contratista', 'contratista2', 'contratista3'].includes(rol());
+const puedeFiltrarSinAsignar = () => tiene('filtro_asignacion');
 const FO = { asig: 'todas', sub: 'todas', cod: new Set() };   // asig: todas | sin | asignadas · sub: todas | masivo | normal · cod: códigos de falla marcados (vacío = todos)
 const asigActiva = () => (puedeFiltrarSinAsignar() ? FO.asig : 'todas');
 const cuentaFiltrosOtros = () => (asigActiva() !== 'todas' ? 1 : 0) + (FO.sub !== 'todas' ? 1 : 0) + (FO.cod.size ? 1 : 0);
@@ -1132,7 +1166,7 @@ function pintarTrafosSuministro(){
   if(!map.hasLayer(suminLayer)) suminLayer.addTo(map);
 }
 let suminAvisos = [], suminAvisosVer = true, suminAvisosLayer = null;
-const suminPuedeAvisos = () => ['admin', 'ito', 'ito2'].includes(rol());   // datos de clientes: solo admin e ITO (la base también lo exige)
+const suminPuedeAvisos = () => tiene('suministro_avisos');   // datos de clientes: solo admin e ITO (la base también lo exige)
 let suminActivo = true;   // interruptor del admin (si la tabla aún no existe, se considera encendido)
 async function cargarSuministro(){
   try{ const c = await select('suministro_config', 'select=activo&id=eq.1'); suminActivo = !(c && c[0] && c[0].activo === false); }catch(err){ suminActivo = true; }
@@ -1228,7 +1262,7 @@ function accionesReporte(textoReportar, geom) {
   const c = geom ? centroGeom(geom) : null;
   return `<div class="acciones acc-fila" id="accFalla">
     ${puedeReportar() ? `<button id="bReportar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}${esc(textoReportar)}</button>` : ''}
-    ${rol() === 'camion' ? `<button id="bAporte" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}Registrar aporte</button>` : ''}
+    ${tiene('aporte_registrar') ? `<button id="bAporte" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}Registrar aporte</button>` : ''}
     ${c ? `<a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>` : ''}
   </div>`;
 }
@@ -1779,16 +1813,16 @@ async function abrirFalla(p, geom) {
   const puedeCerrarEsta = puedeCerrar() && !p.cascada && p.estado !== 'reparada';
   const puedeNuevaAqui = puedeReportar() && p.estado === 'reparada';
   const puedeAsignarEsta = puedeAsignar() && !p.cascada && p.estado !== 'reparada';
-  const puedePasarMasivo = !!(S.perfil && S.perfil.puede_pasar_a_masivo) && !p.masivo && !p.cascada && p.estado !== 'reparada';
+  const puedePasarMasivo = tiene('pasar_a_masivo') && !p.masivo && !p.cascada && p.estado !== 'reparada';
   // Eliminar: el creador su propia falla (no reparada) dentro de 15 min desde que la ingresó; el admin cualquiera (la base lo exige igual)
   const minDesdeIngreso = p.fecha_falla_real ? (Date.now() - new Date(p.fecha_falla_real).getTime()) / 60000 : Infinity;
-  const puedeEliminarEsta = !p.cascada && !!S.perfil && (rol() === 'admin' || (p.creado_por === S.perfil.id && p.estado !== 'reparada' && minDesdeIngreso <= 15));
+  const puedeEliminarEsta = !p.cascada && !!S.perfil && (tiene('falla_editar_cualquiera') || (tiene('falla_editar_propia') && p.creado_por === S.perfil.id && p.estado !== 'reparada' && minDesdeIngreso <= 15));
   const puedeEditarEsta = puedeEliminarEsta && p.estado !== 'reparada';
   const minRestantes = Math.max(1, Math.ceil(15 - minDesdeIngreso));
   const h = abrirHoja(`
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
-    <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && rol() === 'admin' ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
+    <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && tiene('asignacion_quitar') ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
     ${p.estado === 'reparada' ? `<div style="border-top:1px solid var(--linea);margin-top:6px;padding-top:4px">
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
       ${p.descripcion_reparacion ? `<h3>Trabajo realizado</h3><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
@@ -1802,12 +1836,12 @@ async function abrirFalla(p, geom) {
     <div class="acciones" id="accFalla">
       ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.ok}Registrar reparación</button>` : ''}
       <div class="acc-mini">
-        ${puedeEditarEsta ? `<button id="bEditar" class="acc-t">${ICO_ACC.editar}<span>Editar${rol() === 'admin' ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
+        ${puedeEditarEsta ? `<button id="bEditar" class="acc-t">${ICO_ACC.editar}<span>Editar${tiene('falla_editar_cualquiera') ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
         ${puedeNuevaAqui ? `<button id="bNueva" class="acc-t">${ICO_ACC.nueva}<span>Nueva falla<small>${p.tipo === 'linea' ? 'en este circuito' : 'en este punto'}</small></span></button>` : ''}
         ${puedeAsignarEsta ? `<button id="bAsignar" class="acc-t">${ICO_ACC.camion}<span>${p.asignado_camion_id ? 'Cambiar camión' : 'Asignar camión'}</span></button>` : ''}
         ${puedePasarMasivo ? `<button id="bMasivo" class="acc-t" style="background:#8a949d;color:#fff">${ICO_ACC.masivo.replace('<svg', '<svg style="color:#fff"')}<span>Pasar a masivo</span></button>` : ''}
         <a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>
-        ${puedeEliminarEsta ? `<button id="bEliminar" class="acc-t acc-peligro">${ICO_ACC.borrar}<span>Eliminar${rol() === 'admin' ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
+        ${puedeEliminarEsta ? `<button id="bEliminar" class="acc-t acc-peligro">${ICO_ACC.borrar}<span>Eliminar${tiene('falla_editar_cualquiera') ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
       </div>
     </div>
     <h3>Historial</h3>
@@ -1876,7 +1910,7 @@ async function abrirFalla(p, geom) {
 
 /* Editar / quitar una reparación: quien la registró, dentro de 30 minutos (el admin siempre). La base lo exige igual. */
 async function ofrecerEdicionReparacion(p, h) {
-  if (!PUEDE_CERRAR.includes(rol()) || p.cascada || p.estado !== 'reparada') return;
+  if (!tiene('reparacion_editar_propia') || p.cascada || p.estado !== 'reparada') return;
   let est;
   try { est = await rpc('reparacion_estado', { p_falla_id: p.id }); } catch (e) { return; }
   const acc = $('#accFalla', h);
@@ -2034,7 +2068,7 @@ async function formAsignar(p) {
 
 function formCierre(p, borr) {
   let sel = [];
-  const exigeFoto = !!(S.perfil && S.perfil.foto_obligatoria);
+  const exigeFoto = tiene('foto_obligatoria');
   const fotos = [];   // { blob, url, subida }
   if (borr) { sel = (borr.sel || []).slice(); (borr.fotos || []).forEach((b) => fotos.push({ blob: b, url: URL.createObjectURL(b), subida: false })); }
   const h = abrirHoja(`
@@ -2384,8 +2418,11 @@ const FILTROS_USR = [
   ['ito', 'ITO', (u) => u.rol === 'ito' || u.rol === 'ito2'],
   ['otros', 'Otros', (u) => u.rol === 'admin' || u.rol === 'observador'],
 ];
-const U = { tab: 'usuarios', usuarios: [], rel: {}, contratos: [], notifs: [], conteo: null, q: '', filtro: 'todos' };
+const U = { tab: 'usuarios', perfiles: [], usuarios: [], rel: {}, contratos: [], notifs: [], conteo: null, q: '', filtro: 'todos' };
 let usrHist = false, usrVolviendo = false;
+const listaPerfiles = () => (U.perfiles.length ? U.perfiles : ROLES_LISTA.map((r) => ({ clave: r, nombre: ROL_ETQ[r], base_rol: r })));
+const baseRolDe = (clave) => { const p = listaPerfiles().find((x) => x.clave === clave); return p ? p.base_rol : clave; };
+const nombrePerfilU = (u) => { const p = U.perfiles.find((x) => x.clave === u.perfil); return p ? p.nombre : (ROL_ETQ[u.rol] || u.rol); };
 const normTxt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const sinContratoU = (u) => ROLES_CON_CONTRATO.includes(u.rol) && u.rol !== 'camion' && !(U.rel[u.id] || []).length;
 const msgNotif = (e) => {
@@ -2398,12 +2435,14 @@ const msgNotif = (e) => {
 const msgContrato = (e) => (/duplicate|unique|contratos_nombre/i.test(e.message) ? 'Ya existe un contrato con ese nombre.' : e.message);
 
 async function cargarUsuariosAdmin() {
-  const [us, cs, rel, ns] = await Promise.all([
-    select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
+  const [us, cs, rel, ns, pf] = await Promise.all([
+    select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
     select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc').catch(() => []),
     select('usuario_contratos', 'select=usuario_id,contrato_id').catch(() => []),
     select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc').catch(() => []),
+    select('perfiles', 'select=clave,nombre,base_rol,sistema,orden&order=orden.asc').catch(() => []),
   ]);
+  U.perfiles = pf || [];
   U.usuarios = us; U.contratos = cs; U.rel = {};
   rel.forEach((r) => { (U.rel[r.usuario_id] = U.rel[r.usuario_id] || []).push(r.contrato_id); });
   U.notifs = ns.map((n) => ({ ...n, nFallas: (n.fallas && n.fallas[0] && n.fallas[0].count) || 0 }));
@@ -2420,16 +2459,16 @@ async function cargarConteoContratos() {
 }
 
 function abrirUsuarios(modo) {
-  if (rol() !== 'admin') return;
+  if (!(modo === 'perfiles' ? tiene('admin_perfiles') : modo === 'config' ? (tiene('admin_catalogos') || tiene('admin_contratos')) : tiene('admin_usuarios'))) return;
   if (hojaAbierta) cerrarHoja(true); else { try { history.pushState({ pant: 1 }, ''); } catch (e) { /* */ } }   // el menú ya dejó una entrada en el historial: la reutiliza esta pantalla
   usrHist = true;
-  U.modo = modo === 'config' ? 'config' : 'usuarios';
-  $('#uTitulo').textContent = U.modo === 'config' ? 'Configuración' : 'Usuarios y permisos';
-  U.tab = U.modo === 'config' ? 'contratos' : 'usuarios'; U.q = ''; U.filtro = 'todos'; U.conteo = null;
+  U.modo = modo === 'config' ? 'config' : modo === 'perfiles' ? 'perfiles' : 'usuarios';
+  $('#uTitulo').textContent = U.modo === 'config' ? 'Configuración' : U.modo === 'perfiles' ? 'Perfiles y permisos' : 'Usuarios y permisos';
+  U.tab = U.modo === 'config' ? 'contratos' : U.modo === 'perfiles' ? 'perfiles' : 'usuarios'; U.q = ''; U.filtro = 'todos'; U.conteo = null;
   $('#pantallaUsuarios').hidden = false;
   $('#uCuerpo').innerHTML = '<div class="u-vacio">Cargando…</div>';
   pintarTabsU();
-  cargarUsuariosAdmin().then(() => pintarU()).catch((e) => { $('#uCuerpo').innerHTML = `<div class="u-vacio">No se pudo cargar: ${esc(e.message)}</div>`; });
+  (U.modo === 'perfiles' ? Promise.resolve() : cargarUsuariosAdmin()).then(() => pintarU()).catch((e) => { $('#uCuerpo').innerHTML = `<div class="u-vacio">No se pudo cargar: ${esc(e.message)}</div>`; });
 }
 function cerrarUsuarios(desdePop) {
   if ($('#pantallaUsuarios').hidden) return;
@@ -2444,7 +2483,7 @@ const formUsuarios = () => abrirUsuarios();
 const ubicActiva = () => true;   // los camiones comparten siempre mientras la app está abierta (el teléfono pide el permiso de GPS)
 let ubicTimer = null, ubicUltimo = 0;
 function enviarUbicacion() {
-  if (rol() !== 'camion' || !ubicActiva() || document.visibilityState !== 'visible' || !navigator.geolocation) return;
+  if (!tiene('ubicacion_gps_compartir') || !ubicActiva() || document.visibilityState !== 'visible' || !navigator.geolocation) return;
   if (Date.now() - ubicUltimo < 45000) return;
   navigator.geolocation.getCurrentPosition((p) => {
     ubicUltimo = Date.now();
@@ -2453,7 +2492,7 @@ function enviarUbicacion() {
 }
 function iniciarUbicacion() {
   if (ubicTimer) { clearInterval(ubicTimer); ubicTimer = null; }
-  if (rol() !== 'camion' || !ubicActiva()) return;
+  if (!tiene('ubicacion_gps_compartir') || !ubicActiva()) return;
   enviarUbicacion();
   ubicTimer = setInterval(enviarUbicacion, 60000);
 }
@@ -2463,8 +2502,8 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 const CU_TURNOS = { '0': [0, 8], '1': [8, 16], '2': [16, 24], d: [0, 24] };
 const CU_COL = { reparada: '#3a8a5c', pendiente: '#d98e2f', sin: '#c1443c' };
 const CU = { datos: null, hist: false, volviendo: false };
-const puedeCuadrillas = () => !!S.perfil && (S.perfil.rol === 'admin' || !!S.perfil.ver_cuadrillas);
-const puedeUbicacion = () => !!S.perfil && (S.perfil.rol === 'admin' || (S.perfil.ubic_col ? !!S.perfil.ver_ubicacion : !!S.perfil.ver_cuadrillas));
+const puedeCuadrillas = () => !!S.perfil && tiene('rendimiento_cuadrillas');
+const puedeUbicacion = () => !!S.perfil && tiene('ubicacion_camiones');
 function cuRango() {
   const [y, mo, d] = $('#cuFecha').value.split('-').map(Number);
   const [h0, h1] = CU_TURNOS[$('#cuTurno').value];
@@ -2647,14 +2686,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function pintarTabsU() {
   const pend = U.notifs.filter((n) => !n.validado).length;
-  const tabs = U.modo === 'config' ? [['contratos', 'Contratos'], ['notificadores', 'Notificadores'], ['ajustes', 'Enel y ajustes']] : [['usuarios', 'Usuarios']];
+  const tabs = U.modo === 'config' ? [['contratos', 'Contratos'], ['notificadores', 'Notificadores'], ['ajustes', 'Enel y ajustes']] : U.modo === 'perfiles' ? [['perfiles', 'Perfiles']] : [['usuarios', 'Usuarios']];
   $('#uTabs').hidden = tabs.length < 2;
   $('#uTabs').innerHTML = tabs
     .map(([k, t]) => `<button type="button" data-tab="${k}" class="${U.tab === k ? 'on' : ''}">${t}${k === 'notificadores' && pend ? `<b>${pend}</b>` : ''}</button>`).join('');
 }
 function pintarU() {
   pintarTabsU();
-  if (U.tab === 'usuarios') pintarListaU();
+  if (U.tab === 'perfiles') pintarPerfilesU();
+  else if (U.tab === 'usuarios') pintarListaU();
   else if (U.tab === 'contratos') pintarContratosU();
   else if (U.tab === 'ajustes') pintarAjustesU();
   else pintarNotifsU();
@@ -2685,6 +2725,112 @@ async function pintarAjustesU() {
       <div class="u-kv"><span>Último error</span><b>${est.error ? esc(est.error) : 'Ninguno'}</b></div></div>`;
 }
 
+/* --- Perfiles y permisos: grilla de funciones por perfil (se guarda con «Guardar cambios») --- */
+const PF = { perfiles: [], funciones: [], celdas: new Map(), orig: new Map(), sel: null, nUsr: {} };
+const pfCambios = () => [...PF.celdas.keys()].filter((k) => PF.celdas.get(k) !== PF.orig.get(k));
+const claveDePerfilU = (nombre, usadas) => {
+  const base = String(nombre).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 30) || 'perfil';
+  let c = base, n = 2;
+  while (usadas.includes(c)) c = base + '_' + (n++);
+  return c;
+};
+async function cargarPerfilesU() {
+  const [pf, fn, filas, us] = await Promise.all([
+    select('perfiles', 'select=clave,nombre,base_rol,sistema,orden&order=orden.asc'),
+    select('funciones', 'select=clave,grupo,nombre,orden,por_usuario&order=orden.asc'),
+    select('perfil_funciones', 'select=perfil,funcion,habilitado&limit=5000'),
+    select('usuarios', 'select=perfil'),
+  ]);
+  PF.perfiles = pf; PF.funciones = fn; PF.celdas = new Map(); PF.orig = new Map(); PF.nUsr = {};
+  filas.forEach((r) => { PF.celdas.set(r.perfil + '|' + r.funcion, !!r.habilitado); PF.orig.set(r.perfil + '|' + r.funcion, !!r.habilitado); });
+  us.forEach((u) => { PF.nUsr[u.perfil] = (PF.nUsr[u.perfil] || 0) + 1; });
+  if (!PF.perfiles.some((p) => p.clave === PF.sel)) PF.sel = PF.perfiles.length ? PF.perfiles[0].clave : null;
+}
+async function pintarPerfilesU() {
+  $('#uCuerpo').innerHTML = '<div class="u-vacio">Cargando…</div>';
+  try { await cargarPerfilesU(); }
+  catch (e) { if (U.tab === 'perfiles') $('#uCuerpo').innerHTML = '<div class="u-nota">No disponible: falta ejecutar sql/2026-10-perfiles-permisos-etapa1.sql en Supabase.</div>'; return; }
+  if (U.tab === 'perfiles') pintarGrillaU();
+}
+function pintarGrillaU() {
+  const cuerpo = $('#uCuerpo'), arriba = cuerpo.scrollTop;
+  const p = PF.perfiles.find((x) => x.clave === PF.sel);
+  if (!p) { cuerpo.innerHTML = '<div class="u-vacio">No hay perfiles.</div>'; return; }
+  const grupos = [];
+  PF.funciones.forEach((f) => { let g = grupos.find((x) => x[0] === f.grupo); if (!g) grupos.push((g = [f.grupo, []])); g[1].push(f); });
+  const n = pfCambios().length, nu = PF.nUsr[p.clave] || 0;
+  cuerpo.innerHTML = `<div class="u-chips">${PF.perfiles.map((x) => `<button type="button" class="u-chip ${x.clave === p.clave ? 'on' : ''}" data-p="${esc(x.clave)}">${esc(x.nombre)}</button>`).join('')}<button type="button" class="u-chip" data-a="nuevo">+ Nuevo</button></div>
+    <div class="u-nota">${nu} usuario${nu === 1 ? '' : 's'} con este perfil · rol base: ${esc(ROL_ETQ[p.base_rol] || p.base_rol)}. «Por usuario» = además se puede dar o quitar a una persona suelta desde Usuarios.</div>
+    ${grupos.map(([g, fs]) => {
+      const on = fs.filter((f) => PF.celdas.get(p.clave + '|' + f.clave)).length;
+      return `<div class="u-lbl" style="display:flex;justify-content:space-between"><span>${esc(g)}</span><span style="text-transform:none;font-weight:500">${on} de ${fs.length}</span></div>`
+        + fs.map((f) => {
+          const k = p.clave + '|' + f.clave, v = !!PF.celdas.get(k), lock = p.clave === 'admin' && f.clave === 'admin_perfiles', cambio = v !== PF.orig.get(k);
+          return `<button type="button" class="u-tog ${v ? 'on' : ''}" data-f="${esc(f.clave)}" style="${lock ? 'opacity:.55;' : ''}${cambio ? 'border-color:#e7c76a;background:#fff8e1;' : ''}"><span class="u-tx"><b>${esc(f.nombre)}</b>${f.por_usuario || lock ? `<span>${lock ? 'Siempre activa para el Admin' : 'Por usuario'}</span>` : ''}</span><span class="u-sw ${v ? 'on' : ''}"></span></button>`;
+        }).join('');
+    }).join('')}
+    ${!p.sistema ? `<div class="u-lbl">Este perfil</div><div style="display:flex;gap:8px"><button type="button" class="u-btn" data-a="ren" style="flex:1">Cambiar nombre</button>${nu ? '' : '<button type="button" class="u-btn" data-a="del" style="flex:1;color:var(--rojo)">Eliminar</button>'}</div>` : ''}
+    <div style="position:sticky;bottom:0;background:var(--fondo,#fff);padding:10px 0 4px;margin-top:12px"><div class="u-em" id="pfEstado" style="margin-bottom:6px">${n ? `${n} cambio${n > 1 ? 's' : ''} sin guardar` : 'Sin cambios'}</div>
+      <div style="display:flex;gap:8px"><button type="button" class="btn btn-secundario" data-a="descartar" style="flex:1" ${n ? '' : 'disabled'}>Descartar</button><button type="button" class="btn btn-primario" data-a="guardar" style="flex:1;margin-top:0" ${n ? '' : 'disabled'}>Guardar cambios</button></div></div>`;
+  cuerpo.scrollTop = arriba;
+  cuerpo.onclick = async (ev) => {
+    const b = ev.target.closest('button'); if (!b || b.disabled) return;
+    if (b.dataset.p) { PF.sel = b.dataset.p; pintarGrillaU(); cuerpo.scrollTop = 0; return; }
+    if (b.dataset.f) {
+      if (p.clave === 'admin' && b.dataset.f === 'admin_perfiles') { toast('El Admin siempre conserva esta función.', 'error'); return; }
+      const k = p.clave + '|' + b.dataset.f; PF.celdas.set(k, !PF.celdas.get(k)); pintarGrillaU(); return;
+    }
+    const a = b.dataset.a;
+    if (a === 'descartar') { PF.celdas = new Map(PF.orig); pintarGrillaU(); return; }
+    if (a === 'guardar') return guardarGrillaU(b);
+    if (a === 'nuevo') {
+      const nombre = (prompt(`Nombre del perfil nuevo (parte como copia de «${p.nombre}»):`) || '').trim().replace(/\s+/g, ' ');
+      if (!nombre) return;
+      if (nombre.length < 2) { toast('El nombre es muy corto.', 'error'); return; }
+      if (PF.perfiles.some((x) => x.nombre.toLowerCase() === nombre.toLowerCase())) { toast('Ya existe un perfil con ese nombre.', 'error'); return; }
+      if (pfCambios().length && !confirm('Hay cambios sin guardar; se perderán al crear el perfil. ¿Seguir?')) return;
+      try { await rpc('crear_perfil', { p_clave: claveDePerfilU(nombre, PF.perfiles.map((x) => x.clave)), p_nombre: nombre, p_copiar_de: p.clave }); await cargarPerfilesU(); PF.sel = PF.perfiles[PF.perfiles.length - 1].clave; pintarGrillaU(); toast('Perfil creado', 'ok'); }
+      catch (e) { toast('No se pudo crear: ' + e.message, 'error'); }
+      return;
+    }
+    if (a === 'ren') {
+      const nuevo = (prompt('Nuevo nombre del perfil:', p.nombre) || '').trim().replace(/\s+/g, ' ');
+      if (!nuevo || nuevo === p.nombre) return;
+      if (PF.perfiles.some((x) => x.clave !== p.clave && x.nombre.toLowerCase() === nuevo.toLowerCase())) { toast('Ya existe un perfil con ese nombre.', 'error'); return; }
+      try {
+        const r = await api(`/rest/v1/perfiles?clave=eq.${encodeURIComponent(p.clave)}`, { method: 'PATCH', prefer: 'return=representation', body: { nombre: nuevo } });
+        if (!r || !r.length) throw new Error('no se guardó (¿sin permiso?)');
+        p.nombre = nuevo; pintarGrillaU(); toast('Nombre guardado', 'ok');
+      } catch (e) { toast('No se pudo cambiar: ' + e.message, 'error'); }
+      return;
+    }
+    if (a === 'del') {
+      if (!confirm(`¿Eliminar el perfil «${p.nombre}»? No tiene usuarios asignados.`)) return;
+      try { await api(`/rest/v1/perfiles?clave=eq.${encodeURIComponent(p.clave)}`, { method: 'DELETE' }); PF.sel = null; await cargarPerfilesU(); pintarGrillaU(); toast('Perfil eliminado', 'ok'); }
+      catch (e) { toast('No se pudo eliminar: ' + e.message, 'error'); }
+    }
+  };
+}
+async function guardarGrillaU(btn) {
+  const ks = pfCambios(); if (!ks.length) return;
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  // un PATCH por perfil y por valor (activar / desactivar)
+  const lotes = {};
+  ks.forEach((k) => { const [pf, f] = k.split('|'), v = PF.celdas.get(k), id = pf + '|' + v; (lotes[id] = lotes[id] || { pf, v, fs: [] }).fs.push(f); });
+  let ok = 0; const errores = [];
+  for (const l of Object.values(lotes)) {
+    try {
+      const r = await api(`/rest/v1/perfil_funciones?perfil=eq.${encodeURIComponent(l.pf)}&funcion=in.(${l.fs.map(encodeURIComponent).join(',')})`, { method: 'PATCH', prefer: 'return=representation', body: { habilitado: l.v } });
+      if (!Array.isArray(r) || r.length !== l.fs.length) throw new Error('no se guardó todo (¿sin permiso?)');
+      l.fs.forEach((f) => PF.orig.set(l.pf + '|' + f, l.v)); ok += l.fs.length;
+    } catch (e) { errores.push(`${l.pf}: ${e.message}`); l.fs.forEach((f) => PF.celdas.set(l.pf + '|' + f, PF.orig.get(l.pf + '|' + f))); }
+  }
+  if (ok) { await cargarFunciones(); pintarModo(); }   // lo recién guardado rige de inmediato
+  pintarGrillaU();
+  if (errores.length) toast(`Guardados ${ok}. Con error: ${errores.join(' · ')}`, 'error');
+  else toast(`${ok} cambio${ok > 1 ? 's' : ''} guardado${ok > 1 ? 's' : ''}`, 'ok');
+}
+
 /* --- Usuarios --- */
 function tarjetaUsuarioU(u) {
   const cs = (U.rel[u.id] || []).map((id) => U.contratos.find((c) => c.id === id)).filter(Boolean);
@@ -2695,7 +2841,7 @@ function tarjetaUsuarioU(u) {
   else cont = cs.map((c) => `<span class="u-tg ${c.defecto_para === 'masivo' ? 'u-t-ele' : 'u-t-enel'}">${esc(c.nombre)}</span>`).join('');
   const ic = [ROLES_CON_NOTIF.includes(u.rol) && u.notificador_externo_habilitado ? '🔔' : '', ROLES_CON_FOTO.includes(u.rol) && u.foto_obligatoria ? '📷' : ''].filter(Boolean).join(' ');
   return `<button type="button" class="u-card" data-uid="${esc(u.id)}"><span class="u-ini" style="background:${colorAv(u.nombre)}">${esc(iniciales(u.nombre))}</span>
-    <span class="u-mid"><span class="u-nm">${esc(u.nombre || '—')} <span class="u-rol ${ROL_CLASE[u.rol] || ''}">${esc(ROL_ETQ[u.rol] || u.rol)}</span></span>
+    <span class="u-mid"><span class="u-nm">${esc(u.nombre || '—')} <span class="u-rol ${ROL_CLASE[u.rol] || ''}">${esc(nombrePerfilU(u))}</span></span>
     <span class="u-em">${esc(u.email || '—')}</span><span>${cont}${ic ? `<span class="u-ic">${ic}</span>` : ''}</span></span><span class="u-chev">›</span></button>`;
 }
 function pintarListaU() {
@@ -2716,9 +2862,9 @@ function pintarListaU() {
 
 function editarUsuarioU(id) {
   const u = U.usuarios.find((x) => x.id === id); if (!u) return;
-  const orig = { nombre: u.nombre || '', rol: u.rol, notif: !!u.notificador_externo_habilitado, foto: !!u.foto_obligatoria, contr: (U.rel[id] || []).slice().sort() };
+  const orig = { nombre: u.nombre || '', perfil: u.perfil || u.rol, rol: u.rol, notif: !!u.notificador_externo_habilitado, foto: !!u.foto_obligatoria, contr: (U.rel[id] || []).slice().sort() };
   const ed = { ...orig, contr: new Set(orig.contr) };
-  const estado = () => ({ nombre: ed.nombre.trim(), rol: ed.rol, notif: ROLES_CON_NOTIF.includes(ed.rol) && ed.notif, foto: ROLES_CON_FOTO.includes(ed.rol) && ed.foto, contr: ROLES_CON_CONTRATO.includes(ed.rol) ? [...ed.contr].sort() : [] });
+  const estado = () => ({ nombre: ed.nombre.trim(), perfil: ed.perfil, rol: ed.rol, notif: ROLES_CON_NOTIF.includes(ed.rol) && ed.notif, foto: ROLES_CON_FOTO.includes(ed.rol) && ed.foto, contr: ROLES_CON_CONTRATO.includes(ed.rol) ? [...ed.contr].sort() : [] });
   const h = abrirHoja(`<div class="u-sh"><span class="u-ini" style="background:${colorAv(u.nombre)};width:46px;height:46px">${esc(iniciales(u.nombre))}</span><div><div class="u-nm" style="font-size:17px">${esc(u.nombre || '—')}</div><div class="u-em">${esc(u.email || '—')}</div></div></div>
     <div class="u-lbl" style="margin-top:2px">Nombre</div><input id="eNom" class="campo" value="${esc(orig.nombre)}" maxlength="80" autocomplete="off">
     <div id="eDin"></div>
@@ -2728,13 +2874,13 @@ function editarUsuarioU(id) {
   const pintarDin = () => {
     const act = U.contratos.filter((c) => c.activo || ed.contr.has(c.id));
     const aplicaC = ROLES_CON_CONTRATO.includes(ed.rol);
-    $('#eDin', h).innerHTML = `<div class="u-lbl">Rol</div><div class="u-seg">${ROLES_LISTA.map((r) => `<button type="button" data-r="${r}" class="${ed.rol === r ? 'on' : ''}">${esc(ROL_ETQ[r])}</button>`).join('')}</div>
+    $('#eDin', h).innerHTML = `<div class="u-lbl">Perfil</div><div class="u-seg">${listaPerfiles().map((r) => `<button type="button" data-r="${esc(r.clave)}" class="${ed.perfil === r.clave ? 'on' : ''}">${esc(r.nombre)}</button>`).join('')}</div>
       ${aplicaC ? `<div class="u-lbl">Contratos <span style="text-transform:none;font-weight:500">· solo verá fallas de estos</span></div>
         ${act.map((c) => `<button type="button" class="u-tog ${ed.contr.has(c.id) ? 'on' : ''}" data-c="${c.id}"><span class="u-cb ${ed.contr.has(c.id) ? 'on' : ''}">✓</span><span class="u-tx"><b>${esc(c.nombre)}</b><span>${c.defecto_para === 'masivo' ? 'Fallas Masivo' : c.defecto_para === 'normal' ? 'Fallas normales' : 'Sin tipo por defecto'}${c.activo ? '' : ' · inactivo'}</span></span></button>`).join('') || '<div class="u-em">Aún no hay contratos creados.</div>'}
         ${ed.rol !== 'camion' && act.length && !ed.contr.size ? '<div class="u-aviso">Sin contratos no verá ninguna falla.</div>' : ''}` : '<div class="u-em" style="margin-top:12px">Este rol ve todos los contratos.</div>'}
       ${ROLES_CON_NOTIF.includes(ed.rol) ? `<button type="button" class="u-tog ${ed.notif ? 'on' : ''}" data-s="notif" style="margin-top:10px"><span class="u-tx"><b>🔔 Notificador externo y fecha</b><span>Puede informar fallas a nombre de otras personas</span></span><span class="u-sw ${ed.notif ? 'on' : ''}"></span></button>` : ''}
       ${ROLES_CON_FOTO.includes(ed.rol) ? `<button type="button" class="u-tog ${ed.foto ? 'on' : ''}" data-s="foto" style="margin-top:10px"><span class="u-tx"><b>📷 Foto obligatoria al reparar</b></span><span class="u-sw ${ed.foto ? 'on' : ''}"></span></button>` : ''}`;
-    const ok = $('#eOk', h), cambios = JSON.stringify(estado()) !== JSON.stringify({ nombre: orig.nombre.trim(), rol: orig.rol, notif: ROLES_CON_NOTIF.includes(orig.rol) && orig.notif, foto: ROLES_CON_FOTO.includes(orig.rol) && orig.foto, contr: ROLES_CON_CONTRATO.includes(orig.rol) ? orig.contr : [] });
+    const ok = $('#eOk', h), cambios = JSON.stringify(estado()) !== JSON.stringify({ nombre: orig.nombre.trim(), perfil: orig.perfil, rol: orig.rol, notif: ROLES_CON_NOTIF.includes(orig.rol) && orig.notif, foto: ROLES_CON_FOTO.includes(orig.rol) && orig.foto, contr: ROLES_CON_CONTRATO.includes(orig.rol) ? orig.contr : [] });
     ok.disabled = !cambios;
   };
   // Herramientas (permisos que se guardan al tocar): Cuadrillas y Ubicación de camiones
@@ -2764,7 +2910,7 @@ function editarUsuarioU(id) {
   ed.nombre = orig.nombre;
   $('#eDin', h).addEventListener('click', (ev) => {
     const b = ev.target.closest('button'); if (!b) return;
-    if (b.dataset.r) ed.rol = b.dataset.r;
+    if (b.dataset.r) { ed.perfil = b.dataset.r; ed.rol = baseRolDe(ed.perfil); }
     else if (b.dataset.c) { if (ed.contr.has(b.dataset.c)) ed.contr.delete(b.dataset.c); else ed.contr.add(b.dataset.c); }
     else if (b.dataset.s) ed[b.dataset.s] = !ed[b.dataset.s];
     pintarDin();
@@ -2782,12 +2928,12 @@ function editarUsuarioU(id) {
     const e = estado();
     if (!e.nombre) { toast('El nombre no puede quedar vacío.', 'error'); return; }
     ok.textContent = 'Guardando…';
-    const r = await api(`/rest/v1/usuarios?id=eq.${id}`, { method: 'PATCH', prefer: 'return=representation', body: { nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto } });
+    const r = await api(`/rest/v1/usuarios?id=eq.${id}`, { method: 'PATCH', prefer: 'return=representation', body: { nombre: e.nombre, ...(U.perfiles.length ? { perfil: e.perfil } : { rol: e.rol }), notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto } });
     if (!r || !r.length) throw new Error('No se guardó (¿sin permiso?)');
-    Object.assign(u, { nombre: e.nombre, rol: e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto });
+    Object.assign(u, { nombre: e.nombre, perfil: e.perfil, rol: (r[0] && r[0].rol) || e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto });
     const antes = ROLES_CON_CONTRATO.includes(orig.rol) ? orig.contr : [];
     if (JSON.stringify(antes) !== JSON.stringify(e.contr)) { await rpc('set_contratos_usuario', { p_usuario: id, p_contratos: e.contr }); U.rel[id] = e.contr; }
-    if (id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = e.rol; S.perfil.foto_obligatoria = e.foto; $('#barraNombre').textContent = e.nombre; $('#barraAvatar').textContent = iniciales(e.nombre); $('#barraRol').textContent = rolVisible(); }
+    if (id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = u.rol; S.perfil.foto_obligatoria = e.foto; await cargarFunciones(); $('#barraNombre').textContent = e.nombre; $('#barraAvatar').textContent = iniciales(e.nombre); $('#barraRol').textContent = rolVisible(); }
     cerrarHoja(); pintarU(); toast('Usuario guardado', 'ok');
   }));
 }
@@ -2976,11 +3122,11 @@ function abrirOpcionesBarra() {
 }
 function pintarModo() {
   if (S.perfil && vencioModo()) { S.modo = { tipo: 'agregar', fecha: null, inspId: null }; guardarModo(); }
-  $('#navInspC3').hidden = !(rol() === 'contratista3' || rol() === 'admin');
+  $('#navInspC3').hidden = !tiene('inspeccion_asignar_lote');
   $('#navCuad').hidden = !puedeCuadrillas();
-  $('#navHist').hidden = rol() !== 'admin';
-  if (rol() !== 'admin' && S.modoHist) alternarModoHist(false);
-  const puede = PUEDE_MODO_INSPECCION.includes(rol());
+  $('#navHist').hidden = !tiene('modo_historial');
+  if (!tiene('modo_historial') && S.modoHist) alternarModoHist(false);
+  const puede = tiene('informar_inspeccion');
   const c = $('#chipModo'), n = $('#navInsp');
   n.hidden = !puede;
   aplicarNavOcultos();
@@ -3000,7 +3146,7 @@ function guardarModo() {
 function restaurarModo() {
   try {
     const s = JSON.parse(localStorage.getItem(LS_MODO) || 'null');
-    if (!s || s.uid !== S.perfil.id || !PUEDE_MODO_INSPECCION.includes(rol())) return;
+    if (!s || s.uid !== S.perfil.id || !tiene('informar_inspeccion')) return;
     const dias = Math.round((fechaChileLocal(hoyChileStr(), 12) - fechaChileLocal(s.fecha, 12)) / 86400000);
     const ini = s.inicio || s.guardado || 0;
     const vencida = Date.now() - (s.guardado || 0) > 36 * 3600 * 1000 || s.fecha > hoyChileStr() || (rol() !== 'admin' && dias > DIAS_MAX_INSPECCION)
@@ -3157,6 +3303,7 @@ const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
 const esStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 $('#btnMenu').addEventListener('click', () => {
   const ini = iniciales(S.perfil.nombre);
+  const esAdminMenu = tiene('admin_usuarios') || tiene('admin_perfiles') || tiene('admin_catalogos') || tiene('admin_contratos');
   const ico = (d) => `<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
   const chev = '<svg class="m-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
   const h = abrirHoja(`
@@ -3167,17 +3314,18 @@ $('#btnMenu').addEventListener('click', () => {
     <div class="m-lista">
       ${S.instalar ? '<button id="mInstalar" class="btn btn-primario" style="margin:10px 0 6px;width:100%">Instalar la app en este teléfono</button>' : ''}
       ${!S.instalar && esIOS() && !esStandalone() ? '<div class="aviso">Para instalarla en iPhone: toca el botón <b>Compartir</b> de Safari y luego <b>Añadir a pantalla de inicio</b>.</div>' : ''}
-      ${rol() === 'camion' ? '<div class="hint" style="margin:4px 6px 8px">📍 Tu ubicación se comparte con el administrador mientras la app está abierta.</div>' : ''}
-      ${(puedeUbicacion() && !puedeCuadrillas()) || ['contratista', 'contratista2', 'contratista3', 'admin'].includes(rol()) ? '<div class="m-grupo">Operación</div>' : ''}
+      ${tiene('ubicacion_gps_compartir') ? '<div class="hint" style="margin:4px 6px 8px">📍 Tu ubicación se comparte con el administrador mientras la app está abierta.</div>' : ''}
+      ${(puedeUbicacion() && !puedeCuadrillas()) || tiene('maestros') || tiene('operativo_activar') ? '<div class="m-grupo">Operación</div>' : ''}
       ${puedeUbicacion() && !puedeCuadrillas() ? `<button id="mCamiones" class="m-fila"><span class="m-ico m-azul">${ico('<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>')}</span><span class="t">Camiones en el mapa</span>${chev}</button>` : ''}
-      ${['contratista', 'contratista2', 'contratista3', 'admin'].includes(rol()) ? `<button id="mMaestros" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-4 3-6 7-6s6.5 2 7 6"/>')}</span><span class="t">Maestros</span>${chev}</button>` : ''}
-      ${rol() === 'admin' ? `<button id="mOperativo" class="m-fila"><span class="m-ico m-ambar">${ico('<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>')}</span><span class="t">Operativo</span>${chev}</button>` : ''}
-      ${rol() === 'admin' ? '<div class="m-grupo">Administración</div>' : ''}
-      ${rol() === 'admin' ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Usuarios y permisos</span>${chev}</button>` : ''}
-      ${rol() === 'admin' ? `<button id="mConfig" class="m-fila"><span class="m-ico m-ambar">${ico('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>')}</span><span class="t">Configuración</span>${chev}</button>` : ''}
+      ${tiene('maestros') ? `<button id="mMaestros" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-4 3-6 7-6s6.5 2 7 6"/>')}</span><span class="t">Maestros</span>${chev}</button>` : ''}
+      ${tiene('operativo_activar') ? `<button id="mOperativo" class="m-fila"><span class="m-ico m-ambar">${ico('<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>')}</span><span class="t">Operativo</span>${chev}</button>` : ''}
+      ${esAdminMenu ? '<div class="m-grupo">Administración</div>' : ''}
+      ${tiene('admin_usuarios') ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Usuarios y permisos</span>${chev}</button>` : ''}
+      ${tiene('admin_perfiles') ? `<button id="mPerfiles" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/>')}</span><span class="t">Perfiles y permisos</span>${chev}</button>` : ''}
+      ${tiene('admin_catalogos') || tiene('admin_contratos') ? `<button id="mConfig" class="m-fila"><span class="m-ico m-ambar">${ico('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>')}</span><span class="t">Configuración</span>${chev}</button>` : ''}
       <div class="m-grupo">Cuenta</div>
       <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
-      ${rol() === 'admin' ? `<button id="mBarra" class="m-fila"><span class="m-ico m-azul">${ico('<rect x="3" y="15" width="18" height="5" rx="2"/><path d="M7 9h10M7 5h10"/>')}</span><span class="t">Botones de la barra</span>${chev}</button>` : ''}
+      ${tiene('admin_catalogos') ? `<button id="mBarra" class="m-fila"><span class="m-ico m-azul">${ico('<rect x="3" y="15" width="18" height="5" rx="2"/><path d="M7 9h10M7 5h10"/>')}</span><span class="t">Botones de la barra</span>${chev}</button>` : ''}
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <div id="mDiag" class="hint" style="margin:8px 6px 0;white-space:pre-line"></div>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
@@ -3208,6 +3356,8 @@ $('#btnMenu').addEventListener('click', () => {
   if (mma) mma.addEventListener('click', () => abrirMaestros());
   const mop = $('#mOperativo', h);
   if (mop) mop.addEventListener('click', () => abrirOperativos());
+  const mpf = $('#mPerfiles', h);
+  if (mpf) mpf.addEventListener('click', () => abrirUsuarios('perfiles'));
   const mu = $('#mUsuarios', h);
   if (mu) mu.addEventListener('click', () => abrirUsuarios('usuarios'));
   const mba = $('#mBarra', h);
