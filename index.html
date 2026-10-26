@@ -8478,14 +8478,68 @@ async function generarPdfAnalisis(soloResumen, opciones){
     // 6) Pendientes (en el informe general va al final de la hoja de inspecciones nocturnas)
     const seccionPendientes = () => {
     const pen = d.pendientes || {};
-    titulo('Pendientes', `${pen.total_alguna_vez || 0} falla(s) quedaron pendientes alguna vez; ${pen.actuales || 0} siguen pendientes (antigüedad mediana ${dias(pen.antiguedad_mediana_actuales)}).`);
+    titulo('Pendientes y reiteradas', `${pen.total_alguna_vez || 0} falla(s) quedaron pendientes alguna vez; ${pen.actuales || 0} siguen pendientes (antigüedad mediana ${dias(pen.antiguedad_mediana_actuales)}). Las reiteradas conservan esa marca aunque luego se reparen.`);
+    const yCardR = y, pgCardR = pdf.internal.getCurrentPageInfo().pageNumber, W_R = 68, H_R = 62;
+    // Cuadro de reiteradas (a la izquierda de la tabla de pendientes): peso en el período, comparación y tipos con más reiteración
+    const dibujarReit = (yy) => {
+      const rs = d.resumen || {}, nF = rs.fallas || 0, nR = rs.reiteradas || 0, pctR = nF ? Math.round(nR / nF * 100) : 0;
+      const porCod = d.por_codigo || [];
+      const nCirc = porCod.filter(c => c.tipo === 'linea').reduce((a, c) => a + (c.reiteradas || 0), 0);
+      const nPunt = porCod.filter(c => c.tipo !== 'linea').reduce((a, c) => a + (c.reiteradas || 0), 0);
+      const tasas = porCod.filter(c => (c.fallas || 0) >= 10 && (c.reiteradas || 0) > 0)
+        .map(c => ({n: c.tipo_falla + (c.tipo === 'linea' ? ' (circ.)' : ''), r: c.reiteradas, f: c.fallas, p: Math.round(c.reiteradas / c.fallas * 100)}))
+        .filter(t => t.p > pctR).sort((u, v) => v.p - u.p).slice(0, 2);
+      const x0 = margen, xi = x0 + 4, wi = W_R - 8, cx = x0 + W_R / 2, MO = [142, 68, 173];
+      pdf.setFillColor(243, 246, 244); pdf.roundedRect(x0, yy, W_R, H_R, 2.4, 2.4, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(...VERDE); pdf.text('Fallas reiteradas', cx, yy + 6, {align: 'center'});
+      pdf.setFontSize(24); pdf.setTextColor(...MO); pdf.text(pctR + ' %', cx, yy + 17, {align: 'center'});
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text(`${nR} de ${nF} fallas del período`, cx, yy + 22, {align: 'center'});
+      const pr = (prev && prev.resumen && prev.resumen.fallas) ? prev.resumen : null;
+      if(pr){
+        const pPrev = Math.round((pr.reiteradas || 0) / pr.fallas * 100), dif = pctR - pPrev;
+        const txt = (dif === 0 ? 'igual que ' : (dif > 0 ? '+' : '') + dif + ' pp vs ') + etiquetaAnt + ': ' + pPrev + ' %';
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(6.8);
+        const wch = Math.min(wi, pdf.getTextWidth(txt) + 6);
+        pdf.setFillColor(...(dif > 0 ? [251, 227, 223] : (dif < 0 ? [228, 243, 234] : [232, 237, 233])));
+        pdf.roundedRect(cx - wch / 2, yy + 24.2, wch, 4.6, 1.6, 1.6, 'F');
+        pdf.setTextColor(...(dif > 0 ? [138, 42, 31] : (dif < 0 ? [46, 125, 79] : gris))); pdf.text(txt, cx, yy + 27.4, {align: 'center'});
+      }
+      pdf.setDrawColor(214, 222, 216); pdf.setLineWidth(0.2); pdf.line(xi, yy + 31.5, xi + wi, yy + 31.5); pdf.line(cx, yy + 33, cx, yy + 44);
+      [[String(nPunt), 'individuales'], [String(nCirc), 'circuitos']].forEach(([v, t], k) => {
+        const xc = xi + wi / 4 + k * (wi / 2);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(...VERDE); pdf.text(v, xc, yy + 39, {align: 'center'});
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text(t, xc, yy + 42.5, {align: 'center'});
+      });
+      pdf.line(xi, yy + 45.5, xi + wi, yy + 45.5);
+      if(tasas.length){
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text(`Tipos con más reiteración (promedio ${pctR} %)`, cx, yy + 49.5, {align: 'center'});
+        tasas.forEach((t, k) => {
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5); pdf.setTextColor(...VERDE); pdf.text(t.n, xi, yy + 54.5 + k * 3.9);
+          pdf.setFont('helvetica', 'normal'); pdf.setTextColor(...gris); pdf.text(`${t.r} de ${t.f}`, xi + 22, yy + 54.5 + k * 3.9);
+          pdf.setFont('helvetica', 'bold'); pdf.setTextColor(192, 57, 43); pdf.text(t.p + ' %', xi + wi, yy + 54.5 + k * 3.9, {align: 'right'});
+        });
+      } else { pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text('Ningún tipo supera el promedio', cx, yy + 52.5, {align: 'center'}); }
+    };
     if((pen.motivos || []).length){
+      // Cuadro y tabla quedan centrados entre sí: el más corto baja la mitad de la diferencia
+      const offT = Math.max(0, (H_R - (pen.motivos.length + 1) * 7.5) / 2);
+      y = yCardR + offT;
       tabla({
         head: [['Motivo', 'Veces', 'Aún pendientes', 'Ya reparadas']],
         body: pen.motivos.map(m => [m.motivo, m.veces, m.aun_pendientes, m.ya_reparadas]),
-        columnStyles: {1: {halign: 'right'}, 2: {halign: 'right'}, 3: {halign: 'right'}}
+        margin: {left: margen + W_R + 6, right: margen},
+        columnStyles: {1: {halign: 'right', cellWidth: 14}, 2: {halign: 'right', cellWidth: 24}, 3: {halign: 'right', cellWidth: 22}}
       });
-    } else vacio('Ninguna falla del rango quedó pendiente con un motivo registrado.');
+      if(pdf.internal.getCurrentPageInfo().pageNumber === pgCardR){
+        dibujarReit(yCardR + Math.max(0, (pdf.lastAutoTable.finalY - (yCardR + offT) - H_R) / 2));
+      } else {
+        const pgAct = pdf.internal.getCurrentPageInfo().pageNumber; pdf.setPage(pgCardR); dibujarReit(yCardR); pdf.setPage(pgAct);
+      }
+    } else {
+      dibujarReit(yCardR);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...gris); pdf.text('Ninguna falla del rango quedó pendiente con un motivo registrado.', margen + W_R + 6, y + 3); y += 11;
+    }
+    if(pdf.internal.getCurrentPageInfo().pageNumber === pgCardR) y = Math.max(y, yCardR + H_R + 9);
     };
 
     if(!cid){
