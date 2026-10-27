@@ -46,7 +46,7 @@ input,textarea,select{ font:inherit; color:inherit; }
 .campana{ position:relative; }
 .campana-badge{ position:absolute; top:2px; right:0; min-width:17px; height:17px; padding:0 4px; box-sizing:border-box; border-radius:9px; background:#d33a2c; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
 .campana-badge[hidden]{ display:none; }
-.av-cab{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+.av-cab{ padding-right:48px; min-height:40px; display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
 .av-cab b{ font-size:17px; }
 .av-acc{ display:flex; gap:6px; }
 .av-acc button{ border:0; background:#eef2f0; color:var(--tinta); border-radius:10px; padding:7px 10px; font-size:12.5px; font-weight:600; }
