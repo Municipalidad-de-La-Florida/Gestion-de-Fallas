@@ -488,6 +488,11 @@
     50% { opacity: 0.25; }
   }
   .falla-reportada { animation: pulseFalla 1.1s ease-in-out infinite; }
+  /* Falla atrasada en modo mantenedor: su color y rojo, alternados (color, rojo, color, rojo…) */
+  @keyframes alternaRojoFill { 50%, 99% { fill: #d33a2c; } }
+  @keyframes alternaRojoStroke { 50%, 99% { stroke: #d33a2c; } }
+  .falla-atrasada-pt svg *{ animation: alternaRojoFill 1.1s step-end infinite; }
+  .falla-atrasada-ln{ animation: alternaRojoStroke 1.1s step-end infinite; }
   .falla-pendiente { opacity: 0.9; }
 
   @keyframes pulsoResaltado {
@@ -2110,7 +2115,7 @@ function iconoFalla(simbPoste, color, radio, parpadea){
   else if(tipo === 'FACHADA') f = `<path d="M${(c - r * 1.05).toFixed(1)},${(c + r * .45).toFixed(1)} A${(r * 1.05).toFixed(1)},${(r * 1.05).toFixed(1)} 0 0 1 ${(c + r * 1.05).toFixed(1)},${(c + r * .45).toFixed(1)} Z"`;
   else f = `<circle cx="${c}" cy="${c}" r="${r}"`;
   const svg = `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}" xmlns="http://www.w3.org/2000/svg">${f} fill="${color}" fill-opacity="0.95" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>`;
-  return L.divIcon({ html: svg, className: parpadea ? 'falla-reportada' : '', iconSize: [S, S], iconAnchor: [c, c] });
+  return L.divIcon({ html: svg, className: parpadea === 'atrasada' ? 'falla-atrasada-pt' : (parpadea ? 'falla-reportada' : ''), iconSize: [S, S], iconAnchor: [c, c] });
 }
 
 // ---------- MAPA ----------
@@ -3527,7 +3532,7 @@ function renderFallasDesdeCache(){
         const [lon, lat] = feat.geometry.coordinates;
         const radioFalla = map.getZoom() <= 16 ? 4 : 8;
         const marker = L.marker([lat, lon], {
-          icon: iconoFalla(feat.properties.simb_poste, color, radioFalla, MODO_MANT ? (atrasada && !feat.properties.cascada) : (estado === 'reiterada' && !feat.properties.cascada)), pane:'fallasPane',
+          icon: iconoFalla(feat.properties.simb_poste, color, radioFalla, MODO_MANT ? (atrasada && !feat.properties.cascada ? 'atrasada' : false) : (estado === 'reiterada' && !feat.properties.cascada)), pane:'fallasPane',
           interactive: !dejarPasarClick, keyboard: false
         }).addTo(fallasLayerGroup);
         if(!dejarPasarClick){
@@ -3544,7 +3549,7 @@ function renderFallasDesdeCache(){
       } else {
         // Circuito: la línea parpadea mientras está "reportada" o "reiterada"
         // En modo mantenedor el circuito parpadea mientras está notificado (reportada/reiterada) o cuando va atrasado
-        const claseCss = (estado === 'reportada' || estado === 'reiterada' || atrasada) ? 'falla-reportada' : '';
+        const claseCss = atrasada ? 'falla-atrasada-ln' : ((estado === 'reportada' || estado === 'reiterada') ? 'falla-reportada' : '');
         const lineLayer = L.geoJSON(feat, {
           pane:'fallasPane',
           style:{color:color, weight:6, opacity:0.9, className: claseCss},

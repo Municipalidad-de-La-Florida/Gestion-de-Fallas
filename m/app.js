@@ -919,7 +919,14 @@ function iniciarParpadeo() {
   _parpadeoTimer = setInterval(() => {
     if (document.hidden || !S.parpadeo || !S.parpadeo.length) return;
     _parpadeoOn = !_parpadeoOn;
-    S.parpadeo.forEach((l) => l.setStyle(l.options.forma !== undefined ? { fillOpacity: _parpadeoOn ? 0.95 : 0.25, opacity: _parpadeoOn ? 1 : 0.35 } : { opacity: _parpadeoOn ? 0.9 : 0.2 }));
+    S.parpadeo.forEach((l) => {
+      if (l._rojoDe) {   // falla atrasada (modo mantenedor): alterna su color con rojo
+        const c = _parpadeoOn ? l._rojoDe : '#d33a2c';
+        l.setStyle(l.options.forma !== undefined ? { fillColor: c, fillOpacity: 0.95, opacity: 1 } : { color: c, opacity: 0.9 });
+        return;
+      }
+      l.setStyle(l.options.forma !== undefined ? { fillOpacity: _parpadeoOn ? 0.95 : 0.25, opacity: _parpadeoOn ? 1 : 0.35 } : { opacity: _parpadeoOn ? 0.9 : 0.2 });
+    });
   }, 550);
 }
 
@@ -957,12 +964,15 @@ function dibujarFallas() {
       const [lng, lat] = f.geometry.coordinates;
       const r = p.cascada ? (z >= 18 ? 7 : 5) : (z >= 18 ? 13 : z >= 16 ? 11 : 8);
       capa = new MarcadorForma([lat, lng], { renderer: rend, forma: formaPoste(p.simb_poste), radius: r, weight: 3, color: '#fff', fillColor: color, fillOpacity: reparada ? 0.55 : 0.95, interactive: true });
-      if (!p.cascada && (MODO_MANT ? diasAtraso(p) > 0 : p.estado === 'reiterada')) S.parpadeo.push(capa); // punto reiterado (o atrasado en modo mantenedor): parpadea
+      if (!p.cascada && MODO_MANT && diasAtraso(p) > 0) { capa._rojoDe = color; S.parpadeo.push(capa); }   // atrasado en modo mantenedor: color, rojo, color, rojo…
+      else if (!p.cascada && !MODO_MANT && p.estado === 'reiterada') S.parpadeo.push(capa);               // punto reiterado: parpadea como los circuitos
     } else {
       if (p.estado === 'reportada' || p.estado === 'reiterada' || (MODO_MANT && diasAtraso(p) > 0)) {
         // Circuito reportado o reiterado: parpadea (como en el escritorio). El parpadeo es CSS sobre SVG;
         // debajo va una línea ancha invisible para que sea fácil tocarla con el dedo.
-        const base = L.geoJSON(f.geometry, { renderer: rendSvg, style: { color, weight: 7, opacity: 0.9, className: 'falla-reportada' }, interactive: false });
+        const atrasada = MODO_MANT && diasAtraso(p) > 0;
+        const base = L.geoJSON(f.geometry, { renderer: rendSvg, style: { color, weight: 7, opacity: 0.9, className: atrasada ? '' : 'falla-reportada' }, interactive: false });
+        if (atrasada) base._rojoDe = color;
         S.parpadeo.push(base); // el parpadeo se hace por JS (en iPhone la animación CSS sobre SVG no siempre corre)
         capaFallas.addLayer(base);
         capa = L.geoJSON(f.geometry, { renderer: rendSvg, style: { color: '#000', weight: 20, opacity: 0, className: 'falla-toque' }, interactive: true });
