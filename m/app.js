@@ -2547,13 +2547,13 @@ const FILTROS_USR = [
   ['ito', 'ITO', (u) => u.rol === 'ito' || u.rol === 'ito2'],
   ['otros', 'Otros', (u) => u.rol === 'admin' || u.rol === 'observador'],
 ];
-const U = { tab: 'usuarios', perfiles: [], usuarios: [], rel: {}, contratos: [], notifs: [], conteo: null, q: '', filtro: 'todos' };
+const U = { tab: 'usuarios', perfiles: [], usuarios: [], rel: {}, relM: {}, contratos: [], notifs: [], conteo: null, q: '', filtro: 'todos' };
 let usrHist = false, usrVolviendo = false;
 const listaPerfiles = () => (U.perfiles.length ? U.perfiles : ROLES_LISTA.map((r) => ({ clave: r, nombre: ROL_ETQ[r], base_rol: r })));
 const baseRolDe = (clave) => { const p = listaPerfiles().find((x) => x.clave === clave); return p ? p.base_rol : clave; };
 const nombrePerfilU = (u) => { const p = U.perfiles.find((x) => x.clave === u.perfil); return p ? p.nombre : (ROL_ETQ[u.rol] || u.rol); };
 const normTxt = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-const sinContratoU = (u) => ROLES_CON_CONTRATO.includes(u.rol) && u.rol !== 'camion' && !(U.rel[u.id] || []).length;
+const sinContratoU = (u) => ROLES_CON_CONTRATO.includes(u.rol) && u.rol !== 'camion' && !(U.rel[u.id] || []).length && !(U.relM[u.id] || []).length;   // los contratistas por mantenedor (Sinec, Clever) no llevan contrato
 const msgNotif = (e) => {
   const m = String((e && e.message) || e);
   if (/duplicate key|notificadores_nombre_norm_uq/i.test(m)) return 'Ya existe un notificador con ese nombre. Si es la misma persona, usa «Fusionar».';
@@ -2564,14 +2564,17 @@ const msgNotif = (e) => {
 const msgContrato = (e) => (/duplicate|unique|contratos_nombre/i.test(e.message) ? 'Ya existe un contrato con ese nombre.' : e.message);
 
 async function cargarUsuariosAdmin() {
-  const [us, cs, rel, ns, pf] = await Promise.all([
+  const [us, cs, rel, ns, pf, relM] = await Promise.all([
     select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
     select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc').catch(() => []),
     select('usuario_contratos', 'select=usuario_id,contrato_id').catch(() => []),
     select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc').catch(() => []),
     select('perfiles', 'select=clave,nombre,base_rol,sistema,orden&order=orden.asc').catch(() => []),
+    select('usuario_mantenedores', 'select=usuario_id,mantenedor_id').catch(() => []),
   ]);
   U.perfiles = pf || [];
+  U.relM = {};
+  (relM || []).forEach((r) => { (U.relM[r.usuario_id] = U.relM[r.usuario_id] || []).push(r.mantenedor_id); });
   U.usuarios = us; U.contratos = cs; U.rel = {};
   rel.forEach((r) => { (U.rel[r.usuario_id] = U.rel[r.usuario_id] || []).push(r.contrato_id); });
   U.notifs = ns.map((n) => ({ ...n, nFallas: (n.fallas && n.fallas[0] && n.fallas[0].count) || 0 }));
@@ -2966,6 +2969,7 @@ function tarjetaUsuarioU(u) {
   const aplica = ROLES_CON_CONTRATO.includes(u.rol);
   let cont;
   if (!aplica) cont = '<span class="u-em">Ve todos los contratos</span>';
+  else if (!cs.length && (U.relM[u.id] || []).length) cont = (U.relM[u.id] || []).map((id) => `<span class="tag-mant" style="margin-left:0">${esc(MANT[id] || 'Mantenedor')}</span>`).join('');
   else if (!cs.length) cont = u.rol === 'camion' ? '<span class="u-em">Sin contrato asignado</span>' : '<span class="u-tg u-t-sin">⚠ Sin contrato</span>';
   else cont = cs.map((c) => `<span class="u-tg ${c.defecto_para === 'masivo' ? 'u-t-ele' : 'u-t-enel'}">${esc(c.nombre)}</span>`).join('');
   const ic = [ROLES_CON_NOTIF.includes(u.rol) && u.notificador_externo_habilitado ? '🔔' : '', ROLES_CON_FOTO.includes(u.rol) && u.foto_obligatoria ? '📷' : ''].filter(Boolean).join(' ');
@@ -2979,8 +2983,8 @@ function pintarListaU() {
   const f = FILTROS_USR.find((x) => x[0] === U.filtro);
   const lista = U.usuarios.filter((u) => (U.filtro === 'sin' ? sinContratoU(u) : f[2](u)) && (!q || normTxt(u.nombre + ' ' + (u.email || '')).includes(q)));
   const chips = FILTROS_USR.map(([k, t, fn]) => `<button type="button" class="u-chip ${U.filtro === k ? 'on' : ''}" data-f="${k}">${t} ${U.usuarios.filter(fn).length}</button>`).join('')
-    + (nSin ? `<button type="button" class="u-chip ${U.filtro === 'sin' ? 'on' : ''}" data-f="sin">Sin contrato ${nSin}</button>` : '');
-  $('#uCuerpo').innerHTML = `${nSin && U.filtro !== 'sin' ? `<div class="u-alerta"><span>⚠️</span><span><b>${nSin} contratista${nSin > 1 ? 's' : ''} sin contrato</b>: hoy no ve${nSin > 1 ? 'n' : ''} ninguna falla.</span><button type="button" data-f="sin">Ver ›</button></div>` : ''}
+    + (nSin ? `<button type="button" class="u-chip ${U.filtro === 'sin' ? 'on' : ''}" data-f="sin"> Sin contrato ni mantenedor ${nSin}</button>` : '');
+  $('#uCuerpo').innerHTML = `${nSin && U.filtro !== 'sin' ? `<div class="u-alerta"><span>⚠️</span><span><b>${nSin} contratista${nSin > 1 ? 's' : ''} sin contrato ni mantenedor</b>: hoy no ve${nSin > 1 ? 'n' : ''} ninguna falla.</span><button type="button" data-f="sin">Ver ›</button></div>` : ''}
     <input id="uBuscar" class="u-buscar" type="search" placeholder="Buscar nombre o correo" autocomplete="off" value="${esc(U.q)}">
     <div class="u-chips">${chips}</div><div id="uLista">${lista.map(tarjetaUsuarioU).join('') || '<div class="u-vacio">Sin resultados.</div>'}</div>`;
   const b = $('#uBuscar');
