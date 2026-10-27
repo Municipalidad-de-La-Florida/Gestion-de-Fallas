@@ -43,6 +43,18 @@ input,textarea,select{ font:inherit; color:inherit; }
 .rol-chip{ color:rgba(255,255,255,.7); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
 .icon-btn{ width:40px; height:40px; padding:0; border:0; background:transparent; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; }
 .icon-btn:active{ background:rgba(255,255,255,.15); }
+.campana{ position:relative; }
+.campana-badge{ position:absolute; top:2px; right:0; min-width:17px; height:17px; padding:0 4px; box-sizing:border-box; border-radius:9px; background:#d33a2c; color:#fff; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.campana-badge[hidden]{ display:none; }
+.av-cab{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+.av-cab b{ font-size:17px; }
+.av-acc{ display:flex; gap:6px; }
+.av-acc button{ border:0; background:#eef2f0; color:var(--tinta); border-radius:10px; padding:7px 10px; font-size:12.5px; font-weight:600; }
+.av-it{ display:flex; align-items:flex-start; gap:8px; width:100%; text-align:left; border:1.5px solid var(--linea); background:#fff; border-radius:12px; padding:10px 12px; margin-top:8px; min-height:48px; }
+.av-it.nueva{ background:#fff7ea; border-color:#f0cf9a; }
+.av-it .tx{ flex:1; min-width:0; font-size:14px; }
+.av-it .tx small{ display:block; margin-top:2px; font-size:12px; color:var(--tinta-2); font-weight:400; }
+.av-it .nx{ border:0; background:none; color:#8a949d; font-size:22px; line-height:1; padding:0 4px; min-width:32px; min-height:32px; }
 .icon-btn.girando{ animation:girar .8s linear infinite; }
 @keyframes girar{ to{ transform:rotate(360deg); } }
 
