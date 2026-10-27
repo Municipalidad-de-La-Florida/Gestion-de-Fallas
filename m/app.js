@@ -1617,7 +1617,12 @@ function leerOrdenExterna(h) {
 /* ---------- Contrato y mantenedor del reporte (selector celeste y aviso "Sin Mantenimiento") ---------- */
 // El uso (vial o peatonal) lo define el código de falla; con los códigos ambiguos no se pregunta: se exige el comentario.
 const USO_POR_CODIGO = { F01: 'VIAL', F04: 'VIAL', F05: 'VIAL', F29: 'PEATONAL', F32: 'PEATONAL', F33: 'PEATONAL' };
-function evaluarMantencion(ops, codigo, mono) {
+// Luminarias del punto (modelo, potencia, uso, contrato y mantenedor) para elegir cuál falla cuando hay opciones distintas.
+function listaLuminarias(lums, uso) {
+  return (lums || []).filter((l) => !uso || l.uso_grupo === uso)
+    .map((l) => ({ ...l, key: [l.uso_grupo, l.modelo, l.potencia, l.uso, l.contrato_id || '-', l.mantenedor_id || '-'].join('|') }));
+}
+function evaluarMantencion(ops, codigo, mono, lums) {
   if (!ops || !codigo) return { tipo: 'nada' };
   let uso = mono ? 'VIAL' : (USO_POR_CODIGO[codigo] || null);
   if (uso && !ops.some((o) => o.uso_grupo === uso)) uso = null;       // el punto no tiene ese uso
@@ -1629,6 +1634,8 @@ function evaluarMantencion(ops, codigo, mono) {
   const ok = distintas.filter((o) => o.estado === 'ok');
   if (!ok.length) return { tipo: 'sin', uso };
   if (distintas.length === 1 || ok.length === 1) return { tipo: 'info', uso, texto: `${ok[0].contrato} · ${ok[0].mantenedor}` };
+  const items = listaLuminarias(lums, uso);
+  if (items.length > 1) return { tipo: 'luminarias', uso, items };      // se elige la luminaria: de ella salen uso, contrato y mantenedor
   if (!uso) return { tipo: 'comentario', uso: null };                  // vial y peatonal con distinto mantenedor
   const mismoContrato = new Set(ok.map((o) => o.contrato_id)).size < ok.length;
   return {
@@ -1641,6 +1648,12 @@ function htmlMantencion(ev, sel) {
   if (ev.tipo === 'info') return `<div class="mant-box">Mantiene: <b>${esc(ev.texto)}</b></div>`;
   if (ev.tipo === 'sin') return htmlSinMantenimiento('Este punto');
   if (ev.tipo === 'comentario') return '<div class="mant-box">Este punto tiene luminarias vial y peatonal con distinto mantenedor. <b>Escribe en el comentario cuál es.</b></div>';
+  if (ev.tipo === 'luminarias') {
+    const filas = ev.items.map((l) => `<button type="button" class="lum-op${l.key === sel ? ' sel' : ''}" data-k="${esc(l.key)}">
+      <span class="lum-t">${esc(l.modelo)} - ${l.potencia == null ? 's/d' : l.potencia + ' W'} - ${esc(l.uso)}${l.n > 1 ? ' (×' + l.n + ')' : ''}</span>
+      <span class="lum-s">${l.estado === 'ok' ? `<span class="tag-ctr n" style="margin-left:0">${esc(l.contrato)}</span><span class="tag-mant">${esc(l.mantenedor)}</span>` : '<span class="tag-sinmant">Sin Mantenimiento</span>'}</span></button>`).join('');
+    return `<div class="mant-box"><b>¿Qué luminaria está fallando?</b> Este punto tiene luminarias con distinto mantenimiento. Elige la que reportas.<div class="lum-lista">${filas}</div></div>`;
+  }
   if (ev.tipo === 'elegir') {
     const ops = ev.opciones.map((o, i) => `<option value="${i}"${String(i) === String(sel) ? ' selected' : ''}>${esc(o.etiqueta)}</option>`).join('');
     return `<div class="mant-box"><b>Contrato</b> · ¿quién mantiene esta luminaria?
@@ -1650,20 +1663,29 @@ function htmlMantencion(ev, sel) {
   return '';
 }
 function activarMantencionPunto(h, gid, mono) {
-  const est = { ops: null, codigo: null, sel: '', ev: { tipo: 'nada' } };
+  const est = { ops: null, lums: null, codigo: null, sel: '', lum: '', ev: { tipo: 'nada' } };
   const caja = $('#fMant', h);
   const pintar = () => {
-    est.ev = evaluarMantencion(est.ops, est.codigo, mono);
-    caja.innerHTML = htmlMantencion(est.ev, est.sel);
+    est.ev = evaluarMantencion(est.ops, est.codigo, mono, est.lums);
+    caja.innerHTML = htmlMantencion(est.ev, est.ev.tipo === 'luminarias' ? est.lum : est.sel);
     const s = $('#fMantSel', caja);
     if (s) s.addEventListener('change', () => { est.sel = s.value; });
+    caja.querySelectorAll('.lum-op').forEach((b) => b.addEventListener('click', () => { est.lum = b.dataset.k; pintar(); }));
   };
   rpc('opciones_punto', { p_gid: gid }).then((r) => { est.ops = r || []; pintar(); }).catch(() => { /* sin datos: se reporta como siempre */ });
+  rpc('luminarias_punto', { p_gid: gid }).then((r) => { est.lums = r || []; pintar(); }).catch(() => { /* sin el SQL: se usa el selector de contrato */ });
   return {
     elegirCodigo(c) { est.codigo = c; pintar(); },
     // devuelve { error } o { args } con los parámetros extra de crear_falla_punto
     validar(desc) {
       const ev = est.ev, args = {};
+      if (ev.tipo === 'luminarias') {
+        const l = ev.items.find((x) => x.key === est.lum);
+        if (!l) return { error: 'Elige la luminaria que está fallando.' };
+        args.p_uso_grupo = l.uso_grupo;
+        if (l.estado === 'ok') { args.p_contrato_id = l.contrato_id; args.p_mantenedor_id = l.mantenedor_id; }
+        return { args };
+      }
       if (ev.tipo === 'elegir') {
         if (est.sel === '') return { error: 'Elige el contrato que mantiene esta luminaria.' };
         const o = ev.opciones[Number(est.sel)];

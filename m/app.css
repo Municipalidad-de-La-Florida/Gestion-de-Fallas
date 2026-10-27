@@ -397,6 +397,12 @@ textarea.campo{ min-height:70px; }
 /* Contrato y mantenedor del reporte */
 .mant-box{ background:#e6f4fb; border:1px solid #a9d8ef; color:#0b4a6b; border-radius:12px; padding:10px 12px; font-size:14px; margin:10px 0; }
 .mant-box .campo{ margin-top:6px; border-color:#7cc3e6; background:#f4fbff; }
+.lum-lista{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.lum-op{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:10px 12px;background:#fff;border:1.5px solid #b9d9ea;border-radius:12px;min-height:44px}
+.lum-op.sel{border-color:#1f7a52;background:#f1f8f4}
+.lum-t{font-size:14px;font-weight:700;color:#12384d}
+.lum-s{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.tag-sinmant{display:inline-block;background:#e5e7eb;color:#4b5563;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700}
 .tag-mant{display:inline-block;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;margin-left:4px;background:#5b21b6;color:#fff}
 .tag-sinmant{display:inline-block;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;margin-left:4px;background:#eceff3;color:#4b5563}
 .tag-pend{display:inline-block;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;margin-left:4px;background:#fff0d6;color:#9a5b00}
