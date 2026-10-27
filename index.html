@@ -1058,6 +1058,7 @@
             <th style="padding:8px 10px;">Foto obligatoria</th>
             <th style="padding:8px 10px;">Pasar a masivo</th>
             <th style="padding:8px 10px;">Contratos</th>
+            <th style="padding:8px 10px;" title="Un contratista ve las fallas de sus contratos y las que caigan a sus mantenedores">Mantenedores</th>
             <th style="padding:8px 10px;"></th>
           </tr>
         </thead>
@@ -9992,6 +9993,7 @@ let MASIVO_DISPONIBLE = false;   // false si aún no se ejecutó sql/2026-10-pas
 // Roles que pertenecen a uno o más contratos (los demás ven todo)
 const ROLES_CON_CONTRATO = ['contratista','contratista2','contratista3','camion'];
 let CONTRATOS_LISTA = [];   // todos los contratos (activos e inactivos)
+let MANTENEDORES_LISTA = [], MANTENEDORES_DISPONIBLE = false;   // mantenedores para asignar a contratistas y camiones
 const escAttr = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 function htmlCeldaContratos(rol, ids){
   if(!ROLES_CON_CONTRATO.includes(rol)) return '<span style="color:var(--ink-soft);" title="Este rol ve todos los contratos">—</span>';
@@ -9999,6 +10001,15 @@ function htmlCeldaContratos(rol, ids){
   const visibles = CONTRATOS_LISTA.filter(c => c.activo || sel.has(c.id));
   if(!visibles.length) return '<span style="color:var(--ink-soft);">Sin contratos creados</span>';
   return visibles.map(c => `<label style="display:flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap;"><input type="checkbox" class="contrato-chk" value="${c.id}" ${sel.has(c.id) ? 'checked' : ''}> ${escAttr(c.nombre)}${c.activo ? '' : ' <i style="color:var(--ink-soft);">(inactivo)</i>'}</label>`).join('');
+}
+// Columna "Mantenedores": además de por contrato, el usuario ve las fallas que caigan a estos mantenedores
+function htmlCeldaMantenedores(rol, ids){
+  if(!ROLES_CON_CONTRATO.includes(rol)) return '<span style="color:var(--ink-soft);" title="Este rol ve todo">—</span>';
+  if(!MANTENEDORES_DISPONIBLE) return '<span style="color:var(--ink-soft);" title="Falta ejecutar sql/2026-10-mantenedores-contratistas.sql">No disponible</span>';
+  const sel = new Set(ids || []);
+  const visibles = MANTENEDORES_LISTA.filter(m => m.activo || sel.has(m.id));
+  if(!visibles.length) return '<span style="color:var(--ink-soft);">Sin mantenedores</span>';
+  return visibles.map(m => `<label style="display:flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap;"><input type="checkbox" class="mant-chk" value="${m.id}" ${sel.has(m.id) ? 'checked' : ''}> <span class="tag-mantenedor" style="margin-left:0;">${escAttr(m.nombre)}</span></label>`).join('');
 }
 // Bloque "Contratos" del modal: crear, renombrar, activar/desactivar
 function pintarContratosAdmin(){
@@ -10132,6 +10143,14 @@ async function cargarUsuarios(){
       CONTRATOS_LISTA = await db.select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc');
       relaciones = await db.select('usuario_contratos', 'select=usuario_id,contrato_id');
     }catch(e){ CONTRATOS_LISTA = []; console.warn('No se pudieron cargar los contratos (¿ejecutaste el SQL de contratos?):', e); }
+    let relMant = [];
+    try{
+      MANTENEDORES_LISTA = await db.select('mantenedores', 'select=id,nombre,activo&order=nombre.asc');
+      relMant = await db.select('usuario_mantenedores', 'select=usuario_id,mantenedor_id');
+      MANTENEDORES_DISPONIBLE = true;
+    }catch(e){ MANTENEDORES_LISTA = []; MANTENEDORES_DISPONIBLE = false; console.warn('No se pudieron cargar los mantenedores (¿ejecutaste sql/2026-10-mantenedores-contratistas.sql?):', e); }
+    const mantenedoresDe = {};
+    relMant.forEach(r => { (mantenedoresDe[r.usuario_id] = mantenedoresDe[r.usuario_id] || []).push(r.mantenedor_id); });
     const contratosDe = {};
     relaciones.forEach(r => { (contratosDe[r.usuario_id] = contratosDe[r.usuario_id] || []).push(r.contrato_id); });
     pintarContratosAdmin();
@@ -10143,7 +10162,7 @@ async function cargarUsuarios(){
     tbody.innerHTML = usuarios.map(u => {
       const perfilU = u.perfil || u.rol;
       const opciones = PERFILES.map(p => `<option value="${escAttr(p.clave)}" ${p.clave===perfilU?'selected':''}>${escAttr(p.nombre)}</option>`).join('');
-      return `<tr data-id="${u.id}" data-notif="${u.notificador_externo_habilitado ? '1' : '0'}" data-foto="${u.foto_obligatoria ? '1' : '0'}" data-masivo="${masivoDe[u.id] ? '1' : '0'}" data-dias='${JSON.stringify(u.dias_inspeccion || [])}' data-contr='${JSON.stringify(contratosDe[u.id] || [])}'>
+      return `<tr data-id="${u.id}" data-notif="${u.notificador_externo_habilitado ? '1' : '0'}" data-foto="${u.foto_obligatoria ? '1' : '0'}" data-masivo="${masivoDe[u.id] ? '1' : '0'}" data-dias='${JSON.stringify(u.dias_inspeccion || [])}' data-contr='${JSON.stringify(contratosDe[u.id] || [])}' data-mant='${JSON.stringify(mantenedoresDe[u.id] || [])}'>
         <td><input type="text" class="popup-input nombre-input" value="${u.nombre||''}" style="margin:0; padding:6px 8px;"></td>
         <td>${u.email || '—'}</td>
         <td><select class="rol-select" style="padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; font-size:12px;">${opciones}</select></td>
@@ -10151,6 +10170,7 @@ async function cargarUsuarios(){
         <td class="foto-celda" style="white-space:nowrap;">${htmlCeldaFoto(u.rol, u.foto_obligatoria)}</td>
         <td class="masivo-celda" style="white-space:nowrap;">${htmlCeldaMasivo(u.rol, masivoDe[u.id])}</td>
         <td class="contratos-celda" style="font-size:12px;">${htmlCeldaContratos(u.rol, contratosDe[u.id])}</td>
+        <td class="mant-celda" style="font-size:12px;">${htmlCeldaMantenedores(u.rol, mantenedoresDe[u.id])}</td>
         <td><button class="reset-pass-btn" style="font-size:11px; border:1px solid var(--amber); color:var(--amber); background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer;" ${!u.email?'disabled':''}>Enviar reset</button></td>
       </tr>`;
     }).join('');
@@ -10182,10 +10202,17 @@ async function cargarUsuarios(){
         tr.dataset.contr = JSON.stringify([...celdaContr.querySelectorAll('.contrato-chk:checked')].map(x => x.value));
       });
       enlazarContratos();
+      const celdaMant = tr.querySelector('.mant-celda');
+      const enlazarMantenedores = () => celdaMant.querySelectorAll('.mant-chk').forEach(ch => ch.onchange = () => {
+        tr.dataset.mant = JSON.stringify([...celdaMant.querySelectorAll('.mant-chk:checked')].map(x => x.value));
+      });
+      enlazarMantenedores();
       rolSelect.onchange = () => {
         const rolBase = baseRolDe(rolSelect.value);
         celdaContr.innerHTML = htmlCeldaContratos(rolBase, JSON.parse(tr.dataset.contr || '[]'));
         enlazarContratos();
+        celdaMant.innerHTML = htmlCeldaMantenedores(rolBase, JSON.parse(tr.dataset.mant || '[]'));
+        enlazarMantenedores();
         celdaNotif.innerHTML = htmlCeldaNotificador(rolBase, tr.dataset.notif === '1');
         enlazarCasilla();
         celdaFoto.innerHTML = htmlCeldaFoto(rolBase, tr.dataset.foto === '1');
@@ -10291,6 +10318,7 @@ function estadoFilaUsuario(tr){
     foto: ROLES_CON_FOTO.includes(rol) && tr.dataset.foto === '1',
     masivo: MASIVO_DISPONIBLE && ROLES_CON_MASIVO.includes(rol) && tr.dataset.masivo === '1',
     contratos: ROLES_CON_CONTRATO.includes(rol) ? JSON.parse(tr.dataset.contr || '[]').slice().sort() : [],
+    mantenedores: (ROLES_CON_CONTRATO.includes(rol) && MANTENEDORES_DISPONIBLE) ? JSON.parse(tr.dataset.mant || '[]').slice().sort() : [],
     dias: (rol === 'ito' && PAUTA_DISPONIBLE) ? JSON.parse(tr.dataset.dias || '[]').slice().sort((a, b) => a - b) : []
   };
 }
@@ -10330,8 +10358,11 @@ async function guardarUsuariosCambiados(){
       if(JSON.stringify(orig0.contratos || []) !== JSON.stringify(e.contratos)){
         await db.rpc('set_contratos_usuario', {p_usuario: id, p_contratos: e.contratos});
       }
+      if(MANTENEDORES_DISPONIBLE && JSON.stringify(orig0.mantenedores || []) !== JSON.stringify(e.mantenedores)){
+        await db.rpc('set_mantenedores_usuario', {p_usuario: id, p_mantenedores: e.mantenedores});
+      }
       ok++;
-      tr.dataset.orig = JSON.stringify({nombre: e.nombre, perfil: e.perfil, rol: e.rol, notif: !!r[0].notificador_externo_habilitado, foto: !!r[0].foto_obligatoria, masivo: MASIVO_DISPONIBLE && ROLES_CON_MASIVO.includes(e.rol) && !!r[0].puede_pasar_a_masivo, contratos: e.contratos, dias: e.dias});
+      tr.dataset.orig = JSON.stringify({nombre: e.nombre, perfil: e.perfil, rol: e.rol, notif: !!r[0].notificador_externo_habilitado, foto: !!r[0].foto_obligatoria, masivo: MASIVO_DISPONIBLE && ROLES_CON_MASIVO.includes(e.rol) && !!r[0].puede_pasar_a_masivo, contratos: e.contratos, mantenedores: e.mantenedores, dias: e.dias});
       if(id === currentUser.id){
         currentUser.nombre = e.nombre; currentUser.rol = r[0].rol || e.rol;
         currentUser.notificador_externo_habilitado = !!r[0].notificador_externo_habilitado;
