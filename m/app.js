@@ -2634,6 +2634,10 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 const CU_TURNOS = { '0': [0, 8], '1': [8, 16], '2': [16, 24], d: [0, 24] };
 const CU_COL = { reparada: '#3a8a5c', pendiente: '#d98e2f', sin: '#c1443c' };
 const CU = { datos: null, hist: false, volviendo: false };
+// Las cuadrillas se agrupan por mantenedor (si el SQL sql/2026-10-rendimiento-mantenedores.sql está ejecutado) o, si no, por contrato
+const cuModoM = () => Array.isArray(CU.datos && CU.datos.mantenedores) && CU.datos.mantenedores.length > 0;
+const cuGrupos = () => (cuModoM() ? CU.datos.mantenedores : CU.datos.contratos) || [];
+const cuActivasDe = (id) => { const m = cuModoM(), l = m ? CU.datos.activas_m : CU.datos.activas; return { hay: Array.isArray(l), acts: (l || []).filter((a) => !id || (m ? a.mantenedor_id : a.contrato_id) === id) }; };
 const puedeCuadrillas = () => !!S.perfil && tiene('rendimiento_cuadrillas');
 const puedeUbicacion = () => !!S.perfil && tiene('ubicacion_camiones');
 function cuRango() {
@@ -2713,32 +2717,32 @@ async function cargarCuadrillas() {
   } catch (e) { cont.innerHTML = `<div class="u-vacio">No se pudo cargar: ${esc(e.message)}</div>`; return; }
   const sel = $('#cuSel'), previo = sel.value;
   const opCuad = (c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`;
-  const cts = CU.datos.contratos || [], sinContrato = CU.datos.cuadrillas.filter((c) => !(c.contratos || []).length);
-  // Subgrupos por contrato: "Todas las de <contrato>" + cada cuadrilla del contrato (un grupo vacío queda visible)
-  sel.innerHTML = '<option value="">Todas</option>' + cts.map((ct) => `<optgroup label="${esc(ct.nombre)}"><option value="c:${esc(ct.id)}">Todas las de ${esc(ct.nombre)}</option>${CU.datos.cuadrillas.filter((c) => (c.contratos || []).includes(ct.id)).map(opCuad).join('')}</optgroup>`).join('')
-    + (cts.length ? (sinContrato.length ? `<optgroup label="Sin contrato">${sinContrato.map(opCuad).join('')}</optgroup>` : '') : CU.datos.cuadrillas.map(opCuad).join(''));
+  const cts = cuGrupos(), pre = cuModoM() ? 'm' : 'c', clave = cuModoM() ? 'mantenedores' : 'contratos';
+  const sinGrupo = CU.datos.cuadrillas.filter((c) => !(c[clave] || []).length);
+  // Subgrupos por mantenedor (o contrato): "Todas las de <grupo>" + cada cuadrilla del grupo (un grupo vacío queda visible)
+  sel.innerHTML = '<option value="">Todas</option>' + cts.map((ct) => `<optgroup label="${esc(ct.nombre)}"><option value="${pre}:${esc(ct.id)}">Todas las de ${esc(ct.nombre)}</option>${CU.datos.cuadrillas.filter((c) => (c[clave] || []).includes(ct.id)).map(opCuad).join('')}</optgroup>`).join('')
+    + (cts.length ? (sinGrupo.length ? `<optgroup label="${pre === 'm' ? 'Sin mantenedor' : 'Sin contrato'}">${sinGrupo.map(opCuad).join('')}</optgroup>` : '') : CU.datos.cuadrillas.map(opCuad).join(''));
   if ([...sel.options].some((o) => o.value === previo)) sel.value = previo;
   pintarCuadrillas();
 }
 function pintarCuadrillas() {
   if (!CU.datos) return;
   const cont = $('#cuCuerpo'), { desde, hasta } = cuRango(), selId = $('#cuSel').value;
-  const ctSel = selId.startsWith('c:') ? selId.slice(2) : null;
-  const ctNombre = ctSel ? ((CU.datos.contratos || []).find((x) => x.id === ctSel) || {}).nombre : null;
-  const todasLas = CU.datos.cuadrillas.map((c) => ({ c, r: cuCalcular(CU.datos.filas.filter((f) => f.camion_id === c.id), desde, hasta) }));
-  const todas = ctSel ? todasLas.filter((x) => (x.c.contratos || []).includes(ctSel)) : todasLas;
+  const ctSel = /^[cm]:/.test(selId) ? selId.slice(2) : null, modoM = cuModoM();
+  const ctNombre = ctSel ? ((cuGrupos().find((x) => x.id === ctSel)) || {}).nombre : null;
+  const todasLas = CU.datos.cuadrillas.map((c) => ({ c, r: cuCalcular(CU.datos.filas.filter((f) => f.camion_id === c.id && !(modoM && ctSel && f.mantenedor_id !== ctSel)), desde, hasta) }));
+  const todas = ctSel ? todasLas.filter((x) => ((modoM ? x.c.mantenedores : x.c.contratos) || []).includes(ctSel)) : todasLas;
   const kpi = (l, v, col, sub) => `<div class="cu-kpi" style="border-top-color:${col}"><div class="l">${l}</div><div class="v">${v}</div>${sub ? `<div class="l" style="font-size:10.5px">${sub}</div>` : ''}</div>`;
   let html = '';
   if (!selId || ctSel) {
     const apItems = todas.flatMap((x) => x.r.aps.map((i) => ({ ...i, cuad: x.c.nombre })));
     const G = todas.reduce((g, x) => ({ t: g.t + x.r.total, r: g.r + x.r.reparadas, c: g.c + x.r.contrRep + x.r.contrPend }), { t: 0, r: 0, c: 0 });
     // Fallas activas del contrato (o de todos): abiertas al inicio del turno + ingresadas durante el turno
-    const hayAct = Array.isArray(CU.datos.activas);
-    const acts = (CU.datos.activas || []).filter((a) => !ctSel || a.contrato_id === ctSel);
+    const { hay: hayAct, acts } = cuActivasDe(ctSel);
     const aIni = acts.reduce((n, a) => n + a.inicio, 0), aIng = acts.reduce((n, a) => n + a.ingresadas, 0), aTot = aIni + aIng;
-    if ((CU.datos.contratos || []).length) html += `<div class="cu-sec" style="margin-top:0">${ctNombre ? 'Contrato: ' + esc(ctNombre) : 'Todos los contratos'}</div>`;
+    if (cuGrupos().length) html += `<div class="cu-sec" style="margin-top:0">${ctNombre ? (modoM ? 'Mantenedor: ' : 'Contrato: ') + esc(ctNombre) : (modoM ? 'Todos los mantenedores' : 'Todos los contratos')}</div>`;
     html += `<div class="cu-kpis">${hayAct ? kpi('Fallas activas', aTot, '#1f4d3d', `${aIni} al inicio del turno · ${aIng} ingresadas en el turno`) : ''}${kpi('Asignadas a cuadrillas', G.t, '#9aa5b1', hayAct ? `de ${aTot} activas` : '')}${kpi('Reparadas por camión', G.r, CU_COL.reparada)}${apItems.length ? kpi('Aportes', apItems.length, '#7a5ca8', 'extra al trabajo normal') : ''}${kpi('Cumplimiento de las asignadas', G.t ? Math.round(100 * G.r / G.t) + '%' : '—', '#7a5ca8', G.t ? `${G.r} de ${G.t}` : '')}${kpi('Atendidas por contratista', G.c, '#d98e2f')}</div>`;
-    if (!todas.length) html += '<div class="u-vacio">Este contrato aún no tiene cuadrillas.</div>';
+    if (!todas.length) html += `<div class="u-vacio">Este ${modoM ? 'mantenedor' : 'contrato'} aún no tiene cuadrillas.</div>`;
     html += todas.map(({ c, r }) => { const t = r.total || 1;
       return `<button class="cu-card" data-c="${esc(c.id)}"><div class="top"><span>${esc(c.nombre)}</span><span style="color:${r.cumplimiento == null ? 'var(--tinta-2)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')}">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</span></div>
         ${(r.total || r.aportes) ? `<div class="cu-centro">${cuPildora(r)}</div><div class="cu-barra"><i style="width:${100 * r.reparadas / t}%;background:${CU_COL.reparada}"></i><i style="width:${100 * r.pendientes / t}%;background:${CU_COL.pendiente}"></i><i style="width:${100 * r.sin / t}%;background:${CU_COL.sin}"></i></div>
