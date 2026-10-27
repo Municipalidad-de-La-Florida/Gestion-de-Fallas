@@ -306,7 +306,7 @@ textarea.campo{ min-height:70px; }
 
 .tag-ctr{display:inline-block;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;margin-left:4px}
 .tag-ctr.n{background:#e6eefb;color:#2a5db0}
-.tag-ctr.m{background:#efe3fb;color:#6a2fb0}
+.tag-ctr.m{background:#e6eefb;color:#2a5db0}   /* el contrato siempre celeste; el morado es del mantenedor */
 
   /* Suministro eléctrico (Enel) */
   .sum-ctl{position:relative; margin:0 0 6px 10px !important; pointer-events:auto; font-family:inherit;}
@@ -397,3 +397,4 @@ textarea.campo{ min-height:70px; }
 /* Contrato y mantenedor del reporte */
 .mant-box{ background:#e6f4fb; border:1px solid #a9d8ef; color:#0b4a6b; border-radius:12px; padding:10px 12px; font-size:14px; margin:10px 0; }
 .mant-box .campo{ margin-top:6px; border-color:#7cc3e6; background:#f4fbff; }
+.tag-mant{display:inline-block;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;margin-left:4px;background:#efe3fb;color:#6a2fb0}

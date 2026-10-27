@@ -1041,10 +1041,13 @@ $('#btnUbicacion').addEventListener('click', () => {
 });
 
 /* ------------------------- datos de fallas ------------------------- */
+const MANT = {};   // id -> nombre del mantenedor (etiqueta morada junto al contrato)
 const CONTR = {};   // id -> {nombre, masivo} para la etiqueta de contrato en la lista
 async function cargarContratosEtiqueta() {
   try { (await select('contratos', 'select=id,nombre,defecto_para')).forEach((c) => { CONTR[c.id] = { nombre: c.nombre, masivo: c.defecto_para === 'masivo' }; }); if (S.vista === 'lista') renderLista(); } catch (e) { /* sin etiqueta */ }
+  try { (await select('mantenedores', 'select=id,nombre')).forEach((m) => { MANT[m.id] = m.nombre; }); if (S.vista === 'lista') renderLista(); } catch (e) { /* sin etiqueta */ }
 }
+const tagMantenedor = (id) => (id && MANT[id] ? ` <span class="tag-mant">${esc(MANT[id])}</span>` : '');
 const tagContrato = (id) => (id && CONTR[id] ? ` <span class="tag-ctr ${CONTR[id].masivo ? 'm' : 'n'}">${esc(CONTR[id].nombre)}</span>` : '');
 
 /* ---------- Suministro eléctrico (Enel): indicador + transformadores sin suministro ----------
@@ -1864,6 +1867,7 @@ async function abrirFalla(p, geom) {
     ['OS', p.ot || '—'],
     p.orden_externa ? ['Orden externa', p.orden_externa] : null,
     p.contrato_id && CONTR[p.contrato_id] ? ['Contrato', CONTR[p.contrato_id].nombre] : null,
+    p.mantenedor_id && MANT[p.mantenedor_id] ? ['Mantenedor', MANT[p.mantenedor_id]] : null,
     ['Tipo', tipoLabel(p)],
     p.tipo === 'punto' ? ['Llave / N.° mun.', `${p.llave ?? '—'} / ${p.nro_mun ?? '—'}`] : null,
     p.cardinalidad ? ['Cardinalidad', p.cardinalidad] : null,
@@ -2289,7 +2293,7 @@ function renderLista() {
     return `<button class="tarjeta est-${esc(claveColor(p))}" data-i="${i}">
       <div class="tarjeta-top"><b>${esc(p.tipo_falla)} · ${esc(DESC_CODIGO[p.tipo_falla] || '')}</b>${d != null ? `<span class="dist">${esc(fmtDist(d))}</span>` : ''}</div>
       <div class="sub">OS ${esc(p.ot || '—')} · ${p.tipo === 'punto' ? 'Llave ' + esc(p.llave ?? '—') : esc(p.puntos_afectados ?? '') + ' puntos (circuito)'} · <span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
-      <div class="sub">${esc(p.nombre_creador || '—')} · ${esc(hace(p.fecha_falla))}${tagContrato(p.contrato_id)}</div>
+      <div class="sub">${esc(p.nombre_creador || '—')} · ${esc(hace(p.fecha_falla))}${tagContrato(p.contrato_id)}${tagMantenedor(p.mantenedor_id)}</div>
     </button>`;
   }).join('') : '<div class="vacio">No hay fallas activas con este filtro.</div>';
   $$('#listaItems .tarjeta').forEach((b) => b.addEventListener('click', () => {

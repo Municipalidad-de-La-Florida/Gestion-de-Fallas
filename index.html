@@ -85,7 +85,7 @@
   .panel-acciones{position:absolute; top:5px; right:34px; display:flex; gap:6px;}
   .panel-titulo{padding-right:76px; margin-bottom:2px; line-height:1.45; font-size:13px;}
   .panel-titulo .pt-nom{font-weight:700;}
-  .panel-titulo .tag-contrato,.panel-titulo .tag-masivo,.panel-titulo .badge{white-space:nowrap; vertical-align:middle;}
+  .panel-titulo .tag-contrato,.panel-titulo .tag-mantenedor,.panel-titulo .tag-masivo,.panel-titulo .badge{white-space:nowrap; vertical-align:middle;}
   .panel-titulo .badge{margin-left:6px;}
   .btn-masivo{
     position:absolute; top:6px; right:34px; cursor:pointer; font-weight:700; font-size:11.5px; line-height:1.3;
@@ -97,6 +97,7 @@
   .mant-box select{display:block; width:100%; margin-top:5px; padding:5px 6px; border:1.5px solid #7cc3e6; background:#f4fbff; border-radius:6px; font-size:12.5px;}
   .mant-sin{background:#fff4e0; border:1px solid #f5d49a; color:#6b4300; border-radius:8px; padding:7px 9px; font-size:12.5px; margin-top:8px;}
   .tag-contrato{display:inline-block; background:#e6eefb; color:#2a5db0; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:1px;}
+  .tag-mantenedor{display:inline-block; background:#efe3fb; color:#6a2fb0; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:1px;}
   .tag-masivo{display:inline-block; background:#7c3aed; color:#fff; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:middle;}
   .chip-estado.morado:hover{border-color:#7c3aed;}
   .chip-estado.morado.activo{border-color:#7c3aed; background:#f3edff; color:#7c3aed;}
@@ -3775,7 +3776,7 @@ async function abrirPopupFalla(feat){
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
-  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${p.masivo ? ' <span class="tag-masivo">Masivo</span>' : ''}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
+  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${mantenedorTag(p.mantenedor_id)}${p.masivo ? ' <span class="tag-masivo">Masivo</span>' : ''}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   // Quién puede dejar un comentario en una falla ya creada (todos menos el observador); los puntos de cascada comentan en su circuito
@@ -4101,14 +4102,18 @@ async function enfocarFalla(fallaId, abrirPopup){
 }
 window.enfocarFalla = enfocarFalla;
 // ---- Contratos de una falla ----
-let CONTRATOS_ACTIVOS = [], CONTRATOS_MAPA = {}, _contratosPromesa = null;
+let CONTRATOS_ACTIVOS = [], CONTRATOS_MAPA = {}, MANTENEDORES_MAPA = {}, _contratosPromesa = null;
 function asegurarContratos(forzar){
   if(_contratosPromesa && !forzar) return _contratosPromesa;
   _contratosPromesa = db.select('contratos', 'select=id,nombre,activo&order=nombre.asc').then(l => {
     CONTRATOS_MAPA = {}; l.forEach(c => { CONTRATOS_MAPA[c.id] = c.nombre; });
     CONTRATOS_ACTIVOS = l.filter(c => c.activo);
   }).catch(e => { console.warn('No se pudieron cargar los contratos (¿ejecutaste el SQL de contratos?):', e); _contratosPromesa = null; });
+  db.select('mantenedores', 'select=id,nombre').then(l => { (l || []).forEach(m => { MANTENEDORES_MAPA[m.id] = m.nombre; }); renderFallasList(); }).catch(() => { /* sin la tabla de mantenedores: sin etiqueta */ });
   return _contratosPromesa;
+}
+function mantenedorTag(id){
+  return (id && MANTENEDORES_MAPA[id]) ? `<span class="tag-mantenedor" title="Mantenedor">${escHtml(MANTENEDORES_MAPA[id])}</span>` : '';
 }
 function contratoTag(id){
   return (id && CONTRATOS_MAPA[id]) ? `<span class="tag-contrato" title="Contrato">${escHtml(CONTRATOS_MAPA[id])}</span>` : '';
@@ -4205,7 +4210,7 @@ async function cargarFallasDelArea(){
   try{
     await asegurarContratos();
     const query = 'select=id,ot,orden_externa,tipo,tipo_falla,estado,cascada,asignado_camion_id,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,fecha_pendiente,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
-      + ',masivo,contrato_id'
+      + ',masivo,contrato_id,mantenedor_id'
       + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=1000';
     fallasEnArea = await db.select('fallas', query);
     renderFallasList();
@@ -4229,7 +4234,7 @@ function resaltarTexto(texto, terminos){
 function normalizarFilaLateral(f){
   const esBusqueda = 'nombre_creador' in f;
   return {
-    id: f.id, ot: f.ot, masivo: !!f.masivo, contrato_id: f.contrato_id || null, asignado: f.asignado_camion_id || (f.asignado_camion_nombre ? 'asignada' : null), orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
+    id: f.id, ot: f.ot, masivo: !!f.masivo, contrato_id: f.contrato_id || null, mantenedor_id: f.mantenedor_id || null, asignado: f.asignado_camion_id || (f.asignado_camion_nombre ? 'asignada' : null), orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
     fecha: f.fecha_creacion, fecha_pendiente: f.fecha_pendiente || null, creado_en: f.creado_en, creado_por: f.creado_por,
     quien: esBusqueda ? (f.nombre_creador || '—') : (f.notificadores ? f.notificadores.nombre : (f.usuarios ? f.usuarios.nombre : '—')),
     llave: esBusqueda ? f.llave : (f.puntos_luminarios ? f.puntos_luminarios.llave : null)
@@ -4400,7 +4405,7 @@ function renderFallasList(){
     const lineaLlave = (buscando && f.llave != null && terminos.some(t => String(f.llave).toLowerCase().includes(t.toLowerCase())))
       ? `<div class="fi-nom" style="margin-top:1px;">Llave ${resaltarTexto(f.llave, terminos)}</div>` : '';
     return `<div class="fi fi-est-${claveColorFalla(f.estado, f.creado_en || f.fecha, null)}" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
-      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}${contratoTag(f.contrato_id)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
+      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}${contratoTag(f.contrato_id)}${mantenedorTag(f.mantenedor_id)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
       <div class="fi-nom">${escHtml(nombreFalla)}</div>
       <div class="fi-2"><span class="fi-q">${resaltarTexto(f.quien, terminos)}</span><span class="fi-oe${f.orden_externa ? '' : ' vacio'}">OE: ${f.orden_externa ? resaltarTexto(f.orden_externa, terminos) : '—'}</span><span class="fi-fh">${fechaTxt}</span></div>
       ${lineaLlave}
