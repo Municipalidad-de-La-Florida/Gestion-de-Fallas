@@ -10015,8 +10015,8 @@ function pintarNotifs(){
   const nuevas = NOTIFS.filter(n => !n.leida).length;
   badge.hidden = !nuevas; badge.textContent = nuevas;
   if(panel.hidden) return;
-  panel.innerHTML = `<div class="notif-head"><span>Avisos de atraso</span><span><button type="button" data-a="leer">Marcar leídos</button> <button type="button" data-a="limpiar">Descartar todos</button></span></div>` +
-    (NOTIFS.length ? NOTIFS.map(n => `<div class="notif-it${n.leida ? '' : ' nueva'}" data-id="${n.id}" data-f="${n.falla_id}"><div class="nt"><b>${escHtml(n.mensaje)}</b><div class="nh">${tiempoHace(n.creado_en)} · clic: ver en el mapa</div></div><button type="button" class="nx" data-a="quitar" title="Descartar" aria-label="Descartar">×</button></div>`).join('') : '<div class="notif-vacio">No hay avisos de atraso.</div>');
+  panel.innerHTML = `<div class="notif-head"><span>Avisos de atraso</span><span><button type="button" data-a="leer">Marcar leídos</button></span></div>` +
+    (NOTIFS.length ? NOTIFS.map(n => `<div class="notif-it${n.leida ? '' : ' nueva'}" data-id="${n.id}" data-f="${n.falla_id}"><div class="nt"><b>${escHtml(n.mensaje)}</b><div class="nh">${tiempoHace(n.creado_en)} · clic: ver en el mapa</div></div></div>`).join('') : '<div class="notif-vacio">No hay avisos de atraso.</div>');
 }
 async function cargarNotifs(){
   if(!veCampana() || !accessToken) return;
@@ -10048,8 +10048,6 @@ function iniciarNotifs(){
     const a = e.target.closest('[data-a]'), it = e.target.closest('.notif-it');
     try{
       if(a && a.dataset.a === 'leer'){ await db.update('notificaciones_atraso', 'leida=eq.false', {leida: true}); NOTIFS.forEach(n => n.leida = true); pintarNotifs(); return; }
-      if(a && a.dataset.a === 'limpiar'){ if(NOTIFS.length) await db.delete('notificaciones_atraso', 'id=not.is.null'); NOTIFS = []; pintarNotifs(); return; }
-      if(a && a.dataset.a === 'quitar' && it){ await db.delete('notificaciones_atraso', `id=eq.${it.dataset.id}`); NOTIFS = NOTIFS.filter(n => n.id !== it.dataset.id); pintarNotifs(); return; }
       if(it){
         const n = NOTIFS.find(x => x.id === it.dataset.id);
         if(n && !n.leida){ n.leida = true; db.update('notificaciones_atraso', `id=eq.${n.id}`, {leida: true}).catch(() => {}); }

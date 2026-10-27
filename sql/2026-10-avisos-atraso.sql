@@ -22,12 +22,11 @@ create table if not exists public.notificaciones_atraso (  -- lista que se ve de
 alter table public.notificaciones_atraso enable row level security;
 drop policy if exists notif_atraso_select on public.notificaciones_atraso;
 drop policy if exists notif_atraso_update on public.notificaciones_atraso;
-drop policy if exists notif_atraso_delete on public.notificaciones_atraso;
+drop policy if exists notif_atraso_delete on public.notificaciones_atraso;   -- los avisos no se pueden eliminar a mano: los reemplaza o descarta la base
 create policy notif_atraso_select on public.notificaciones_atraso for select to authenticated using (usuario_id = (select auth.uid()));
 create policy notif_atraso_update on public.notificaciones_atraso for update to authenticated using (usuario_id = (select auth.uid())) with check (usuario_id = (select auth.uid()));
-create policy notif_atraso_delete on public.notificaciones_atraso for delete to authenticated using (usuario_id = (select auth.uid()));
 revoke all on public.notificaciones_atraso from anon;
-grant select, update, delete on public.notificaciones_atraso to authenticated;
+grant select, update on public.notificaciones_atraso to authenticated;
 
 -- Días de atraso de una falla (0 = sin atraso)
 create or replace function public.dias_atraso_falla(p_estado text, p_base timestamptz)
