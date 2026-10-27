@@ -3353,7 +3353,7 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
 // ---------- DIBUJAR FALLAS EN EL MAPA (visibles en cualquier zoom) ----------
 const colorEstado = {reportada:'#f2b705', pendiente:'#2fa8d8', reparada:'#3a8a5c', reiterada:'#8e44ad', vencida:'#d33a2c'};
 // Color vivo de una falla: amarillo reportada, morado reiterada, celeste pendiente; pasan a rojo si
-// la reportada/reiterada supera 48 h o la pendiente 7 días, contados desde que se informó.
+// la reportada/reiterada supera 48 h o la pendiente 120 h, contados desde que se informó.
 // fInf = fecha en que se informó (o reiteró); fPend = fecha en que quedó pendiente.
 // Modo mantenedor (camiones y contratistas por mantenedor): nunca rojo; la falla atrasada parpadea en su color.
 // Reportada/reiterada se atrasan desde las 48 h (1 día de atraso) y las pendientes desde las 120 h, contadas desde que se informó.
@@ -3373,7 +3373,7 @@ function claveColorFalla(estado, fInf, fPend){
   const ms = (d) => { const t = d ? new Date(d).getTime() : NaN; return isNaN(t) ? null : Date.now() - t; };
   if(estado === 'pendiente'){
     const t = ms(fInf || fPend);
-    return (t !== null && t > 7 * 86400000) ? 'vencida' : 'pendiente';
+    return (t !== null && t > 120 * 3600000) ? 'vencida' : 'pendiente';
   }
   const t = ms(fInf);
   if(t !== null && t > 48 * 3600000) return 'vencida';
@@ -10003,6 +10003,7 @@ function tiempoHace(iso){
   const h = Math.round(m / 60);
   return h < 24 ? `hace ${h} h` : `hace ${Math.round(h / 24)} d`;
 }
+const veCampana = () => MODO_MANT || (currentUser && currentUser.rol === 'admin');   // camiones, mantenedores y admin
 function pintarNotifs(){
   const badge = document.getElementById('notifBadge'), panel = document.getElementById('notifPanel');
   if(!badge || !panel) return;
@@ -10013,7 +10014,7 @@ function pintarNotifs(){
     (NOTIFS.length ? NOTIFS.map(n => `<div class="notif-it${n.leida ? '' : ' nueva'}" data-id="${n.id}" data-f="${n.falla_id}"><div class="nt"><b>${escHtml(n.mensaje)}</b><div class="nh">${tiempoHace(n.creado_en)} · clic: ver en el mapa</div></div><button type="button" class="nx" data-a="quitar" title="Descartar" aria-label="Descartar">×</button></div>`).join('') : '<div class="notif-vacio">No hay avisos de atraso.</div>');
 }
 async function cargarNotifs(){
-  if(!MODO_MANT || !accessToken) return;
+  if(!veCampana() || !accessToken) return;
   try{ NOTIFS = await db.select('notificaciones_atraso', 'select=id,falla_id,dias,mensaje,creado_en,leida&order=creado_en.desc&limit=100') || []; }
   catch(_){ NOTIFS = []; }   // sin el SQL de avisos: la campana queda vacía
   pintarNotifs();
@@ -10022,8 +10023,8 @@ function iniciarNotifs(){
   clearInterval(notifTimer);
   const box = document.getElementById('notifBox');
   if(!box) return;
-  box.style.display = (MODO_MANT && !modoVista) ? '' : 'none';
-  if(!MODO_MANT) return;
+  box.style.display = (veCampana() && !modoVista) ? '' : 'none';
+  if(!veCampana()) return;
   cargarNotifs();
   notifTimer = setInterval(cargarNotifs, 5 * 60 * 1000);
 }

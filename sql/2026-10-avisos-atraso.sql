@@ -1,6 +1,6 @@
 -- Avisos de atraso para mantenedores (Sinec, Clever) y camiones.
 -- Plazo contractual: reportadas/reiteradas 24 h (atraso desde las 48 h = 1 día); pendientes 96 h (atraso desde las 120 h = 1 día).
--- Cada día que pasa se avisa de nuevo ("La falla OS 26-0370 tiene 2 días de atraso") y el aviso anterior de esa falla se reemplaza.
+-- El admin ve todos los avisos en la campana de la web. Cada día que pasa se avisa de nuevo ("La falla OS 26-0370 tiene 2 días de atraso") y el aviso anterior de esa falla se reemplaza.
 
 create table if not exists public.atraso_avisos (        -- último día de atraso avisado por falla (no se toca la tabla fallas)
   falla_id uuid primary key references public.fallas(id) on delete cascade,
@@ -43,7 +43,7 @@ $$;
 -- p_push = false: solo llena la campana (sirve para la primera vez, sin mandar una avalancha de avisos al celular).
 create or replace function public.avisar_atrasos(p_push boolean default true)
 returns integer language plpgsql security definer set search_path = public as $$
-declare f record; v_dias int; v_dest uuid[]; v_msg text; v_n int := 0;
+declare f record; v_dias int; v_dest uuid[]; v_adm uuid[]; v_msg text; v_n int := 0;
 begin
   for f in
     select fa.id, fa.ot, fa.estado, fa.contrato_id, fa.mantenedor_id, fa.asignado_camion_id,
@@ -72,16 +72,17 @@ begin
       union
       select u.id from public.usuarios u where u.id = f.asignado_camion_id and u.rol = 'camion'
     ) x;
-    if v_dest is null then continue; end if;
+    select array_agg(u.id) into v_adm from public.usuarios u where u.rol = 'admin';   -- el admin ve todos los avisos en la campana (sin push)
+    if v_dest is null and v_adm is null then continue; end if;
 
     v_msg := 'La falla OS ' || coalesce(f.ot, '') || ' tiene ' || v_dias || case when v_dias = 1 then ' día' else ' días' end || ' de atraso';
     insert into public.notificaciones_atraso (usuario_id, falla_id, dias, mensaje, creado_en, leida)
-      select d, f.id, v_dias, v_msg, now(), false from unnest(v_dest) d
+      select d, f.id, v_dias, v_msg, now(), false from unnest(coalesce(v_dest, '{}'::uuid[]) || coalesce(v_adm, '{}'::uuid[])) d
       on conflict (usuario_id, falla_id) do update
         set dias = excluded.dias, mensaje = excluded.mensaje, creado_en = excluded.creado_en, leida = false;
     insert into public.atraso_avisos (falla_id, dias, avisado_en) values (f.id, v_dias, now())
       on conflict (falla_id) do update set dias = excluded.dias, avisado_en = excluded.avisado_en;
-    if p_push then
+    if p_push and v_dest is not null then
       perform public.notificar_push(v_dest, 'Falla atrasada', v_msg, './?falla=' || f.id);
     end if;
     v_n := v_n + 1;

@@ -140,7 +140,7 @@ function claveColor(p) {
   if (p.estado === 'reparada') return 'reparada';
   if (MODO_MANT) return p.estado === 'pendiente' ? 'pendiente' : (p.estado === 'reiterada' ? 'reiterada' : 'reportada');
   const ms = (d) => { const t = d ? Date.parse(d) : NaN; return isNaN(t) ? null : Date.now() - t; };
-  if (p.estado === 'pendiente') { const t = ms(p.fecha_falla_real || p.fecha_falla || p.fecha_pendiente); return t !== null && t > 7 * 86400000 ? 'vencida' : 'pendiente'; }
+  if (p.estado === 'pendiente') { const t = ms(p.fecha_falla_real || p.fecha_falla || p.fecha_pendiente); return t !== null && t > 120 * 3600000 ? 'vencida' : 'pendiente'; }
   const t = ms(p.fecha_falla_real || p.fecha_falla);
   if (t !== null && t > 48 * 3600000) return 'vencida';
   return p.estado === 'reiterada' ? 'reiterada' : 'reportada';
