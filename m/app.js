@@ -1610,16 +1610,85 @@ function leerOrdenExterna(h) {
   return { valor: `${emp}-${num}` };
 }
 
+/* ---------- Contrato y mantenedor del reporte (selector celeste y aviso "Sin Mantenimiento") ---------- */
+// El uso (vial o peatonal) lo define el código de falla; con los códigos ambiguos no se pregunta: se exige el comentario.
+const USO_POR_CODIGO = { F01: 'VIAL', F04: 'VIAL', F05: 'VIAL', F29: 'PEATONAL', F32: 'PEATONAL', F33: 'PEATONAL' };
+function evaluarMantencion(ops, codigo, mono) {
+  if (!ops || !codigo) return { tipo: 'nada' };
+  let uso = mono ? 'VIAL' : (USO_POR_CODIGO[codigo] || null);
+  if (uso && !ops.some((o) => o.uso_grupo === uso)) uso = null;       // el punto no tiene ese uso
+  const filas = uso ? ops.filter((o) => o.uso_grupo === uso) : ops;
+  if (!filas.length) return { tipo: 'sin', uso: null };
+  const distintas = [...new Map(filas.map((o) => [`${o.contrato_id || '-'}/${o.mantenedor_id || '-'}/${o.estado}`, o])).values()];
+  const usos = [...new Set(filas.map((o) => o.uso_grupo))];
+  if (!uso && usos.length === 1) uso = usos[0];
+  const ok = distintas.filter((o) => o.estado === 'ok');
+  if (!ok.length) return { tipo: 'sin', uso };
+  if (distintas.length === 1 || ok.length === 1) return { tipo: 'info', uso, texto: `${ok[0].contrato} · ${ok[0].mantenedor}` };
+  if (!uso) return { tipo: 'comentario', uso: null };                  // vial y peatonal con distinto mantenedor
+  const mismoContrato = new Set(ok.map((o) => o.contrato_id)).size < ok.length;
+  return {
+    tipo: 'elegir', uso, comentarioObligatorio: mismoContrato,
+    opciones: ok.map((o) => ({ contrato_id: o.contrato_id, mantenedor_id: o.mantenedor_id, etiqueta: mismoContrato ? `${o.contrato} · ${o.mantenedor}` : o.contrato })),
+  };
+}
+const htmlSinMantenimiento = (que) => `<div class="aviso"><b>Sin Mantenimiento</b><br>${que} no tiene contrato de mantención. Puedes reportar igual: la falla la verá la administración / ITO.</div>`;
+function htmlMantencion(ev, sel) {
+  if (ev.tipo === 'info') return `<div class="mant-box">Mantiene: <b>${esc(ev.texto)}</b></div>`;
+  if (ev.tipo === 'sin') return htmlSinMantenimiento('Este punto');
+  if (ev.tipo === 'comentario') return '<div class="mant-box">Este punto tiene luminarias vial y peatonal con distinto mantenedor. <b>Escribe en el comentario cuál es.</b></div>';
+  if (ev.tipo === 'elegir') {
+    const ops = ev.opciones.map((o, i) => `<option value="${i}"${String(i) === String(sel) ? ' selected' : ''}>${esc(o.etiqueta)}</option>`).join('');
+    return `<div class="mant-box"><b>Contrato</b> · ¿quién mantiene esta luminaria?
+      <select id="fMantSel" class="campo" aria-label="Contrato"><option value="">Elige el contrato…</option>${ops}</select>
+      ${ev.comentarioObligatorio ? '<div style="margin-top:6px"><b>Comentario obligatorio:</b> indica cuál luminaria falló.</div>' : ''}</div>`;
+  }
+  return '';
+}
+function activarMantencionPunto(h, gid, mono) {
+  const est = { ops: null, codigo: null, sel: '', ev: { tipo: 'nada' } };
+  const caja = $('#fMant', h);
+  const pintar = () => {
+    est.ev = evaluarMantencion(est.ops, est.codigo, mono);
+    caja.innerHTML = htmlMantencion(est.ev, est.sel);
+    const s = $('#fMantSel', caja);
+    if (s) s.addEventListener('change', () => { est.sel = s.value; });
+  };
+  rpc('opciones_punto', { p_gid: gid }).then((r) => { est.ops = r || []; pintar(); }).catch(() => { /* sin datos: se reporta como siempre */ });
+  return {
+    elegirCodigo(c) { est.codigo = c; pintar(); },
+    // devuelve { error } o { args } con los parámetros extra de crear_falla_punto
+    validar(desc) {
+      const ev = est.ev, args = {};
+      if (ev.tipo === 'elegir') {
+        if (est.sel === '') return { error: 'Elige el contrato que mantiene esta luminaria.' };
+        const o = ev.opciones[Number(est.sel)];
+        args.p_contrato_id = o.contrato_id; args.p_mantenedor_id = o.mantenedor_id;
+        if (ev.comentarioObligatorio && !desc) return { error: 'Escribe un comentario: indica cuál luminaria falló.' };
+      }
+      if (ev.tipo === 'comentario' && !desc) return { error: 'Escribe un comentario: indica si es la luminaria vial o la peatonal.' };
+      if (ev.uso) args.p_uso_grupo = ev.uso;
+      return { args };
+    },
+  };
+}
+async function avisoMantencionCircuito(h, gid) {
+  try {
+    const e = await rpc('estado_mantencion_circuito', { p_gid: gid });
+    if (e !== 'ok') $('#fMant', h).innerHTML = htmlSinMantenimiento('Este circuito');
+  } catch (err) { /* sin datos: se reporta como siempre */ }
+}
+
 function formReportePunto(p) {
   const mono = String(p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
   const nomCat = mono ? 'monoposte' : 'punto';
   const cat = catalogoActivo(nomCat);
   let codigo = null, card = null;
   const h = abrirHoja(`
-    ${htmlBotonMasivo()}
     <h2>Reportar falla</h2>
     <div class="hint">Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}${mono ? ' · monoposte' : ''}</div>
     <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
+    <div id="fMant"></div>
     <h3>Cardinalidad (opcional)</h3>
     <div class="rosca" id="fCard">
       <button type="button" data-r="N">N</button><button type="button" data-r="S">S</button>
@@ -1632,13 +1701,14 @@ function formReportePunto(p) {
     <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>`);
   $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
+    mant.elegirCodigo(codigo);
   }));
   $$('#fCard button', h).forEach((b) => b.addEventListener('click', () => {
     const ya = b.classList.contains('sel');
     $$('#fCard button', h).forEach((x) => x.classList.remove('sel'));
     if (!ya) { b.classList.add('sel'); card = b.dataset.r; } else card = null;
   }));
-  activarBotonMasivo(h);
+  const mant = activarMantencionPunto(h, p.gid, mono);
   const env = $('#fEnviar', h);
   env.addEventListener('click', ocupar(env, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -1646,10 +1716,11 @@ function formReportePunto(p) {
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
     const oe = leerOrdenExterna(h);
     if (oe.error) { toast(oe.error, 'error'); return; }
+    const mv = mant.validar(desc);
+    if (mv.error) { toast(mv.error, 'error'); return; }
     env.textContent = 'Enviando…';
     const ctx = await contextoReporte();
-    if (leerMasivo(h)) ctx.p_masivo = true;
-    const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx });
+    const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx, ...mv.args });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot}${r.estado === 'reiterada' ? ' (reiterada)' : ''}`, 'ok');
     cargarFallas();
@@ -1659,10 +1730,10 @@ function formReportePunto(p) {
 function formReporteCircuito(p) {
   let codigo = null;
   const h = abrirHoja(`
-    ${htmlBotonMasivo()}
     <h2>Reportar falla de circuito</h2>
     <div class="hint">Circuito ${esc(p.id ?? '')} · ${esc(p.cantidad_luminarias_cliente ?? '—')} luminarias</div>
     <div class="aviso">Se crea una falla por cada punto del circuito. Al reparar el circuito se cierran todas juntas.</div>
+    <div id="fMant"></div>
     <h3>Código de falla</h3>${htmlCodigos(catalogoActivo('circuito'), 'circuito')}
     <h3>Comentario</h3>
     <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
@@ -1672,7 +1743,7 @@ function formReporteCircuito(p) {
   $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
   }));
-  activarBotonMasivo(h);
+  avisoMantencionCircuito(h, p.gid);
   const env = $('#fEnviar', h);
   env.addEventListener('click', ocupar(env, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -1682,7 +1753,6 @@ function formReporteCircuito(p) {
     if (oe.error) { toast(oe.error, 'error'); return; }
     env.textContent = 'Enviando…';
     const ctx = await contextoReporte();
-    if (leerMasivo(h)) ctx.p_masivo = true;
     const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot} · ${r.puntos_afectados} puntos afectados`, 'ok');

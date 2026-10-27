@@ -393,3 +393,7 @@ textarea.campo{ min-height:70px; }
 #navInferior.apretado .nav-btn{ flex-direction:column; gap:1px; font-size:10.5px; height:52px; padding:0 2px; }
 #navInferior.apretado .nav-btn svg{ width:21px; height:21px; }
 .m-grupo{ font-size:10.5px; letter-spacing:.6px; text-transform:uppercase; color:var(--tinta-2); font-weight:700; padding:12px 6px 3px; }
+
+/* Contrato y mantenedor del reporte */
+.mant-box{ background:#e6f4fb; border:1px solid #a9d8ef; color:#0b4a6b; border-radius:12px; padding:10px 12px; font-size:14px; margin:10px 0; }
+.mant-box .campo{ margin-top:6px; border-color:#7cc3e6; background:#f4fbff; }
