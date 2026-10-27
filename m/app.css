@@ -398,3 +398,5 @@ textarea.campo{ min-height:70px; }
 .mant-box{ background:#e6f4fb; border:1px solid #a9d8ef; color:#0b4a6b; border-radius:12px; padding:10px 12px; font-size:14px; margin:10px 0; }
 .mant-box .campo{ margin-top:6px; border-color:#7cc3e6; background:#f4fbff; }
 .tag-mant{display:inline-block;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;margin-left:4px;background:#efe3fb;color:#6a2fb0}
+.tag-sinmant{display:inline-block;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;margin-left:4px;background:#eceff3;color:#4b5563}
+.tag-pend{display:inline-block;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700;margin-left:4px;background:#fff0d6;color:#9a5b00}
