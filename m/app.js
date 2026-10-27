@@ -3524,19 +3524,17 @@ function iniciarCampana() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil && veCampana()) cargarNotifs(); });
 function listaNotifsHtml() {
-  return NOTIFS.length ? NOTIFS.map((n) => `<div class="av-it${n.leida ? '' : ' nueva'}" data-id="${esc(n.id)}" data-f="${esc(n.falla_id)}" role="button" tabindex="0"><div class="tx"><b>${esc(n.mensaje)}</b><small>${esc(hace(n.creado_en))} · toca para verla en el mapa</small></div><button type="button" class="nx" data-a="quitar" aria-label="Descartar">×</button></div>`).join('')
+  return NOTIFS.length ? NOTIFS.map((n) => `<div class="av-it${n.leida ? '' : ' nueva'}" data-id="${esc(n.id)}" data-f="${esc(n.falla_id)}" role="button" tabindex="0"><div class="tx"><b>${esc(n.mensaje)}</b><small>${esc(hace(n.creado_en))} · toca para verla en el mapa</small></div></div>`).join('')
     : '<div class="u-vacio">No hay avisos de atraso.</div>';
 }
 $('#btnCampana').addEventListener('click', async () => {
-  const h = abrirHoja(`<div id="avRaiz"><div class="av-cab"><b>Avisos de atraso</b><div class="av-acc"><button type="button" data-a="leer">Marcar leídos</button><button type="button" data-a="limpiar">Descartar todos</button></div></div><div id="avLista">${listaNotifsHtml()}</div></div>`);
+  const h = abrirHoja(`<div id="avRaiz"><div class="av-cab"><b>Avisos de atraso</b><div class="av-acc"><button type="button" data-a="leer">Marcar leídos</button></div></div><div id="avLista">${listaNotifsHtml()}</div></div>`);
   const repintar = () => { const l = $('#avLista', h); if (l) l.innerHTML = listaNotifsHtml(); pintarCampana(); };
   cargarNotifs().then(repintar);
   $('#avRaiz', h).addEventListener('click', async (e) => {   // el oyente va en un contenedor que se recrea cada vez que se abre
     const a = e.target.closest('[data-a]'), it = e.target.closest('.av-it');
     try {
       if (a && a.dataset.a === 'leer') { await api('/rest/v1/notificaciones_atraso?leida=eq.false', { method: 'PATCH', body: { leida: true } }); NOTIFS.forEach((n) => { n.leida = true; }); repintar(); return; }
-      if (a && a.dataset.a === 'limpiar') { if (NOTIFS.length) await api('/rest/v1/notificaciones_atraso?id=not.is.null', { method: 'DELETE', prefer: 'return=minimal' }); NOTIFS = []; repintar(); return; }
-      if (a && a.dataset.a === 'quitar' && it) { await api(`/rest/v1/notificaciones_atraso?id=eq.${it.dataset.id}`, { method: 'DELETE', prefer: 'return=minimal' }); NOTIFS = NOTIFS.filter((n) => n.id !== it.dataset.id); repintar(); return; }
       if (it) {
         const n = NOTIFS.find((x) => x.id === it.dataset.id);
         if (n && !n.leida) { n.leida = true; pintarCampana(); api(`/rest/v1/notificaciones_atraso?id=eq.${n.id}`, { method: 'PATCH', body: { leida: true } }).catch(() => {}); }
