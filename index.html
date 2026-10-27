@@ -1426,6 +1426,7 @@ async function cargarPerfilYIniciar(userId){
       return;
     }
     currentUser = data[0];
+    try{ MODO_MANT = !!(await db.rpc('es_usuario_mantenedor', {})); }catch(_){ MODO_MANT = false; }   // sin el SQL: colores de siempre
     cargarLibreria();   // códigos de falla y de cierre desde la Librería (sin bloquear el inicio)
     currentUser.ver_cuadrillas = false; currentUser.ver_ubicacion = false; currentUser.ubic_col = false;
     currentUser.ver_fiscalizacion = false; currentUser.fisc_col = false;
@@ -3338,8 +3339,21 @@ const colorEstado = {reportada:'#f2b705', pendiente:'#2fa8d8', reparada:'#3a8a5c
 // Color vivo de una falla: amarillo reportada, morado reiterada, celeste pendiente; pasan a rojo si
 // la reportada/reiterada supera 48 h o la pendiente 7 días, contados desde que se informó.
 // fInf = fecha en que se informó (o reiteró); fPend = fecha en que quedó pendiente.
+// Modo mantenedor (camiones y contratistas por mantenedor): nunca rojo; la falla atrasada parpadea en su color.
+// Reportada/reiterada se atrasan desde las 48 h (1 día de atraso) y las pendientes desde las 120 h, contadas desde que se informó.
+let MODO_MANT = false;
+function diasAtraso(estado, fInf, fPend){
+  if(estado === 'reparada') return 0;
+  const f = estado === 'pendiente' ? (fInf || fPend) : fInf;
+  const t = f ? new Date(f).getTime() : NaN;
+  if(isNaN(t)) return 0;
+  const h = (Date.now() - t) / 3600000;
+  if(estado === 'pendiente') return h >= 120 ? Math.floor(h / 24) - 4 : 0;
+  return h >= 48 ? Math.floor(h / 24) - 1 : 0;
+}
 function claveColorFalla(estado, fInf, fPend){
   if(estado === 'reparada') return 'reparada';
+  if(MODO_MANT) return estado === 'pendiente' ? 'pendiente' : (estado === 'reiterada' ? 'reiterada' : 'reportada');
   const ms = (d) => { const t = d ? new Date(d).getTime() : NaN; return isNaN(t) ? null : Date.now() - t; };
   if(estado === 'pendiente'){
     const t = ms(fInf || fPend);
@@ -3483,6 +3497,7 @@ function renderFallasDesdeCache(){
         if(asigFiltro === 'sin' ? !!feat.properties.asignado_camion_id : !feat.properties.asignado_camion_id) return;
       }
       const color = colorFalla(estado, feat.properties.fecha_falla_real || feat.properties.fecha_falla, feat.properties.fecha_pendiente);
+      const atrasada = MODO_MANT && diasAtraso(estado, feat.properties.fecha_falla_real || feat.properties.fecha_falla, feat.properties.fecha_pendiente) > 0;
       const fallaId = feat.properties.id;
       // Si la falla ya está reparada y el usuario está en modo "agregar/informar falla" (y no viendo
       // historial), dejamos el marcador/línea sin interacción para que el clic "atraviese" hacia la capa
@@ -3496,7 +3511,7 @@ function renderFallasDesdeCache(){
         const [lon, lat] = feat.geometry.coordinates;
         const radioFalla = map.getZoom() <= 16 ? 4 : 8;
         const marker = L.marker([lat, lon], {
-          icon: iconoFalla(feat.properties.simb_poste, color, radioFalla, estado === 'reiterada' && !feat.properties.cascada), pane:'fallasPane',
+          icon: iconoFalla(feat.properties.simb_poste, color, radioFalla, MODO_MANT ? (atrasada && !feat.properties.cascada) : (estado === 'reiterada' && !feat.properties.cascada)), pane:'fallasPane',
           interactive: !dejarPasarClick, keyboard: false
         }).addTo(fallasLayerGroup);
         if(!dejarPasarClick){
@@ -3512,7 +3527,8 @@ function renderFallasDesdeCache(){
         }
       } else {
         // Circuito: la línea parpadea mientras está "reportada" o "reiterada"
-        const claseCss = (estado === 'reportada' || estado === 'reiterada') ? 'falla-reportada' : '';
+        // En modo mantenedor el circuito parpadea mientras está notificado (reportada/reiterada) o cuando va atrasado
+        const claseCss = (estado === 'reportada' || estado === 'reiterada' || atrasada) ? 'falla-reportada' : '';
         const lineLayer = L.geoJSON(feat, {
           pane:'fallasPane',
           style:{color:color, weight:6, opacity:0.9, className: claseCss},

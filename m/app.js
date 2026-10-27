@@ -124,8 +124,21 @@ const ETIQUETA_ESTADO = { reportada: 'Reportada', pendiente: 'Pendiente', reiter
 const COLOR_ESTADO = { reportada: '#f2b705', pendiente: '#2fa8d8', reiterada: '#7b3fe4', reparada: '#2e9e57', vencida: '#d33a2c' };
 // Amarillo reportada, morado reiterada, celeste pendiente; pasan a rojo con más de 48 h (reportada/reiterada,
 // desde que se informó) o más de 7 días (pendiente, también desde que se informó).
+// Modo mantenedor (camiones y contratistas por mantenedor): nunca rojo; la falla atrasada parpadea en su color.
+// Reportada/reiterada se atrasan desde las 48 h (1 día de atraso) y las pendientes desde las 120 h, contadas desde que se informó.
+let MODO_MANT = false;
+function diasAtraso(p) {
+  if (p.estado === 'reparada') return 0;
+  const f = p.estado === 'pendiente' ? (p.fecha_falla_real || p.fecha_falla || p.fecha_pendiente) : (p.fecha_falla_real || p.fecha_falla);
+  const t = f ? Date.parse(f) : NaN;
+  if (isNaN(t)) return 0;
+  const h = (Date.now() - t) / 3600000;
+  if (p.estado === 'pendiente') return h >= 120 ? Math.floor(h / 24) - 4 : 0;
+  return h >= 48 ? Math.floor(h / 24) - 1 : 0;
+}
 function claveColor(p) {
   if (p.estado === 'reparada') return 'reparada';
+  if (MODO_MANT) return p.estado === 'pendiente' ? 'pendiente' : (p.estado === 'reiterada' ? 'reiterada' : 'reportada');
   const ms = (d) => { const t = d ? Date.parse(d) : NaN; return isNaN(t) ? null : Date.now() - t; };
   if (p.estado === 'pendiente') { const t = ms(p.fecha_falla_real || p.fecha_falla || p.fecha_pendiente); return t !== null && t > 7 * 86400000 ? 'vencida' : 'pendiente'; }
   const t = ms(p.fecha_falla_real || p.fecha_falla);
@@ -584,7 +597,7 @@ function salir(msg) {
   detenerGPS();
   clearInterval(S.timer);
   cerrarHoja();
-  S.perfil = null; S.funciones = null; S.features = []; S.activas = [];
+  S.perfil = null; MODO_MANT = false; S.funciones = null; S.features = []; S.activas = [];
   mostrarLogin(msg);
 }
 
@@ -593,6 +606,7 @@ async function cargarPerfil() {
     const f = await select('usuarios', `id=eq.${sesion.user_id}&select=id,nombre,rol,foto_obligatoria`);
     if (!f || !f.length) { guardarSesion(null); throw new Error('Tu cuenta no tiene un perfil asignado en el sistema. Consulta con el administrador.'); }
     S.perfil = f[0];
+    try { MODO_MANT = !!(await rpc('es_usuario_mantenedor', {})); } catch (e) { MODO_MANT = false; }   // sin el SQL: colores de siempre
     // Permiso para ver Cuadrillas (el admin siempre; los demás solo si el admin se lo habilitó)
     S.perfil.ver_cuadrillas = false; S.perfil.ver_ubicacion = false; S.perfil.ubic_col = false;
     try { const w = await select('usuarios', `id=eq.${sesion.user_id}&select=ver_ubicacion`); if (w && w[0]) { S.perfil.ver_ubicacion = !!w[0].ver_ubicacion; S.perfil.ubic_col = true; } } catch (e) { /* sin columna: sigue a Cuadrillas */ }
@@ -943,9 +957,9 @@ function dibujarFallas() {
       const [lng, lat] = f.geometry.coordinates;
       const r = p.cascada ? (z >= 18 ? 7 : 5) : (z >= 18 ? 13 : z >= 16 ? 11 : 8);
       capa = new MarcadorForma([lat, lng], { renderer: rend, forma: formaPoste(p.simb_poste), radius: r, weight: 3, color: '#fff', fillColor: color, fillOpacity: reparada ? 0.55 : 0.95, interactive: true });
-      if (p.estado === 'reiterada' && !p.cascada) S.parpadeo.push(capa); // punto reiterado: parpadea como los circuitos
+      if (!p.cascada && (MODO_MANT ? diasAtraso(p) > 0 : p.estado === 'reiterada')) S.parpadeo.push(capa); // punto reiterado (o atrasado en modo mantenedor): parpadea
     } else {
-      if (p.estado === 'reportada' || p.estado === 'reiterada') {
+      if (p.estado === 'reportada' || p.estado === 'reiterada' || (MODO_MANT && diasAtraso(p) > 0)) {
         // Circuito reportado o reiterado: parpadea (como en el escritorio). El parpadeo es CSS sobre SVG;
         // debajo va una línea ancha invisible para que sea fácil tocarla con el dedo.
         const base = L.geoJSON(f.geometry, { renderer: rendSvg, style: { color, weight: 7, opacity: 0.9, className: 'falla-reportada' }, interactive: false });
