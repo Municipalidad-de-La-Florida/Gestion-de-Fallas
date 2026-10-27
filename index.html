@@ -324,6 +324,9 @@
   #usuariosTbody tr:hover{background:#e6f1ea;}
   #usuariosTbody td{border-bottom:1px solid #b9c7be; border-right:1px solid #e3e9e5; padding-top:6px; padding-bottom:6px; vertical-align:middle;}
   #usuariosTbody td:last-child{border-right:none;}
+  .acc-modos{margin-bottom:4px;}
+  .acc-grupo{margin-top:3px;}
+  .acc-tit{font-size:10.5px; font-weight:700; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em;}
   #usuariosTbody td:first-child, .gu-pane[data-pane="usuarios"] thead th:first-child{position:sticky; left:0; z-index:2; background:inherit; box-shadow:2px 0 0 #d5ded8;}
   .gu-pane[data-pane="usuarios"] thead th:first-child{z-index:4; background:#eef2ef;}
   .cfg-layout{display:grid; grid-template-columns:190px minmax(0,1fr); gap:16px; align-items:start;}
@@ -1068,8 +1071,7 @@
             <th style="padding:8px 10px;">Notificadores</th>
             <th style="padding:8px 10px;">Foto obligatoria</th>
             <th style="padding:8px 10px;">Pasar a masivo</th>
-            <th style="padding:8px 10px;">Contratos</th>
-            <th style="padding:8px 10px;" title="Un contratista ve las fallas de sus contratos y las que caigan a sus mantenedores">Mantenedores</th>
+            <th style="padding:8px 10px;" title="Un perfil por contrato ve todas las fallas del contrato; un subcontratista por mantenedor ve lo de su mantenedor en cualquier contrato">Acceso (contrato o mantenedor)</th>
             <th style="padding:8px 10px;"></th>
           </tr>
         </thead>
@@ -10022,6 +10024,42 @@ function htmlCeldaMantenedores(rol, ids){
   if(!visibles.length) return '<span style="color:var(--ink-soft);">Sin mantenedores</span>';
   return visibles.map(m => `<label style="display:flex; align-items:center; gap:6px; cursor:pointer; white-space:nowrap;"><input type="checkbox" class="mant-chk" value="${m.id}" ${sel.has(m.id) ? 'checked' : ''}> <span class="tag-mantenedor" style="margin-left:0;">${escAttr(m.nombre)}</span></label>`).join('');
 }
+// Acceso de un usuario: un perfil por CONTRATO (ve todo el contrato) o un subcontratista por MANTENEDOR (el contrato viene de la falla).
+// Los camiones se asignan por mantenedor; si todavía tienen contratos (antiguo) se muestran para poder quitarlos.
+function modoAcceso(ctr, man){ return (ctr.length && man.length) ? 'ambos' : (man.length ? 'mantenedor' : 'contrato'); }
+function htmlCeldaAcceso(rol, ctr, man, modo, uid){
+  if(!ROLES_CON_CONTRATO.includes(rol)) return '<span style="color:var(--ink-soft);" title="Este rol ve todo">—</span>';
+  const grupo = (t, h) => `<div class="acc-grupo"><div class="acc-tit">${t}</div>${h}</div>`;
+  if(!MANTENEDORES_DISPONIBLE) return htmlCeldaContratos(rol, ctr);
+  if(rol === 'camion'){
+    return grupo('Mantenedor', htmlCeldaMantenedores(rol, man))
+      + (ctr.length ? grupo('Contrato (antiguo, ya no hace falta)', htmlCeldaContratos(rol, ctr)) : '');
+  }
+  const radio = (v, t) => `<label style="display:inline-flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap; margin-right:10px;"><input type="radio" class="acc-modo" name="acc-${uid}" value="${v}" ${modo === v ? 'checked' : ''}> <b>${t}</b></label>`;
+  return `<div class="acc-modos">${radio('contrato', 'Por contrato')}${radio('mantenedor', 'Por mantenedor')}${modo === 'ambos' ? radio('ambos', 'Ambos (antiguo)') : ''}</div>`
+    + (modo !== 'mantenedor' ? grupo('Contratos', htmlCeldaContratos(rol, ctr)) : '')
+    + (modo !== 'contrato' ? grupo('Mantenedores', htmlCeldaMantenedores(rol, man)) : '');
+}
+// Dibuja la celda de acceso de una fila y enlaza sus casillas
+function pintarCeldaAcceso(tr){
+  const celda = tr.querySelector('.contratos-celda'); if(!celda) return;
+  const rol = baseRolDe(tr.querySelector('.rol-select').value);
+  const ctr = JSON.parse(tr.dataset.contr || '[]'), man = JSON.parse(tr.dataset.mant || '[]');
+  if(!tr.dataset.modo) tr.dataset.modo = modoAcceso(ctr, man);
+  celda.innerHTML = htmlCeldaAcceso(rol, ctr, man, tr.dataset.modo, tr.dataset.id);
+  celda.querySelectorAll('.contrato-chk').forEach(ch => ch.onchange = () => {
+    tr.dataset.contr = JSON.stringify([...celda.querySelectorAll('.contrato-chk:checked')].map(x => x.value)); refrescarCambiosUsuarios();
+  });
+  celda.querySelectorAll('.mant-chk').forEach(ch => ch.onchange = () => {
+    tr.dataset.mant = JSON.stringify([...celda.querySelectorAll('.mant-chk:checked')].map(x => x.value)); refrescarCambiosUsuarios();
+  });
+  celda.querySelectorAll('.acc-modo').forEach(r => r.onchange = () => {
+    tr.dataset.modo = r.value;
+    if(r.value === 'contrato') tr.dataset.mant = '[]';          // elegir uno borra el otro: no se mezclan
+    if(r.value === 'mantenedor') tr.dataset.contr = '[]';
+    pintarCeldaAcceso(tr); refrescarCambiosUsuarios();
+  });
+}
 // Bloque "Contratos" del modal: crear, renombrar, activar/desactivar
 function pintarContratosAdmin(){
   const cont = document.getElementById('contratosAdmin');
@@ -10082,9 +10120,7 @@ function pintarContratosAdmin(){
 function refrescarCeldasContratos(){
   asegurarContratos(true);
   document.querySelectorAll('#usuariosTbody tr[data-id]').forEach(tr => {
-    const celda = tr.querySelector('.contratos-celda'); if(!celda) return;
-    celda.innerHTML = htmlCeldaContratos(baseRolDe(tr.querySelector('.rol-select').value), JSON.parse(tr.dataset.contr || '[]'));
-    celda.querySelectorAll('.contrato-chk').forEach(ch => ch.onchange = () => { tr.dataset.contr = JSON.stringify([...celda.querySelectorAll('.contrato-chk:checked')].map(x => x.value)); });
+    pintarCeldaAcceso(tr);
   });
   refrescarCambiosUsuarios();
 }
@@ -10173,15 +10209,14 @@ async function cargarUsuarios(){
     tbody.innerHTML = usuarios.map(u => {
       const perfilU = u.perfil || u.rol;
       const opciones = PERFILES.map(p => `<option value="${escAttr(p.clave)}" ${p.clave===perfilU?'selected':''}>${escAttr(p.nombre)}</option>`).join('');
-      return `<tr data-id="${u.id}" data-notif="${u.notificador_externo_habilitado ? '1' : '0'}" data-foto="${u.foto_obligatoria ? '1' : '0'}" data-masivo="${masivoDe[u.id] ? '1' : '0'}" data-dias='${JSON.stringify(u.dias_inspeccion || [])}' data-contr='${JSON.stringify(contratosDe[u.id] || [])}' data-mant='${JSON.stringify(mantenedoresDe[u.id] || [])}'>
+      return `<tr data-id="${u.id}" data-notif="${u.notificador_externo_habilitado ? '1' : '0'}" data-foto="${u.foto_obligatoria ? '1' : '0'}" data-masivo="${masivoDe[u.id] ? '1' : '0'}" data-dias='${JSON.stringify(u.dias_inspeccion || [])}' data-contr='${JSON.stringify(contratosDe[u.id] || [])}' data-mant='${JSON.stringify(mantenedoresDe[u.id] || [])}' data-modo='${modoAcceso(contratosDe[u.id] || [], mantenedoresDe[u.id] || [])}'>
         <td><input type="text" class="popup-input nombre-input" value="${u.nombre||''}" style="margin:0; padding:6px 8px;"></td>
         <td>${u.email || '—'}</td>
         <td><select class="rol-select" style="padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; font-size:12px;">${opciones}</select></td>
         <td class="notif-celda" style="white-space:nowrap;">${htmlCeldaNotificador(u.rol, u.notificador_externo_habilitado)}</td>
         <td class="foto-celda" style="white-space:nowrap;">${htmlCeldaFoto(u.rol, u.foto_obligatoria)}</td>
         <td class="masivo-celda" style="white-space:nowrap;">${htmlCeldaMasivo(u.rol, masivoDe[u.id])}</td>
-        <td class="contratos-celda" style="font-size:12px;">${htmlCeldaContratos(u.rol, contratosDe[u.id])}</td>
-        <td class="mant-celda" style="font-size:12px;">${htmlCeldaMantenedores(u.rol, mantenedoresDe[u.id])}</td>
+        <td class="contratos-celda" style="font-size:12px;">${htmlCeldaAcceso(u.rol, contratosDe[u.id] || [], mantenedoresDe[u.id] || [], modoAcceso(contratosDe[u.id] || [], mantenedoresDe[u.id] || []), u.id)}</td>
         <td><button class="reset-pass-btn" style="font-size:11px; border:1px solid var(--amber); color:var(--amber); background:#fff; border-radius:6px; padding:5px 10px; cursor:pointer;" ${!u.email?'disabled':''}>Enviar reset</button></td>
       </tr>`;
     }).join('');
@@ -10208,22 +10243,11 @@ async function cargarUsuarios(){
         if(chk) chk.onchange = () => { tr.dataset.foto = chk.checked ? '1' : '0'; };
       };
       enlazarFoto();
-      const celdaContr = tr.querySelector('.contratos-celda');
-      const enlazarContratos = () => celdaContr.querySelectorAll('.contrato-chk').forEach(ch => ch.onchange = () => {
-        tr.dataset.contr = JSON.stringify([...celdaContr.querySelectorAll('.contrato-chk:checked')].map(x => x.value));
-      });
-      enlazarContratos();
-      const celdaMant = tr.querySelector('.mant-celda');
-      const enlazarMantenedores = () => celdaMant.querySelectorAll('.mant-chk').forEach(ch => ch.onchange = () => {
-        tr.dataset.mant = JSON.stringify([...celdaMant.querySelectorAll('.mant-chk:checked')].map(x => x.value));
-      });
-      enlazarMantenedores();
+      pintarCeldaAcceso(tr);
       rolSelect.onchange = () => {
         const rolBase = baseRolDe(rolSelect.value);
-        celdaContr.innerHTML = htmlCeldaContratos(rolBase, JSON.parse(tr.dataset.contr || '[]'));
-        enlazarContratos();
-        celdaMant.innerHTML = htmlCeldaMantenedores(rolBase, JSON.parse(tr.dataset.mant || '[]'));
-        enlazarMantenedores();
+        tr.dataset.modo = '';
+        pintarCeldaAcceso(tr);
         celdaNotif.innerHTML = htmlCeldaNotificador(rolBase, tr.dataset.notif === '1');
         enlazarCasilla();
         celdaFoto.innerHTML = htmlCeldaFoto(rolBase, tr.dataset.foto === '1');
