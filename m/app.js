@@ -1624,11 +1624,9 @@ function listaLuminarias(lums, uso) {
 }
 function evaluarMantencion(ops, codigo, mono, lums) {
   if (!ops) return { tipo: 'nada' };
-  if (!codigo) {                                                        // aún sin código: si hay opciones distintas, ya se muestra el listado
-    const it = listaLuminarias(lums, mono ? 'VIAL' : null);
-    const dist = new Set(it.map((l) => [l.uso_grupo, l.contrato_id, l.mantenedor_id, l.estado].join('/')));
-    return dist.size > 1 ? { tipo: 'luminarias', uso: null, items: it } : { tipo: 'nada' };
-  }
+  const todas = listaLuminarias(lums, mono ? 'VIAL' : null);           // si el punto tiene opciones distintas: primero se elige la luminaria
+  if (new Set(todas.map((l) => [l.uso_grupo, l.contrato_id, l.mantenedor_id, l.estado].join('/'))).size > 1) return { tipo: 'luminarias', uso: null, items: todas };
+  if (!codigo) return { tipo: 'nada' };
   let uso = mono ? 'VIAL' : (USO_POR_CODIGO[codigo] || null);
   if (uso && !ops.some((o) => o.uso_grupo === uso)) uso = null;       // el punto no tiene ese uso
   const filas = uso ? ops.filter((o) => o.uso_grupo === uso) : ops;
@@ -1672,10 +1670,14 @@ function activarMantencionPunto(h, gid, mono) {
   const caja = $('#fMant', h);
   const pintar = () => {
     est.ev = evaluarMantencion(est.ops, est.codigo, mono, est.lums);
-    caja.innerHTML = htmlMantencion(est.ev, est.ev.tipo === 'luminarias' ? est.lum : est.sel);
+    const lista = est.ev.tipo === 'luminarias', top = $('#fMantTop', h), cuerpo = $('#fCuerpo', h);
+    if (top) top.innerHTML = lista ? htmlMantencion(est.ev, est.lum) : '';
+    caja.innerHTML = lista ? '' : htmlMantencion(est.ev, est.sel);
     const s = $('#fMantSel', caja);
     if (s) s.addEventListener('change', () => { est.sel = s.value; });
-    caja.querySelectorAll('.lum-op').forEach((b) => b.addEventListener('click', () => { est.lum = b.dataset.k; pintar(); }));
+    if (top) top.querySelectorAll('.lum-op').forEach((b) => b.addEventListener('click', () => { est.lum = b.dataset.k; pintar(); }));
+    // con opciones distintas, las opciones de falla aparecen recién después de elegir la luminaria
+    if (cuerpo) cuerpo.style.display = (lista && !est.ev.items.some((l) => l.key === est.lum)) ? 'none' : '';
   };
   rpc('opciones_punto', { p_gid: gid }).then((r) => { est.ops = r || []; pintar(); }).catch(() => { /* sin datos: se reporta como siempre */ });
   rpc('luminarias_punto', { p_gid: gid }).then((r) => { est.lums = r || []; pintar(); }).catch(() => { /* sin el SQL: se usa el selector de contrato */ });
@@ -1718,6 +1720,8 @@ function formReportePunto(p) {
   const h = abrirHoja(`
     <h2>Reportar falla</h2>
     <div class="hint">Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}${mono ? ' · monoposte' : ''}</div>
+    <div id="fMantTop"></div>
+    <div id="fCuerpo">
     <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
     <div id="fMant"></div>
     <h3>Cardinalidad (opcional)</h3>
@@ -1729,7 +1733,8 @@ function formReportePunto(p) {
     <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
     <div style="margin-top:12px">${modoTexto()}</div>
-    <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>`);
+    <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>
+    </div>`);
   $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
     mant.elegirCodigo(codigo);

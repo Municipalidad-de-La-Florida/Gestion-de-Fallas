@@ -96,9 +96,9 @@
   .mant-box{background:#e6f4fb; border:1px solid #a9d8ef; color:#0b4a6b; border-radius:8px; padding:7px 9px; font-size:12.5px; margin-top:8px;}
   .mant-box select{display:block; width:100%; margin-top:5px; padding:5px 6px; border:1.5px solid #7cc3e6; background:#f4fbff; border-radius:6px; font-size:12.5px;}
   .lum-lista{display:flex; flex-direction:column; gap:6px; margin-top:7px;}
-  .lum-op{all:unset; box-sizing:border-box; cursor:pointer; display:flex; flex-direction:column; gap:3px; padding:8px 10px; background:#fff; border:1.5px solid #b9d9ea; border-radius:8px; min-height:40px;}
-  .lum-op.sel{border-color:#1f7a52; background:#f1f8f4;}
-  .lum-t{font-size:13px; font-weight:700; color:#12384d;}
+  .lum-op{all:unset; box-sizing:border-box; cursor:pointer; display:flex; flex-direction:column; gap:3px; padding:8px 10px; background:var(--primary); border:1.5px solid var(--primary); color:#fff; border-radius:8px; min-height:40px;}
+  .lum-op.sel{border-color:var(--amber); background:var(--amber); color:#1c2b23; box-shadow:0 0 0 2px rgba(217,142,47,0.35);}
+  .lum-t{font-size:13px; font-weight:700;}
   .lum-s{display:flex; flex-wrap:wrap; gap:4px; align-items:center;}
   .mant-sin{background:#fff4e0; border:1px solid #f5d49a; color:#6b4300; border-radius:8px; padding:7px 9px; font-size:12.5px; margin-top:8px;}
   .tag-contrato{display:inline-block; background:#e6eefb; color:#2a5db0; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:1px;}
@@ -3124,11 +3124,9 @@ function listaLuminarias(lums, uso){
 }
 function evaluarMantencion(ops, codigo, mono, lums){
   if(!ops) return {tipo:'nada'};
-  if(!codigo){                                                          // aún sin código: si hay opciones distintas, ya se muestra el listado
-    const it = listaLuminarias(lums, mono ? 'VIAL' : null);
-    const dist = new Set(it.map(l => [l.uso_grupo, l.contrato_id, l.mantenedor_id, l.estado].join('/')));
-    return dist.size > 1 ? {tipo:'luminarias', uso:null, items:it} : {tipo:'nada'};
-  }
+  const todas = listaLuminarias(lums, mono ? 'VIAL' : null);           // si el punto tiene opciones distintas: primero se elige la luminaria
+  if(new Set(todas.map(l => [l.uso_grupo, l.contrato_id, l.mantenedor_id, l.estado].join('/'))).size > 1) return {tipo:'luminarias', uso:null, items:todas};
+  if(!codigo) return {tipo:'nada'};
   let uso = mono ? 'VIAL' : (USO_POR_CODIGO[codigo] || null);
   if(uso && !ops.some(o => o.uso_grupo === uso)) uso = null;          // el punto no tiene ese uso
   const filas = uso ? ops.filter(o => o.uso_grupo === uso) : ops;
@@ -3176,6 +3174,9 @@ function activarMantencionPunto(panel, gid, mono){
     const s = caja.querySelector('#mantSel');
     if(s) s.onchange = () => { est.sel = s.value; };
     caja.querySelectorAll('.lum-op').forEach(b => b.onclick = () => { est.lum = b.dataset.k; pintar(); });
+    // con opciones distintas, las opciones de falla aparecen recién después de elegir la luminaria
+    const cuerpo = panel.querySelector('#fallaCuerpo');
+    if(cuerpo) cuerpo.style.display = (est.ev.tipo === 'luminarias' && !est.ev.items.some(l => l.key === est.lum)) ? 'none' : '';
   };
   db.rpc('opciones_punto', {p_gid: gid}).then(r => { est.ops = r || []; pintar(); }).catch(() => { /* sin datos: se reporta como siempre */ });
   db.rpc('luminarias_punto', {p_gid: gid}).then(r => { est.lums = r || []; pintar(); }).catch(() => { /* sin el SQL: se usa el selector de contrato */ });
@@ -3223,6 +3224,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     <b>Falla individual - Pto. Lumínico Llave N.° ${llave}</b>
     <div class="hint" style="margin-top:2px;">N.° Municipal: <b>${nroMun ?? '—'}</b></div>
     <div id="mantBox"></div>
+    <div id="fallaCuerpo">
     ${htmlNotificador()}
     <div style="display:flex; gap:14px; margin-top:10px;">
       <div style="flex-shrink:0; width:110px;">
@@ -3244,6 +3246,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
       </div>
     </div>
     <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
+    </div>
   `);
   panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
     panel.querySelectorAll('.codigo-btn').forEach(x => x.classList.remove('sel'));
