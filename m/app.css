@@ -398,8 +398,8 @@ textarea.campo{ min-height:70px; }
 .mant-box{ background:#e6f4fb; border:1px solid #a9d8ef; color:#0b4a6b; border-radius:12px; padding:10px 12px; font-size:14px; margin:10px 0; }
 .mant-box .campo{ margin-top:6px; border-color:#7cc3e6; background:#f4fbff; }
 .lum-lista{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-.lum-op{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:10px 12px;background:var(--verde);border:1.5px solid var(--verde);color:#fff;border-radius:12px;min-height:44px}
-.lum-op.sel{border-color:#d98e2f;background:#d98e2f;color:#1c2b23;box-shadow:0 0 0 2px rgba(217,142,47,.35)}
+.lum-op{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:4px;padding:10px 12px;background:#d6ebdf;border:1.5px solid #9ccbb2;color:#1f4d3d;border-radius:12px;min-height:44px}
+.lum-op.sel{border-color:#e3b46a;background:#fbe6c3;color:#5a3a00;box-shadow:0 0 0 2px rgba(217,142,47,.25)}
 .lum-t{font-size:14px;font-weight:700}
 .lum-s{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
 .tag-sinmant{display:inline-block;background:#e5e7eb;color:#4b5563;border-radius:6px;padding:0 6px;font-size:11px;font-weight:700}

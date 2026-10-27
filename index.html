@@ -96,8 +96,9 @@
   .mant-box{background:#e6f4fb; border:1px solid #a9d8ef; color:#0b4a6b; border-radius:8px; padding:7px 9px; font-size:12.5px; margin-top:8px;}
   .mant-box select{display:block; width:100%; margin-top:5px; padding:5px 6px; border:1.5px solid #7cc3e6; background:#f4fbff; border-radius:6px; font-size:12.5px;}
   .lum-lista{display:flex; flex-direction:column; gap:6px; margin-top:7px;}
-  .lum-op{all:unset; box-sizing:border-box; cursor:pointer; display:flex; flex-direction:column; gap:3px; padding:8px 10px; background:var(--primary); border:1.5px solid var(--primary); color:#fff; border-radius:8px; min-height:40px;}
-  .lum-op.sel{border-color:var(--amber); background:var(--amber); color:#1c2b23; box-shadow:0 0 0 2px rgba(217,142,47,0.35);}
+  .lum-op{all:unset; box-sizing:border-box; cursor:pointer; display:flex; flex-direction:column; gap:3px; padding:8px 10px; background:#d6ebdf; border:1.5px solid #9ccbb2; color:#1f4d3d; border-radius:8px; min-height:40px;}
+  .lum-op:hover{background:#c8e4d6;}
+  .lum-op.sel{border-color:#e3b46a; background:#fbe6c3; color:#5a3a00; box-shadow:0 0 0 2px rgba(217,142,47,0.25);}
   .lum-t{font-size:13px; font-weight:700;}
   .lum-s{display:flex; flex-wrap:wrap; gap:4px; align-items:center;}
   .mant-sin{background:#fff4e0; border:1px solid #f5d49a; color:#6b4300; border-radius:8px; padding:7px 9px; font-size:12.5px; margin-top:8px;}
@@ -3173,7 +3174,7 @@ function activarMantencionPunto(panel, gid, mono){
     caja.innerHTML = htmlMantencion(est.ev, est.ev.tipo === 'luminarias' ? est.lum : est.sel);
     const s = caja.querySelector('#mantSel');
     if(s) s.onchange = () => { est.sel = s.value; };
-    caja.querySelectorAll('.lum-op').forEach(b => b.onclick = () => { est.lum = b.dataset.k; pintar(); });
+    caja.querySelectorAll('.lum-op').forEach(b => b.onclick = (ev) => { ev.stopPropagation(); est.lum = b.dataset.k; pintar(); });   // el botón se vuelve a dibujar: sin stopPropagation el clic llegaba al mapa y cerraba el panel
     // con opciones distintas, las opciones de falla aparecen recién después de elegir la luminaria
     const cuerpo = panel.querySelector('#fallaCuerpo');
     if(cuerpo) cuerpo.style.display = (est.ev.tipo === 'luminarias' && !est.ev.items.some(l => l.key === est.lum)) ? 'none' : '';
