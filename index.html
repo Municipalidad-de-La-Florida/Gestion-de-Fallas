@@ -85,7 +85,7 @@
   .panel-acciones{position:absolute; top:5px; right:34px; display:flex; gap:6px;}
   .panel-titulo{padding-right:76px; margin-bottom:2px; line-height:1.45; font-size:13px;}
   .panel-titulo .pt-nom{font-weight:700;}
-  .panel-titulo .tag-contrato,.panel-titulo .tag-masivo,.panel-titulo .badge{white-space:nowrap; vertical-align:middle;}
+  .panel-titulo .tag-contrato,.panel-titulo .tag-mantenedor,.panel-titulo .tag-masivo,.panel-titulo .badge{white-space:nowrap; vertical-align:middle;}
   .panel-titulo .badge{margin-left:6px;}
   .btn-masivo{
     position:absolute; top:6px; right:34px; cursor:pointer; font-weight:700; font-size:11.5px; line-height:1.3;
@@ -93,7 +93,11 @@
   }
   .btn-masivo.on{background:#7c3aed; color:#fff; box-shadow:0 0 0 3px rgba(124,58,237,.25);}
   .report-panel:has(.btn-masivo) > b:first-of-type{display:block; padding-right:105px;}
+  .mant-box{background:#e6f4fb; border:1px solid #a9d8ef; color:#0b4a6b; border-radius:8px; padding:7px 9px; font-size:12.5px; margin-top:8px;}
+  .mant-box select{display:block; width:100%; margin-top:5px; padding:5px 6px; border:1.5px solid #7cc3e6; background:#f4fbff; border-radius:6px; font-size:12.5px;}
+  .mant-sin{background:#fff4e0; border:1px solid #f5d49a; color:#6b4300; border-radius:8px; padding:7px 9px; font-size:12.5px; margin-top:8px;}
   .tag-contrato{display:inline-block; background:#e6eefb; color:#2a5db0; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:1px;}
+  .tag-mantenedor{display:inline-block; background:#efe3fb; color:#6a2fb0; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:1px;}
   .tag-masivo{display:inline-block; background:#7c3aed; color:#fff; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:middle;}
   .chip-estado.morado:hover{border-color:#7c3aed;}
   .chip-estado.morado.activo{border-color:#7c3aed; background:#f3edff; color:#7c3aed;}
@@ -3089,6 +3093,75 @@ function recordarNotificador(r){
   else { guardarSesionNotificador(d); actualizarChipNotificador(); }
 }
 
+// ---------- Contrato y mantenedor del reporte (selector celeste y aviso "Sin Mantenimiento") ----------
+// El uso (vial o peatonal) lo define el código de falla; con los códigos ambiguos no se pregunta: se exige el comentario.
+const USO_POR_CODIGO = {F01:'VIAL', F04:'VIAL', F05:'VIAL', F29:'PEATONAL', F32:'PEATONAL', F33:'PEATONAL'};
+function evaluarMantencion(ops, codigo, mono){
+  if(!ops || !codigo) return {tipo:'nada'};
+  let uso = mono ? 'VIAL' : (USO_POR_CODIGO[codigo] || null);
+  if(uso && !ops.some(o => o.uso_grupo === uso)) uso = null;          // el punto no tiene ese uso
+  const filas = uso ? ops.filter(o => o.uso_grupo === uso) : ops;
+  if(!filas.length) return {tipo:'sin', uso:null};
+  const distintas = [...new Map(filas.map(o => [`${o.contrato_id||'-'}/${o.mantenedor_id||'-'}/${o.estado}`, o])).values()];
+  const usos = [...new Set(filas.map(o => o.uso_grupo))];
+  if(!uso && usos.length === 1) uso = usos[0];
+  const ok = distintas.filter(o => o.estado === 'ok');
+  if(!ok.length) return {tipo:'sin', uso};
+  if(distintas.length === 1 || ok.length === 1) return {tipo:'info', uso, texto:`${ok[0].contrato} · ${ok[0].mantenedor}`};
+  if(!uso) return {tipo:'comentario', uso:null};                      // vial y peatonal con distinto mantenedor
+  const mismoContrato = new Set(ok.map(o => o.contrato_id)).size < ok.length;
+  return {tipo:'elegir', uso, comentarioObligatorio:mismoContrato,
+    opciones: ok.map(o => ({contrato_id:o.contrato_id, mantenedor_id:o.mantenedor_id, etiqueta: mismoContrato ? `${o.contrato} · ${o.mantenedor}` : o.contrato}))};
+}
+function htmlSinMantenimiento(que){
+  return `<div class="mant-sin"><b>Sin Mantenimiento</b><br>${que} no tiene contrato de mantención. Puedes reportar igual: la falla la verá la administración / ITO.</div>`;
+}
+function htmlMantencion(ev, sel){
+  if(ev.tipo === 'info') return `<div class="mant-box">Mantiene: <b>${escHtml(ev.texto)}</b></div>`;
+  if(ev.tipo === 'sin') return htmlSinMantenimiento('Este punto');
+  if(ev.tipo === 'comentario') return '<div class="mant-box">Este punto tiene luminarias vial y peatonal con distinto mantenedor. <b>Escribe en el comentario cuál es.</b></div>';
+  if(ev.tipo === 'elegir'){
+    const ops = ev.opciones.map((o, i) => `<option value="${i}"${String(i) === String(sel) ? ' selected' : ''}>${escHtml(o.etiqueta)}</option>`).join('');
+    return `<div class="mant-box"><b>Contrato</b> · ¿quién mantiene esta luminaria?
+      <select id="mantSel" aria-label="Contrato"><option value="">Elige el contrato…</option>${ops}</select>
+      ${ev.comentarioObligatorio ? '<div style="margin-top:5px;"><b>Comentario obligatorio:</b> indica cuál luminaria falló.</div>' : ''}</div>`;
+  }
+  return '';
+}
+function activarMantencionPunto(panel, gid, mono){
+  const est = {ops:null, codigo:null, sel:'', ev:{tipo:'nada'}};
+  const caja = panel.querySelector('#mantBox');
+  const pintar = () => {
+    est.ev = evaluarMantencion(est.ops, est.codigo, mono);
+    caja.innerHTML = htmlMantencion(est.ev, est.sel);
+    const s = caja.querySelector('#mantSel');
+    if(s) s.onchange = () => { est.sel = s.value; };
+  };
+  db.rpc('opciones_punto', {p_gid: gid}).then(r => { est.ops = r || []; pintar(); }).catch(() => { /* sin datos: se reporta como siempre */ });
+  return {
+    elegirCodigo(c){ est.codigo = c; pintar(); },
+    // devuelve {error} o {datos} con uso_grupo / contrato_id / mantenedor_id para la falla
+    validar(desc){
+      const ev = est.ev, datos = {};
+      if(ev.tipo === 'elegir'){
+        if(est.sel === '') return {error:'Elige el contrato que mantiene esta luminaria.'};
+        const o = ev.opciones[Number(est.sel)];
+        datos.contrato_id = o.contrato_id; datos.mantenedor_id = o.mantenedor_id;
+        if(ev.comentarioObligatorio && !desc) return {error:'Escribe un comentario: indica cuál luminaria falló.'};
+      }
+      if(ev.tipo === 'comentario' && !desc) return {error:'Escribe un comentario: indica si es la luminaria vial o la peatonal.'};
+      if(ev.uso) datos.uso_grupo = ev.uso;
+      return {datos};
+    }
+  };
+}
+async function avisoMantencionCircuito(panel, gid){
+  try{
+    const e = await db.rpc('estado_mantencion_circuito', {p_gid: gid});
+    if(e !== 'ok') panel.querySelector('#mantBox').innerHTML = htmlSinMantenimiento('Este circuito');
+  }catch(err){ /* sin datos: se reporta como siempre */ }
+}
+
 function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
   let codigoSel = null, cardSel = null;
   const catPunto = esMonoposte ? 'monoposte' : 'punto';
@@ -3099,10 +3172,9 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     </div>
   `);
   const panel = mostrarPanel(`
-    ${htmlBotonMasivo(false)}
     <b>Falla individual - Pto. Lumínico Llave N.° ${llave}</b>
     <div class="hint" style="margin-top:2px;">N.° Municipal: <b>${nroMun ?? '—'}</b></div>
-    ${htmlSelectContrato(null, false)}
+    <div id="mantBox"></div>
     ${htmlNotificador()}
     <div style="display:flex; gap:14px; margin-top:10px;">
       <div style="flex-shrink:0; width:110px;">
@@ -3128,22 +3200,26 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
   panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
     panel.querySelectorAll('.codigo-btn').forEach(x => x.classList.remove('sel'));
     b.classList.add('sel'); codigoSel = b.dataset.c;
+    mant.elegirCodigo(codigoSel);
   });
   panel.querySelectorAll('.rosca button').forEach(b => b.onclick = () => {
     panel.querySelectorAll('.rosca button').forEach(x => x.classList.remove('sel'));
     b.classList.add('sel'); cardSel = b.dataset.r || null;
   });
+  const mant = activarMantencionPunto(panel, puntoGid, !!esMonoposte);
   panel.querySelector('#confirmarBtn').onclick = async () => {
     if(!codigoSel){ alert('Selecciona un código de falla.'); return; }
     const desc = panel.querySelector('#otroDesc').value.trim();
     if(codigoSel === 'OTRO' && !desc){ alert('Describe la falla.'); return; }
+    const mv = mant.validar(desc);
+    if(mv.error){ alert(mv.error); return; }
     const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
     const oe = leerOrdenExterna(panel);
     if(oe.error){ alert(oe.error); return; }
     const ordenExterna = oe.valor;
     const notif = puedeNotificadorExterno() ? await leerNotificador(panel) : null;
     if(notif && notif.error){ alert(notif.error); return; }
-    const ok = await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna, notif && notif.extra, leerMasivo(panel), leerMasivo(panel) ? leerContrato(panel) : null);
+    const ok = await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna, notif && notif.extra, false, null, mv.datos);
     if(ok) recordarNotificador(notif);
     cerrarPanel();
   };
@@ -3171,9 +3247,8 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
     </div>
   `);
   const panel = mostrarPanel(`
-    ${htmlBotonMasivo(false)}
     <b>Falla de circuito ${idOriginal||''}</b>
-    ${htmlSelectContrato(null, false)}
+    <div id="mantBox"></div>
     ${htmlNotificador()}
     <div style="margin-top:10px;">
       ${filasCatalogo}
@@ -3196,10 +3271,11 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
     const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
     const notif = puedeNotificadorExterno() ? await leerNotificador(panel) : null;
     if(notif && notif.error){ alert(notif.error); return; }
-    const ok = await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna, notif && notif.extra, leerMasivo(panel), leerMasivo(panel) ? leerContrato(panel) : null);
+    const ok = await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna, notif && notif.extra, false, null);
     if(ok) recordarNotificador(notif);
     cerrarPanel();
   };
+  avisoMantencionCircuito(panel, circuitoGid);
   activarOrdenExterna(panel);
   activarNotificador(panel);
   protegerClick(panel.querySelector('#confirmarBtn'));
@@ -3700,7 +3776,7 @@ async function abrirPopupFalla(feat){
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
-  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${p.masivo ? ' <span class="tag-masivo">Masivo</span>' : ''}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
+  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${mantenedorTag(p.mantenedor_id)}${p.masivo ? ' <span class="tag-masivo">Masivo</span>' : ''}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   // Quién puede dejar un comentario en una falla ya creada (todos menos el observador); los puntos de cascada comentan en su circuito
@@ -4026,14 +4102,18 @@ async function enfocarFalla(fallaId, abrirPopup){
 }
 window.enfocarFalla = enfocarFalla;
 // ---- Contratos de una falla ----
-let CONTRATOS_ACTIVOS = [], CONTRATOS_MAPA = {}, _contratosPromesa = null;
+let CONTRATOS_ACTIVOS = [], CONTRATOS_MAPA = {}, MANTENEDORES_MAPA = {}, _contratosPromesa = null;
 function asegurarContratos(forzar){
   if(_contratosPromesa && !forzar) return _contratosPromesa;
   _contratosPromesa = db.select('contratos', 'select=id,nombre,activo&order=nombre.asc').then(l => {
     CONTRATOS_MAPA = {}; l.forEach(c => { CONTRATOS_MAPA[c.id] = c.nombre; });
     CONTRATOS_ACTIVOS = l.filter(c => c.activo);
   }).catch(e => { console.warn('No se pudieron cargar los contratos (¿ejecutaste el SQL de contratos?):', e); _contratosPromesa = null; });
+  db.select('mantenedores', 'select=id,nombre').then(l => { (l || []).forEach(m => { MANTENEDORES_MAPA[m.id] = m.nombre; }); renderFallasList(); }).catch(() => { /* sin la tabla de mantenedores: sin etiqueta */ });
   return _contratosPromesa;
+}
+function mantenedorTag(id){
+  return (id && MANTENEDORES_MAPA[id]) ? `<span class="tag-mantenedor" title="Mantenedor">${escHtml(MANTENEDORES_MAPA[id])}</span>` : '';
 }
 function contratoTag(id){
   return (id && CONTRATOS_MAPA[id]) ? `<span class="tag-contrato" title="Contrato">${escHtml(CONTRATOS_MAPA[id])}</span>` : '';
@@ -4054,7 +4134,7 @@ function htmlBotonMasivo(on){
 function leerMasivo(panel){ return !!panel.querySelector('.btn-masivo.on'); }
 
 // extra (opcional): {fechaISO, notificadorId} elegidos en la ventana de "Agregar falla" (usuarios con el permiso)
-async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna, extra, masivo, contratoId){
+async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna, extra, masivo, contratoId, mantDatos){
   try{
     const fila = {
       tipo:'punto', ref_punto_gid:puntoGid, tipo_falla:tipoFalla,
@@ -4064,6 +4144,7 @@ async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtr
     if(ordenExterna) fila.orden_externa = ordenExterna;
     if(masivo) fila.masivo = true;
     if(contratoId) fila.contrato_id = contratoId;
+    if(mantDatos) Object.assign(fila, mantDatos);   // uso_grupo, contrato_id y mantenedor_id elegidos en el selector
     if(fechaCustom) fila.fecha_falla = fechaChileLocal(fechaCustom, 23, 50, 0).toISOString();
     if(extra && extra.fechaISO) fila.fecha_falla = extra.fechaISO;
     if(extra && extra.notificadorId) fila.notificador_id = extra.notificadorId;
@@ -4129,7 +4210,7 @@ async function cargarFallasDelArea(){
   try{
     await asegurarContratos();
     const query = 'select=id,ot,orden_externa,tipo,tipo_falla,estado,cascada,asignado_camion_id,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,fecha_pendiente,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
-      + ',masivo,contrato_id'
+      + ',masivo,contrato_id,mantenedor_id'
       + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=1000';
     fallasEnArea = await db.select('fallas', query);
     renderFallasList();
@@ -4153,7 +4234,7 @@ function resaltarTexto(texto, terminos){
 function normalizarFilaLateral(f){
   const esBusqueda = 'nombre_creador' in f;
   return {
-    id: f.id, ot: f.ot, masivo: !!f.masivo, contrato_id: f.contrato_id || null, asignado: f.asignado_camion_id || (f.asignado_camion_nombre ? 'asignada' : null), orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
+    id: f.id, ot: f.ot, masivo: !!f.masivo, contrato_id: f.contrato_id || null, mantenedor_id: f.mantenedor_id || null, asignado: f.asignado_camion_id || (f.asignado_camion_nombre ? 'asignada' : null), orden_externa: f.orden_externa || '', tipo: f.tipo, tipo_falla: f.tipo_falla, estado: f.estado,
     fecha: f.fecha_creacion, fecha_pendiente: f.fecha_pendiente || null, creado_en: f.creado_en, creado_por: f.creado_por,
     quien: esBusqueda ? (f.nombre_creador || '—') : (f.notificadores ? f.notificadores.nombre : (f.usuarios ? f.usuarios.nombre : '—')),
     llave: esBusqueda ? f.llave : (f.puntos_luminarios ? f.puntos_luminarios.llave : null)
@@ -4324,7 +4405,7 @@ function renderFallasList(){
     const lineaLlave = (buscando && f.llave != null && terminos.some(t => String(f.llave).toLowerCase().includes(t.toLowerCase())))
       ? `<div class="fi-nom" style="margin-top:1px;">Llave ${resaltarTexto(f.llave, terminos)}</div>` : '';
     return `<div class="fi fi-est-${claveColorFalla(f.estado, f.creado_en || f.fecha, null)}" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
-      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}${contratoTag(f.contrato_id)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
+      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}${contratoTag(f.contrato_id)}${mantenedorTag(f.mantenedor_id)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
       <div class="fi-nom">${escHtml(nombreFalla)}</div>
       <div class="fi-2"><span class="fi-q">${resaltarTexto(f.quien, terminos)}</span><span class="fi-oe${f.orden_externa ? '' : ' vacio'}">OE: ${f.orden_externa ? resaltarTexto(f.orden_externa, terminos) : '—'}</span><span class="fi-fh">${fechaTxt}</span></div>
       ${lineaLlave}
