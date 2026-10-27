@@ -3123,7 +3123,12 @@ function listaLuminarias(lums, uso){
     .map(l => ({...l, key:[l.uso_grupo, l.modelo, l.potencia, l.uso, l.contrato_id || '-', l.mantenedor_id || '-'].join('|')}));
 }
 function evaluarMantencion(ops, codigo, mono, lums){
-  if(!ops || !codigo) return {tipo:'nada'};
+  if(!ops) return {tipo:'nada'};
+  if(!codigo){                                                          // aún sin código: si hay opciones distintas, ya se muestra el listado
+    const it = listaLuminarias(lums, mono ? 'VIAL' : null);
+    const dist = new Set(it.map(l => [l.uso_grupo, l.contrato_id, l.mantenedor_id, l.estado].join('/')));
+    return dist.size > 1 ? {tipo:'luminarias', uso:null, items:it} : {tipo:'nada'};
+  }
   let uso = mono ? 'VIAL' : (USO_POR_CODIGO[codigo] || null);
   if(uso && !ops.some(o => o.uso_grupo === uso)) uso = null;          // el punto no tiene ese uso
   const filas = uso ? ops.filter(o => o.uso_grupo === uso) : ops;
