@@ -3541,7 +3541,6 @@ async function abrirEditorFalla(p){
 
   let codigoSel = fila.tipo_falla;
   const panel = mostrarPanel(`
-    ${htmlBotonMasivo(!!fila.masivo)}
     <b>✏️ Editar falla · OS ${escHtml(p.ot || '—')}</b>
     <div class="hint" style="margin-top:2px;">${esCircuito ? 'Circuito' : 'Punto lumínico'} · la ubicación no se puede cambiar (si está mal, elimina la falla y créala de nuevo).${esCircuito ? ' Los cambios también se aplican a sus puntos afectados.' : ''}</div>
     ${puedeEditarContrato() ? htmlSelectContrato(fila.contrato_id || null, true) : ''}
@@ -3590,7 +3589,6 @@ async function abrirEditorFalla(p){
     if(codigoSel !== fila.tipo_falla) cambios.tipo_falla = codigoSel;
     if(desc !== (fila.descripcion_otro || '')) cambios.descripcion_otro = desc;
     if((oe.valor || null) !== (fila.orden_externa || null)) cambios.orden_externa = oe.valor;
-    if(leerMasivo(panel) !== !!fila.masivo) cambios.masivo = leerMasivo(panel);
     if(panel.querySelector('.sel-contrato-sel') && (leerContrato(panel) || null) !== (fila.contrato_id || null)) cambios.contrato_id = leerContrato(panel);
 
     if(permisoNotif){
@@ -3792,7 +3790,7 @@ async function abrirPopupFalla(feat){
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
-  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${mantenedorTag(p.mantenedor_id)}${p.contrato_id ? '' : derivacionTag(p.derivacion)}${p.masivo ? ' <span class="tag-masivo">Masivo</span>' : ''}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
+  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${mantenedorTag(p.mantenedor_id)}${p.contrato_id ? '' : derivacionTag(p.derivacion)}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   // Quién puede dejar un comentario en una falla ya creada (todos menos el observador); los puntos de cascada comentan en su circuito
@@ -4426,7 +4424,7 @@ function renderFallasList(){
     const lineaLlave = (buscando && f.llave != null && terminos.some(t => String(f.llave).toLowerCase().includes(t.toLowerCase())))
       ? `<div class="fi-nom" style="margin-top:1px;">Llave ${resaltarTexto(f.llave, terminos)}</div>` : '';
     return `<div class="fi fi-est-${claveColorFalla(f.estado, f.creado_en || f.fecha, null)}" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
-      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}${contratoTag(f.contrato_id)}${mantenedorTag(f.mantenedor_id)}${f.contrato_id ? '' : derivacionTag(f.derivacion)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
+      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${contratoTag(f.contrato_id)}${mantenedorTag(f.mantenedor_id)}${f.contrato_id ? '' : derivacionTag(f.derivacion)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
       <div class="fi-nom">${escHtml(nombreFalla)}</div>
       <div class="fi-2"><span class="fi-q">${resaltarTexto(f.quien, terminos)}</span><span class="fi-oe${f.orden_externa ? '' : ' vacio'}">OE: ${f.orden_externa ? resaltarTexto(f.orden_externa, terminos) : '—'}</span><span class="fi-fh">${fechaTxt}</span></div>
       ${lineaLlave}
@@ -5495,7 +5493,7 @@ function renderTodasFallasTabla(){
     }
 
     return `<tr onclick="enfocarFalla('${f.id}')">
-      <td class="mono col-os">${f.ot || '—'}${f.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}</td>
+      <td class="mono col-os">${f.ot || '—'}</td>
       <td class="mono">${f.orden_externa ? escHtml(f.orden_externa) : '—'}</td>
       <td>${fechaCelda}</td>
       ${fechaReal}

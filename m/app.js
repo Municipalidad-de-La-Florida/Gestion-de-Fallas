@@ -1795,7 +1795,6 @@ async function editarFallaApp(p) {
   const cat = catalogoActivo(nomCat, fila.tipo_falla);
   let codigo = fila.tipo_falla;
   const h = abrirHoja(`
-    ${htmlBotonMasivo()}
     <h2>Editar falla · OS ${esc(p.ot || '—')}</h2>
     <div class="hint">${esc(tipoLabel(p))}${p.tipo === 'punto' ? ` · llave ${esc(p.llave ?? '—')}` : ''}. La ubicación no se puede cambiar: si está mal, elimina la falla y vuelve a informarla.${esCircuito ? ' Los cambios también se aplican a sus puntos afectados.' : ''}</div>
     <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
@@ -1810,9 +1809,6 @@ async function editarFallaApp(p) {
   $('#fDesc', h).value = fila.descripcion_otro || '';
   const m = /^([SE])-(.*)$/.exec(fila.orden_externa || '');
   if (m) { $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
-  const bm = $('#fMasivo', h);
-  if (fila.masivo) { bm.classList.add('on'); bm.setAttribute('aria-pressed', 'true'); }
-  activarBotonMasivo(h);
   const gu = $('#fGuardar', h);
   gu.addEventListener('click', ocupar(gu, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -1821,7 +1817,7 @@ async function editarFallaApp(p) {
     const oe = leerOrdenExterna(h);
     if (oe.error) { toast(oe.error, 'error'); return; }
     gu.textContent = 'Guardando…';
-    await rpc('editar_falla', { p_id: p.id, p_cambios: { tipo_falla: codigo, descripcion_otro: desc || null, orden_externa: oe.valor, masivo: leerMasivo(h) } });
+    await rpc('editar_falla', { p_id: p.id, p_cambios: { tipo_falla: codigo, descripcion_otro: desc || null, orden_externa: oe.valor } });
     cerrarHoja();
     toast('Falla actualizada', 'ok');
     cargarFallas();
