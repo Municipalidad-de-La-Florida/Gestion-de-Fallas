@@ -1649,10 +1649,15 @@ function listaLuminarias(lums, uso) {
 function evaluarMantencion(ops, codigo, mono, lums) {
   if (!ops) return { tipo: 'nada' };
   const todas = listaLuminarias(lums, mono ? 'VIAL' : null);           // si el punto tiene opciones distintas: primero se elige la luminaria
-  if (new Set(todas.map((l) => [l.uso_grupo, l.contrato_id, l.mantenedor_id, l.estado].join('/'))).size > 1) return { tipo: 'luminarias', uso: null, items: todas };
+  const distintasLum = new Set(todas.map((l) => [l.uso_grupo, l.contrato_id, l.mantenedor_id, l.estado].join('/')));
+  // Si lo único que cambia es el uso (una luminaria vial y otra peatonal, cada una con un solo contrato/mantenedor), decide el código de falla
+  const porUso = new Map(); todas.forEach((l) => { if (!porUso.has(l.uso_grupo)) porUso.set(l.uso_grupo, new Set()); porUso.get(l.uso_grupo).add([l.contrato_id, l.mantenedor_id, l.estado].join('/')); });
+  const decideCodigo = porUso.size > 1 && [...porUso.values()].every((x) => x.size === 1);
+  if (distintasLum.size > 1 && !decideCodigo) return { tipo: 'luminarias', uso: null, items: todas };
   if (!codigo) return { tipo: 'nada' };
   let uso = mono ? 'VIAL' : (USO_POR_CODIGO[codigo] || null);
   if (uso && !ops.some((o) => o.uso_grupo === uso)) uso = null;       // el punto no tiene ese uso
+  if (decideCodigo && !uso && distintasLum.size > 1) return { tipo: 'luminarias', uso: null, items: todas, trasCodigo: true };   // código genérico (pintar poste, otro…): ahí sí se elige la luminaria
   const filas = uso ? ops.filter((o) => o.uso_grupo === uso) : ops;
   if (!filas.length) return { tipo: 'sin', uso: null };
   const distintas = [...new Map(filas.map((o) => [`${o.contrato_id || '-'}/${o.mantenedor_id || '-'}/${o.estado}`, o])).values()];
@@ -1679,7 +1684,7 @@ function htmlMantencion(ev, sel) {
     const filas = ev.items.map((l) => `<button type="button" class="lum-op${l.key === sel ? ' sel' : ''}" data-k="${esc(l.key)}">
       <span class="lum-t">${esc(l.modelo)} - ${l.potencia == null ? 's/d' : l.potencia + ' W'} - ${esc(l.uso)}${l.n > 1 ? ' (×' + l.n + ')' : ''}</span>
       <span class="lum-s">${l.estado === 'ok' ? `<span class="tag-ctr n" style="margin-left:0">${esc(l.contrato)}</span><span class="tag-mant">${esc(l.mantenedor)}</span>` : '<span class="tag-sinmant">Sin Mantenimiento</span>'}</span></button>`).join('');
-    return `<div class="mant-box"><b>¿Qué luminaria está fallando?</b> Este punto tiene luminarias con distinto mantenimiento. Elige la que reportas.<div class="lum-lista">${filas}</div></div>`;
+    return `<div class="mant-box"><b>¿Qué luminaria está fallando?</b> ${ev.trasCodigo ? 'Esta falla no distingue entre vial y peatonal.' : 'Este punto tiene luminarias con distinto mantenimiento.'} Elige la que reportas.<div class="lum-lista">${filas}</div></div>`;
   }
   if (ev.tipo === 'elegir') {
     const ops = ev.opciones.map((o, i) => `<option value="${i}"${String(i) === String(sel) ? ' selected' : ''}>${esc(o.etiqueta)}</option>`).join('');
@@ -1701,7 +1706,7 @@ function activarMantencionPunto(h, gid, mono) {
     if (s) s.addEventListener('change', () => { est.sel = s.value; });
     if (top) top.querySelectorAll('.lum-op').forEach((b) => b.addEventListener('click', () => { est.lum = b.dataset.k; pintar(); }));
     // con opciones distintas, las opciones de falla aparecen recién después de elegir la luminaria
-    if (cuerpo) cuerpo.style.display = (lista && !est.ev.items.some((l) => l.key === est.lum)) ? 'none' : '';
+    if (cuerpo) cuerpo.style.display = (lista && !est.ev.trasCodigo && !est.ev.items.some((l) => l.key === est.lum)) ? 'none' : '';
   };
   rpc('opciones_punto', { p_gid: gid }).then((r) => { est.ops = r || []; pintar(); }).catch(() => { /* sin datos: se reporta como siempre */ });
   rpc('luminarias_punto', { p_gid: gid }).then((r) => { est.lums = r || []; pintar(); }).catch(() => { /* sin el SQL: se usa el selector de contrato */ });
