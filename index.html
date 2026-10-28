@@ -81,6 +81,17 @@
     max-height:min(75vh, calc(100% - 32px)); overflow-y:auto; box-shadow:0 10px 34px rgba(0,0,0,0.2);
   }
   .report-panel.visible{display:block;}
+  /* Ventana de fallas/reparación en dos columnas: el botón de confirmar queda siempre visible y solo se desplazan las columnas */
+  .report-panel.rp-flex{overflow:hidden;}
+  .report-panel.rp-flex.visible{display:flex; flex-direction:column;}
+  .report-panel.rp-flex > *{flex:none;}
+  .report-panel.rp-flex > .rp-cuerpo, .rp-cuerpo{display:flex; flex-direction:column; flex:1 1 auto; min-height:0;}
+  .report-panel.rp-flex > .rp-cols{flex:1 1 auto;}
+  .rp-cols{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; flex:1 1 auto; min-height:0; margin-top:10px;}
+  .rp-cols > div{min-width:0; min-height:0; overflow-y:auto; padding-right:2px;}
+  .rp-cuerpo > .popup-btn, .rp-pie{flex:none;}
+  .rp-pie{padding-top:4px;}
+  .rp-cols textarea.popup-input{min-height:120px;}
   .falla-opcion-row{
     display:flex; align-items:center; gap:10px;
     padding:6px 0; border-bottom:1px solid var(--line); font-size:11.5px;
@@ -2013,8 +2024,9 @@ document.getElementById('logoutBtn').onclick = () => {
 };
 
 // ---------- PANEL FLOTANTE (independiente del mapa, no se destruye al moverlo) ----------
-function mostrarPanel(innerHtml){
+function mostrarPanel(innerHtml, dosColumnas){
   const panel = document.getElementById('reportPanel');
+  panel.classList.toggle('rp-flex', !!dosColumnas);   // dosColumnas: confirmar fijo y scroll solo en las columnas
   panel.innerHTML = '<button class="close-x" onclick="cerrarPanel()">×</button>' + innerHtml;
   panel.classList.add('visible');
   ajustarIndicadorFallas();
@@ -3275,40 +3287,26 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     <b>Falla individual - Pto. Lumínico Llave N.° ${llave}</b>
     <div class="hint" style="margin-top:2px;">N.° Municipal: <b>${nroMun ?? '—'}</b></div>
     <div id="mantBox"></div>
-    <div id="fallaCuerpo">
-    ${htmlNotificador()}
-    <div style="display:flex; gap:14px; margin-top:10px;">
-      <div style="flex-shrink:0; width:110px;">
-        <div class="hint" style="margin-bottom:4px;">Cardinalidad (opcional):</div>
-        <div class="rosca">
-          <button class="n" data-r="N">N</button>
-          <button class="o" data-r="O">O</button>
-          <button class="c" data-r="">·</button>
-          <button class="p" data-r="P">P</button>
-          <button class="s" data-r="S">S</button>
-        </div>
-      </div>
-      <div style="flex:1; min-width:0;">
-        <div id="codigosCont">
-          ${filasCatalogo}
-        </div>
+    <div id="fallaCuerpo" class="rp-cuerpo">
+    <div class="rp-cols">
+      <div class="rp-izq">
+        ${htmlNotificador()}
         <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
         ${htmlOrdenExterna()}
+      </div>
+      <div class="rp-der" id="codigosCont">
+        ${filasCatalogo}
       </div>
     </div>
     <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
     </div>
-  `);
+  `, true);
   const ligarCodigos = () => panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
     panel.querySelectorAll('.codigo-btn').forEach(x => x.classList.remove('sel'));
     b.classList.add('sel'); codigoSel = b.dataset.c;
     mant.elegirCodigo(codigoSel);
   });
   ligarCodigos();
-  panel.querySelectorAll('.rosca button').forEach(b => b.onclick = () => {
-    panel.querySelectorAll('.rosca button').forEach(x => x.classList.remove('sel'));
-    b.classList.add('sel'); cardSel = b.dataset.r || null;
-  });
   const mant = activarMantencionPunto(panel, puntoGid, !!esMonoposte, (usos, nLum) => {
     if(esMonoposte) return;
     const items = filtrarCodigosPorUsos(catalogoActivo(catPunto), usos, nLum);
@@ -3359,14 +3357,18 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
   const panel = mostrarPanel(`
     <b>Falla de circuito ${idOriginal||''}</b>
     <div id="mantBox"></div>
-    ${htmlNotificador()}
-    <div style="margin-top:10px;">
-      ${filasCatalogo}
+    <div class="rp-cuerpo">
+    <div class="rp-cols">
+      <div class="rp-izq">
+        ${htmlNotificador()}
+        <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
+        ${htmlOrdenExterna()}
+      </div>
+      <div class="rp-der">${filasCatalogo}</div>
     </div>
-    <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
-    ${htmlOrdenExterna()}
     <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
-  `);
+    </div>
+  `, true);
   panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
     panel.querySelectorAll('.codigo-btn').forEach(x => x.classList.remove('sel'));
     b.classList.add('sel'); codigoSel = b.dataset.c;
@@ -3904,7 +3906,7 @@ async function abrirPopupFalla(feat){
 
   // Quién puede dejar un comentario en una falla ya creada (todos menos el observador); los puntos de cascada comentan en su circuito
   const puedeComentar = tiene('falla_comentar') && !p.cascada && !p._vistaHistorica;
-  let contenidoPanel;
+  let contenidoPanel, panelDosColumnas = false;
   if(tiene('reparacion_cerrar') && (rolEfectivo() !== 'admin' || adminPuedeReparar()) && !p.cascada && p.estado !== 'reparada'){
     const filasCierre = htmlCodigosAgrupados('cierre', CATALOGO_CIERRES, item => `
       <div class="falla-opcion-row">
@@ -3929,13 +3931,16 @@ async function abrirPopupFalla(feat){
     `;
     contenidoPanel = `
       ${tituloConEliminar}
-      <div style="display:flex; gap:14px;">
-        <div style="flex:1; min-width:0;">${columnaIzquierda}</div>
-        <div style="flex:1; min-width:0;">${filasCierre}</div>
+      <div class="rp-cols">
+        <div>${columnaIzquierda}</div>
+        <div>${filasCierre}</div>
       </div>
-      <button class="popup-btn" id="confirmarCierreBtn" style="margin-top:12px;">Registrar reparación y cerrar falla</button>
-      <button class="popup-btn" id="dejarPendienteBtn" style="background:#d98e2f; color:#000; border:1.5px solid #000; margin-top:6px;">Se deja pendiente</button>
+      <div class="rp-pie">
+        <button class="popup-btn" id="confirmarCierreBtn" style="margin-top:12px;">Registrar reparación y cerrar falla</button>
+        <button class="popup-btn" id="dejarPendienteBtn" style="background:#d98e2f; color:#000; border:1.5px solid #000; margin-top:6px;">Se deja pendiente</button>
+      </div>
     `;
+    panelDosColumnas = true;
   } else {
     contenidoPanel = `
       ${tituloConEliminar}
@@ -3952,7 +3957,7 @@ async function abrirPopupFalla(feat){
     `;
   }
 
-  const panel = mostrarPanel(contenidoPanel);
+  const panel = mostrarPanel(contenidoPanel, panelDosColumnas);
   llenarFotos(panel);
   if(p.estado === 'reparada' && !p.cascada && !p._vistaHistorica && tiene('reparacion_editar_propia')){
     activarEdicionReparacion(panel, p);
