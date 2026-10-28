@@ -1780,7 +1780,6 @@ function formReportePunto(p) {
           <div id="fMant"></div>
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
-          <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
         </div>
         <div class="col-der">
@@ -1807,13 +1806,11 @@ function formReportePunto(p) {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
     const desc = $('#fDesc', h).value.trim();
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
-    const oe = leerOrdenExterna(h);
-    if (oe.error) { toast(oe.error, 'error'); return; }
     const mv = mant.validar(desc);
     if (mv.error) { toast(mv.error, 'error'); return; }
     env.textContent = 'Enviando…';
     const ctx = await contextoReporte();
-    const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx, ...mv.args });
+    const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: null, ...ctx, ...mv.args });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot}${r.estado === 'reiterada' ? ' (reiterada)' : ''}`, 'ok');
     cargarFallas();
@@ -1832,7 +1829,6 @@ function formReporteCircuito(p) {
         <div class="col-izq">
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
-          <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
         </div>
         <div class="col-der">
@@ -1850,11 +1846,9 @@ function formReporteCircuito(p) {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
     const desc = $('#fDesc', h).value.trim();
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
-    const oe = leerOrdenExterna(h);
-    if (oe.error) { toast(oe.error, 'error'); return; }
     env.textContent = 'Enviando…';
     const ctx = await contextoReporte();
-    const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx });
+    const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: null, ...ctx });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot} · ${r.puntos_afectados} puntos afectados`, 'ok');
     cargarFallas();

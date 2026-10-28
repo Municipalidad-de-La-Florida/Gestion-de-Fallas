@@ -92,6 +92,22 @@
   .rp-cuerpo > .popup-btn, .rp-pie{flex:none;}
   .rp-pie{padding-top:4px;}
   .rp-cols textarea.popup-input{min-height:120px;}
+  .rp-cols #ordenExternaInput{min-height:0 !important; height:30px; min-width:0; flex:1;}
+  .rp-cols #ordenExternaInput::placeholder{font-size:11px;}
+  .rp-card{background:#f4f7f5; border:1px solid var(--line); border-radius:10px; padding:8px 10px;}
+  .rp-kv{display:grid; grid-template-columns:1fr 1fr; gap:6px 10px;}
+  .rp-kv > div{font-size:10px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em;}
+  .rp-kv b{display:block; font-size:12.5px; color:var(--ink); text-transform:none; letter-spacing:0; margin-top:1px;}
+  .rp-sec{font-size:10.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-soft); margin:12px 0 5px;}
+  .rp-lt{font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--primary); padding:0 0 4px;}
+  .rp-sum{font-size:12px; background:#e9f3ee; border:1px solid #b9dccb; border-radius:8px; padding:7px 10px; margin:8px 0 0; color:var(--primary); flex:none;}
+  .rp-sum:empty{display:none;}
+  .falla-opcion-row.sel{background:#e9f3ee; box-shadow:inset 0 0 0 1.5px #2a6b52; border-radius:8px; padding-left:6px; padding-right:6px;}
+  .rp-asig{display:flex; gap:6px; align-items:center;}
+  .rp-asig select{flex:1; margin:0 !important; width:auto !important;}
+  .rp-asig .popup-btn{width:auto !important; margin:0 !important; padding:7px 14px !important; background:#e3f1ea !important; color:var(--primary) !important; border:1.5px solid #b9dccb !important;}
+  .rp-link{font-size:12px; color:var(--primary-light); font-weight:600; cursor:pointer; margin-top:5px; background:none; border:0; padding:0;}
+  .popup-btn.rp-pendiente{background:#fbefd9; color:#7a4a00; border:1.5px solid #e6b866;}
   .falla-opcion-row{
     display:flex; align-items:center; gap:10px;
     padding:6px 0; border-bottom:1px solid var(--line); font-size:11.5px;
@@ -3285,25 +3301,37 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
   const filasCatalogo = htmlCodigosAgrupados(catPunto, catalogoActivo(catPunto), filaCodigo);
   const panel = mostrarPanel(`
     <b>Falla individual - Pto. Lumínico Llave N.° ${llave}</b>
-    <div class="hint" style="margin-top:2px;">N.° Municipal: <b>${nroMun ?? '—'}</b></div>
     <div id="mantBox"></div>
     <div id="fallaCuerpo" class="rp-cuerpo">
     <div class="rp-cols">
       <div class="rp-izq">
-        ${htmlNotificador()}
-        <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
+        <div class="rp-card"><div class="rp-kv"><div>N.° llave<b>${escHtml(llave ?? '—')}</b></div><div>N.° municipal<b>${escHtml(nroMun ?? '—')}</b></div></div></div>
+        ${puedeNotificadorExterno() ? '<div class="rp-sec">Quién informó</div>' + htmlNotificador() : ''}
+        <div class="rp-sec">Comentario</div>
+        <textarea class="popup-input" id="otroDesc" placeholder="Opcional (obligatorio si elegiste OTRO)" style="margin-top:0;"></textarea>
+        <div class="rp-sec">Orden externa (opcional)</div>
         ${htmlOrdenExterna()}
       </div>
-      <div class="rp-der" id="codigosCont">
-        ${filasCatalogo}
+      <div class="rp-der">
+        <div class="rp-lt">Listado de fallas</div>
+        <div id="codigosCont">
+          ${filasCatalogo}
+        </div>
       </div>
     </div>
-    <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
+    <div class="rp-sum" id="fallaElegida"></div>
+    <button class="popup-btn" id="confirmarBtn" style="margin-top:8px;">Confirmar reporte</button>
     </div>
   `, true);
+  const resumenFalla = () => {
+    const el = panel.querySelector('#fallaElegida'); if(!el) return;
+    const b = panel.querySelector('.codigo-btn.sel');
+    el.innerHTML = b ? `<b>Falla elegida:</b> ${escHtml(b.dataset.c)} · ${escHtml((b.parentElement.querySelector('.falla-opcion-desc') || {}).textContent || '')}` : '';
+  };
   const ligarCodigos = () => panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
-    panel.querySelectorAll('.codigo-btn').forEach(x => x.classList.remove('sel'));
-    b.classList.add('sel'); codigoSel = b.dataset.c;
+    panel.querySelectorAll('.codigo-btn').forEach(x => { x.classList.remove('sel'); x.parentElement.classList.remove('sel'); });
+    b.classList.add('sel'); b.parentElement.classList.add('sel'); codigoSel = b.dataset.c;
+    resumenFalla();
     mant.elegirCodigo(codigoSel);
   });
   ligarCodigos();
@@ -3313,7 +3341,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     if(items.length === catalogoActivo(catPunto).length) return;
     panel.querySelector('#codigosCont').innerHTML = htmlCodigosAgrupados(catPunto, items, filaCodigo);
     if(codigoSel && !items.some(x => x.c === codigoSel)){ codigoSel = null; mant.elegirCodigo(null); }
-    ligarCodigos();
+    ligarCodigos(); resumenFalla();
   });
   panel.querySelector('#confirmarBtn').onclick = async () => {
     if(!codigoSel){ alert('Selecciona un código de falla.'); return; }
@@ -3360,18 +3388,25 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
     <div class="rp-cuerpo">
     <div class="rp-cols">
       <div class="rp-izq">
-        ${htmlNotificador()}
-        <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
+        ${puedeNotificadorExterno() ? '<div class="rp-sec" style="margin-top:0;">Quién informó</div>' + htmlNotificador() : ''}
+        <div class="rp-sec"${puedeNotificadorExterno() ? '' : ' style="margin-top:0;"'}>Comentario</div>
+        <textarea class="popup-input" id="otroDesc" placeholder="Opcional (obligatorio si elegiste OTRO)" style="margin-top:0;"></textarea>
+        <div class="rp-sec">Orden externa (opcional)</div>
         ${htmlOrdenExterna()}
       </div>
-      <div class="rp-der">${filasCatalogo}</div>
+      <div class="rp-der">
+        <div class="rp-lt">Listado de fallas</div>
+        ${filasCatalogo}
+      </div>
     </div>
-    <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
+    <div class="rp-sum" id="fallaElegida"></div>
+    <button class="popup-btn" id="confirmarBtn" style="margin-top:8px;">Confirmar reporte</button>
     </div>
   `, true);
   panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
-    panel.querySelectorAll('.codigo-btn').forEach(x => x.classList.remove('sel'));
-    b.classList.add('sel'); codigoSel = b.dataset.c;
+    panel.querySelectorAll('.codigo-btn').forEach(x => { x.classList.remove('sel'); x.parentElement.classList.remove('sel'); });
+    b.classList.add('sel'); b.parentElement.classList.add('sel'); codigoSel = b.dataset.c;
+    panel.querySelector('#fallaElegida').innerHTML = `<b>Falla elegida:</b> ${escHtml(b.dataset.c)} · ${escHtml((b.parentElement.querySelector('.falla-opcion-desc') || {}).textContent || '')}`;
   });
   panel.querySelector('#confirmarBtn').onclick = async () => {
     if(!codigoSel){ alert('Selecciona un código de falla.'); return; }
@@ -3828,6 +3863,7 @@ async function abrirPopupFalla(feat){
     const dos = n => String(n).padStart(2, '0');
     return `${dos(d.getDate())}/${dos(d.getMonth() + 1)}, ${dos(d.getHours())}:${dos(d.getMinutes())}`;
   })();
+  const lineaAsignadoA = (p.estado === 'reparada' || (p.estado === 'pendiente' && !(tiene('asignacion_quitar') && !!p.asignado_camion_id && !p.cascada && !p._vistaHistorica))) ? '' : `<div class="hint">Asignado a: <b>${p.asignado_camion_nombre || 'Sin asignar'}</b>${(tiene('asignacion_quitar') && !!p.asignado_camion_id && !p.cascada && !p._vistaHistorica) ? ' <button id="quitarAsignacionBtn" title="Quitar la asignación" style="margin-left:6px; padding:1px 8px; font-size:10.5px; border:1px solid #c1443c; color:#c1443c; background:#fff; border-radius:10px; cursor:pointer;">Quitar</button>' : ''}</div>`;
   const infoGeneral = `
     ${infoLlaveMun}
     <div class="hint" style="margin-top:6px;">Informada: <b>${fechaFalla}</b></div>
@@ -3835,7 +3871,7 @@ async function abrirPopupFalla(feat){
     <div class="hint">Duración de la falla: <b>${duracion}</b></div>
     <div class="hint">Puntos lumínicos afectados: <b>${p.puntos_afectados ?? '—'}</b></div>
     ${p.asignado_camion_nombre ? `<div class="hint">Asignado por: <b>${p.asignado_por_nombre || '—'}</b>${fechaAsignacionCorta ? ` · ${fechaAsignacionCorta}` : ''}</div>` : ''}
-    ${(p.estado === 'reparada' || (p.estado === 'pendiente' && !(tiene('asignacion_quitar') && !!p.asignado_camion_id && !p.cascada && !p._vistaHistorica))) ? '' : `<div class="hint">Asignado a: <b>${p.asignado_camion_nombre || 'Sin asignar'}</b>${(tiene('asignacion_quitar') && !!p.asignado_camion_id && !p.cascada && !p._vistaHistorica) ? ' <button id="quitarAsignacionBtn" title="Quitar la asignación" style="margin-left:6px; padding:1px 8px; font-size:10.5px; border:1px solid #c1443c; color:#c1443c; background:#fff; border-radius:10px; cursor:pointer;">Quitar</button>' : ''}</div>`}
+    ${lineaAsignadoA}
     ${infoComentario}
     ${infoComentarioAsignacion}
     ${infoComentariosLibres}
@@ -3881,13 +3917,16 @@ async function abrirPopupFalla(feat){
     : '';
   const puedeAsignarCamion = tiene('reparacion_asignar_camion') && (rolEfectivo() !== 'admin' || adminPuedeReparar()) && !p.cascada && !p._vistaHistorica && p.estado !== 'reparada';
   const asignarCamionHtml = puedeAsignarCamion ? `
-    <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
-      <div class="hint" style="margin-bottom:4px;">Asignar a camión:</div>
-      <select id="asignarCamionSelect" class="popup-input" style="width:100%; margin-bottom:6px;">
-        <option value="">Cargando camiones...</option>
-      </select>
-      <textarea class="popup-input" id="comentarioAsignacionInput" placeholder="Comentario de asignación (opcional, lo verá el camión)" style="width:100%; min-height:60px; box-sizing:border-box; margin-bottom:6px;"></textarea>
-      <button class="popup-btn" id="confirmarAsignarCamionBtn" style="background:#2563a8;">Asignar</button>
+    <div>
+      <div class="rp-sec">Asignar a camión</div>
+      <div class="rp-asig">
+        <select id="asignarCamionSelect" class="popup-input">
+          <option value="">Cargando camiones...</option>
+        </select>
+        <button class="popup-btn" id="confirmarAsignarCamionBtn">Asignar</button>
+      </div>
+      <button type="button" class="rp-link" onclick="this.style.display='none'; var t=document.getElementById('comentarioAsignacionInput'); t.style.display='block'; t.focus();">+ Agregar comentario para el camión</button>
+      <textarea class="popup-input" id="comentarioAsignacionInput" placeholder="Comentario de asignación (opcional, lo verá el camión)" style="display:none; width:100%; min-height:60px; box-sizing:border-box; margin-top:6px;"></textarea>
     </div>
   ` : '';
 
@@ -3914,17 +3953,29 @@ async function abrirPopupFalla(feat){
         <span class="falla-opcion-desc">${escHtml(item.d)}</span>
       </div>
     `);
+    const kvR = (l, v) => `<div>${l}<b>${v}</b></div>`;
+    const tarjetaDatos = `
+      <div class="rp-card">
+        <div class="rp-kv">
+          ${p.tipo === 'punto' ? kvR('N.° llave', escHtml(p.llave ?? '—')) + kvR('N.° municipal', escHtml(p.nro_mun ?? '—')) : ''}
+          ${kvR('Informada', fechaFalla)}${kvR('Duración', duracion)}${kvR('Inspector', p.nombre_creador || '—')}${kvR('Puntos afectados', p.puntos_afectados ?? '—')}
+          ${p.asignado_camion_nombre ? kvR('Asignado por', `${p.asignado_por_nombre || '—'}${fechaAsignacionCorta ? ` · ${fechaAsignacionCorta}` : ''}`) : ''}
+        </div>
+        ${lineaAsignadoA}
+        ${infoCardinalidad}
+        ${infoComentario}
+        ${infoComentarioAsignacion}
+        ${infoComentariosLibres}
+      </div>`;
     const columnaIzquierda = `
-      ${infoCardinalidad}
-      ${infoGeneral}
+      ${tarjetaDatos}
       ${infoReparacion}
       ${asignarCamionHtml}
       ${pasarMasivoHtml}
-      <div id="cierrePreview" style="margin-top:8px; font-size:11.5px; color:var(--ink); font-weight:600; line-height:1.5;"></div>
-      <div class="hint" style="margin-top:8px;">Información adicional:</div>
-      <textarea class="popup-input" id="cierreDesc" placeholder="Ej: Información adicional" style="width:100%; min-height:120px; box-sizing:border-box;"></textarea>
+      <div class="rp-sec">Información adicional</div>
+      <textarea class="popup-input" id="cierreDesc" placeholder="Ej: Información adicional" style="width:100%; min-height:90px; box-sizing:border-box; margin-top:0;"></textarea>
       <button type="button" class="popup-btn" id="guardarComentarioBtn" style="margin-top:6px; background:#fff; color:var(--primary); border:1.5px solid var(--primary);">💬 Guardar comentario (sin cerrar)</button>
-      <div class="hint" style="margin-top:8px;">Fotografías ${currentUser.foto_obligatoria ? `<b style="color:var(--red);">(obligatorio: al menos 1, hasta ${MAX_FOTOS_CIERRE})</b>` : `(opcional, hasta ${MAX_FOTOS_CIERRE})`}:</div>
+      <div class="rp-sec">Fotografías ${currentUser.foto_obligatoria ? `<b style="color:var(--red); text-transform:none; letter-spacing:0;">(obligatorio: al menos 1, hasta ${MAX_FOTOS_CIERRE})</b>` : `<span style="text-transform:none; letter-spacing:0; font-weight:400;">(opcional, hasta ${MAX_FOTOS_CIERRE})</span>`}</div>
       <div id="cierreFotos" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:4px;"></div>
       <button type="button" class="popup-btn" id="cierreFotoBtn" style="margin-top:6px; background:#fff; color:var(--ink); border:1.5px solid var(--line);">🖼 Agregar fotos</button>
       <input type="file" id="cierreFotoIn" accept="image/*" multiple hidden>
@@ -3933,11 +3984,12 @@ async function abrirPopupFalla(feat){
       ${tituloConEliminar}
       <div class="rp-cols">
         <div>${columnaIzquierda}</div>
-        <div>${filasCierre}</div>
+        <div><div class="rp-lt">Listado de trabajos</div>${filasCierre}</div>
       </div>
       <div class="rp-pie">
-        <button class="popup-btn" id="confirmarCierreBtn" style="margin-top:12px;">Registrar reparación y cerrar falla</button>
-        <button class="popup-btn" id="dejarPendienteBtn" style="background:#d98e2f; color:#000; border:1.5px solid #000; margin-top:6px;">Se deja pendiente</button>
+        <div id="cierrePreview" class="rp-sum"></div>
+        <button class="popup-btn" id="confirmarCierreBtn" style="margin-top:8px;">Registrar reparación y cerrar falla</button>
+        <button class="popup-btn rp-pendiente" id="dejarPendienteBtn" style="margin-top:6px;">Se deja pendiente</button>
       </div>
     `;
     panelDosColumnas = true;
@@ -4054,7 +4106,7 @@ async function abrirPopupFalla(feat){
   function renderPreviewCierre(){
     const preview = panel.querySelector('#cierrePreview');
     if(!preview) return;
-    preview.innerHTML = seleccionCierre.map((t, i) => `
+    preview.innerHTML = !seleccionCierre.length ? '' : '<b>Trabajo realizado:</b>' + seleccionCierre.map((t, i) => `
       <div style="display:flex; align-items:center; gap:6px;">
         <span style="flex:1;">${t}</span>
         <span data-i="${i}" class="quitar-cierre-x" style="cursor:pointer; color:var(--red); font-weight:700; flex-shrink:0;">×</span>
@@ -4066,7 +4118,7 @@ async function abrirPopupFalla(feat){
         const desc = seleccionCierre[i];
         seleccionCierre.splice(i, 1);
         const btnCorrespondiente = panel.querySelector(`.cierre-btn[data-desc="${CSS.escape(desc)}"]`);
-        if(btnCorrespondiente) btnCorrespondiente.classList.remove('sel');
+        if(btnCorrespondiente){ btnCorrespondiente.classList.remove('sel'); btnCorrespondiente.parentElement.classList.remove('sel'); }
         renderPreviewCierre();
       };
     });
@@ -4076,8 +4128,8 @@ async function abrirPopupFalla(feat){
     b.onclick = () => {
       const desc = b.dataset.desc;
       const idx = seleccionCierre.indexOf(desc);
-      if(idx === -1){ seleccionCierre.push(desc); b.classList.add('sel'); }
-      else { seleccionCierre.splice(idx, 1); b.classList.remove('sel'); }
+      if(idx === -1){ seleccionCierre.push(desc); b.classList.add('sel'); b.parentElement.classList.add('sel'); }
+      else { seleccionCierre.splice(idx, 1); b.classList.remove('sel'); b.parentElement.classList.remove('sel'); }
       renderPreviewCierre();
     };
   });
