@@ -405,6 +405,19 @@
     padding:5px 16px; border-bottom:1px solid var(--line); flex-shrink:0;
   }
   /* Todas las fallas: buscador + panel de filtros plegable (mismo sistema que la barra lateral) */
+  .ms{position:relative;}
+  .ms-btn{display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px; border:1.5px solid var(--line); border-radius:13px; background:#fff; font-size:11.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; font-family:inherit; max-width:260px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .ms-btn.on{border-color:#7c3aed; background:#f3edff; color:#7c3aed;}
+  .ms-flecha{font-size:10px;}
+  .ms-pop{position:absolute; z-index:60; top:30px; left:0; min-width:280px; max-width:360px; background:#fff; border:1px solid var(--line); border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.18); padding:8px;}
+  .ms-pop[hidden]{display:none;}
+  .ms-q{width:100%; box-sizing:border-box; height:30px; border:0; border-radius:10px; background:#eef2f0; padding:0 10px; font-size:12px; outline:none; margin-bottom:6px;}
+  .ms-list{max-height:230px; overflow:auto;}
+  .ms-it{display:flex; align-items:center; gap:8px; padding:4px 6px; border-radius:8px; font-size:12px; cursor:pointer;}
+  .ms-it:hover{background:#f4f7f5;}
+  .ms-it .ms-t{flex:1; min-width:0;}
+  .ms-it .n{color:var(--ink-soft); font-size:11px;}
+  .ms-pie{display:flex; justify-content:space-between; padding:6px 4px 0; border-top:1px solid #e3e9e5; margin-top:6px;}
   .tf-barra{display:flex; gap:8px; align-items:center; margin:4px 0 6px;}
   .tf-barra > div{flex:1;}
   .tf-panel{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:8px 24px; padding:10px 14px; margin:0 0 6px;}
@@ -5303,10 +5316,41 @@ function pintarChipsCodigoTodas(fuente){
   const codigos = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a] || a.localeCompare(b));
   if(!codigos.length){ cont.style.display = 'none'; return; }
   cont.style.display = 'flex';
-  const chip = (id, txt, act, tit) => `<button type="button" class="chip-estado morado${act ? ' activo' : ''}" title="${escHtml(tit || '')}" onclick="filtrarTodasFallasPorCodigo('${escHtml(id)}')">${txt}</button>`;
-  cont.innerHTML = '<span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Código:</span>' + chip('__todos', 'Todos', !filtroCodigosTodasFallas.size) +
-    codigos.map(c => chip(c, `${escHtml(c)} <span class="n">(${cuenta[c]})</span>`, filtroCodigosTodasFallas.has(c), descCodigoSimple(c))).join('');
+  pintarMultiTodas(cont, 'Código', codigos.map(c => ({id: c, nombre: c + (descCodigoSimple(c) ? ' — ' + descCodigoSimple(c) : ''), n: cuenta[c]})), filtroCodigosTodasFallas, filtrarTodasFallasPorCodigo, 'Todos');
 }
+// Lista desplegable con selección múltiple y buscador (para filtros con muchas opciones). La estructura se crea una vez
+// y después solo se actualiza la lista y el rótulo, así el desplegable no se cierra ni pierde lo escrito al marcar opciones.
+function pintarMultiTodas(cont, etiqueta, items, sel, alternar, textoTodos){
+  let ms = cont.querySelector('.ms');
+  if(!ms){
+    cont.innerHTML = `<span>${escHtml(etiqueta)}:</span><div class="ms"><button type="button" class="ms-btn"></button><div class="ms-pop" hidden><input type="search" class="ms-q" placeholder="Buscar…" autocomplete="off"><div class="ms-list"></div><div class="ms-pie"><button type="button" class="lat-link ms-limpiar">Quitar selección</button><button type="button" class="lat-link ms-cerrar">Listo</button></div></div></div>`;
+    ms = cont.querySelector('.ms');
+    const pop = ms.querySelector('.ms-pop');
+    ms.querySelector('.ms-btn').onclick = (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.ms-pop').forEach(x => { if(x !== pop) x.hidden = true; });
+      pop.hidden = !pop.hidden;
+      if(!pop.hidden) ms.querySelector('.ms-q').focus();
+    };
+    ms.querySelector('.ms-cerrar').onclick = () => { pop.hidden = true; };
+    ms.querySelector('.ms-q').oninput = () => ms._pintar();
+    pop.addEventListener('click', e => e.stopPropagation());
+  }
+  ms._pintar = () => {
+    const q = normalizarBusqueda(ms.querySelector('.ms-q').value);
+    const lista = ms.querySelector('.ms-list');
+    const vis = items.filter(it => !q || normalizarBusqueda(it.nombre).includes(q));
+    lista.innerHTML = vis.length ? vis.map(it => `<label class="ms-it"><input type="checkbox" data-id="${escHtml(it.id)}" ${sel.has(it.id) ? 'checked' : ''}><span class="ms-t">${escHtml(it.nombre)}</span><span class="n">${it.n}</span></label>`).join('') : '<div class="hint" style="padding:6px 8px;">Sin resultados</div>';
+    lista.querySelectorAll('input').forEach(c => c.onchange = () => alternar(c.dataset.id));
+    ms.querySelector('.ms-limpiar').onclick = () => alternar('__todos');
+    const btn = ms.querySelector('.ms-btn'), n = sel.size;
+    btn.classList.toggle('on', n > 0);
+    btn.textContent = n === 0 ? (textoTodos || 'Todos') : (n === 1 ? (items.find(i => sel.has(i.id)) || {nombre: [...sel][0]}).nombre.split(' — ')[0] : n + ' seleccionados');
+    btn.insertAdjacentHTML('beforeend', ' <span class="ms-flecha">▾</span>');
+  };
+  ms._pintar();
+}
+document.addEventListener('click', () => document.querySelectorAll('.ms-pop').forEach(x => { x.hidden = true; }));
 // ---- Mantenedor y Período en "Todas las fallas" + barra de filtros (panel plegable y filtros activos) ----
 const filtroMantenedoresTodas = new Set();   // ids de mantenedor ('sin' = sin mantenedor); vacío = todos
 function filtrarTodasFallasPorMantenedor(id){
@@ -5467,11 +5511,8 @@ function actualizarChipsAsignacionTodas(){
   const conteo = new Map();
   ultimosTodasFallas.forEach(f => { if(f.asignado_por_id) conteo.set(f.asignado_por_id, {nombre: f.asignado_por_nombre || '—', n: (conteo.get(f.asignado_por_id)?.n || 0) + 1}); });
   const lista = [...conteo.entries()].sort((a,b) => b[1].n - a[1].n);
-  contPor.innerHTML = lista.length
-    ? `<span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Asignada por:</span>
-       <button type="button" class="chip-estado ${filtroAsignadoresTodasFallas.size ? '' : 'activo'}" onclick="filtrarTodasFallasPorAsignador('__todos')">Todos</button>` +
-      lista.map(([id, v]) => `<button type="button" class="chip-estado ${filtroAsignadoresTodasFallas.has(id) ? 'activo' : ''}" onclick="filtrarTodasFallasPorAsignador('${id}')">${escHtml(v.nombre)} <span class="n">(${v.n})</span></button>`).join('')
-    : '';
+  if(!lista.length){ contPor.innerHTML = ''; return; }
+  pintarMultiTodas(contPor, 'Asignada por', lista.map(([id, v]) => ({id, nombre: v.nombre, n: v.n})), filtroAsignadoresTodasFallas, filtrarTodasFallasPorAsignador, 'Todos');
 }
 
 function actualizarChipsEstadoTodas(){
