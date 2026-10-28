@@ -102,6 +102,11 @@
   .rp-lt{font-size:11px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--primary); padding:0 0 4px;}
   .rp-sum{font-size:12px; background:#e9f3ee; border:1px solid #b9dccb; border-radius:8px; padding:7px 10px; margin:8px 0 0; color:var(--primary); flex:none;}
   .rp-sum:empty{display:none;}
+  .rp-ok{background:#e9f7ee; border:1px solid #b9e2c6; border-radius:8px; padding:7px 10px; margin:8px 0;}
+  .rp-ok.rp-warn{background:#fff6df; border-color:#f0d58a;}
+  .rp-lum{background:#f4f7f5; border:1px solid var(--line); border-radius:8px; padding:6px 9px; margin:5px 0; font-size:12px;}
+  .rp-lum .tg{display:inline-block; border-radius:6px; padding:0 6px; font-size:11px; font-weight:700; margin:3px 4px 0 0; background:#e6eefb; color:#2a5db0;}
+  .rp-lum .tg.m{background:#5b21b6; color:#fff;}
   .falla-opcion-row.sel{background:#e9f3ee; box-shadow:inset 0 0 0 1.5px #2a6b52; border-radius:8px; padding-left:6px; padding-right:6px;}
   .rp-asig{display:flex; gap:6px; align-items:center;}
   .rp-asig select{flex:1; margin:0 !important; width:auto !important;}
@@ -2789,10 +2794,25 @@ function handlePuntoClick(feature, layer){
   if(!puedeReportar()){
     const [lon, lat] = feature.geometry.coordinates;
     resaltarPuntoConsulta(lat, lon);
-    mostrarPanel(`<b>Punto lumínico</b>
-      <div class="hint">N.° de Llave: <b>${feature.properties.llave ?? '—'}</b></div>
-      <div class="hint">N.° Municipal: <b>${feature.properties.nro_mun ?? '—'}</b></div>
-      <div class="hint">${feature.properties.calle_1||''} ${feature.properties.direccion||''}</div>`);
+    const pp = feature.properties;
+    mostrarPanel(`<b>Punto lumínico · Llave ${pp.llave ?? '—'}</b>
+      <div class="hint">${pp.calle_1||''} ${pp.direccion||''}</div>
+      <div class="rp-card" style="margin-top:6px"><div class="hint">N.° de llave: <b>${pp.llave ?? '—'}</b></div><div class="hint">N.° municipal: <b>${pp.nro_mun ?? '—'}</b></div></div>
+      <div class="hint" style="margin-top:8px"><b>Luminarias del punto</b></div><div id="infLums" class="hint">Cargando…</div>
+      <div class="hint" style="margin-top:8px"><b>Estado</b></div><div id="infEstado" class="rp-ok">Cargando…</div>
+      ${tieneReal('modo_historial') ? '<button class="popup-btn" id="infHistBtn" style="margin-top:8px">Ver historial del punto</button>' : ''}`);
+    db.rpc('luminarias_punto', {p_gid: pp.gid}).then(ls => {
+      const b = document.getElementById('infLums'); if(!b) return;
+      b.className = '';
+      b.innerHTML = ls && ls.length ? ls.map(l => `<div class="rp-lum"><b>${escHtml([l.modelo, l.potencia ? l.potencia+' W' : '', l.uso].filter(Boolean).join(' - '))}${l.n > 1 ? ' ×'+l.n : ''}</b><div>${l.contrato ? `<span class="tg">${escHtml(l.contrato)}</span>` : ''}${l.mantenedor ? `<span class="tg m">${escHtml(l.mantenedor)}</span>` : ''}</div></div>`).join('') : '<div class="hint">Sin luminarias registradas.</div>';
+    }).catch(() => { const b = document.getElementById('infLums'); if(b) b.textContent = '—'; });
+    db.select('fallas', `ref_punto_gid=eq.${pp.gid}&tipo=eq.punto&cascada=eq.false&select=tipo_falla,estado,fecha_reparacion&order=fecha_falla.desc&limit=1`).then(fs => {
+      const b = document.getElementById('infEstado'); if(!b) return;
+      const f = fs && fs[0];
+      b.textContent = f && f.fecha_reparacion ? `Sin fallas activas · última reparación ${new Date(f.fecha_reparacion).toLocaleDateString('es-CL')} (${f.tipo_falla})` : 'Sin fallas activas';
+    }).catch(() => { const b = document.getElementById('infEstado'); if(b) b.textContent = '—'; });
+    const hb = document.getElementById('infHistBtn');
+    if(hb) hb.addEventListener('click', () => mostrarHistorial('punto', pp.gid, `Punto lumínico ${pp.llave ?? ''}`));
     return;
   }
   verificarDuplicadoYAbrir('ref_punto_gid', feature.properties.gid,
@@ -3879,20 +3899,22 @@ async function abrirPopupFalla(feat){
   let infoReparacion = '';
   if(p.estado === 'reparada' && p.reparado_por_nombre){
     const fechaResp = p.fecha_reparacion ? new Date(p.fecha_reparacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-    infoReparacion = `
-      <div class="hint" style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">Responde: <b>${p.reparado_por_nombre}</b></div>
-      <div class="hint">Fecha respuesta: <b>${fechaResp}</b></div>
-      <div class="hint" style="margin-top:2px;">Cierre:</div>
+    infoReparacion = `<div class="rp-ok">
+      <b>Reparación</b>
+      <div class="hint">Responde: <b>${p.reparado_por_nombre}</b></div>
+      <div class="hint">Fecha: <b>${fechaResp}</b></div>
+      <div class="hint" style="margin-top:2px;">Trabajo realizado:</div>
       <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.descripcion_reparacion || '—'}</div>
-      <div class="fotos-falla" data-falla="${escHtml(p.id)}"></div>
+      <div class="fotos-falla" data-falla="${escHtml(p.id)}"></div></div>
     `;
   } else if(p.estado === 'pendiente' && p.pendiente_por_nombre){
     const fechaResp = p.fecha_pendiente ? new Date(p.fecha_pendiente).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-    infoReparacion = `
-      <div class="hint" style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">Responde: <b>${p.pendiente_por_nombre}</b></div>
-      <div class="hint">Fecha respuesta: <b>${fechaResp}</b></div>
+    infoReparacion = `<div class="rp-ok rp-warn">
+      <b>Pendiente</b>
+      <div class="hint">Responde: <b>${p.pendiente_por_nombre}</b></div>
+      <div class="hint">Fecha: <b>${fechaResp}</b></div>
       <div class="hint" style="margin-top:2px;">Motivo:</div>
-      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.motivo_pendiente || '—'}</div>
+      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.motivo_pendiente || '—'}</div></div>
     `;
   }
   const CATALOGO_CIERRES = catalogoActivo('cierre');
