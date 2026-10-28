@@ -3201,8 +3201,12 @@ function htmlMantencion(ev, sel){
   return '';
 }
 function activarMantencionPunto(panel, gid, mono){
-  const est = {ops:null, lums:null, codigo:null, sel:'', lum:'', ev:{tipo:'nada'}};
+  const est = {ops:null, lums:null, codigo:null, sel:'', lum:'', ev:{tipo:'nada'}, cargado:{o:false, l:false}};
   const caja = panel.querySelector('#mantBox');
+  const cuerpo0 = panel.querySelector('#fallaCuerpo');
+  if(cuerpo0) cuerpo0.style.display = 'none';   // las opciones de falla no se muestran hasta saber si hay que elegir luminaria o contrato (evita ingresar una falla antes de elegir)
+  const listo = () => { est.cargado.o = est.cargado.l = true; pintar(); };
+  setTimeout(listo, 8000);                         // sin conexión: pasado un rato se reporta como siempre
   const pintar = () => {
     est.ev = evaluarMantencion(est.ops, est.codigo, mono, est.lums);
     caja.innerHTML = htmlMantencion(est.ev, est.ev.tipo === 'luminarias' ? est.lum : est.sel);
@@ -3211,10 +3215,10 @@ function activarMantencionPunto(panel, gid, mono){
     caja.querySelectorAll('.lum-op').forEach(b => b.onclick = (ev) => { ev.stopPropagation(); est.lum = b.dataset.k; pintar(); });   // el botón se vuelve a dibujar: sin stopPropagation el clic llegaba al mapa y cerraba el panel
     // con opciones distintas, las opciones de falla aparecen recién después de elegir la luminaria
     const cuerpo = panel.querySelector('#fallaCuerpo');
-    if(cuerpo) cuerpo.style.display = (est.ev.tipo === 'luminarias' && !est.ev.trasCodigo && !est.ev.items.some(l => l.key === est.lum)) ? 'none' : '';
+    if(cuerpo) cuerpo.style.display = (!(est.cargado.o && est.cargado.l) || (est.ev.tipo === 'luminarias' && !est.ev.trasCodigo && !est.ev.items.some(l => l.key === est.lum))) ? 'none' : '';
   };
-  db.rpc('opciones_punto', {p_gid: gid}).then(r => { est.ops = r || []; pintar(); }).catch(() => { /* sin datos: se reporta como siempre */ });
-  db.rpc('luminarias_punto', {p_gid: gid}).then(r => { est.lums = r || []; pintar(); }).catch(() => { /* sin el SQL: se usa el selector de contrato */ });
+  db.rpc('opciones_punto', {p_gid: gid}).then(r => { est.ops = r || []; est.cargado.o = true; pintar(); }).catch(() => { est.cargado.o = true; pintar(); /* sin datos: se reporta como siempre */ });
+  db.rpc('luminarias_punto', {p_gid: gid}).then(r => { est.lums = r || []; est.cargado.l = true; pintar(); }).catch(() => { est.cargado.l = true; pintar(); /* sin el SQL: se usa el selector de contrato */ });
   return {
     elegirCodigo(c){ est.codigo = c; pintar(); },
     // devuelve {error} o {datos} con uso_grupo / contrato_id / mantenedor_id para la falla
