@@ -3150,7 +3150,8 @@ function listaLuminarias(lums, uso){
     .map(l => ({...l, key:[l.uso_grupo, l.modelo, l.potencia, l.uso, l.contrato_id || '-', l.mantenedor_id || '-'].join('|')}));
 }
 // Si el punto solo tiene luminarias viales (o solo peatonales) no se ofrecen los códigos del otro uso; los «más frecuentes» se recalculan con lo que queda
-function filtrarCodigosPorUsos(items, usos){
+function filtrarCodigosPorUsos(items, usos, nLum){
+  if(nLum != null && nLum < 2) items = items.filter(x => x.c !== 'F43');   // «Dos luminarias apagadas» no aplica si el punto tiene una sola
   if(!usos || !usos.size || usos.has('OTRO') || usos.size > 1) return items;
   return items.filter(x => !USO_POR_CODIGO[x.c] || usos.has(USO_POR_CODIGO[x.c]));
 }
@@ -3216,7 +3217,7 @@ function activarMantencionPunto(panel, gid, mono, alUsos){
     if(!est.usosAvisados && est.cargado.o && est.cargado.l && alUsos){
       est.usosAvisados = true;
       const us = new Set((est.lums && est.lums.length ? est.lums : (est.ops || [])).map(x => x.uso_grupo).filter(Boolean));
-      alUsos(us);
+      alUsos(us, est.lums && est.lums.length ? est.lums.reduce((n, l) => n + (l.n || 1), 0) : null);
     }
     est.ev = evaluarMantencion(est.ops, est.codigo, mono, est.lums);
     caja.innerHTML = htmlMantencion(est.ev, est.ev.tipo === 'luminarias' ? est.lum : est.sel);
@@ -3308,9 +3309,9 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     panel.querySelectorAll('.rosca button').forEach(x => x.classList.remove('sel'));
     b.classList.add('sel'); cardSel = b.dataset.r || null;
   });
-  const mant = activarMantencionPunto(panel, puntoGid, !!esMonoposte, usos => {
+  const mant = activarMantencionPunto(panel, puntoGid, !!esMonoposte, (usos, nLum) => {
     if(esMonoposte) return;
-    const items = filtrarCodigosPorUsos(catalogoActivo(catPunto), usos);
+    const items = filtrarCodigosPorUsos(catalogoActivo(catPunto), usos, nLum);
     if(items.length === catalogoActivo(catPunto).length) return;
     panel.querySelector('#codigosCont').innerHTML = htmlCodigosAgrupados(catPunto, items, filaCodigo);
     if(codigoSel && !items.some(x => x.c === codigoSel)){ codigoSel = null; mant.elegirCodigo(null); }

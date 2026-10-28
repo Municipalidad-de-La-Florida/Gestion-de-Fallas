@@ -1651,7 +1651,8 @@ function listaLuminarias(lums, uso) {
     .map((l) => ({ ...l, key: [l.uso_grupo, l.modelo, l.potencia, l.uso, l.contrato_id || '-', l.mantenedor_id || '-'].join('|') }));
 }
 // Si el punto solo tiene luminarias viales (o solo peatonales) no se ofrecen los códigos del otro uso; los «más frecuentes» se recalculan con lo que queda
-function filtrarCodigosPorUsos(items, usos) {
+function filtrarCodigosPorUsos(items, usos, nLum) {
+  if (nLum != null && nLum < 2) items = items.filter((x) => x.c !== 'F43');   // «Dos luminarias apagadas» no aplica si el punto tiene una sola
   if (!usos || !usos.size || usos.has('OTRO') || usos.size > 1) return items;
   return items.filter((x) => !USO_POR_CODIGO[x.c] || usos.has(USO_POR_CODIGO[x.c]));
 }
@@ -1716,7 +1717,8 @@ function activarMantencionPunto(h, gid, mono, alUsos) {
   const pintar = () => {
     if (!est.usosAvisados && est.cargado.o && est.cargado.l && alUsos) {
       est.usosAvisados = true;
-      alUsos(new Set((est.lums && est.lums.length ? est.lums : (est.ops || [])).map((x) => x.uso_grupo).filter(Boolean)));
+      alUsos(new Set((est.lums && est.lums.length ? est.lums : (est.ops || [])).map((x) => x.uso_grupo).filter(Boolean)),
+        est.lums && est.lums.length ? est.lums.reduce((n, l) => n + (l.n || 1), 0) : null);
     }
     est.ev = evaluarMantencion(est.ops, est.codigo, mono, est.lums);
     const lista = est.ev.tipo === 'luminarias', top = $('#fMantTop', h), cuerpo = $('#fCuerpo', h);
@@ -1794,9 +1796,9 @@ function formReportePunto(p) {
     $$('#fCard button', h).forEach((x) => x.classList.remove('sel'));
     if (!ya) { b.classList.add('sel'); card = b.dataset.r; } else card = null;
   }));
-  const mant = activarMantencionPunto(h, p.gid, mono, (usos) => {
+  const mant = activarMantencionPunto(h, p.gid, mono, (usos, nLum) => {
     if (mono) return;
-    const items = filtrarCodigosPorUsos(cat, usos);
+    const items = filtrarCodigosPorUsos(cat, usos, nLum);
     if (items.length === cat.length) return;
     $('.codigos', h).outerHTML = htmlCodigos(items, nomCat);
     if (codigo && !items.some((x) => x.c === codigo)) { codigo = null; mant.elegirCodigo(null); }
