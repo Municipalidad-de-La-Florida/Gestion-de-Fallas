@@ -505,7 +505,15 @@ function tiene(f) {
   const casilla = { pasar_a_masivo: u.puede_pasar_a_masivo, foto_obligatoria: u.foto_obligatoria, rendimiento_cuadrillas: u.ver_cuadrillas, ubicacion_camiones: u.ubic_col ? u.ver_ubicacion : u.ver_cuadrillas }[f];
   return (!!bits && i >= 0 && bits[i] === '1') || !!casilla;
 }
+let ULT_CONEXION = 0;
+function registrarConexion() {   // avisa a la base que esta persona usa la app (como máximo cada 5 min)
+  if (Date.now() - ULT_CONEXION < 300000) return;
+  ULT_CONEXION = Date.now();
+  rpc('registrar_conexion').catch(() => {});
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil) registrarConexion(); });
 async function cargarFunciones() {
+  registrarConexion();
   S.funciones = null;
   try {
     const r = await rpc('mis_funciones');
