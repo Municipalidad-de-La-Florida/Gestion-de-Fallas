@@ -3149,6 +3149,11 @@ function listaLuminarias(lums, uso){
   return (lums || []).filter(l => !uso || l.uso_grupo === uso)
     .map(l => ({...l, key:[l.uso_grupo, l.modelo, l.potencia, l.uso, l.contrato_id || '-', l.mantenedor_id || '-'].join('|')}));
 }
+// Si el punto solo tiene luminarias viales (o solo peatonales) no se ofrecen los códigos del otro uso; los «más frecuentes» se recalculan con lo que queda
+function filtrarCodigosPorUsos(items, usos){
+  if(!usos || !usos.size || usos.has('OTRO') || usos.size > 1) return items;
+  return items.filter(x => !USO_POR_CODIGO[x.c] || usos.has(USO_POR_CODIGO[x.c]));
+}
 function evaluarMantencion(ops, codigo, mono, lums){
   if(!ops) return {tipo:'nada'};
   const todas = listaLuminarias(lums, mono ? 'VIAL' : null);           // si el punto tiene opciones distintas: primero se elige la luminaria
@@ -3200,7 +3205,7 @@ function htmlMantencion(ev, sel){
   }
   return '';
 }
-function activarMantencionPunto(panel, gid, mono){
+function activarMantencionPunto(panel, gid, mono, alUsos){
   const est = {ops:null, lums:null, codigo:null, sel:'', lum:'', ev:{tipo:'nada'}, cargado:{o:false, l:false}};
   const caja = panel.querySelector('#mantBox');
   const cuerpo0 = panel.querySelector('#fallaCuerpo');
@@ -3208,6 +3213,11 @@ function activarMantencionPunto(panel, gid, mono){
   const listo = () => { est.cargado.o = est.cargado.l = true; pintar(); };
   setTimeout(listo, 8000);                         // sin conexión: pasado un rato se reporta como siempre
   const pintar = () => {
+    if(!est.usosAvisados && est.cargado.o && est.cargado.l && alUsos){
+      est.usosAvisados = true;
+      const us = new Set((est.lums && est.lums.length ? est.lums : (est.ops || [])).map(x => x.uso_grupo).filter(Boolean));
+      alUsos(us);
+    }
     est.ev = evaluarMantencion(est.ops, est.codigo, mono, est.lums);
     caja.innerHTML = htmlMantencion(est.ev, est.ev.tipo === 'luminarias' ? est.lum : est.sel);
     const s = caja.querySelector('#mantSel');
@@ -3253,12 +3263,13 @@ async function avisoMantencionCircuito(panel, gid){
 function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
   let codigoSel = null, cardSel = null;
   const catPunto = esMonoposte ? 'monoposte' : 'punto';
-  const filasCatalogo = htmlCodigosAgrupados(catPunto, catalogoActivo(catPunto), item => `
+  const filaCodigo = item => `
     <div class="falla-opcion-row">
       <button class="codigo-btn" data-c="${item.c}">${escHtml(item.c)}</button>
       <span class="falla-opcion-desc">${escHtml(item.d)}</span>
     </div>
-  `);
+  `;
+  const filasCatalogo = htmlCodigosAgrupados(catPunto, catalogoActivo(catPunto), filaCodigo);
   const panel = mostrarPanel(`
     <b>Falla individual - Pto. Lumínico Llave N.° ${llave}</b>
     <div class="hint" style="margin-top:2px;">N.° Municipal: <b>${nroMun ?? '—'}</b></div>
@@ -3277,7 +3288,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
         </div>
       </div>
       <div style="flex:1; min-width:0;">
-        <div>
+        <div id="codigosCont">
           ${filasCatalogo}
         </div>
         <textarea class="popup-input" id="otroDesc" placeholder="Comentario (opcional; obligatorio si elegiste OTRO)" style="margin-top:8px;"></textarea>
@@ -3287,16 +3298,24 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     <button class="popup-btn" id="confirmarBtn" style="margin-top:12px;">Confirmar reporte</button>
     </div>
   `);
-  panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
+  const ligarCodigos = () => panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
     panel.querySelectorAll('.codigo-btn').forEach(x => x.classList.remove('sel'));
     b.classList.add('sel'); codigoSel = b.dataset.c;
     mant.elegirCodigo(codigoSel);
   });
+  ligarCodigos();
   panel.querySelectorAll('.rosca button').forEach(b => b.onclick = () => {
     panel.querySelectorAll('.rosca button').forEach(x => x.classList.remove('sel'));
     b.classList.add('sel'); cardSel = b.dataset.r || null;
   });
-  const mant = activarMantencionPunto(panel, puntoGid, !!esMonoposte);
+  const mant = activarMantencionPunto(panel, puntoGid, !!esMonoposte, usos => {
+    if(esMonoposte) return;
+    const items = filtrarCodigosPorUsos(catalogoActivo(catPunto), usos);
+    if(items.length === catalogoActivo(catPunto).length) return;
+    panel.querySelector('#codigosCont').innerHTML = htmlCodigosAgrupados(catPunto, items, filaCodigo);
+    if(codigoSel && !items.some(x => x.c === codigoSel)){ codigoSel = null; mant.elegirCodigo(null); }
+    ligarCodigos();
+  });
   panel.querySelector('#confirmarBtn').onclick = async () => {
     if(!codigoSel){ alert('Selecciona un código de falla.'); return; }
     const desc = panel.querySelector('#otroDesc').value.trim();

@@ -1650,6 +1650,11 @@ function listaLuminarias(lums, uso) {
   return (lums || []).filter((l) => !uso || l.uso_grupo === uso)
     .map((l) => ({ ...l, key: [l.uso_grupo, l.modelo, l.potencia, l.uso, l.contrato_id || '-', l.mantenedor_id || '-'].join('|') }));
 }
+// Si el punto solo tiene luminarias viales (o solo peatonales) no se ofrecen los códigos del otro uso; los «más frecuentes» se recalculan con lo que queda
+function filtrarCodigosPorUsos(items, usos) {
+  if (!usos || !usos.size || usos.has('OTRO') || usos.size > 1) return items;
+  return items.filter((x) => !USO_POR_CODIGO[x.c] || usos.has(USO_POR_CODIGO[x.c]));
+}
 function evaluarMantencion(ops, codigo, mono, lums) {
   if (!ops) return { tipo: 'nada' };
   const todas = listaLuminarias(lums, mono ? 'VIAL' : null);           // si el punto tiene opciones distintas: primero se elige la luminaria
@@ -1701,7 +1706,7 @@ function htmlMantencion(ev, sel) {
   }
   return '';
 }
-function activarMantencionPunto(h, gid, mono) {
+function activarMantencionPunto(h, gid, mono, alUsos) {
   const est = { ops: null, lums: null, codigo: null, sel: '', lum: '', ev: { tipo: 'nada' }, cargado: { o: false, l: false } };
   const caja = $('#fMant', h);
   const cuerpo0 = $('#fCuerpo', h);
@@ -1709,6 +1714,10 @@ function activarMantencionPunto(h, gid, mono) {
   const listo = () => { est.cargado.o = est.cargado.l = true; pintar(); };
   setTimeout(listo, 8000);                         // sin conexión: pasado un rato se reporta como siempre
   const pintar = () => {
+    if (!est.usosAvisados && est.cargado.o && est.cargado.l && alUsos) {
+      est.usosAvisados = true;
+      alUsos(new Set((est.lums && est.lums.length ? est.lums : (est.ops || [])).map((x) => x.uso_grupo).filter(Boolean)));
+    }
     est.ev = evaluarMantencion(est.ops, est.codigo, mono, est.lums);
     const lista = est.ev.tipo === 'luminarias', top = $('#fMantTop', h), cuerpo = $('#fCuerpo', h);
     if (top) top.innerHTML = lista ? htmlMantencion(est.ev, est.lum) : '';
@@ -1775,16 +1784,24 @@ function formReportePunto(p) {
     <div style="margin-top:12px">${modoTexto()}</div>
     <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>
     </div>`);
-  $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
+  const ligarCodigos = () => $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
     mant.elegirCodigo(codigo);
   }));
+  ligarCodigos();
   $$('#fCard button', h).forEach((b) => b.addEventListener('click', () => {
     const ya = b.classList.contains('sel');
     $$('#fCard button', h).forEach((x) => x.classList.remove('sel'));
     if (!ya) { b.classList.add('sel'); card = b.dataset.r; } else card = null;
   }));
-  const mant = activarMantencionPunto(h, p.gid, mono);
+  const mant = activarMantencionPunto(h, p.gid, mono, (usos) => {
+    if (mono) return;
+    const items = filtrarCodigosPorUsos(cat, usos);
+    if (items.length === cat.length) return;
+    $('.codigos', h).outerHTML = htmlCodigos(items, nomCat);
+    if (codigo && !items.some((x) => x.c === codigo)) { codigo = null; mant.elegirCodigo(null); }
+    ligarCodigos();
+  });
   const env = $('#fEnviar', h);
   env.addEventListener('click', ocupar(env, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
