@@ -801,7 +801,6 @@
           <span class="tf-sep"></span>
           <div id="todasFiltroAsignacion" class="tf-pill" style="display:none;"></div>
           <div id="todasFiltroAsignador" class="tf-pill" style="display:none;"></div>
-          <div id="todasFiltroMasivo" class="tf-pill"></div>
           <div id="todasFiltroContrato" class="tf-pill" style="display:none;"></div>
           <div id="todasFiltroMantenedor" class="tf-pill" style="display:none;"></div>
           <div id="todasFiltroPeriodo" class="tf-pill"></div>
@@ -5382,7 +5381,7 @@ function pintarChipsMantenedorTodas(fuente){
   if(!ids.some(k => k !== 'sin')){ cont.style.display = 'none'; return; }   // sin datos de mantenedor (SQL sin ejecutar o aún sin asignar)
   ids.sort((a, b) => (a === 'sin') - (b === 'sin') || cuenta[b] - cuenta[a]);
   cont.style.display = '';
-  pintarMultiTodas(cont, 'Mantenedor', ids.map(k => ({id: k, nombre: k === 'sin' ? 'Sin mantenedor' : (MANTENEDORES_MAPA[k] || 'Mantenedor'), n: cuenta[k]})), filtroMantenedoresTodas, filtrarTodasFallasPorMantenedor, 'Todos', {sinBuscador: ids.length < 8});
+  pintarMultiTodas(cont, 'Mantenedores', ids.map(k => ({id: k, nombre: k === 'sin' ? 'Sin mantenedor' : (MANTENEDORES_MAPA[k] || 'Mantenedor'), n: cuenta[k]})), filtroMantenedoresTodas, filtrarTodasFallasPorMantenedor, 'Todos', {sinBuscador: ids.length < 8});
 }
 let filtroPeriodoTodas = 'todo';   // 'todo' | 'hoy' | '7' | 'mes' | 'rango'  (sobre la fecha informada)
 function hoyChileIso(){ return new Intl.DateTimeFormat('en-CA', {timeZone: ZONA_CHILE, year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date()); }
@@ -5441,9 +5440,6 @@ function limpiarFiltrosTodas(){
   filtrarTodasFallasPorPeriodo('todo');
 }
 function pintarPillsFijasTodas(){
-  const m = document.getElementById('todasFiltroMasivo');
-  if(m) pintarMultiTodas(m, 'Subcontrato', [{id: 'todas', nombre: 'Todas'}, {id: 'si', nombre: 'Masivo'}, {id: 'no', nombre: 'Normal'}],
-    filtroMasivoTodasFallas, filtrarTodasFallasPorMasivo, 'Todas', {single: true, sinBuscador: true, neutro: 'todas'});
   const p = document.getElementById('todasFiltroPeriodo');
   if(p) pintarMultiTodas(p, 'Período', [{id: 'todo', nombre: 'Todo'}, {id: 'hoy', nombre: 'Hoy'}, {id: '7', nombre: 'Últimos 7 días', corto: '7 días'}, {id: 'mes', nombre: 'Este mes', corto: 'Mes'}, {id: 'rango', nombre: 'Elegir fechas…', corto: 'Fechas'}],
     filtroPeriodoTodas, filtrarTodasFallasPorPeriodo, 'Todo', {single: true, sinBuscador: true, neutro: 'todo', noCerrar: id => id === 'rango',
