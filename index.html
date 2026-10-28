@@ -1127,6 +1127,7 @@
           <tr style="text-align:left; border-bottom:2px solid var(--line);">
             <th style="padding:8px 10px;">Nombre</th>
             <th style="padding:8px 10px;">Email</th>
+            <th style="padding:8px 10px;">Última conexión</th>
             <th style="padding:8px 10px;">Perfil</th>
             <th style="padding:8px 10px;">Notificadores</th>
             <th style="padding:8px 10px;">Foto obligatoria</th>
@@ -1136,7 +1137,7 @@
           </tr>
         </thead>
         <tbody id="usuariosTbody">
-          <tr><td colspan="9" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
+          <tr><td colspan="10" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>
         </tbody>
       </table>
     </div>
@@ -1557,7 +1558,15 @@ function tiene(f){
   return tieneReal(f);
 }
 function rolEfectivo(){ return modoVista ? (PERFIL_BASE[modoVista] || modoVista) : currentUser.rol; }
+let ULT_CONEXION = 0;
+function registrarConexion(){   // avisa a la base que esta persona está usando el sistema (como máximo cada 5 min)
+  if(Date.now() - ULT_CONEXION < 300000) return;
+  ULT_CONEXION = Date.now();
+  db.rpc('registrar_conexion', {}).catch(() => {});
+}
+document.addEventListener('visibilitychange', () => { if(!document.hidden && currentUser) registrarConexion(); });
 async function cargarFunciones(){
+  registrarConexion();
   try{ FUNCIONES = new Set(await db.rpc('mis_funciones', {})); }
   catch(e){ FUNCIONES = null; GRILLA = null; return; }   // sin la grilla en la base: reglas de siempre
   if(tieneReal('ver_como')){
@@ -10631,6 +10640,13 @@ function htmlCeldaFoto(rol, marcado){
     ? `<label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" class="foto-obligatoria" ${marcado ? 'checked' : ''}> Exigir foto</label>`
     : '<span style="color:var(--ink-soft);" title="Solo para contratistas">—</span>';
 }
+function htmlUltimaConexion(iso){
+  if(iso === undefined) return '<span style="color:var(--ink-soft);" title="Falta ejecutar sql/2026-10-ultima-conexion.sql">—</span>';
+  if(!iso) return '<span style="color:var(--ink-soft);">nunca</span>';
+  const d = new Date(iso), horas = (Date.now() - d.getTime()) / 3600000;
+  const txt = d.toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false});
+  return `<span style="color:${horas < 24 ? '#1f7a4d' : horas < 24 * 7 ? 'var(--ink)' : 'var(--ink-soft)'};" title="${horas < 1 ? 'hace minutos' : horas < 24 ? 'hace ' + Math.round(horas) + ' h' : 'hace ' + Math.round(horas / 24) + ' d'}">${txt}</span>`;
+}
 function htmlCeldaInforme(rol, marcado){
   if(!INFORME_DISPONIBLE) return '<span style="color:var(--ink-soft);" title="Falta ejecutar sql/2026-10-informe-reparaciones.sql">—</span>';
   return ROLES_CON_INFORME.includes(rol)
@@ -10669,7 +10685,7 @@ async function pintarAjustesAdmin(){
 
 async function cargarUsuarios(){
   const tbody = document.getElementById('usuariosTbody');
-  tbody.innerHTML = '<tr><td colspan="8" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="10" style="padding:20px; text-align:center; color:var(--ink-soft);">Cargando...</td></tr>';
   try{
     let usuarios;
     await cargarPerfiles();
@@ -10682,6 +10698,8 @@ async function cargarUsuarios(){
       PAUTA_DISPONIBLE = false;
       usuarios = await db.select('usuarios', `select=id,nombre,rol${colPerfil},email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc`);
     }
+    const conexDe = {};
+    try{ (await db.select('usuarios', 'select=id,ultima_conexion')).forEach(m => { conexDe[m.id] = m.ultima_conexion; }); }catch(e){ /* sin el SQL: la columna muestra — */ }
     const informeDe = {};
     try{
       (await db.select('usuarios', 'select=id,ver_informe_rep')).forEach(m => { informeDe[m.id] = !!m.ver_informe_rep; });
@@ -10705,7 +10723,7 @@ async function cargarUsuarios(){
     pintarContratosAdmin();
     pintarAjustesAdmin();
     if(!usuarios.length){
-      tbody.innerHTML = '<tr><td colspan="8" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="padding:20px; text-align:center; color:var(--ink-soft);">No hay usuarios.</td></tr>';
       return;
     }
     tbody.innerHTML = usuarios.map(u => {
@@ -10714,6 +10732,7 @@ async function cargarUsuarios(){
       return `<tr data-id="${u.id}" data-notif="${u.notificador_externo_habilitado ? '1' : '0'}" data-foto="${u.foto_obligatoria ? '1' : '0'}" data-informe="${informeDe[u.id] ? '1' : '0'}" data-dias='${JSON.stringify(u.dias_inspeccion || [])}' data-contr='${JSON.stringify(contratosDe[u.id] || [])}' data-mant='${JSON.stringify(mantenedoresDe[u.id] || [])}' data-modo='${modoAcceso(contratosDe[u.id] || [], mantenedoresDe[u.id] || [])}'>
         <td><input type="text" class="popup-input nombre-input" value="${u.nombre||''}" style="margin:0; padding:6px 8px;"></td>
         <td>${u.email || '—'}</td>
+        <td style="white-space:nowrap; font-size:12px;">${htmlUltimaConexion(conexDe[u.id])}</td>
         <td><select class="rol-select" style="padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; font-size:12px;">${opciones}</select></td>
         <td class="notif-celda" style="white-space:nowrap;">${htmlCeldaNotificador(u.rol, u.notificador_externo_habilitado)}</td>
         <td class="foto-celda" style="white-space:nowrap;">${htmlCeldaFoto(u.rol, u.foto_obligatoria)}</td>
@@ -10769,7 +10788,7 @@ async function cargarUsuarios(){
     aplicarFiltroUsuarios();
     refrescarCambiosUsuarios();
   }catch(e){
-    tbody.innerHTML = `<tr><td colspan="8" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="padding:20px; text-align:center; color:var(--ink-soft);">Error: ${e.message}</td></tr>`;
   }
 }
 
