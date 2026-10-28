@@ -3946,6 +3946,32 @@ async function abrirPopupFalla(feat){
   }
   const CATALOGO_CIERRES = catalogoActivo('cierre');
 
+// Correo con los datos de la falla para reenviar a la concesionaria de la autopista (se abre el correo de quien lo usa)
+const AUTOPISTA_CORREO = '';   // destinatario de la concesionaria; vacío = el ITO lo escribe al enviar
+function abrirCorreoFallaAutopista(p, feat){
+  const [lon, lat] = feat.geometry.coordinates;
+  const desc = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
+  const fecha = p.fecha_falla ? new Date(p.fecha_falla).toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : '—';
+  const asunto = `Falla de alumbrado · Autopista Vespucio Sur · ${p.nro_mun} · OS ${p.ot || '—'}`;
+  const cuerpo = [
+    'Junto con saludar, informamos la siguiente falla de alumbrado en luminaria de la Autopista Vespucio Sur, comuna de La Florida:',
+    '',
+    `N.° de luminaria (placa): ${p.nro_mun}`,
+    `Falla: ${p.tipo_falla}${desc ? ' · ' + desc : ''}`,
+    `Fecha informada: ${fecha}`,
+    `N.° de llave: ${p.llave ?? '—'}`,
+    p.simb_poste ? `Poste: ${p.simb_poste}` : null,
+    `Ubicación: ${lat.toFixed(6)}, ${lon.toFixed(6)}`,
+    `Mapa: https://www.google.com/maps?q=${lat.toFixed(6)},${lon.toFixed(6)}`,
+    `OS: ${p.ot || '—'}${p.orden_externa ? ' · Orden externa: ' + p.orden_externa : ''}`,
+    '',
+    'Quedamos atentos a su gestión.',
+    '',
+    `${currentUser.nombre || ''}`,
+    'Alumbrado Público · Dirección de Obras Municipales · Municipalidad de La Florida'
+  ].filter(x => x !== null).join('\n');
+  window.location.href = `mailto:${encodeURIComponent(AUTOPISTA_CORREO)}?subject=${encodeURIComponent(asunto)}&body=${encodeURIComponent(cuerpo)}`;
+}
 // Botón "Eliminar": admin puede eliminar cualquiera en cualquier momento;
   // el creador (ITO/ITO2/admin) solo su propia falla, no reparada, dentro de 15 min
   let puedeEliminar = false;
@@ -3963,6 +3989,11 @@ async function abrirPopupFalla(feat){
     : '';
   const botonEliminarHtml = puedeEliminar
     ? `<button id="eliminarDesdeMapaBtn" title="Eliminar falla" style="flex-shrink:0; width:26px; height:26px; padding:0; border:1.5px solid var(--red); border-radius:6px; background:#fbe7e5; color:var(--red); font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center;">🗑️</button>`
+    : '';
+  // Luminarias de la autopista (placa AV…): atajo para reenviar la falla por correo a la concesionaria
+  const esAutopista = /^AV\d/i.test(String(p.nro_mun ?? ''));
+  const botonCorreoHtml = (tiene('falla_correo') && esAutopista && p.tipo === 'punto')
+    ? `<button id="correoFallaBtn" title="Enviar por correo (autopista)" style="flex-shrink:0; width:26px; height:26px; padding:0; border:1.5px solid #8a6d00; border-radius:6px; background:#fff8dc; color:#8a6d00; font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center;">✉</button>`
     : '';
   const puedeAsignarCamion = tiene('reparacion_asignar_camion') && (rolEfectivo() !== 'admin' || adminPuedeReparar()) && !p.cascada && !p._vistaHistorica && p.estado !== 'reparada';
   const asignarCamionHtml = puedeAsignarCamion ? `
@@ -3989,7 +4020,7 @@ async function abrirPopupFalla(feat){
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
-  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${mantenedorTag(p.mantenedor_id)}${p.contrato_id ? '' : derivacionTag(p.derivacion)}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
+  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml || botonCorreoHtml) ? `<div class="panel-acciones">${botonCorreoHtml}${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${mantenedorTag(p.mantenedor_id)}${p.contrato_id ? '' : derivacionTag(p.derivacion)}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   // Quién puede dejar un comentario en una falla ya creada (todos menos el observador); los puntos de cascada comentan en su circuito
@@ -4135,6 +4166,9 @@ async function abrirPopupFalla(feat){
     };
     protegerClick(btnQuitarAsig);
   }
+
+  const btnCorreo = panel.querySelector('#correoFallaBtn');
+  if(btnCorreo) btnCorreo.onclick = () => abrirCorreoFallaAutopista(p, feat);
 
   const btnEditarMapa = panel.querySelector('#editarDesdeMapaBtn');
   if(btnEditarMapa) btnEditarMapa.onclick = () => abrirEditorFalla(p);
