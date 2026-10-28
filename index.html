@@ -404,6 +404,18 @@
     display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
     padding:5px 16px; border-bottom:1px solid var(--line); flex-shrink:0;
   }
+  /* Todas las fallas: buscador + panel de filtros plegable (mismo sistema que la barra lateral) */
+  .tf-barra{display:flex; gap:8px; align-items:center; margin:4px 0 6px;}
+  .tf-barra > div{flex:1;}
+  .tf-panel{display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:8px 24px; padding:10px 14px; margin:0 0 6px;}
+  .tf-panel[hidden]{display:none;}
+  .tf-grupo > div{display:flex; flex-wrap:wrap; gap:5px; align-items:center;}
+  .tf-grupo > div > span:first-child{flex-basis:100%; font-size:10.5px !important; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--ink-soft) !important; margin:0 0 1px !important;}
+  .tf-grupo:has(> [style*="display: none"]){display:none;}
+  .tf-activos{display:flex; flex-wrap:wrap; gap:6px; margin:0 0 6px;}
+  .tf-activos:empty{display:none;}
+  .tf-act{display:inline-flex; align-items:center; gap:6px; padding:2px 9px; border-radius:12px; border:1.5px solid var(--primary); background:#eef5f1; color:var(--primary); font-size:11.5px; font-weight:600; cursor:pointer;}
+  .tf-act:hover{background:#e2efe8;}
   .bottom-panel-body{flex:1; overflow:auto; padding:6px 16px 8px;}
   #todasFallasTabla th{padding:5px 6px !important; font-size:12px;}
   #sidebar{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;display:flex;flex-direction:column;position:relative;}
@@ -750,7 +762,7 @@
       <div id="resizeHandle" class="resize-handle"></div>
       <div class="bottom-panel-header">
         <div style="display:flex; align-items:baseline; gap:10px; min-width:0; flex-wrap:wrap;">
-          <h2 style="margin:0; font-size:15px;" id="panelInferiorTitulo">Todas las fallas de la comuna</h2>
+          <h2 style="margin:0; font-size:15px;" id="panelInferiorTitulo">Todas las fallas de la comuna</h2><span class="lat-cuenta" id="todasCuenta" title="Fallas que se ven con los filtros actuales">0</span>
           <span class="hint" id="panelInferiorPista" style="margin:0; font-size:11px;">Mostrando las más recientes · clic en una fila para ubicarla en el mapa</span>
         </div>
         <div style="display:flex; gap:8px; align-items:center;">
@@ -761,36 +773,35 @@
       </div>
       <div class="bottom-panel-body">
         <div id="todasContenido">
-        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin-bottom:6px;">
-        <div id="todasFiltroEstado" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
+        <div class="tf-barra">
+          <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:220px;">
+          <input type="search" id="buscadorTodasFallas" name="buscar-fallas-tabla" autocomplete="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" placeholder="🔍 Buscar por OS, orden externa, código, cliente, llave, nombre, estado, fecha..." style="flex:1; min-width:0; box-sizing:border-box; padding:4px 9px; font-size:12px; border:1.5px solid var(--line); border-radius:8px; background:#fff; color:var(--ink);">
+          <span class="hint" id="contadorBusquedaTodas" style="margin:0; white-space:nowrap;"></span>
+        </div>
+          <button type="button" id="tfFiltrosBtn" class="lat-fbtn" aria-expanded="false" title="Filtros" style="width:auto; padding:0 12px; gap:6px; font-size:12.5px; font-weight:600; white-space:nowrap;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>Filtros<span class="lat-fnum" id="tfFiltrosNum" hidden></span></button>
+        </div>
+        <div id="todasFiltrosPanel" class="lat-panel tf-panel" hidden>
+          <div class="tf-grupo"><div id="todasFiltroEstado" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
           <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Estado:</span>
           <button type="button" class="chip-estado activo" data-estado="todas" onclick="filtrarTodasFallasPorEstado('todas')">Todas <span class="n" id="cntEstadoTodas"></span></button>
           <button type="button" class="chip-estado" data-estado="reportada" onclick="filtrarTodasFallasPorEstado('reportada')"><span class="dot" style="background:#f2b705"></span>Reportada <span class="n" id="cntEstadoReportada"></span></button>
           <button type="button" class="chip-estado" data-estado="pendiente" onclick="filtrarTodasFallasPorEstado('pendiente')"><span class="dot" style="background:#2fa8d8"></span>Pendiente <span class="n" id="cntEstadoPendiente"></span></button>
           <button type="button" class="chip-estado" data-estado="reparada" onclick="filtrarTodasFallasPorEstado('reparada')"><span class="dot" style="background:#3a8a5c"></span>Reparada <span class="n" id="cntEstadoReparada"></span></button>
           <button type="button" class="chip-estado" data-estado="reiterada" onclick="filtrarTodasFallasPorEstado('reiterada')"><span class="dot" style="background:#8e44ad"></span>Reiterada <span class="n" id="cntEstadoReiterada"></span></button>
-        </div>
-        <div id="todasFiltroMasivo" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
-          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Subcontrato:</span>
-          <button type="button" class="chip-estado morado activo" data-masivo="todas" onclick="filtrarTodasFallasPorMasivo('todas')">Todas</button>
-          <button type="button" class="chip-estado morado" data-masivo="si" onclick="filtrarTodasFallasPorMasivo('si')">Masivo</button>
-          <button type="button" class="chip-estado morado" data-masivo="no" onclick="filtrarTodasFallasPorMasivo('no')">Normal</button>
-        </div>
-        <div id="todasFiltroContrato" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div>
-        <div id="todasFiltroCodigo" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div>
-        <div id="todasFiltroAsignacion" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;">
+        </div></div><div class="tf-grupo"><div id="todasFiltroAsignacion" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;">
           <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Asignación:</span>
           <button type="button" class="chip-estado activo" data-asig="todas" onclick="filtrarTodasFallasPorAsignacion('todas')">Todas</button>
           <button type="button" class="chip-estado" data-asig="sin" onclick="filtrarTodasFallasPorAsignacion('sin')">Sin asignar</button>
           <button type="button" class="chip-estado" data-asig="asignadas" onclick="filtrarTodasFallasPorAsignacion('asignadas')">Asignadas</button>
+        </div></div><div class="tf-grupo"><div id="todasFiltroAsignador" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div></div><div class="tf-grupo"><div id="todasFiltroMasivo" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;">
+          <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Subcontrato:</span>
+          <button type="button" class="chip-estado morado activo" data-masivo="todas" onclick="filtrarTodasFallasPorMasivo('todas')">Todas</button>
+          <button type="button" class="chip-estado morado" data-masivo="si" onclick="filtrarTodasFallasPorMasivo('si')">Masivo</button>
+          <button type="button" class="chip-estado morado" data-masivo="no" onclick="filtrarTodasFallasPorMasivo('no')">Normal</button>
+        </div></div><div class="tf-grupo"><div id="todasFiltroContrato" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div></div><div class="tf-grupo"><div id="todasFiltroMantenedor" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div></div><div class="tf-grupo"><div id="todasFiltroPeriodo" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center;"><span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Período:</span><button type="button" class="chip-estado activo" data-per="todo" onclick="filtrarTodasFallasPorPeriodo('todo')">Todo</button><button type="button" class="chip-estado" data-per="hoy" onclick="filtrarTodasFallasPorPeriodo('hoy')">Hoy</button><button type="button" class="chip-estado" data-per="7" onclick="filtrarTodasFallasPorPeriodo('7')">7 días</button><button type="button" class="chip-estado" data-per="mes" onclick="filtrarTodasFallasPorPeriodo('mes')">Mes</button><button type="button" class="chip-estado" data-per="rango" onclick="filtrarTodasFallasPorPeriodo('rango')">Elegir…</button><span id="tfRango" style="display:none; gap:4px; align-items:center; font-size:11.5px;"><input type="date" id="tfDesde" class="popup-input" style="margin:0; padding:2px 5px; font-size:11.5px; width:128px;" onchange="cambiarRangoTodasFallas()"> a <input type="date" id="tfHasta" class="popup-input" style="margin:0; padding:2px 5px; font-size:11.5px; width:128px;" onchange="cambiarRangoTodasFallas()"></span></div></div><div class="tf-grupo"><div id="todasFiltroCodigo" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div></div>
+          <div class="lat-pie" style="grid-column:1 / -1;"><button type="button" id="tfLimpiar" class="lat-link">Limpiar filtros</button><span id="tfResumen"></span></div>
         </div>
-        <div id="todasFiltroAsignador" style="display:none; flex-wrap:wrap; gap:5px; align-items:center;"></div>
-
-        <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:220px;">
-          <input type="search" id="buscadorTodasFallas" name="buscar-fallas-tabla" autocomplete="off" spellcheck="false" readonly onfocus="this.removeAttribute('readonly');" placeholder="🔍 Buscar por OS, orden externa, código, cliente, llave, nombre, estado, fecha..." style="flex:1; min-width:0; box-sizing:border-box; padding:4px 9px; font-size:12px; border:1.5px solid var(--line); border-radius:8px; background:#fff; color:var(--ink);">
-          <span class="hint" id="contadorBusquedaTodas" style="margin:0; white-space:nowrap;"></span>
-        </div>
-        </div>
+        <div id="tfActivos" class="tf-activos"></div>
 
         <table id="todasFallasTabla" style="width:100%; border-collapse:collapse; font-size:12.5px;">
           <thead>
@@ -807,7 +818,7 @@
               <th style="padding:8px 10px;" title="Puntos afectados">Pts.</th>
               <th style="padding:8px 10px;">Estado</th>
               <th style="padding:8px 10px;" title="Fecha de reparación">F. reparación <button class="sort-btn" onclick="ordenarTodasFallas('fecha_reparacion')" title="Ordenar por fecha de reparación">⇅</button></th>
-              <th style="padding:8px 10px; display:none;" id="thContrato">Contrato</th>
+              <th style="padding:8px 10px; display:none;" id="thContrato">Contrato · Mantenedor</th>
               <th style="padding:8px 10px; display:none;" id="thAsignacion">Asignación <button class="sort-btn" onclick="ordenarTodasFallas('asignacion')" title="Ordenar por asignación">⇅</button></th>
               <th style="padding:8px 10px; display:none;" id="thResponde" title="Quién registró la reparación o dejó la falla pendiente">Responde <button class="sort-btn" onclick="ordenarTodasFallas('responde')" title="Ordenar por quién responde">⇅</button></th>
               <th style="padding:8px 10px;">Fotos</th>
@@ -5296,6 +5307,104 @@ function pintarChipsCodigoTodas(fuente){
   cont.innerHTML = '<span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Código:</span>' + chip('__todos', 'Todos', !filtroCodigosTodasFallas.size) +
     codigos.map(c => chip(c, `${escHtml(c)} <span class="n">(${cuenta[c]})</span>`, filtroCodigosTodasFallas.has(c), descCodigoSimple(c))).join('');
 }
+// ---- Mantenedor y Período en "Todas las fallas" + barra de filtros (panel plegable y filtros activos) ----
+const filtroMantenedoresTodas = new Set();   // ids de mantenedor ('sin' = sin mantenedor); vacío = todos
+function filtrarTodasFallasPorMantenedor(id){
+  if(id === '__todos') filtroMantenedoresTodas.clear();
+  else if(filtroMantenedoresTodas.has(id)) filtroMantenedoresTodas.delete(id);
+  else filtroMantenedoresTodas.add(id);
+  renderTodasFallasTabla();
+}
+window.filtrarTodasFallasPorMantenedor = filtrarTodasFallasPorMantenedor;
+function pintarChipsMantenedorTodas(fuente){
+  const cont = document.getElementById('todasFiltroMantenedor'); if(!cont) return;
+  const cuenta = {};
+  (fuente || []).forEach(f => { const k = f.mantenedor_id || 'sin'; cuenta[k] = (cuenta[k] || 0) + 1; });
+  filtroMantenedoresTodas.forEach(k => { if(!(k in cuenta)) cuenta[k] = 0; });
+  const ids = Object.keys(cuenta).filter(k => k !== 'sin' || cuenta.sin > 0);
+  if(!ids.some(k => k !== 'sin')){ cont.style.display = 'none'; return; }   // sin datos de mantenedor (SQL sin ejecutar o aún sin asignar)
+  ids.sort((a, b) => (a === 'sin') - (b === 'sin') || cuenta[b] - cuenta[a]);
+  cont.style.display = 'flex';
+  const chip = (id, txt, act) => `<button type="button" class="chip-estado morado${act ? ' activo' : ''}" onclick="filtrarTodasFallasPorMantenedor('${escHtml(id)}')">${txt}</button>`;
+  cont.innerHTML = '<span>Mantenedor:</span>' + chip('__todos', 'Todos', !filtroMantenedoresTodas.size) +
+    ids.map(k => chip(k, `${escHtml(k === 'sin' ? 'Sin mantenedor' : (MANTENEDORES_MAPA[k] || 'Mantenedor'))} <span class="n">(${cuenta[k]})</span>`, filtroMantenedoresTodas.has(k))).join('');
+}
+let filtroPeriodoTodas = 'todo';   // 'todo' | 'hoy' | '7' | 'mes' | 'rango'  (sobre la fecha informada)
+function hoyChileIso(){ return new Intl.DateTimeFormat('en-CA', {timeZone: ZONA_CHILE, year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date()); }
+function sumarDiasIso(iso, n){ const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+function limitesPeriodoTodas(){
+  const hoy = hoyChileIso();
+  if(filtroPeriodoTodas === 'hoy') return [hoy, hoy];
+  if(filtroPeriodoTodas === '7') return [sumarDiasIso(hoy, -6), hoy];
+  if(filtroPeriodoTodas === 'mes') return [hoy.slice(0, 8) + '01', hoy];
+  if(filtroPeriodoTodas === 'rango') return [document.getElementById('tfDesde').value || null, document.getElementById('tfHasta').value || null];
+  return [null, null];
+}
+function pasaPeriodoTodas(f){
+  const [d, h] = limitesPeriodoTodas(); if(!d && !h) return true;
+  const dia = new Intl.DateTimeFormat('en-CA', {timeZone: ZONA_CHILE, year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date(f.fecha_creacion));
+  return (!d || dia >= d) && (!h || dia <= h);
+}
+function filtrarTodasFallasPorPeriodo(v){
+  filtroPeriodoTodas = v;
+  document.querySelectorAll('#todasFiltroPeriodo .chip-estado').forEach(c => c.classList.toggle('activo', c.dataset.per === v));
+  const rg = document.getElementById('tfRango'); if(rg) rg.style.display = v === 'rango' ? 'inline-flex' : 'none';
+  renderTodasFallasTabla();
+}
+window.filtrarTodasFallasPorPeriodo = filtrarTodasFallasPorPeriodo;
+window.cambiarRangoTodasFallas = () => renderTodasFallasTabla();
+
+// Filtros activos (etiquetas con ×) y contadores
+function filtrosActivosTodas(){
+  const a = [];
+  filtroEstadoTodasFallas.forEach(e => a.push({t: 'Estado: ' + e, k: 'estado:' + e}));
+  if(verAsignacionTodas() && filtroAsignTodasFallas !== 'todas') a.push({t: filtroAsignTodasFallas === 'sin' ? 'Sin asignar' : 'Asignadas', k: 'asig'});
+  if(verAsignacionTodas()) filtroAsignadoresTodasFallas.forEach(id => { const f = ultimosTodasFallas.find(x => x.asignado_por_id === id); a.push({t: 'Asignada por: ' + (f ? f.asignado_por_nombre : '—'), k: 'asignador:' + id}); });
+  if(filtroMasivoTodasFallas !== 'todas') a.push({t: filtroMasivoTodasFallas === 'si' ? 'Masivo' : 'Normal', k: 'masivo'});
+  if(filtroContratoTodasFallas !== 'todos') a.push({t: 'Contrato: ' + (filtroContratoTodasFallas === 'sin' ? 'sin contrato' : (CONTRATOS_MAPA[filtroContratoTodasFallas] || '—')), k: 'contrato'});
+  filtroMantenedoresTodas.forEach(id => a.push({t: 'Mantenedor: ' + (id === 'sin' ? 'sin mantenedor' : (MANTENEDORES_MAPA[id] || '—')), k: 'mant:' + id}));
+  if(filtroPeriodoTodas !== 'todo') a.push({t: 'Período: ' + ({hoy: 'hoy', '7': 'últimos 7 días', mes: 'este mes', rango: 'rango'}[filtroPeriodoTodas]), k: 'periodo'});
+  filtroCodigosTodasFallas.forEach(c => a.push({t: 'Código: ' + c, k: 'cod:' + c}));
+  return a;
+}
+function quitarFiltroTodas(k){
+  const [t, v] = k.split(':');
+  if(t === 'estado'){ filtroEstadoTodasFallas.delete(v); }
+  else if(t === 'asig') filtroAsignTodasFallas = 'todas', filtroAsignadoresTodasFallas.clear();
+  else if(t === 'asignador') filtroAsignadoresTodasFallas.delete(v);
+  else if(t === 'masivo') filtroMasivoTodasFallas = 'todas', document.querySelectorAll('#todasFiltroMasivo .chip-estado').forEach(c => c.classList.toggle('activo', c.dataset.masivo === 'todas'));
+  else if(t === 'contrato') filtroContratoTodasFallas = 'todos';
+  else if(t === 'mant') filtroMantenedoresTodas.delete(v);
+  else if(t === 'periodo') return filtrarTodasFallasPorPeriodo('todo');
+  else if(t === 'cod') filtroCodigosTodasFallas.delete(v);
+  renderTodasFallasTabla();
+}
+window.quitarFiltroTodas = quitarFiltroTodas;
+function limpiarFiltrosTodas(){
+  filtroEstadoTodasFallas.clear(); filtroAsignTodasFallas = 'todas'; filtroAsignadoresTodasFallas.clear();
+  filtroMasivoTodasFallas = 'todas'; document.querySelectorAll('#todasFiltroMasivo .chip-estado').forEach(c => c.classList.toggle('activo', c.dataset.masivo === 'todas'));
+  filtroContratoTodasFallas = 'todos'; filtroMantenedoresTodas.clear(); filtroCodigosTodasFallas.clear();
+  filtrarTodasFallasPorPeriodo('todo');
+}
+function actualizarBarraFiltrosTodas(visibles){
+  const act = filtrosActivosTodas();
+  const caja = document.getElementById('tfActivos');
+  if(caja){
+    caja.innerHTML = act.map(x => `<button type="button" class="tf-act" title="Quitar este filtro" onclick="quitarFiltroTodas('${escHtml(x.k)}')">${escHtml(x.t)} ×</button>`).join('');
+  }
+  const num = document.getElementById('tfFiltrosNum'), btn = document.getElementById('tfFiltrosBtn');
+  if(num){ num.textContent = act.length; num.hidden = !act.length; }
+  if(btn) btn.classList.toggle('activo', act.length > 0 || btn.getAttribute('aria-expanded') === 'true');
+  const cuenta = document.getElementById('todasCuenta'); if(cuenta) cuenta.textContent = visibles;
+  const res = document.getElementById('tfResumen'); if(res) res.textContent = `${visibles} de ${ultimosTodasFallas.length} fallas cargadas`;
+}
+document.getElementById('tfFiltrosBtn').addEventListener('click', () => {
+  const pnl = document.getElementById('todasFiltrosPanel'), b = document.getElementById('tfFiltrosBtn');
+  pnl.hidden = !pnl.hidden; b.setAttribute('aria-expanded', String(!pnl.hidden));
+  b.classList.toggle('activo', !pnl.hidden || filtrosActivosTodas().length > 0);
+});
+document.getElementById('tfLimpiar').addEventListener('click', limpiarFiltrosTodas);
+
 function filtrarTodasFallasPorContrato(v){
   filtroContratoTodasFallas = v;
   renderTodasFallasTabla();
@@ -5620,7 +5729,10 @@ function renderTodasFallasTabla(){
   else if(filtroContratoTodasFallas !== 'todos') porEstado = porEstado.filter(f => f.contrato_id === filtroContratoTodasFallas);
   if(filtroCodigosTodasFallas.size) porEstado = porEstado.filter(f => filtroCodigosTodasFallas.has(f.tipo_falla));
   porEstado = porEstado.filter(pasaFiltrosAsignacionTodas);
+  if(filtroMantenedoresTodas.size) porEstado = porEstado.filter(f => filtroMantenedoresTodas.has(f.mantenedor_id || 'sin'));
+  if(filtroPeriodoTodas !== 'todo') porEstado = porEstado.filter(pasaPeriodoTodas);
   pintarChipsContratoTodas();
+  pintarChipsMantenedorTodas((busquedaServidor.activa && textoBusquedaTodasFallas.trim()) ? busquedaServidor.filas : ultimosTodasFallas);
   pintarChipsCodigoTodas((busquedaServidor.activa && textoBusquedaTodasFallas.trim()) ? busquedaServidor.filas : ultimosTodasFallas);
   const thC = document.getElementById('thContrato'); if(thC) thC.style.display = CONTRATOS_ACTIVOS.length ? 'table-cell' : 'none';
 
@@ -5630,6 +5742,7 @@ function renderTodasFallasTabla(){
     ? porEstado.filter(f => { const h = textoBusquedaDeFalla(f, esAdmin && !ocultarReales); return terminos.every(t => h.includes(t)); })
     : porEstado;
 
+  actualizarBarraFiltrosTodas(datosFiltrados.length);
   const contador = document.getElementById('contadorBusquedaTodas');
   if(contador){
     if(enServidor) contador.textContent = `${datosFiltrados.length}${busquedaServidor.hayMas ? '+' : ''} en toda la base`;
@@ -5704,7 +5817,7 @@ function renderTodasFallasTabla(){
       <td>${f.puntos_afectados}</td>
       <td><span class="badge ${f.estado}" ${tooltipEstado ? `title="${tooltipEstado.replace(/"/g,'&quot;')}"` : ''} style="${tooltipEstado ? 'cursor:help;' : ''}">${f.estado.replace('_',' ')}</span></td>
       <td style="white-space:nowrap;">${f.fecha_reparacion ? new Date(f.fecha_reparacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-      ${CONTRATOS_ACTIVOS.length ? `<td style="font-size:11.5px;">${f.contrato_nombre ? escHtml(f.contrato_nombre) : '—'}</td>` : ''}
+      ${CONTRATOS_ACTIVOS.length ? `<td style="font-size:11.5px; white-space:nowrap;">${(f.contrato_nombre || f.mantenedor_nombre) ? contratoTag(f.contrato_id) + mantenedorTag(f.mantenedor_id) || escHtml(f.contrato_nombre || '') : '—'}</td>` : ''}
       ${verAsignacionTodas() ? `<td style="font-size:11.5px; line-height:1.3;">${celdaAsignacionTodas(f)}</td><td style="font-size:11.5px; line-height:1.3;">${celdaRespondeTodas(f)}</td>` : ''}
       <td>${celdaFotosTodas(f.id)}</td>
       <td>${boton}</td>
