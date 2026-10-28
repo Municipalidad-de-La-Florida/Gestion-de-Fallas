@@ -10199,7 +10199,7 @@ function iniciarNotifs(){
 const INF_AZUL = [47, 93, 138], INF_NAVY = [31, 58, 95], INF_CELESTE = [228, 238, 247], INF_DORADO = [232, 199, 104], INF_GRIS = [108, 127, 148], INF_TINTA = [35, 54, 77];
 const infFmt = (iso) => iso ? new Date(iso).toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}) : '—';
 const infFmtDia = (d) => { const [y, m, dd] = String(d).slice(0, 10).split('-'); return `${dd}-${m}-${y}`; };
-const infNombrePar = (r) => `${r.mantenedor || 'Sin mantenedor'} · ${r.contrato_corto}`;
+const infNombrePar = (r) => r.mantenedor ? `${r.mantenedor} · ${r.contrato_corto}` : r.contrato_corto;
 const infDiasPeriodo = (d, h) => Math.round((new Date(h + 'T12:00:00') - new Date(d + 'T12:00:00')) / 86400000) + 1;
 
 async function abrirInformeReparaciones(){
@@ -10233,7 +10233,7 @@ async function abrirInformeReparaciones(){
     opciones = await db.rpc('informe_reparaciones_opciones', {}) || [];
     const caja = ov.querySelector('#infOpciones');
     caja.className = '';
-    caja.innerHTML = opciones.length ? opciones.map((o, i) => `<label style="display:block;margin:4px 0;"><input type="checkbox" class="infOp" data-i="${i}" ${opciones.length === 1 ? 'checked' : ''}> <b>${escHtml(o.mantenedor || 'Sin mantenedor')}</b> · ${escHtml(o.contrato)}${o.mantenedor ? '' : ' <span class="hint">(fallas anteriores a la asignación de mantenedor)</span>'}</label>`).join('') : '<div class="hint">No hay reparaciones disponibles para tu perfil.</div>';
+    caja.innerHTML = opciones.length ? opciones.map((o, i) => `<label style="display:block;margin:4px 0;"><input type="checkbox" class="infOp" data-i="${i}" ${opciones.length === 1 ? 'checked' : ''}> ${o.mantenedor ? `<b>${escHtml(o.mantenedor)}</b> · ` : ''}${escHtml(o.contrato)}</label>`).join('') : '<div class="hint">No hay reparaciones disponibles para tu perfil.</div>';
   }catch(e){ ov.querySelector('#infOpciones').innerHTML = `<span style="color:var(--red);">No se pudo cargar: ${escHtml(e.message)}<br>¿Ejecutaste sql/2026-10-informe-reparaciones.sql?</span>`; }
   try{
     const us = await db.select('usuarios', 'select=id,nombre,rol&rol=in.(admin,ito,ito2,contratista,contratista2,contratista3)&order=nombre.asc');
@@ -10271,7 +10271,7 @@ function infGenerarExcel(r, estado){
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ['Informe de reparaciones', `${infFmtDia(r.desde)} al ${infFmtDia(r.hasta)}`], [],
     ['Contrato', 'Mantenedor', 'Reparaciones', 'Media de trabajos diarios', 'Filas del detalle'],
-    ...r.datos.map(p => [p.contrato, p.mantenedor || 'Sin mantenedor', p.resumen.total, Math.round(p.resumen.total / dias * 10) / 10, p.detalle.length])
+    ...r.datos.map(p => [p.contrato, p.mantenedor || '', p.resumen.total, Math.round(p.resumen.total / dias * 10) / 10, p.detalle.length])
   ]), 'Resumen');
   const usados = new Set(['Resumen']);
   r.datos.forEach(p => {
@@ -10324,8 +10324,10 @@ async function infGenerarPdf(r, estado){
     pdf.setFontSize(7.5); pdf.text('CONTRATO', 14, y);
     pdf.setFontSize(13); pdf.setTextColor(...INF_NAVY);
     const lin = pdf.splitTextToSize(p.contrato, 150); pdf.text(lin, 40, y + 0.5); y += lin.length * 5.6 + 3;
-    pdf.setFontSize(7.5); pdf.setTextColor(...INF_GRIS); pdf.text('MANTENEDOR', 14, y);
-    pdf.setFontSize(10.5); pdf.setTextColor(...INF_NAVY); pdf.text((p.mantenedor || 'Sin mantenedor').toUpperCase(), 40, y);
+    if(p.mantenedor){
+      pdf.setFontSize(7.5); pdf.setTextColor(...INF_GRIS); pdf.text('MANTENEDOR', 14, y);
+      pdf.setFontSize(10.5); pdf.setTextColor(...INF_NAVY); pdf.text(p.mantenedor.toUpperCase(), 40, y);
+    } else y -= 7;
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...INF_GRIS);
     pdf.text(`Municipalidad de La Florida · ${periodo}` + (r.muestra ? ` · Muestra de ${r.muestra} reparaciones por informe, repartidas entre los días` : ' · Todas las reparaciones'), 14, y + 7);
   };
@@ -10353,7 +10355,7 @@ async function infGenerarPdf(r, estado){
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(...INF_GRIS); pdf.text('INFORME DE REPARACIONES · RESUMEN GENERAL', 14, 12, {charSpace: 0.6});
     pdf.setFontSize(13); pdf.setTextColor(...INF_NAVY); pdf.text(`Municipalidad de La Florida · ${periodo}`, 14, 22);
     tabla(42, ['Contrato', 'Mantenedor', 'Reparaciones', 'Media diaria'],
-      r.datos.map(p => [p.contrato, p.mantenedor || 'Sin mantenedor', ent(p.resumen.total), num(p.resumen.total / dias)]),
+      r.datos.map(p => [p.contrato, p.mantenedor || '—', ent(p.resumen.total), num(p.resumen.total / dias)]),
       {2: {halign: 'right', cellWidth: 28}, 3: {halign: 'right', cellWidth: 28}});
     marcar(210, 297);
   }
@@ -10398,9 +10400,10 @@ async function infGenerarPdf(r, estado){
       {0: {cellWidth: 22}, 2: {halign: 'right', cellWidth: 16}});
 
     // ===== Detalle (hojas horizontales) =====
-    pdf.addPage('a4', 'landscape'); marcar(297, 210);
+    pdf.addPage([210, 330], 'landscape'); marcar(330, 210);
     const nF = Math.min(3, Math.max(0, ...p.detalle.map(d => (d.fotos || []).filter(f => mapa[f]).slice(0, 3).length)));
     const tw = 22, th = 16.5, anchoFotos = nF ? nF * (tw + 1) + 2 : 14;
+    const ANCHO_UTIL = 330 - 16, wBase = {n: 9, os: 22, falla: 40, ubic: 48, notif: 58}, wCierre = Math.min(80, ANCHO_UTIL - Object.values(wBase).reduce((a, b) => a + b, 0) - anchoFotos);
     const txtUbic = d => d.tipo === 'linea' ? `Circuito ${d.circuito ?? '—'}\n${d.puntos_afectados ?? 0} puntos lumínicos afectados`
       : [`Llave ${d.llave ?? '—'}`, `N.º mun.: ${d.nro_mun ?? '—'}`, d.calle, d.poste ? `Poste: ${d.poste}` : null].filter(Boolean).join('\n');
     const cuerpo = p.detalle.map((d, i) => [i + 1, (d.ot || '—') + (d.orden_externa ? `\n${d.orden_externa}` : '\n—'), `${d.codigo}\n${d.descripcion_falla || ''}`, txtUbic(d),
@@ -10410,7 +10413,7 @@ async function infGenerarPdf(r, estado){
       startY: 17, margin: {left: 8, right: 8, top: 17, bottom: 10}, head: [['N.º', 'OS / Ord. Ext.', 'Falla', 'Ubicación', 'Lo que se notificó', 'Cierre', 'Fotos']], body: cuerpo,
       styles: {fontSize: 7.5, cellPadding: 1.6, textColor: INF_TINTA, lineColor: [220, 223, 220], lineWidth: 0.1, valign: 'top'},
       headStyles: {fillColor: INF_AZUL, textColor: 255, fontStyle: 'bold'}, alternateRowStyles: {fillColor: [243, 247, 251]},
-      columnStyles: {0: {cellWidth: 9, halign: 'center'}, 6: {cellWidth: anchoFotos}}, tableWidth: 'wrap',
+      columnStyles: {0: {cellWidth: wBase.n, halign: 'center'}, 1: {cellWidth: wBase.os}, 2: {cellWidth: wBase.falla}, 3: {cellWidth: wBase.ubic}, 4: {cellWidth: wBase.notif}, 5: {cellWidth: wCierre}, 6: {cellWidth: anchoFotos}}, tableWidth: 'wrap',
       didParseCell: (h) => { if(h.section === 'body' && h.column.index === 6){ const d = p.detalle[h.row.index]; if(d && (d.fotos || []).slice(0, 3).some(f => mapa[f])) h.cell.styles.minCellHeight = th + 3.2; } },
       didDrawCell: (h) => {
         if(h.section !== 'body' || h.column.index !== 6) return;
@@ -10418,12 +10421,12 @@ async function infGenerarPdf(r, estado){
         (d.fotos || []).slice(0, 3).forEach(f => { if(mapa[f]){ pdf.addImage(mapa[f], 'JPEG', h.cell.x + 1.2 + k * (tw + 1), h.cell.y + 1.6, tw, th); k++; } });
       },
       didDrawPage: (h) => {
-        dims[pdf.getNumberOfPages()] = {w: 297, h: 210};
-        pdf.setFillColor(...INF_CELESTE); pdf.rect(0, 0, 297, 12, 'F'); pdf.setFillColor(...INF_DORADO); pdf.rect(0, 12, 297, 1.2, 'F');
+        dims[pdf.getNumberOfPages()] = {w: 330, h: 210};
+        pdf.setFillColor(...INF_CELESTE); pdf.rect(0, 0, 330, 12, 'F'); pdf.setFillColor(...INF_DORADO); pdf.rect(0, 12, 330, 1.2, 'F');
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(...INF_NAVY);
-        pdf.text(`Detalle de las reparaciones · ${(p.mantenedor || 'Sin mantenedor')} · ${periodo}`, 8, 7.8);
+        pdf.text(`Detalle de las reparaciones${p.mantenedor ? ' · ' + p.mantenedor : ''} · ${periodo}`, 8, 7.8);
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...INF_GRIS);
-        pdf.text(p.contrato, 289, 7.8, {align: 'right', maxWidth: 170});
+        pdf.text(p.contrato, 322, 7.8, {align: 'right', maxWidth: 190});
       }
     });
   });
