@@ -9,6 +9,18 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const esc = (s: unknown) => String(s ?? "—").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const fmtFecha = (iso: string) => new Date(iso).toLocaleString("es-CL", { timeZone: "America/Santiago", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
+const armar = (g: any) => {
+  const n = g.fallas.length;
+  const filasTxt = g.fallas.map((f: any) => `- ${f.placa} · ${f.tipo_falla}${f.descripcion ? " (" + f.descripcion + ")" : ""} · OS ${f.ot || "—"}${f.orden_externa ? " / " + f.orden_externa : ""} · ${fmtFecha(f.fecha_falla)} · llave ${f.llave ?? "—"} · https://www.google.com/maps?q=${f.lat},${f.lon}`).join("\n");
+  const filasHtml = g.fallas.map((f: any) => `<tr><td><b>${esc(f.placa)}</b></td><td>${esc(f.tipo_falla)}${f.descripcion ? "<br><small>" + esc(f.descripcion) + "</small>" : ""}</td><td>${esc(f.ot)}${f.orden_externa ? "<br><small>" + esc(f.orden_externa) + "</small>" : ""}</td><td>${esc(fmtFecha(f.fecha_falla))}</td><td>${esc(f.llave)}</td><td><a href="https://www.google.com/maps?q=${f.lat},${f.lon}">Ver mapa</a></td></tr>`).join("");
+  const asunto = `Alumbrado Público · ${n} falla${n > 1 ? "s" : ""} en luminarias de Autopista Vespucio Sur por reenviar`;
+  const texto = `Hola ${g.nombre || ""},\n\nEstas son las fallas que registraste en luminarias de la Autopista Vespucio Sur (sin mantenimiento municipal), para reenviar a la concesionaria:\n\n${filasTxt}\n\nAlumbrado Público · Dirección de Obras Municipales · Municipalidad de La Florida`;
+  const html = `<p>Hola ${esc(g.nombre)},</p><p>Estas son las fallas que registraste en luminarias de la <b>Autopista Vespucio Sur</b> (sin mantenimiento municipal), para reenviar a la concesionaria:</p>
+<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;border-color:#c9d3dc;font-size:13px"><tr style="background:#1f3a5f;color:#fff"><th>Placa</th><th>Falla</th><th>OS</th><th>Fecha informada</th><th>Llave</th><th>Ubicación</th></tr>${filasHtml}</table>
+<p style="color:#6c7f94">Alumbrado Público · Dirección de Obras Municipales · Municipalidad de La Florida</p>`;
+  return { asunto, texto, html };
+};
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -29,6 +41,13 @@ Deno.serve(async (req) => {
   if (prueba) {
     const { data: u } = await admin.from("usuarios").select("nombre, email").ilike("email", prueba).limit(1);
     if (!u || !u.length) return json(400, { error: "Esa dirección no es de ningún usuario del sistema" });
+    if (body.ejemplo) {
+      // Ejemplo con la plantilla real y datos inventados (no toca fallas)
+      const g = { nombre: u[0].nombre, fallas: [{ placa: "AV001", tipo_falla: "F01", descripcion: "Luminaria vial apagada", ot: "26-0000", orden_externa: "OS-EJEMPLO-001", fecha_falla: new Date().toISOString(), llave: 42670, lat: -33.5149624885833, lon: -70.5929835377407 }] };
+      const m = armar(g);
+      try { await correo.sendMail({ from: `Alumbrado Público La Florida <${gmail}>`, to: u[0].email, subject: "[EJEMPLO] " + m.asunto, text: m.texto, html: m.html }); return json(200, { ejemplo: "enviado", a: u[0].email }); }
+      catch (e) { return json(500, { ejemplo: "error", error: String(e) }); }
+    }
     try {
       await correo.sendMail({ from: `Alumbrado Público La Florida <${gmail}>`, to: u[0].email, subject: "Prueba · correo automático de fallas de la Autopista Vespucio Sur",
         text: `Hola ${u[0].nombre || ""},\n\nEste es un correo de prueba. Si lo recibes, el envío automático de fallas de la Autopista Vespucio Sur está funcionando.\n\nEjemplo: AV001 · F01 · OS 26-0000`,
@@ -44,18 +63,11 @@ Deno.serve(async (req) => {
   for (const g of (grupos || []) as any[]) {
     const ids = g.fallas.map((f: any) => f.id);
     if (!g.email || !ids.length) continue;
-    const n = ids.length;
-    const filasTxt = g.fallas.map((f: any) => `- ${f.placa} · ${f.tipo_falla}${f.descripcion ? " (" + f.descripcion + ")" : ""} · OS ${f.ot || "—"}${f.orden_externa ? " / " + f.orden_externa : ""} · ${fmtFecha(f.fecha_falla)} · llave ${f.llave ?? "—"} · https://www.google.com/maps?q=${f.lat},${f.lon}`).join("\n");
-    const filasHtml = g.fallas.map((f: any) => `<tr><td><b>${esc(f.placa)}</b></td><td>${esc(f.tipo_falla)}${f.descripcion ? "<br><small>" + esc(f.descripcion) + "</small>" : ""}</td><td>${esc(f.ot)}${f.orden_externa ? "<br><small>" + esc(f.orden_externa) + "</small>" : ""}</td><td>${esc(fmtFecha(f.fecha_falla))}</td><td>${esc(f.llave)}</td><td><a href="https://www.google.com/maps?q=${f.lat},${f.lon}">Ver mapa</a></td></tr>`).join("");
-    const asunto = `Alumbrado Público · ${n} falla${n > 1 ? "s" : ""} en luminarias de Autopista Vespucio Sur por reenviar`;
-    const texto = `Hola ${g.nombre || ""},\n\nEstas son las fallas que registraste en luminarias de la Autopista Vespucio Sur (sin mantenimiento municipal), para reenviar a la concesionaria:\n\n${filasTxt}\n\nAlumbrado Público · Dirección de Obras Municipales · Municipalidad de La Florida`;
-    const html = `<p>Hola ${esc(g.nombre)},</p><p>Estas son las fallas que registraste en luminarias de la <b>Autopista Vespucio Sur</b> (sin mantenimiento municipal), para reenviar a la concesionaria:</p>
-<table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;border-color:#c9d3dc;font-size:13px"><tr style="background:#1f3a5f;color:#fff"><th>Placa</th><th>Falla</th><th>OS</th><th>Fecha informada</th><th>Llave</th><th>Ubicación</th></tr>${filasHtml}</table>
-<p style="color:#6c7f94">Alumbrado Público · Dirección de Obras Municipales · Municipalidad de La Florida</p>`;
+    const { asunto, texto, html } = armar(g);
     try {
       await correo.sendMail({ from: `Alumbrado Público La Florida <${gmail}>`, to: g.email, subject: asunto, text: texto, html });
       await admin.rpc("autopista_marcar_enviadas", { p_ids: ids, p_usuario: g.usuario_id, p_modo: modo, p_ok: true, p_error: null });
-      resultado.push({ usuario: g.nombre, enviadas: n });
+      resultado.push({ usuario: g.nombre, enviadas: ids.length });
     } catch (e) {
       await admin.rpc("autopista_marcar_enviadas", { p_ids: ids, p_usuario: g.usuario_id, p_modo: modo, p_ok: false, p_error: String(e) });
       resultado.push({ usuario: g.nombre, error: String(e) });
