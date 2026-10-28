@@ -75,16 +75,48 @@ grant execute on function public.informe_reparaciones_opciones() to authenticate
 create or replace function public.informe_reparaciones(p_desde date, p_hasta date, p_pares jsonb, p_asignadores uuid[] default null, p_muestra integer default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
-  par jsonb; v_c uuid; v_m uuid; v_out jsonb := '[]'::jsonb; v_det jsonb; v_res jsonb;
+  par jsonb; pares jsonb[] := '{}'; cnts int[] := '{}'; q int[] := '{}';
+  v_c uuid; v_m uuid; v_out jsonb := '[]'::jsonb; v_det jsonb; v_res jsonb;
+  tot int := 0; n int; i int; j int; k int; rem int; best numeric; fr numeric; v_n int;
 begin
   if not public.tiene_permiso('informe_reparaciones') then
     raise exception 'No tienes permiso para sacar el informe de reparaciones';
   end if;
   if p_desde is null or p_hasta is null or p_hasta < p_desde then raise exception 'Período no válido'; end if;
+
+  -- 1) cuántas reparaciones tiene cada informe pedido (solo los que la persona puede ver)
   for par in select * from jsonb_array_elements(coalesce(p_pares, '[]'::jsonb)) loop
     v_c := nullif(par->>'contrato_id', '')::uuid; v_m := nullif(par->>'mantenedor_id', '')::uuid;
     if v_c is null or not public.falla_visible(v_c, v_m) then continue; end if;
+    pares := pares || par;
+    cnts := cnts || (select count(distinct f.id)::int
+      from public.fallas f join public.reparaciones r on r.falla_id = f.id
+     where f.cascada is not true and f.contrato_id = v_c and f.mantenedor_id is not distinct from v_m
+       and (r.fecha_reparacion at time zone 'America/Santiago')::date between p_desde and p_hasta
+       and (p_asignadores is null or f.asignado_por_id = any(p_asignadores)));
+  end loop;
+  n := coalesce(array_length(cnts, 1), 0);
+  select coalesce(sum(x), 0) into tot from unnest(cnts) x;
 
+  -- 2) la muestra pedida es el TOTAL del informe: se reparte entre los informes en proporción a sus reparaciones
+  q := cnts;
+  if p_muestra is not null and p_muestra > 0 and tot > p_muestra then
+    for i in 1..n loop q[i] := floor(p_muestra::numeric * cnts[i] / tot)::int; end loop;
+    select p_muestra - coalesce(sum(x), 0) into rem from unnest(q) x;
+    for k in 1..rem loop
+      best := -1; j := 0;
+      for i in 1..n loop
+        if q[i] < cnts[i] then fr := p_muestra::numeric * cnts[i] / tot - q[i]; if fr > best then best := fr; j := i; end if; end if;
+      end loop;
+      if j > 0 then q[j] := q[j] + 1; end if;
+    end loop;
+  end if;
+
+  -- 3) cada informe
+  i := 0;
+  foreach par in array pares loop
+    i := i + 1;
+    v_c := nullif(par->>'contrato_id', '')::uuid; v_m := nullif(par->>'mantenedor_id', '')::uuid;
     create temp table if not exists _inf (falla_id uuid, dia date, rep timestamptz, trabajo text, rep_por uuid, rn int) on commit drop;
     truncate _inf;
     insert into _inf
@@ -98,21 +130,22 @@ begin
     v_res := jsonb_build_object(
       'total', (select count(*) from _inf),
       'dias', (select count(distinct dia) from _inf),
-      'trabajos', coalesce((select jsonb_agg(jsonb_build_object('trabajo', t, 'cant', n) order by n desc, t)
-                              from (select btrim(l) t, count(*) n from _inf, regexp_split_to_table(coalesce(trabajo, ''), E'\n') l
-                                     where btrim(l) <> '' group by 1) q), '[]'::jsonb),
-      'por_dia', coalesce((select jsonb_agg(jsonb_build_object('dia', dia, 'cant', n) order by dia)
-                             from (select dia, count(*) n from _inf group by 1) q), '[]'::jsonb),
-      'por_codigo', coalesce((select jsonb_agg(jsonb_build_object('codigo', tipo_falla, 'descripcion', d, 'cant', n) order by n desc, tipo_falla)
-                                from (select f.tipo_falla, cf.descripcion d, count(*) n
-                                        from _inf i join public.fallas f on f.id = i.falla_id
+      'trabajos', coalesce((select jsonb_agg(jsonb_build_object('trabajo', t, 'cant', n2) order by n2 desc, t)
+                              from (select btrim(l) t, count(*) n2 from _inf, regexp_split_to_table(coalesce(trabajo, ''), E'\n') l
+                                     where btrim(l) <> '' group by 1) z), '[]'::jsonb),
+      'por_dia', coalesce((select jsonb_agg(jsonb_build_object('dia', dia, 'cant', n2) order by dia)
+                             from (select dia, count(*) n2 from _inf group by 1) z), '[]'::jsonb),
+      'por_codigo', coalesce((select jsonb_agg(jsonb_build_object('codigo', tipo_falla, 'descripcion', d, 'cant', n2) order by n2 desc, tipo_falla)
+                                from (select f.tipo_falla, cf.descripcion d, count(*) n2
+                                        from _inf i2 join public.fallas f on f.id = i2.falla_id
                                         left join public.codigos_falla cf on cf.codigo = f.tipo_falla
-                                       group by 1, 2) q), '[]'::jsonb));
+                                       group by 1, 2) z), '[]'::jsonb));
 
-    -- muestra: se numera al azar dentro de cada día y se toman las primeras (reparte parejo entre los días)
-    if p_muestra is not null and p_muestra > 0 then
-      update _inf i set rn = s.rn from (select falla_id, row_number() over (partition by dia order by random()) rn from _inf) s where s.falla_id = i.falla_id;
-      delete from _inf where falla_id not in (select falla_id from _inf order by rn, random() limit p_muestra);
+    -- muestra de este informe: se numera al azar dentro de cada día y se toman las primeras (reparte parejo entre los días)
+    v_n := q[i];
+    if p_muestra is not null and p_muestra > 0 and v_n < cnts[i] then
+      update _inf t set rn = s.rn from (select falla_id, row_number() over (partition by dia order by random()) rn from _inf) s where s.falla_id = t.falla_id;
+      delete from _inf where falla_id not in (select falla_id from _inf order by rn, random() limit v_n);
     end if;
 
     select coalesce(jsonb_agg(d order by (d->>'reparada_en')), '[]'::jsonb) into v_det from (
@@ -125,19 +158,19 @@ begin
         'comentario', (select fc.comentario from public.fallas_comentarios fc where fc.falla_id = f.id and fc.tipo = 'reporte' order by fc.creado_en limit 1),
         'informada_en', coalesce(f.fecha_falla_real, f.fecha_falla),
         'informada_por', coalesce((select u2.nombre from public.usuarios u2 where u2.id::text = f.informado_por::text), f.informado_por::text, uc.nombre),
-        'reparada_en', i.rep, 'trabajo', i.trabajo,
+        'reparada_en', i3.rep, 'trabajo', i3.trabajo,
         'repara', ur.nombre,
         'cuadrilla', case when ur.rol = 'camion' then ur.nombre else coalesce(ua.nombre, ur.nombre) end,
         'fotos', coalesce((select jsonb_agg(ff.ruta order by ff.creado_en) from public.fallas_fotos ff where ff.falla_id = f.id and ff.archivada_en is null), '[]'::jsonb)
       ) d
-      from _inf i
-      join public.fallas f on f.id = i.falla_id
+      from _inf i3
+      join public.fallas f on f.id = i3.falla_id
       left join public.codigos_falla cf on cf.codigo = f.tipo_falla
       left join public.puntos_luminarios p on f.tipo = 'punto' and p.gid = f.ref_punto_gid
       left join public.circuitos c on f.tipo = 'linea' and c.gid = f.ref_circuito_gid
       left join public.usuarios uc on uc.id = f.creado_por
       left join public.usuarios ua on ua.id = f.asignado_camion_id
-      left join public.usuarios ur on ur.id = i.rep_por
+      left join public.usuarios ur on ur.id = i3.rep_por
     ) z;
 
     v_out := v_out || jsonb_build_object(
