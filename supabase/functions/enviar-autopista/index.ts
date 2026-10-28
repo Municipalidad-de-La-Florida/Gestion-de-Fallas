@@ -13,14 +13,29 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
   const modo = "diario";
+  let body: any = {};
+  try { body = await req.json(); } catch { /* sin cuerpo */ }
+  const prueba = typeof body.prueba === "string" ? body.prueba.trim().toLowerCase() : "";
   const ahora = new Date();
   const hora = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "America/Santiago", hour: "2-digit", hour12: false }).format(ahora)) % 24;
   const dia = new Intl.DateTimeFormat("en-US", { timeZone: "America/Santiago", weekday: "short" }).format(ahora);
-  if (hora !== 9 || dia === "Sat" || dia === "Sun") return json(200, { omitido: true, hora, dia });
+  if (!prueba && (hora !== 9 || dia === "Sat" || dia === "Sun")) return json(200, { omitido: true, hora, dia });
 
   const gmail = Deno.env.get("GMAIL_USER"), clave = Deno.env.get("GMAIL_APP_PASSWORD");
   if (!gmail || !clave) return json(500, { error: "Faltan los secretos GMAIL_USER y GMAIL_APP_PASSWORD" });
   const correo = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: gmail, pass: clave } });
+
+  // Prueba: manda un correo de ejemplo (sin tocar fallas) y solo a una dirección que sea de un usuario del sistema
+  if (prueba) {
+    const { data: u } = await admin.from("usuarios").select("nombre, email").ilike("email", prueba).limit(1);
+    if (!u || !u.length) return json(400, { error: "Esa dirección no es de ningún usuario del sistema" });
+    try {
+      await correo.sendMail({ from: `Alumbrado Público La Florida <${gmail}>`, to: u[0].email, subject: "Prueba · correo automático de fallas de la Autopista Vespucio Sur",
+        text: `Hola ${u[0].nombre || ""},\n\nEste es un correo de prueba. Si lo recibes, el envío automático de fallas de la Autopista Vespucio Sur está funcionando.\n\nEjemplo: AV001 · F01 · OS 26-0000`,
+        html: `<p>Hola ${esc(u[0].nombre)},</p><p>Este es un <b>correo de prueba</b>. Si lo recibes, el envío automático de fallas de la Autopista Vespucio Sur está funcionando.</p><p style="color:#6c7f94">Ejemplo: AV001 · F01 · OS 26-0000</p>` });
+      return json(200, { prueba: "enviado", a: u[0].email });
+    } catch (e) { return json(500, { prueba: "error", error: String(e) }); }
+  }
 
   const { data: grupos, error } = await admin.rpc("autopista_pendientes_envio", { p_usuario: null });
   if (error) return json(500, { error: error.message });
