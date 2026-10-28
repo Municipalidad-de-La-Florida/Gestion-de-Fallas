@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     try {
       await correo.sendMail({ from: `Alumbrado Público La Florida <${gmail}>`, to: g.email, subject: asunto, text: texto, html });
       await admin.rpc("autopista_marcar_enviadas", { p_ids: ids, p_usuario: g.usuario_id, p_modo: modo, p_ok: true, p_error: null });
-      resultado.push({ usuario: g.nombre, enviadas: n });
+      resultado.push({ usuario: g.nombre, enviadas: ids.length });
     } catch (e) {
       await admin.rpc("autopista_marcar_enviadas", { p_ids: ids, p_usuario: g.usuario_id, p_modo: modo, p_ok: false, p_error: String(e) });
       resultado.push({ usuario: g.nombre, error: String(e) });
