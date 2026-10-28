@@ -537,13 +537,15 @@ function ocupar(btn, fn) {
 let hojaAbierta = false, hojaVolviendo = false;
 function abrirHoja(html) {
   $('#hojaContenido').innerHTML = html;
-  $('#hoja').classList.remove('hoja-menu');
+  $('#hoja').classList.remove('hoja-menu', 'hoja-form');
   $('#hoja').hidden = false;
   $('#velo').hidden = false;
   $('#hoja').scrollTop = 0;
   if (!hojaAbierta) { hojaAbierta = true; try { history.pushState({ hoja: 1 }, ''); } catch (e) { /* */ } }
   return $('#hojaContenido');
 }
+// Formulario en dos columnas: la confirmación queda fija abajo y solo se desplaza el listado
+function abrirHojaForm(html) { const h = abrirHoja(html); $('#hoja').classList.add('hoja-form'); return h; }
 function cerrarHoja(desdePop) {
   if (!hojaAbierta) return;
   hojaAbierta = false;
@@ -1768,34 +1770,30 @@ function formReportePunto(p) {
   const nomCat = mono ? 'monoposte' : 'punto';
   const cat = catalogoActivo(nomCat);
   let codigo = null, card = null;
-  const h = abrirHoja(`
+  const h = abrirHojaForm(`
     <h2>Reportar falla</h2>
     <div class="hint">Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}${mono ? ' · monoposte' : ''}</div>
     <div id="fMantTop"></div>
     <div id="fCuerpo">
-    <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
-    <div id="fMant"></div>
-    <h3>Cardinalidad (opcional)</h3>
-    <div class="rosca" id="fCard">
-      <button type="button" data-r="N">N</button><button type="button" data-r="S">S</button>
-      <button type="button" data-r="O">O</button><button type="button" data-r="P">P</button>
-    </div>
-    <h3>Comentario</h3>
-    <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
-    <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
-    <div style="margin-top:12px">${modoTexto()}</div>
-    <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>
+      <div class="dos-col">
+        <div class="col-izq">
+          <div id="fMant"></div>
+          <h3>Comentario</h3>
+          <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+          <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
+          <div class="hint" style="margin-top:10px">${modoTexto()}</div>
+        </div>
+        <div class="col-der">
+          <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
+        </div>
+      </div>
+      <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>
     </div>`);
   const ligarCodigos = () => $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
     mant.elegirCodigo(codigo);
   }));
   ligarCodigos();
-  $$('#fCard button', h).forEach((b) => b.addEventListener('click', () => {
-    const ya = b.classList.contains('sel');
-    $$('#fCard button', h).forEach((x) => x.classList.remove('sel'));
-    if (!ya) { b.classList.add('sel'); card = b.dataset.r; } else card = null;
-  }));
   const mant = activarMantencionPunto(h, p.gid, mono, (usos, nLum) => {
     if (mono) return;
     const items = filtrarCodigosPorUsos(cat, usos, nLum);
@@ -1824,17 +1822,25 @@ function formReportePunto(p) {
 
 function formReporteCircuito(p) {
   let codigo = null;
-  const h = abrirHoja(`
+  const h = abrirHojaForm(`
     <h2>Reportar falla de circuito</h2>
     <div class="hint">Circuito ${esc(p.id ?? '')} · ${esc(p.cantidad_luminarias_cliente ?? '—')} luminarias</div>
     <div class="aviso">Se crea una falla por cada punto del circuito. Al reparar el circuito se cierran todas juntas.</div>
     <div id="fMant"></div>
-    <h3>Código de falla</h3>${htmlCodigos(catalogoActivo('circuito'), 'circuito')}
-    <h3>Comentario</h3>
-    <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
-    <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
-    <div style="margin-top:12px">${modoTexto()}</div>
-    <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>`);
+    <div id="fCuerpo">
+      <div class="dos-col">
+        <div class="col-izq">
+          <h3>Comentario</h3>
+          <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+          <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
+          <div class="hint" style="margin-top:10px">${modoTexto()}</div>
+        </div>
+        <div class="col-der">
+          <h3>Código de falla</h3>${htmlCodigos(catalogoActivo('circuito'), 'circuito')}
+        </div>
+      </div>
+      <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>
+    </div>`);
   $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
   }));
@@ -2235,11 +2241,12 @@ function formCierre(p, borr) {
   const exigeFoto = tiene('foto_obligatoria');
   const fotos = [];   // { blob, url, subida }
   if (borr) { sel = (borr.sel || []).slice(); (borr.fotos || []).forEach((b) => fotos.push({ blob: b, url: URL.createObjectURL(b), subida: false })); }
-  const h = abrirHoja(`
+  const h = abrirHojaForm(`
     <h2>Registrar reparación</h2>
     <div class="hint">${esc(p.tipo_falla)} · OS ${esc(p.ot || '—')} · ${esc(tipoLabel(p))}${p.tipo === 'linea' ? ' · se cerrarán también sus ' + esc(p.puntos_afectados ?? '') + ' puntos' : ''}</div>
-    <h3>Trabajo realizado</h3>
-    ${htmlCierres()}
+    <div class="cuerpo-form">
+    <div class="dos-col">
+    <div class="col-izq">
     <h3>Información adicional</h3>
     <textarea id="cDesc" class="campo" placeholder="Ej: detalle de lo realizado. Obligatorio si dejas la falla pendiente."></textarea>
     <h3>Fotografías ${exigeFoto ? '<span class="req">obligatoria</span>' : '<span class="hint" style="font-weight:400;">(opcional)</span>'}</h3>
@@ -2251,9 +2258,16 @@ function formCierre(p, borr) {
     </div>
     <input id="cInCam" type="file" accept="image/*" capture="environment" hidden>
     <input id="cInGal" type="file" accept="image/*" multiple hidden>
+    </div>
+    <div class="col-der">
+    <h3>Trabajo realizado</h3>
+    ${htmlCierres()}
+    </div>
+    </div>
     <div class="acciones fija">
       <button id="cOk" class="btn btn-primario">Registrar reparación y cerrar falla</button>
       <button id="cPend" class="btn btn-ambar">Dejar pendiente</button>
+    </div>
     </div>`);
   $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     const t = b.dataset.t, i = sel.indexOf(t);
