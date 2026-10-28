@@ -1702,8 +1702,12 @@ function htmlMantencion(ev, sel) {
   return '';
 }
 function activarMantencionPunto(h, gid, mono) {
-  const est = { ops: null, lums: null, codigo: null, sel: '', lum: '', ev: { tipo: 'nada' } };
+  const est = { ops: null, lums: null, codigo: null, sel: '', lum: '', ev: { tipo: 'nada' }, cargado: { o: false, l: false } };
   const caja = $('#fMant', h);
+  const cuerpo0 = $('#fCuerpo', h);
+  if (cuerpo0) cuerpo0.style.display = 'none';   // las opciones de falla no se muestran hasta saber si hay que elegir luminaria o contrato (evita ingresar una falla antes de elegir)
+  const listo = () => { est.cargado.o = est.cargado.l = true; pintar(); };
+  setTimeout(listo, 8000);                         // sin conexión: pasado un rato se reporta como siempre
   const pintar = () => {
     est.ev = evaluarMantencion(est.ops, est.codigo, mono, est.lums);
     const lista = est.ev.tipo === 'luminarias', top = $('#fMantTop', h), cuerpo = $('#fCuerpo', h);
@@ -1713,10 +1717,10 @@ function activarMantencionPunto(h, gid, mono) {
     if (s) s.addEventListener('change', () => { est.sel = s.value; });
     if (top) top.querySelectorAll('.lum-op').forEach((b) => b.addEventListener('click', () => { est.lum = b.dataset.k; pintar(); }));
     // con opciones distintas, las opciones de falla aparecen recién después de elegir la luminaria
-    if (cuerpo) cuerpo.style.display = (lista && !est.ev.trasCodigo && !est.ev.items.some((l) => l.key === est.lum)) ? 'none' : '';
+    if (cuerpo) cuerpo.style.display = (!(est.cargado.o && est.cargado.l) || (lista && !est.ev.trasCodigo && !est.ev.items.some((l) => l.key === est.lum))) ? 'none' : '';
   };
-  rpc('opciones_punto', { p_gid: gid }).then((r) => { est.ops = r || []; pintar(); }).catch(() => { /* sin datos: se reporta como siempre */ });
-  rpc('luminarias_punto', { p_gid: gid }).then((r) => { est.lums = r || []; pintar(); }).catch(() => { /* sin el SQL: se usa el selector de contrato */ });
+  rpc('opciones_punto', { p_gid: gid }).then((r) => { est.ops = r || []; est.cargado.o = true; pintar(); }).catch(() => { est.cargado.o = true; pintar(); /* sin datos: se reporta como siempre */ });
+  rpc('luminarias_punto', { p_gid: gid }).then((r) => { est.lums = r || []; est.cargado.l = true; pintar(); }).catch(() => { est.cargado.l = true; pintar(); /* sin el SQL: se usa el selector de contrato */ });
   return {
     elegirCodigo(c) { est.codigo = c; pintar(); },
     // devuelve { error } o { args } con los parámetros extra de crear_falla_punto
