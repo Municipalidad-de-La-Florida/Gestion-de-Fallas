@@ -14,9 +14,10 @@ const armar = (g: any) => {
   const filasTxt = g.fallas.map((f: any) => `- ${f.placa} · ${f.tipo_falla}${f.descripcion ? " (" + f.descripcion + ")" : ""} · OS ${f.ot || "—"}${f.orden_externa ? " / " + f.orden_externa : ""} · ${fmtFecha(f.fecha_falla)} · llave ${f.llave ?? "—"} · https://www.google.com/maps?q=${f.lat},${f.lon}`).join("\n");
   const filasHtml = g.fallas.map((f: any) => `<tr><td><b>${esc(f.placa)}</b></td><td>${esc(f.tipo_falla)}${f.descripcion ? "<br><small>" + esc(f.descripcion) + "</small>" : ""}</td><td>${esc(f.ot)}${f.orden_externa ? "<br><small>" + esc(f.orden_externa) + "</small>" : ""}</td><td>${esc(fmtFecha(f.fecha_falla))}</td><td>${esc(f.llave)}</td><td><a href="https://www.google.com/maps?q=${f.lat},${f.lon}">Ver mapa</a></td></tr>`).join("");
   const asunto = `Alumbrado Público · ${n} falla${n > 1 ? "s" : ""} en luminarias de Autopista Vespucio Sur por reenviar`;
-  const texto = `Hola ${g.nombre || ""},\n\nEstas son las fallas que registraste en luminarias de la Autopista Vespucio Sur (sin mantenimiento municipal), para reenviar a la concesionaria:\n\n${filasTxt}\n\nAlumbrado Público · Dirección de Obras Municipales · Municipalidad de La Florida`;
-  const html = `<p>Hola ${esc(g.nombre)},</p><p>Estas son las fallas que registraste en luminarias de la <b>Autopista Vespucio Sur</b> (sin mantenimiento municipal), para reenviar a la concesionaria:</p>
+  const texto = `Hola ${g.nombre || ""},\n\nA continuación se detallan las fallas de alumbrado público reportadas por ti correspondientes a Autopista Vespucio Sur, la(s) cual(es) no cuenta(n) con mantenimiento municipal, para su gestión.\n\n${filasTxt}\n\nAtte\n\nAlumbrado Público · Dirección de Obras Municipales · Municipalidad de La Florida`;
+  const html = `<p>Hola ${esc(g.nombre)},</p><p>A continuación se detallan las fallas de alumbrado público reportadas por ti correspondientes a <b>Autopista Vespucio Sur</b>, la(s) cual(es) no cuenta(n) con mantenimiento municipal, para su gestión.</p>
 <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;border-color:#c9d3dc;font-size:13px"><tr style="background:#1f3a5f;color:#fff"><th>Placa</th><th>Falla</th><th>OS</th><th>Fecha informada</th><th>Llave</th><th>Ubicación</th></tr>${filasHtml}</table>
+<p>Atte</p>
 <p style="color:#6c7f94">Alumbrado Público · Dirección de Obras Municipales · Municipalidad de La Florida</p>`;
   return { asunto, texto, html };
 };
