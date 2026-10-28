@@ -1339,16 +1339,30 @@ function abrirPunto(p, geom) {
   // Si ya tiene una falla activa, se muestra esa en vez de ofrecer reportar otra
   const act = fallaActivaCargada('punto', p.gid); if (act) return abrirFalla(act.properties, act.geometry);
   const h = abrirHoja(`
-    <h2>Punto lumínico</h2>
-    <dl class="kv">
+    <h2>Punto lumínico · Llave ${esc(p.llave ?? '—')}</h2>
+    <div class="hint">${esc([p.calle_1, p.direccion].filter((x) => x != null && x !== '').join(' ') || '')}</div>
+    <dl class="kv info-card">
       <dt>N.° de llave</dt><dd>${esc(p.llave ?? '—')}</dd>
       <dt>N.° municipal</dt><dd>${esc(p.nro_mun ?? '—')}</dd>
       <dt>Dirección</dt><dd>${esc([p.calle_1, p.direccion].filter((x) => x != null && x !== '').join(' ') || '—')}</dd>
       <dt>Poste</dt><dd>${esc(p.simb_poste || '—')}</dd>
     </dl>
+    <h3>Luminarias del punto</h3><div id="lumsPunto" class="hint">Cargando…</div>
+    <h3>Estado</h3><div id="estPunto" class="hint">Cargando…</div>
     ${infoSoloLectura()}
     ${accionesReporte('Reportar falla', geom)}`);
   botonVerReparada(h, 'punto', p.gid);
+  rpc('luminarias_punto', { p_gid: p.gid }).then((ls) => {
+    const b = $('#lumsPunto', h); if (!b || !document.body.contains(b)) return;
+    b.className = '';
+    b.innerHTML = ls && ls.length ? ls.map((l) => `<div class="lum-it"><b>${esc([l.modelo, l.potencia ? l.potencia + ' W' : '', l.uso].filter(Boolean).join(' - '))}${l.n > 1 ? ' ×' + l.n : ''}</b><div>${l.contrato ? `<span class="tag-ctr n">${esc(l.contrato)}</span>` : ''}${l.mantenedor ? `<span class="tag-mant">${esc(l.mantenedor)}</span>` : ''}</div></div>`).join('') : '<div class="hint">Sin luminarias registradas.</div>';
+  }).catch(() => { const b = $('#lumsPunto', h); if (b) b.textContent = '—'; });
+  select('fallas', `ref_punto_gid=eq.${p.gid}&tipo=eq.punto&cascada=eq.false&select=tipo_falla,estado,fecha_reparacion&order=fecha_falla.desc&limit=1`).then((fs) => {
+    const b = $('#estPunto', h); if (!b || !document.body.contains(b)) return;
+    const f = fs && fs[0];
+    b.className = 'info-ok';
+    b.innerHTML = f && f.fecha_reparacion ? `Sin fallas activas · última reparación ${esc(fmtFecha(f.fecha_reparacion))} (${esc(f.tipo_falla)})` : 'Sin fallas activas';
+  }).catch(() => { const b = $('#estPunto', h); if (b) b.textContent = '—'; });
   const b = $('#bReportar', h);
   if (b) b.addEventListener('click', ocupar(b, async () => {
     b.textContent = 'Revisando…';
@@ -1985,16 +1999,16 @@ async function abrirFalla(p, geom) {
   const minRestantes = Math.max(1, Math.ceil(15 - minDesdeIngreso));
   const h = abrirHoja(`
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
-    <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
-    <dl class="kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && tiene('asignacion_quitar') ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
-    ${p.estado === 'reparada' ? `<div style="border-top:1px solid var(--linea);margin-top:6px;padding-top:4px">
+    <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span>${p.contrato_id && CONTR[p.contrato_id] ? `<span class="tag-ctr n">${esc(CONTR[p.contrato_id].nombre)}</span>` : ''}${p.mantenedor_id && MANT[p.mantenedor_id] ? `<span class="tag-mant">${esc(MANT[p.mantenedor_id])}</span>` : ''}</div>
+    <dl class="kv info-card">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && tiene('asignacion_quitar') ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
+    ${p.estado === 'reparada' ? `<div class="info-ok"><h3>Reparación</h3>
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-      ${p.descripcion_reparacion ? `<h3>Trabajo realizado</h3><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
+      ${p.descripcion_reparacion ? `<h4>Trabajo realizado</h4><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
       <div id="fotosFalla"></div>
     </div>` : ''}
-    ${p.estado === 'pendiente' ? `<div style="border-top:1px solid var(--linea);margin-top:6px;padding-top:4px">
+    ${p.estado === 'pendiente' ? `<div class="info-warn"><h3>Pendiente</h3>
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-      <h3>Motivo</h3><pre class="texto">${esc(p.motivo_pendiente || '')}</pre>
+      <h4>Motivo</h4><pre class="texto">${esc(p.motivo_pendiente || '')}</pre>
     </div>` : ''}
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
@@ -2008,7 +2022,7 @@ async function abrirFalla(p, geom) {
         ${puedeEliminarEsta ? `<button id="bEliminar" class="acc-t acc-peligro">${ICO_ACC.borrar}<span>Eliminar${tiene('falla_editar_cualquiera') ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
       </div>
     </div>
-    <h3>Historial</h3>
+    <h3>Comentarios</h3>
     <ul class="linea-tiempo" id="histFalla"><li class="hint">Cargando…</li></ul>`);
   ofrecerEdicionReparacion(p, h);
   const bc = $('#bCerrar', h);
