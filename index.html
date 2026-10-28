@@ -10218,7 +10218,7 @@ async function abrirInformeReparaciones(){
       <div id="infAsig" style="max-height:110px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;"></div></div>
     <div style="margin:14px 0 4px;"><b>Detalle</b></div>
     <label style="display:block;margin:3px 0;"><input type="radio" name="infDet" value="todas" checked> Todas las reparaciones</label>
-    <label style="display:block;margin:3px 0;"><input type="radio" name="infDet" value="muestra"> Muestra de <input type="number" id="infN" value="50" min="1" max="2000" style="width:70px;"> reparaciones al azar, repartidas entre todos los días <span class="hint">(por cada informe)</span></label>
+    <label style="display:block;margin:3px 0;"><input type="radio" name="infDet" value="muestra"> Muestra de <input type="number" id="infN" value="50" min="1" max="2000" style="width:70px;"> reparaciones al azar, repartidas entre todos los días <span class="hint">(en total, entre los informes marcados)</span></label>
     <div style="display:flex;gap:10px;margin-top:16px;align-items:center;flex-wrap:wrap;">
       <button type="button" id="infPdf" class="popup-btn" style="width:auto;padding:9px 18px;">Descargar PDF</button>
       <button type="button" id="infXls" class="popup-btn" style="width:auto;padding:9px 18px;background:#fff;color:var(--primary);border:1.5px solid var(--primary);">Excel</button>
@@ -10329,7 +10329,7 @@ async function infGenerarPdf(r, estado){
       pdf.setFontSize(10.5); pdf.setTextColor(...INF_NAVY); pdf.text(p.mantenedor.toUpperCase(), 40, y);
     } else y -= 7;
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8.5); pdf.setTextColor(...INF_GRIS);
-    pdf.text(`Municipalidad de La Florida · ${periodo}` + (r.muestra ? ` · Muestra de ${r.muestra} reparaciones por informe, repartidas entre los días` : ' · Todas las reparaciones'), 14, y + 7);
+    pdf.text(`Municipalidad de La Florida · ${periodo}` + (r.muestra ? ` · Muestra de ${r.muestra} reparaciones (repartidas entre los informes y los días)` : ' · Todas las reparaciones'), 14, y + 7);
   };
   const tarjeta = (x, y, w, valor, rotulo) => {
     pdf.setFillColor(255, 255, 255); pdf.setDrawColor(211, 225, 238); pdf.setLineWidth(0.3); pdf.roundedRect(x, y, w, 26, 2, 2, 'FD');
