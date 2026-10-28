@@ -2241,12 +2241,11 @@ function formCierre(p, borr) {
   const exigeFoto = tiene('foto_obligatoria');
   const fotos = [];   // { blob, url, subida }
   if (borr) { sel = (borr.sel || []).slice(); (borr.fotos || []).forEach((b) => fotos.push({ blob: b, url: URL.createObjectURL(b), subida: false })); }
-  const h = abrirHojaForm(`
+  const h = abrirHoja(`
     <h2>Registrar reparación</h2>
     <div class="hint">${esc(p.tipo_falla)} · OS ${esc(p.ot || '—')} · ${esc(tipoLabel(p))}${p.tipo === 'linea' ? ' · se cerrarán también sus ' + esc(p.puntos_afectados ?? '') + ' puntos' : ''}</div>
-    <div class="cuerpo-form">
-    <div class="dos-col">
-    <div class="col-izq">
+    <h3>Trabajo realizado</h3>
+    ${htmlCierres()}
     <h3>Información adicional</h3>
     <textarea id="cDesc" class="campo" placeholder="Ej: detalle de lo realizado. Obligatorio si dejas la falla pendiente."></textarea>
     <h3>Fotografías ${exigeFoto ? '<span class="req">obligatoria</span>' : '<span class="hint" style="font-weight:400;">(opcional)</span>'}</h3>
@@ -2258,16 +2257,9 @@ function formCierre(p, borr) {
     </div>
     <input id="cInCam" type="file" accept="image/*" capture="environment" hidden>
     <input id="cInGal" type="file" accept="image/*" multiple hidden>
-    </div>
-    <div class="col-der">
-    <h3>Trabajo realizado</h3>
-    ${htmlCierres()}
-    </div>
-    </div>
     <div class="acciones fija">
       <button id="cOk" class="btn btn-primario">Registrar reparación y cerrar falla</button>
       <button id="cPend" class="btn btn-ambar">Dejar pendiente</button>
-    </div>
     </div>`);
   $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     const t = b.dataset.t, i = sel.indexOf(t);
