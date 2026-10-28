@@ -1640,6 +1640,10 @@ function leerOrdenExterna(h) {
 
 /* ---------- Contrato y mantenedor del reporte (selector celeste y aviso "Sin Mantenimiento") ---------- */
 // El uso (vial o peatonal) lo define el código de falla; con los códigos ambiguos no se pregunta: se exige el comentario.
+// Fallas del poste o la tapa (no de una luminaria): van al contrato de la luminaria vial; si el punto no tiene vial se elige el contrato.
+// F43 (dos luminarias): una sola falla; si hay más de un contrato o mantenedor se elige a cuál va.
+const CODIGOS_POSTE = ['F20', 'F35', 'F42'];
+const CODIGOS_ELEGIR_CONTRATO = [...CODIGOS_POSTE, 'F43'];
 const USO_POR_CODIGO = { F01: 'VIAL', F04: 'VIAL', F05: 'VIAL', F29: 'PEATONAL', F32: 'PEATONAL', F33: 'PEATONAL' };
 // Luminarias del punto (modelo, potencia, uso, contrato y mantenedor) para elegir cuál falla cuando hay opciones distintas.
 function listaLuminarias(lums, uso) {
@@ -1657,7 +1661,9 @@ function evaluarMantencion(ops, codigo, mono, lums) {
   if (!codigo) return { tipo: 'nada' };
   let uso = mono ? 'VIAL' : (USO_POR_CODIGO[codigo] || null);
   if (uso && !ops.some((o) => o.uso_grupo === uso)) uso = null;       // el punto no tiene ese uso
-  if (decideCodigo && !uso && distintasLum.size > 1) return { tipo: 'luminarias', uso: null, items: todas, trasCodigo: true };   // código genérico (pintar poste, otro…): ahí sí se elige la luminaria
+  const poste = !mono && CODIGOS_ELEGIR_CONTRATO.includes(codigo);
+  if (poste && CODIGOS_POSTE.includes(codigo) && ops.some((o) => o.uso_grupo === 'VIAL')) uso = 'VIAL';   // poste/tapa: contrato de la luminaria vial
+  if (decideCodigo && !uso && !poste && distintasLum.size > 1) return { tipo: 'luminarias', uso: null, items: todas, trasCodigo: true };   // código genérico (pintar poste, otro…): ahí sí se elige la luminaria
   const filas = uso ? ops.filter((o) => o.uso_grupo === uso) : ops;
   if (!filas.length) return { tipo: 'sin', uso: null };
   const distintas = [...new Map(filas.map((o) => [`${o.contrato_id || '-'}/${o.mantenedor_id || '-'}/${o.estado}`, o])).values()];
@@ -1667,12 +1673,13 @@ function evaluarMantencion(ops, codigo, mono, lums) {
   if (!ok.length) return { tipo: 'sin', uso };
   if (distintas.length === 1 || ok.length === 1) return { tipo: 'info', uso, texto: `${ok[0].contrato} · ${ok[0].mantenedor}` };
   const items = listaLuminarias(lums, uso);
-  if (items.length > 1) return { tipo: 'luminarias', uso, items };      // se elige la luminaria: de ella salen uso, contrato y mantenedor
-  if (!uso) return { tipo: 'comentario', uso: null };                  // vial y peatonal con distinto mantenedor
+  if (items.length > 1 && !poste) return { tipo: 'luminarias', uso, items };      // se elige la luminaria: de ella salen uso, contrato y mantenedor
+  if (!uso && !poste) return { tipo: 'comentario', uso: null };                  // vial y peatonal con distinto mantenedor
   const mismoContrato = new Set(ok.map((o) => o.contrato_id)).size < ok.length;
+  const variosMant = new Set(ok.map((o) => o.mantenedor_id)).size > 1;
   return {
     tipo: 'elegir', uso, comentarioObligatorio: mismoContrato,
-    opciones: ok.map((o) => ({ contrato_id: o.contrato_id, mantenedor_id: o.mantenedor_id, etiqueta: mismoContrato ? `${o.contrato} · ${o.mantenedor}` : o.contrato })),
+    opciones: ok.map((o) => ({ contrato_id: o.contrato_id, mantenedor_id: o.mantenedor_id, etiqueta: (mismoContrato || variosMant) ? `${o.contrato} · ${o.mantenedor}` : o.contrato })),
   };
 }
 const htmlSinMantenimiento = (que) => `<div class="aviso"><b>Sin Mantenimiento</b><br>${que} no tiene contrato de mantención. Puedes reportar igual: la falla la verá la administración / ITO.</div>`;
