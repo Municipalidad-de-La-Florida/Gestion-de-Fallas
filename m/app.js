@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.1.0';
+const VERSION_APP = '2.2.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1280,6 +1280,7 @@ function infoSoloLectura() {
   return `<div class="aviso">Con tu perfil (${esc(rolVisible())}) puedes ver el mapa${puedeCerrar() ? ' y registrar reparaciones desde las fallas activas' : ''}. Reportar fallas lo hacen los ITO.</div>`;
 }
 function modoTexto() {
+  if (CQ.abierto) return 'Se <b>anotará en el Cuaderno</b> compartido. Todavía no se informa: no tiene número hasta que alguien la informe desde ahí.';
   if (S.modo.tipo !== 'inspeccion') return 'Se guardará como falla informada <b>ahora</b>.';
   return `Se guardará dentro de tu <b>inspección del ${esc(fmtFechaCorta(S.modo.fecha))}</b>, con la fecha y hora exactas de este momento.`;
 }
@@ -1808,7 +1809,7 @@ function formReportePunto(p) {
           <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
         </div>
       </div>
-      <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>
+      <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">${CQ.abierto ? 'Anotar en el Cuaderno' : 'Confirmar reporte'}</button></div>
     </div>`);
   const ligarCodigos = () => $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
@@ -1831,6 +1832,7 @@ function formReportePunto(p) {
     const mv = mant.validar(desc);
     if (mv.error) { toast(mv.error, 'error'); return; }
     env.textContent = 'Enviando…';
+    if (CQ.abierto) return anotarEnCuaderno('punto', p.gid, codigo, desc, mv.args);
     const ctx = await contextoReporte();
     const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: null, ...ctx, ...mv.args });
     cerrarHoja();
@@ -1857,7 +1859,7 @@ function formReporteCircuito(p) {
           <h3>Código de falla</h3>${htmlCodigos(catalogoActivo('circuito'), 'circuito')}
         </div>
       </div>
-      <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">Confirmar reporte</button></div>
+      <div class="acciones fija"><button id="fEnviar" class="btn btn-primario">${CQ.abierto ? 'Anotar en el Cuaderno' : 'Confirmar reporte'}</button></div>
     </div>`);
   $$('.codigo', h).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
@@ -1869,6 +1871,7 @@ function formReporteCircuito(p) {
     const desc = $('#fDesc', h).value.trim();
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
     env.textContent = 'Enviando…';
+    if (CQ.abierto) return anotarEnCuaderno('circuito', p.gid, codigo, desc, {});
     const ctx = await contextoReporte();
     const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: null, ...ctx });
     cerrarHoja();
@@ -2622,7 +2625,7 @@ const msgContrato = (e) => (/duplicate|unique|contratos_nombre/i.test(e.message)
 
 async function cargarUsuariosAdmin() {
   const [us, cs, rel, ns, pf, relM, conex, mants] = await Promise.all([
-    select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
+    select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo,ver_cuaderno&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
     select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc').catch(() => []),
     select('usuario_contratos', 'select=usuario_id,contrato_id').catch(() => []),
     select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc').catch(() => []),
@@ -3117,7 +3120,7 @@ function editarUsuarioU(id) {
     const cont = $('#eHerr', h);
     if (u.rol === 'camion') { cont.innerHTML = ''; return; }
     const t = (k, tit, sub) => `<button type="button" class="u-tog ${u[k] ? 'on' : ''}" data-p="${k}" style="margin-top:8px"><span class="u-tx"><b>${tit}</b><span>${sub}</span></span><span class="u-sw ${u[k] ? 'on' : ''}"></span></button>`;
-    cont.innerHTML = `<div class="u-lbl" style="margin-top:14px">Herramientas</div>` + t('ver_cuadrillas', '🚚 Cuadrillas', 'Rendimiento de las cuadrillas por turno') + t('ver_ubicacion', '📍 Ubicación de camiones', 'Ver dónde están los camiones (permiso aparte)');
+    cont.innerHTML = `<div class="u-lbl" style="margin-top:14px">Herramientas</div>` + t('ver_cuadrillas', '🚚 Cuadrillas', 'Rendimiento de las cuadrillas por turno') + t('ver_ubicacion', '📍 Ubicación de camiones', 'Ver dónde están los camiones (permiso aparte)') + (u.ver_cuaderno !== undefined ? t('ver_cuaderno', '📓 Cuaderno', 'Anotar fallas en un cuaderno compartido, sin informarlas (solo app)') : '');
   };
   pintarHerr();
   $('#eHerr', h).addEventListener('click', async (ev) => {
@@ -3128,7 +3131,7 @@ function editarUsuarioU(id) {
       const r = await api(`/rest/v1/usuarios?id=eq.${id}`, { method: 'PATCH', prefer: 'return=representation', body: { [k]: nuevo } });
       if (!r || !r.length) throw new Error('No se guardó (¿falta ejecutar el SQL?)');
       u[k] = nuevo;
-      if (id === S.perfil.id) { S.perfil[k] = nuevo; if (k === 'ver_ubicacion') S.perfil.ubic_col = true; }
+      if (id === S.perfil.id) { S.perfil[k] = nuevo; if (k === 'ver_ubicacion') S.perfil.ubic_col = true; if (k === 'ver_cuaderno' && S.funciones) { if (nuevo) S.funciones.add('cuaderno'); else S.funciones.delete('cuaderno'); pintarModo(); } }
       toast('Guardado', 'ok');
     } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
     pintarHerr();
@@ -3333,17 +3336,24 @@ function cerrarPorTiempo() {
 setInterval(() => { if (S.perfil && vencioModo()) cerrarPorTiempo(); }, 30000);
 /* Botones de la barra inferior que el admin puede ocultar (solo en este teléfono) */
 const LS_NAV_OCULTOS = 'fm_nav_ocultos_v1';
-const NAV_OPCIONES = [['navLista', 'Activas'], ['navInspC3', 'Inspecciones'], ['navInsp', 'Inspección'], ['navCuad', 'Cuadrillas'], ['navHist', 'Historial']];
+const NAV_OPCIONES = [['navLista', 'Activas'], ['navInspC3', 'Inspecciones'], ['navInsp', 'Inspección'], ['navCuad', 'Cuadrillas'], ['navCuaderno', 'Cuaderno'], ['navHist', 'Historial']];
 function navOcultos() { try { const v = JSON.parse(localStorage.getItem(LS_NAV_OCULTOS) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+// Qué botones opcionales tiene esta persona según sus funciones (antes de ocultar los que ella elija)
+function navDisponibles() {
+  const ok = { navLista: true, navInspC3: tiene('inspeccion_asignar_lote'), navInsp: tiene('informar_inspeccion'), navCuad: puedeCuadrillas(), navCuaderno: puedeCuaderno(), navHist: tiene('modo_historial') };
+  return NAV_OPCIONES.filter(([id]) => ok[id]);
+}
+// «Botones de la barra» lo tienen los perfiles con 4 o más de esos botones
+const puedeOpcionesBarra = () => !!S.perfil && navDisponibles().length >= 4;
 function aplicarNavOcultos() {
-  if (rol() !== 'admin') return;
+  if (!puedeOpcionesBarra()) return;
   const oc = navOcultos();
   NAV_OPCIONES.forEach(([id]) => { if (oc.includes(id)) $('#' + id).hidden = true; });
 }
 function abrirOpcionesBarra() {
   const oc = navOcultos();
   const h = abrirHoja(`<h2>Botones de la barra</h2><div class="hint">Elige cuáles se muestran abajo. Solo cambia en este teléfono. «Mapa» y «Más» siempre están.</div>
-    <div class="m-lista">${NAV_OPCIONES.map(([id, t]) => `<label class="m-fila" style="cursor:pointer"><span class="t">${t}</span><input type="checkbox" data-nav="${id}" ${oc.includes(id) ? '' : 'checked'} style="width:22px;height:22px"></label>`).join('')}</div>`);
+    <div class="m-lista">${navDisponibles().map(([id, t]) => `<label class="m-fila" style="cursor:pointer"><span class="t">${t}</span><input type="checkbox" data-nav="${id}" ${oc.includes(id) ? '' : 'checked'} style="width:22px;height:22px"></label>`).join('')}</div>`);
   $$('[data-nav]', h).forEach((c) => c.addEventListener('change', () => {
     const o = new Set(navOcultos());
     if (c.checked) o.delete(c.dataset.nav); else o.add(c.dataset.nav);
@@ -3360,6 +3370,7 @@ function pintarModo() {
   const puede = tiene('informar_inspeccion');
   const c = $('#chipModo'), n = $('#navInsp');
   n.hidden = !puede;
+  pintarCuaderno();
   aplicarNavOcultos();
   $('#navInferior').classList.toggle('apretado', $$('#navInferior .nav-btn:not([hidden])').length >= 4);
   if (!puede) { c.hidden = true; return; }
@@ -3394,6 +3405,7 @@ async function abrirInspeccion() {
     if (!S.perfil.dias_inspeccion.length && !esOperativoHoy()) bloqueo = 'Aún no tienes días de inspección asignados. Pídele al administrador que los habilite; mientras tanto usa <b>Agregar falla</b>.';
     else if (!S.perfil.dias_inspeccion.includes(diaIsoHoy()) && !esOperativoHoy()) bloqueo = `Hoy no es tu día de inspección (tus días: ${esc(textoDiasPauta())}). Hoy usa <b>Agregar falla</b>.`;
   }
+  if (!on && CQ.abierto) bloqueo = 'Tienes el <b>Cuaderno</b> abierto. Ciérralo para comenzar una inspección (las dos cosas no pueden estar activas a la vez).';
   const h = abrirHoja(`
     <h2>Inspección</h2>
     <p class="hint" style="font-size:14px;margin-top:6px">Con la inspección activa, todas las fallas que reportes quedan dentro de ella (para la estadística), cada una con la fecha y hora exactas en que la registras. Si la inspección es nocturna y pasa de medianoche, conserva la fecha en que la iniciaste. Cualquier otro ajuste se hace en la página de escritorio.</p>
@@ -3417,6 +3429,210 @@ async function abrirInspeccion() {
 }
 $('#navInsp').addEventListener('click', abrirInspeccion);
 $('#chipModo').addEventListener('click', abrirInspeccion);
+
+/* ------------------------------ Cuaderno compartido ------------------------------ */
+// Anotaciones temporales de fallas SIN informar (compartidas por todos los habilitados). Una falla recién existe (con OS y fecha) cuando alguien la informa.
+// «Cuaderno abierto» es un modo de este teléfono, como la inspección: las dos no pueden estar activas a la vez.
+const LS_CUAD = 'fm_cuaderno_v1';
+const CUAD_MAX_MS = 12 * 3600 * 1000;
+const CQ = { abierto: false, desde: 0, total: 0, mias: 0, anotadores: [], pag: 0, f: { orden: 'desc', anotador: '', codigo: '', tipo: '', vencen: false, texto: '' } };
+const puedeCuaderno = () => !!S.perfil && tiene('cuaderno') && tiene('informar_falla');
+function nombreCorto(n) { const p = String(n || '').trim().split(/\s+/); return p.length > 1 ? `${p[0]} ${p[1].charAt(0)}.` : (p[0] || '—'); }
+function guardarCuad() {
+  try { if (CQ.abierto) localStorage.setItem(LS_CUAD, JSON.stringify({ uid: S.perfil.id, desde: CQ.desde })); else localStorage.removeItem(LS_CUAD); } catch (e) { /* */ }
+}
+function restaurarCuad() {
+  try {
+    const s = JSON.parse(localStorage.getItem(LS_CUAD) || 'null');
+    if (!s) return;
+    if (s.uid !== S.perfil.id || !puedeCuaderno() || Date.now() - s.desde >= CUAD_MAX_MS || S.modo.tipo === 'inspeccion') { localStorage.removeItem(LS_CUAD); return; }
+    CQ.abierto = true; CQ.desde = s.desde;
+  } catch (e) { /* */ }
+}
+function cerrarCuaderno(aviso) { CQ.abierto = false; guardarCuad(); pintarModo(); if (aviso) toast(aviso, 'error'); }
+setInterval(() => { if (S.perfil && CQ.abierto && Date.now() - CQ.desde >= CUAD_MAX_MS) cerrarCuaderno('El Cuaderno se cerró solo al cumplir 12 horas.'); }, 30000);
+async function cuadContar() {
+  if (!puedeCuaderno()) return;
+  try { const r = await rpc('cuaderno_contar'); CQ.total = r.total || 0; CQ.mias = r.mias || 0; pintarCuaderno(); } catch (e) { /* sin red o sin el SQL */ }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil) cuadContar(); });
+setInterval(() => { if (S.perfil && !document.hidden) cuadContar(); }, 120000);
+function pintarCuaderno() {
+  const pc = puedeCuaderno(), nc = $('#navCuaderno'), cb = $('#chipCuaderno'), bd = $('#cuadBadge');
+  if (!nc) return;
+  nc.hidden = !pc;
+  aplicarNavOcultos();
+  if (!pc && CQ.abierto) { CQ.abierto = false; guardarCuad(); }
+  bd.hidden = !pc || !CQ.total; bd.textContent = CQ.total > 99 ? '99+' : CQ.total;
+  nc.classList.toggle('sel', CQ.abierto);
+  cb.hidden = !(pc && CQ.abierto);
+  cb.textContent = CQ.abierto ? `📓 Cuaderno abierto · ${CQ.total} en total${CQ.mias ? ` · +${CQ.mias} tuyas` : ''} · toca para cerrar` : '';
+  $('#navInferior').classList.toggle('apretado', $$('#navInferior .nav-btn:not([hidden])').length >= 4);
+}
+function abrirCuaderno() {
+  const ins = S.modo.tipo === 'inspeccion';
+  const h = abrirHoja(`
+    <h2>📓 Cuaderno</h2>
+    <p class="hint" style="font-size:14px;margin-top:6px">${CQ.total} anotación${CQ.total === 1 ? '' : 'es'} de todo el equipo. Anota fallas sin informarlas todavía; la falla (con su número de OS y la fecha) se crea cuando alguien la informa desde el Cuaderno. Duran 5 días.</p>
+    ${CQ.abierto ? '<div class="aviso">Cuaderno abierto: las fallas que reportes se <b>anotan aquí</b> en vez de informarse. Se cierra solo a las 12 horas.</div>' : ''}
+    ${!CQ.abierto && ins ? '<div class="aviso">Termina tu inspección para abrir el Cuaderno. Mientras tanto puedes verlo.</div>' : ''}
+    <div class="acciones">
+      ${CQ.abierto ? '<button id="cqCerrar" class="btn btn-secundario">Cerrar el Cuaderno</button>' : `<button id="cqAbrir" class="btn btn-secundario" ${ins ? 'disabled' : ''}>Abrir el Cuaderno</button>`}
+      <button id="cqVer" class="btn btn-primario" style="background:#5b4bd5">Ver el Cuaderno (${CQ.total})</button>
+    </div>`);
+  const a = $('#cqAbrir', h);
+  if (a) a.addEventListener('click', () => {
+    if (S.modo.tipo === 'inspeccion') { toast('Termina tu inspección para abrir el Cuaderno.', 'error'); return; }
+    CQ.abierto = true; CQ.desde = Date.now(); guardarCuad(); pintarModo(); cerrarHoja(); cambiarVista('mapa');
+    toast('Cuaderno abierto. Toca un punto o circuito para anotar la falla.', 'ok');
+  });
+  const c = $('#cqCerrar', h);
+  if (c) c.addEventListener('click', () => { cerrarCuaderno(); cerrarHoja(); toast('Cuaderno cerrado'); });
+  $('#cqVer', h).addEventListener('click', () => { CQ.pag = 0; abrirListaCuaderno(); });
+}
+async function anotarEnCuaderno(tipo, gid, codigo, desc, a) {
+  const r = await rpc('cuaderno_agregar', { p_tipo: tipo, p_gid: gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_uso_grupo: a.p_uso_grupo || null, p_contrato_id: a.p_contrato_id || null, p_mantenedor_id: a.p_mantenedor_id || null, p_masivo: false });
+  cerrarHoja();
+  if (r.ya_existe) {
+    const h = abrirHoja(`<h2>Ya está en el Cuaderno</h2>
+      <div class="aviso" style="background:#fbe7e5"><b>${esc(r.tipo_falla || '')}</b> · lo anotó ${esc(nombreCorto(r.anotado_por))} ${esc(hace(r.anotado_en))}.<br>Un punto o circuito tiene una sola anotación; puedes editarla desde el Cuaderno.</div>
+      <div class="acciones"><button id="cqIr" class="btn btn-primario" style="background:#5b4bd5">Ver el Cuaderno</button><button id="cqNo" class="btn btn-secundario">Cancelar</button></div>`);
+    $('#cqIr', h).addEventListener('click', () => { CQ.pag = 0; abrirListaCuaderno(); });
+    $('#cqNo', h).addEventListener('click', () => cerrarHoja());
+    return;
+  }
+  toast('Anotado en el Cuaderno', 'ok');
+  cuadContar();
+}
+function descCodigoCuad(it) {
+  const cat = it.tipo === 'circuito' ? 'circuito' : 'punto';
+  let x = catalogoActivo(cat, it.tipo_falla).find((y) => y.c === it.tipo_falla);
+  if (!x && cat === 'punto') x = catalogoActivo('monoposte', it.tipo_falla).find((y) => y.c === it.tipo_falla);
+  return x ? x.d : '';
+}
+function venceTexto(it) {
+  const ms = new Date(it.expira_en).getTime() - Date.now();
+  if (ms > 24 * 3600 * 1000) return '';
+  return ms <= 12 * 3600 * 1000 ? 'Vence hoy' : 'Vence mañana';
+}
+function htmlTarjetaCuad(it, i) {
+  const dir = it.tipo === 'circuito' ? `Circuito ${esc(it.circuito_id ?? '')}${it.cant_lum != null ? ` · ${esc(it.cant_lum)} luminarias` : ''}` : `${esc(it.direccion || 'Sin dirección')}${it.llave != null ? ` · llave ${esc(it.llave)}` : ''}`;
+  const dist = S.pos && it.lat != null ? ` · ${fmtDist(distanciaM([S.pos.lat, S.pos.lng], [it.lat, it.lng]))}` : '';
+  const v = venceTexto(it);
+  return `<button type="button" class="cq-card ${it.tipo}" data-i="${i}">
+    <div class="cq-l1"><b>${esc(it.tipo_falla)} · ${esc(descCodigoCuad(it) || '')}</b><span>${esc(hace(it.anotado_en))}</span></div>
+    <div class="cq-l2">${dir}</div>
+    <div class="cq-l3"><span>${esc(nombreCorto(it.anotador))}${dist}</span>${v ? `<span class="ven">● ${v}</span>` : ''}</div></button>`;
+}
+let CQ_ITEMS = [];
+async function abrirListaCuaderno() {
+  const f = CQ.f;
+  try { CQ.anotadores = (await rpc('cuaderno_anotadores')) || []; } catch (e) { CQ.anotadores = []; }
+  const codigos = [...new Map([...catalogoActivo('punto'), ...catalogoActivo('circuito')].map((x) => [x.c, x])).values()];
+  const h = abrirHoja(`
+    <h2 id="cqTit">📓 Cuaderno</h2>
+    <input id="cqTxt" class="campo" placeholder="Dirección o llave…" value="${esc(f.texto)}" autocomplete="off">
+    <div class="cq-chips">
+      <button type="button" id="cqOrd" class="cq-chip sel">⇅ ${f.orden === 'desc' ? 'Más nuevas' : 'Más antiguas'}</button>
+      <select id="cqAn" class="cq-chip ${f.anotador ? 'sel' : ''}" aria-label="Quién anotó"><option value="">Anotó: todos</option>${CQ.anotadores.map((a) => `<option value="${esc(a.id)}" ${f.anotador === a.id ? 'selected' : ''}>${esc(nombreCorto(a.nombre))} (${a.n})</option>`).join('')}</select>
+      <select id="cqCod" class="cq-chip ${f.codigo ? 'sel' : ''}" aria-label="Código"><option value="">Código: todos</option>${codigos.map((x) => `<option value="${esc(x.c)}" ${f.codigo === x.c ? 'selected' : ''}>${esc(x.c)} · ${esc(x.d)}</option>`).join('')}</select>
+      <select id="cqTipo" class="cq-chip ${f.tipo ? 'sel' : ''}" aria-label="Tipo"><option value="">Punto / Circuito</option><option value="punto" ${f.tipo === 'punto' ? 'selected' : ''}>Solo puntos</option><option value="circuito" ${f.tipo === 'circuito' ? 'selected' : ''}>Solo circuitos</option></select>
+      <button type="button" id="cqVen" class="cq-chip ${f.vencen ? 'sel' : ''}">Vencen pronto</button>
+    </div>
+    <div id="cqLista"><div class="hint">Cargando…</div></div>`);
+  const cargar = async (mas) => {
+    const lista = $('#cqLista', h); if (!lista) return;
+    try {
+      if (!mas) CQ_ITEMS = [];
+      const r = await rpc('cuaderno_listar', { p_orden: f.orden, p_anotador: f.anotador || null, p_codigo: f.codigo || null, p_tipo: f.tipo || null, p_vencen: f.vencen, p_texto: f.texto || null, p_limite: 40, p_desde: CQ_ITEMS.length });
+      CQ_ITEMS = CQ_ITEMS.concat(r.items || []);
+      $('#cqTit', h).textContent = `📓 Cuaderno · ${r.total} anotación${r.total === 1 ? '' : 'es'}`;
+      lista.innerHTML = CQ_ITEMS.length ? CQ_ITEMS.map(htmlTarjetaCuad).join('') + (CQ_ITEMS.length < r.total ? '<button type="button" id="cqMas" class="btn btn-secundario" style="width:100%">Ver más</button>' : '')
+        : '<div class="hint" style="padding:14px 0">No hay anotaciones con estos filtros.</div>';
+      $$('.cq-card', lista).forEach((b) => b.addEventListener('click', () => abrirDetalleCuaderno(CQ_ITEMS[+b.dataset.i])));
+      const m = $('#cqMas', lista); if (m) m.addEventListener('click', () => cargar(true));
+    } catch (e) { lista.innerHTML = `<div class="hint" style="color:#c62828">No se pudo cargar: ${esc(e.message)}</div>`; }
+  };
+  let t = null;
+  $('#cqTxt', h).addEventListener('input', (e) => { f.texto = e.target.value.trim(); clearTimeout(t); t = setTimeout(() => cargar(false), 300); });
+  $('#cqOrd', h).addEventListener('click', (e) => { f.orden = f.orden === 'desc' ? 'asc' : 'desc'; e.currentTarget.textContent = `⇅ ${f.orden === 'desc' ? 'Más nuevas' : 'Más antiguas'}`; cargar(false); });
+  const sel = (id, k) => $(id, h).addEventListener('change', (e) => { f[k] = e.target.value; e.target.classList.toggle('sel', !!f[k]); cargar(false); });
+  sel('#cqAn', 'anotador'); sel('#cqCod', 'codigo'); sel('#cqTipo', 'tipo');
+  $('#cqVen', h).addEventListener('click', (e) => { f.vencen = !f.vencen; e.currentTarget.classList.toggle('sel', f.vencen); cargar(false); });
+  cargar(false);
+}
+function abrirDetalleCuaderno(it) {
+  if (!it) return;
+  const puedeEliminar = it.anotado_por === S.perfil.id || rol() === 'admin';
+  const dir = it.tipo === 'circuito' ? `Circuito ${esc(it.circuito_id ?? '')}` : `${esc(it.direccion || 'Sin dirección')}${it.llave != null ? ` · llave ${esc(it.llave)}` : ''}`;
+  const v = venceTexto(it);
+  const h = abrirHoja(`
+    <h2>${esc(it.tipo_falla)} · ${esc(descCodigoCuad(it))}</h2>
+    <div class="hint">${dir}</div>
+    <div style="font-size:13.5px;margin-top:8px">Anotó <b>${esc(it.anotador || '—')}</b> · ${esc(new Date(it.anotado_en).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))}${it.descripcion ? `<br>Comentario: “${esc(it.descripcion)}”` : ''}${v ? ` · <b style="color:#c62828">${v.toLowerCase()}</b>` : ''}</div>
+    <div class="cq-b3">
+      <button id="cqInf" class="btn btn-primario">${ICO_CQ.ok}Informar falla</button>
+      <button id="cqEd" class="btn btn-secundario">${ICO_CQ.ed}Editar falla</button>
+      <button id="cqEl" class="btn btn-peligro" ${puedeEliminar ? '' : 'disabled'}>${ICO_CQ.el}Eliminar</button>
+    </div>
+    ${puedeEliminar ? '' : '<div class="hint" style="margin-top:8px">Solo quien la anotó o un administrador puede eliminarla.</div>'}
+    <div class="cq-nota">Al informar se crea la falla con la fecha y hora de ese momento, a tu nombre, y recién ahí recibe número de OS.${S.modo.tipo === 'inspeccion' ? ' Si es válida, entra a tu inspección.' : ''}</div>`);
+  const inf = $('#cqInf', h);
+  inf.addEventListener('click', ocupar(inf, async () => {
+    inf.textContent = 'Informando…';
+    let insp = null;
+    if (S.modo.tipo === 'inspeccion' && S.modo.fecha) { try { insp = (await contextoReporte()).p_inspeccion_id || null; } catch (e) { insp = null; } }
+    const r = await rpc('cuaderno_informar', { p_id: it.id, p_inspeccion_id: insp });
+    cerrarHoja();
+    if (r.ya_no_esta) toast('Esa anotación ya no existe (la informó o eliminó otra persona).', 'error');
+    else if (r.ya_informada) toast(`Ya estaba informada · OS ${r.ot}${r.informante ? ' por ' + nombreCorto(r.informante) : ''}`, 'error');
+    else toast(`Falla informada · OS ${r.ot}${r.estado === 'reiterada' ? ' (reiterada)' : ''}${r.en_inspeccion ? ' · en tu inspección' : ''}`, 'ok');
+    cargarFallas(); cuadContar(); abrirListaCuaderno();
+  }));
+  $('#cqEd', h).addEventListener('click', () => editarCuaderno(it));
+  const el = $('#cqEl', h);
+  el.addEventListener('click', () => {
+    const h2 = abrirHoja(`<h2>¿Eliminar esta anotación?</h2><div class="aviso">${esc(it.tipo_falla)} · ${dir}<br>La anotó ${esc(it.anotador || '—')}. Esta acción no se puede deshacer.</div>
+      <div class="acciones"><button id="cqSi" class="btn btn-peligro">Eliminar</button><button id="cqNo" class="btn btn-secundario">Cancelar</button></div>`);
+    $('#cqNo', h2).addEventListener('click', () => abrirDetalleCuaderno(it));
+    const si = $('#cqSi', h2);
+    si.addEventListener('click', ocupar(si, async () => {
+      await rpc('cuaderno_eliminar', { p_id: it.id });
+      toast('Anotación eliminada', 'ok'); cuadContar(); abrirListaCuaderno();
+    }));
+  });
+}
+const ICO_CQ = {
+  ok: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  ed: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+  el: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>'
+};
+function editarCuaderno(it) {
+  const cat = it.tipo === 'circuito' ? 'circuito' : 'punto';
+  let codigo = it.tipo_falla;
+  const h = abrirHojaForm(`
+    <h2>Editar anotación</h2>
+    <div class="hint">${it.tipo === 'circuito' ? 'Circuito ' + esc(it.circuito_id ?? '') : esc(it.direccion || 'Punto') + (it.llave != null ? ' · llave ' + esc(it.llave) : '')} · no cambia el plazo de 5 días</div>
+    <div id="fCuerpo"><div class="dos-col">
+      <div class="col-izq"><h3>Comentario</h3><textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)">${esc(it.descripcion || '')}</textarea></div>
+      <div class="col-der"><h3>Código de falla</h3>${htmlCodigos(catalogoActivo(cat, it.tipo_falla), cat)}</div>
+    </div><div class="acciones fija"><button id="fGuardar" class="btn btn-primario">Guardar cambios</button></div></div>`);
+  const marcar = () => $$('.codigo', h).forEach((b) => b.classList.toggle('sel', b.dataset.c === codigo));
+  $$('.codigo', h).forEach((b) => b.addEventListener('click', () => { codigo = b.dataset.c; marcar(); }));
+  marcar();
+  const g = $('#fGuardar', h);
+  g.addEventListener('click', ocupar(g, async () => {
+    const desc = $('#fDesc', h).value.trim();
+    if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
+    await rpc('cuaderno_editar', { p_id: it.id, p_tipo_falla: codigo, p_descripcion: desc || null });
+    toast('Anotación actualizada', 'ok'); abrirListaCuaderno();
+  }));
+}
+function pintarCuadernoClicks() {
+  $('#navCuaderno').addEventListener('click', abrirCuaderno);
+  $('#chipCuaderno').addEventListener('click', abrirCuaderno);
+}
+pintarCuadernoClicks();
 
 /* ------------------------- abrir una falla desde un aviso ------------------------- */
 async function abrirFallaPorId(id) {
@@ -3517,13 +3733,24 @@ async function forzarActualizacion() {
 // Compara la versión que corre con la publicada (sin usar copias guardadas) y avisa si hay una nueva.
 async function revisarVersion() {
   try {
+    if (S.avisoVersion) return;
     const r = await fetch('app.js?v=' + Date.now(), { cache: 'no-store' });
     const m = (await r.text()).match(/const VERSION_APP = '([^']+)'/);
-    if (!m || m[1] === VERSION_APP || S.avisoVersion) return;
+    let nueva = m ? m[1] : null, hay = !!m && m[1] !== VERSION_APP;
+    // Además del número de versión, se compara la copia del service worker: así avisa aunque en un cambio no se haya subido el número
+    if (!hay) {
+      try {
+        const sw = await fetch('sw.js?v=' + Date.now(), { cache: 'no-store' });
+        const v = (await sw.text()).match(/const VERSION = '(fm-v\d+)'/);
+        const claves = (await caches.keys()).filter((k) => /^fm-v\d+$/.test(k));
+        if (v && claves.length && !claves.includes(v[1])) { hay = true; nueva = nueva || VERSION_APP; }
+      } catch (e) { /* sin caches: se usa solo el número */ }
+    }
+    if (!hay) return;
     S.avisoVersion = true;
     const b = $('#avisoVersion');
     b.hidden = false;
-    b.textContent = `Hay una versión nueva (${m[1]}). Toca aquí para actualizar.`;
+    b.textContent = nueva && nueva !== VERSION_APP ? `Hay una versión nueva (${nueva}). Toca aquí para actualizar.` : 'Hay una actualización disponible. Toca aquí para actualizar.';
     b.onclick = () => { b.textContent = 'Actualizando…'; forzarActualizacion(); };
   } catch (e) { /* sin conexión: se revisa después */ }
 }
@@ -3556,7 +3783,7 @@ $('#btnMenu').addEventListener('click', () => {
       ${tiene('admin_catalogos') || tiene('admin_contratos') ? `<button id="mConfig" class="m-fila"><span class="m-ico m-ambar">${ico('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>')}</span><span class="t">Configuración</span>${chev}</button>` : ''}
       <div class="m-grupo">Cuenta</div>
       <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
-      ${tiene('admin_catalogos') ? `<button id="mBarra" class="m-fila"><span class="m-ico m-azul">${ico('<rect x="3" y="15" width="18" height="5" rx="2"/><path d="M7 9h10M7 5h10"/>')}</span><span class="t">Botones de la barra</span>${chev}</button>` : ''}
+      ${puedeOpcionesBarra() ? `<button id="mBarra" class="m-fila"><span class="m-ico m-azul">${ico('<rect x="3" y="15" width="18" height="5" rx="2"/><path d="M7 9h10M7 5h10"/>')}</span><span class="t">Botones de la barra</span>${chev}</button>` : ''}
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <div id="mDiag" class="hint" style="margin:8px 6px 0;white-space:pre-line"></div>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
@@ -3658,7 +3885,9 @@ async function entrarApp() {
   $('#barraAvatar').textContent = iniciales(S.perfil.nombre);
   $('#barraRol').textContent = rolVisible();
   restaurarModo();
+  restaurarCuad();
   pintarModo();
+  cuadContar();
   S.vista = 'mapa';
   cambiarVista('mapa');
   iniciarMapa();
