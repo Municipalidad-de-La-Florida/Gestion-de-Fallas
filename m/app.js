@@ -2621,7 +2621,7 @@ const msgNotif = (e) => {
 const msgContrato = (e) => (/duplicate|unique|contratos_nombre/i.test(e.message) ? 'Ya existe un contrato con ese nombre.' : e.message);
 
 async function cargarUsuariosAdmin() {
-  const [us, cs, rel, ns, pf, relM, conex] = await Promise.all([
+  const [us, cs, rel, ns, pf, relM, conex, mants] = await Promise.all([
     select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
     select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc').catch(() => []),
     select('usuario_contratos', 'select=usuario_id,contrato_id').catch(() => []),
@@ -2629,11 +2629,13 @@ async function cargarUsuariosAdmin() {
     select('perfiles', 'select=clave,nombre,base_rol,sistema,orden&order=orden.asc').catch(() => []),
     select('usuario_mantenedores', 'select=usuario_id,mantenedor_id').catch(() => []),
     select('usuarios', 'select=id,ultima_conexion').catch(() => null),   // sin el SQL de última conexión: queda en «—»
+    select('mantenedores', 'select=id,nombre,activo&order=nombre.asc').catch(() => null),   // sin la tabla: no se ofrece el acceso por mantenedor
   ]);
   U.perfiles = pf || [];
   U.relM = {};
   (relM || []).forEach((r) => { (U.relM[r.usuario_id] = U.relM[r.usuario_id] || []).push(r.mantenedor_id); });
   if (conex) { const cx = Object.fromEntries(conex.map((c) => [c.id, c.ultima_conexion || null])); us.forEach((x) => { x.ultima_conexion = cx[x.id] === undefined ? null : cx[x.id]; }); }
+  U.mant = mants;
   U.usuarios = us; U.contratos = cs; U.rel = {};
   rel.forEach((r) => { (U.rel[r.usuario_id] = U.rel[r.usuario_id] || []).push(r.contrato_id); });
   U.notifs = ns.map((n) => ({ ...n, nFallas: (n.fallas && n.fallas[0] && n.fallas[0].count) || 0 }));
@@ -3030,11 +3032,13 @@ async function guardarGrillaU(btn) {
 function tarjetaUsuarioU(u) {
   const cs = (U.rel[u.id] || []).map((id) => U.contratos.find((c) => c.id === id)).filter(Boolean);
   const aplica = ROLES_CON_CONTRATO.includes(u.rol);
+  const nomM = (id) => ((U.mant || []).find((m) => m.id === id) || {}).nombre || MANT[id] || 'Mantenedor';
+  const tagsC = cs.map((c) => `<span class="u-tg ${c.defecto_para === 'masivo' ? 'u-t-ele' : 'u-t-enel'}">${esc(c.nombre)}</span>`).join('');
+  const tagsM = (U.relM[u.id] || []).map((id) => `<span class="tag-mant" style="margin-left:0">${esc(nomM(id))}</span>`).join('');
   let cont;
   if (!aplica) cont = '<span class="u-em">Ve todos los contratos</span>';
-  else if (!cs.length && (U.relM[u.id] || []).length) cont = (U.relM[u.id] || []).map((id) => `<span class="tag-mant" style="margin-left:0">${esc(MANT[id] || 'Mantenedor')}</span>`).join('');
-  else if (!cs.length) cont = u.rol === 'camion' ? '<span class="u-em">Sin contrato asignado</span>' : '<span class="u-tg u-t-sin">⚠ Sin contrato</span>';
-  else cont = cs.map((c) => `<span class="u-tg ${c.defecto_para === 'masivo' ? 'u-t-ele' : 'u-t-enel'}">${esc(c.nombre)}</span>`).join('');
+  else if (tagsC || tagsM) cont = tagsC + tagsM;
+  else cont = u.rol === 'camion' ? '<span class="u-em">Sin mantenedor asignado</span>' : '<span class="u-tg u-t-sin">⚠ Sin contrato ni mantenedor</span>';
   const ic = [ROLES_CON_NOTIF.includes(u.rol) && u.notificador_externo_habilitado ? '🔔' : '', ROLES_CON_FOTO.includes(u.rol) && u.foto_obligatoria ? '📷' : ''].filter(Boolean).join(' ');
   return `<button type="button" class="u-card" data-uid="${esc(u.id)}"><span class="u-ini" style="background:${colorAv(u.nombre)}">${esc(iniciales(u.nombre))}</span>
     <span class="u-mid"><span class="u-nm">${esc(u.nombre || '—')} <span class="u-rol ${ROL_CLASE[u.rol] || ''}">${esc(nombrePerfilU(u))}</span></span>
@@ -3066,9 +3070,18 @@ function textoUltCon(iso) {
 }
 function editarUsuarioU(id) {
   const u = U.usuarios.find((x) => x.id === id); if (!u) return;
-  const orig = { nombre: u.nombre || '', perfil: u.perfil || u.rol, rol: u.rol, notif: !!u.notificador_externo_habilitado, foto: !!u.foto_obligatoria, contr: (U.rel[id] || []).slice().sort() };
-  const ed = { ...orig, contr: new Set(orig.contr) };
-  const estado = () => ({ nombre: ed.nombre.trim(), perfil: ed.perfil, rol: ed.rol, notif: ROLES_CON_NOTIF.includes(ed.rol) && ed.notif, foto: ROLES_CON_FOTO.includes(ed.rol) && ed.foto, contr: ROLES_CON_CONTRATO.includes(ed.rol) ? [...ed.contr].sort() : [] });
+  const hayMant = Array.isArray(U.mant);
+  const orig = { nombre: u.nombre || '', perfil: u.perfil || u.rol, rol: u.rol, notif: !!u.notificador_externo_habilitado, foto: !!u.foto_obligatoria, contr: (U.rel[id] || []).slice().sort(), mant: (U.relM[id] || []).slice().sort() };
+  orig.modo = (orig.contr.length && orig.mant.length) ? 'ambos' : (orig.mant.length ? 'mantenedor' : 'contrato');   // un perfil por contrato, o un subcontratista por mantenedor
+  const ed = { ...orig, contr: new Set(orig.contr), mant: new Set(orig.mant) };
+  // Lo que se guardaría: contratos y mantenedores según el modo (camión: siempre por mantenedor)
+  const estadoDe = (x) => {
+    const aplica = ROLES_CON_CONTRATO.includes(x.rol), cam = x.rol === 'camion';
+    return { nombre: x.nombre.trim(), perfil: x.perfil, rol: x.rol, notif: ROLES_CON_NOTIF.includes(x.rol) && x.notif, foto: ROLES_CON_FOTO.includes(x.rol) && x.foto,
+      contr: aplica && (cam || x.modo !== 'mantenedor' || !hayMant) ? [...x.contr].sort() : [],
+      mant: !hayMant ? [...orig.mant] : (aplica && (cam || x.modo !== 'contrato') ? [...x.mant].sort() : []) };
+  };
+  const estado = () => estadoDe(ed);
   const h = abrirHoja(`<div class="u-sh"><span class="u-ini" style="background:${colorAv(u.nombre)};width:46px;height:46px">${esc(iniciales(u.nombre))}</span><div><div class="u-nm" style="font-size:17px">${esc(u.nombre || '—')}</div><div class="u-em">${esc(u.email || '—')}</div><div>${textoUltCon(u.ultima_conexion)}</div></div></div>
     <div class="u-lbl" style="margin-top:2px">Nombre</div><input id="eNom" class="campo" value="${esc(orig.nombre)}" maxlength="80" autocomplete="off">
     <div id="eDin"></div>
@@ -3078,13 +3091,25 @@ function editarUsuarioU(id) {
   const pintarDin = () => {
     const act = U.contratos.filter((c) => c.activo || ed.contr.has(c.id));
     const aplicaC = ROLES_CON_CONTRATO.includes(ed.rol);
+    const cam = ed.rol === 'camion';
+    const bloqueC = `<div class="u-lbl">${cam ? 'Contrato (antiguo, ya no hace falta)' : 'Contratos'} <span style="text-transform:none;font-weight:500">· solo verá fallas de estos</span></div>
+      ${act.map((c) => `<button type="button" class="u-tog ${ed.contr.has(c.id) ? 'on' : ''}" data-c="${c.id}"><span class="u-cb ${ed.contr.has(c.id) ? 'on' : ''}">✓</span><span class="u-tx"><b>${esc(c.nombre)}</b><span>${c.defecto_para === 'masivo' ? 'Fallas Masivo' : c.defecto_para === 'normal' ? 'Fallas normales' : 'Sin tipo por defecto'}${c.activo ? '' : ' · inactivo'}</span></span></button>`).join('') || '<div class="u-em">Aún no hay contratos.</div>'}
+      ${!cam && act.length && !ed.contr.size && (!hayMant || ed.modo !== 'mantenedor') ? '<div class="u-aviso">Sin contratos no verá ninguna falla.</div>' : ''}`;
+    const actM = (U.mant || []).filter((m) => m.activo !== false || ed.mant.has(m.id));
+    const bloqueM = `<div class="u-lbl">Mantenedores <span style="text-transform:none;font-weight:500">· solo verá fallas de estos</span></div>
+      ${actM.map((m) => `<button type="button" class="u-tog ${ed.mant.has(m.id) ? 'on' : ''}" data-m="${m.id}"><span class="u-cb ${ed.mant.has(m.id) ? 'on' : ''}">✓</span><span class="u-tx"><b>${esc(m.nombre)}</b></span></button>`).join('') || '<div class="u-em">Aún no hay mantenedores.</div>'}
+      ${actM.length && !ed.mant.size ? '<div class="u-aviso">Sin mantenedores no verá ninguna falla.</div>' : ''}`;
+    const modos = [['contrato', 'Por contrato'], ['mantenedor', 'Por mantenedor'], ...(orig.modo === 'ambos' ? [['ambos', 'Ambos (antiguo)']] : [])];
+    const acceso = !aplicaC ? '<div class="u-em" style="margin-top:12px">Este rol ve todos los contratos.</div>'
+      : !hayMant ? bloqueC
+      : cam ? bloqueM + (ed.contr.size || orig.contr.length ? bloqueC : '')
+      : `<div class="u-lbl">Acceso</div><div class="u-seg">${modos.map(([k, t]) => `<button type="button" data-md="${k}" class="${ed.modo === k ? 'on' : ''}">${t}</button>`).join('')}</div>`
+        + (ed.modo !== 'mantenedor' ? bloqueC : '') + (ed.modo !== 'contrato' ? bloqueM : '');
     $('#eDin', h).innerHTML = `<div class="u-lbl">Perfil</div><div class="u-seg">${listaPerfiles().map((r) => `<button type="button" data-r="${esc(r.clave)}" class="${ed.perfil === r.clave ? 'on' : ''}">${esc(r.nombre)}</button>`).join('')}</div>
-      ${aplicaC ? `<div class="u-lbl">Contratos <span style="text-transform:none;font-weight:500">· solo verá fallas de estos</span></div>
-        ${act.map((c) => `<button type="button" class="u-tog ${ed.contr.has(c.id) ? 'on' : ''}" data-c="${c.id}"><span class="u-cb ${ed.contr.has(c.id) ? 'on' : ''}">✓</span><span class="u-tx"><b>${esc(c.nombre)}</b><span>${c.defecto_para === 'masivo' ? 'Fallas Masivo' : c.defecto_para === 'normal' ? 'Fallas normales' : 'Sin tipo por defecto'}${c.activo ? '' : ' · inactivo'}</span></span></button>`).join('') || '<div class="u-em">Aún no hay contratos creados.</div>'}
-        ${ed.rol !== 'camion' && act.length && !ed.contr.size ? '<div class="u-aviso">Sin contratos no verá ninguna falla.</div>' : ''}` : '<div class="u-em" style="margin-top:12px">Este rol ve todos los contratos.</div>'}
+      ${acceso}
       ${ROLES_CON_NOTIF.includes(ed.rol) ? `<button type="button" class="u-tog ${ed.notif ? 'on' : ''}" data-s="notif" style="margin-top:10px"><span class="u-tx"><b>🔔 Notificador externo y fecha</b><span>Puede informar fallas a nombre de otras personas</span></span><span class="u-sw ${ed.notif ? 'on' : ''}"></span></button>` : ''}
       ${ROLES_CON_FOTO.includes(ed.rol) ? `<button type="button" class="u-tog ${ed.foto ? 'on' : ''}" data-s="foto" style="margin-top:10px"><span class="u-tx"><b>📷 Foto obligatoria al reparar</b></span><span class="u-sw ${ed.foto ? 'on' : ''}"></span></button>` : ''}`;
-    const ok = $('#eOk', h), cambios = JSON.stringify(estado()) !== JSON.stringify({ nombre: orig.nombre.trim(), perfil: orig.perfil, rol: orig.rol, notif: ROLES_CON_NOTIF.includes(orig.rol) && orig.notif, foto: ROLES_CON_FOTO.includes(orig.rol) && orig.foto, contr: ROLES_CON_CONTRATO.includes(orig.rol) ? orig.contr : [] });
+    const ok = $('#eOk', h), cambios = JSON.stringify(estado()) !== JSON.stringify(estadoDe(orig));
     ok.disabled = !cambios;
   };
   // Herramientas (permisos que se guardan al tocar): Cuadrillas y Ubicación de camiones
@@ -3115,6 +3140,8 @@ function editarUsuarioU(id) {
     const b = ev.target.closest('button'); if (!b) return;
     if (b.dataset.r) { ed.perfil = b.dataset.r; ed.rol = baseRolDe(ed.perfil); }
     else if (b.dataset.c) { if (ed.contr.has(b.dataset.c)) ed.contr.delete(b.dataset.c); else ed.contr.add(b.dataset.c); }
+    else if (b.dataset.m) { if (ed.mant.has(b.dataset.m)) ed.mant.delete(b.dataset.m); else ed.mant.add(b.dataset.m); }
+    else if (b.dataset.md) ed.modo = b.dataset.md;
     else if (b.dataset.s) ed[b.dataset.s] = !ed[b.dataset.s];
     pintarDin();
   });
@@ -3136,6 +3163,7 @@ function editarUsuarioU(id) {
     Object.assign(u, { nombre: e.nombre, perfil: e.perfil, rol: (r[0] && r[0].rol) || e.rol, notificador_externo_habilitado: e.notif, foto_obligatoria: e.foto });
     const antes = ROLES_CON_CONTRATO.includes(orig.rol) ? orig.contr : [];
     if (JSON.stringify(antes) !== JSON.stringify(e.contr)) { await rpc('set_contratos_usuario', { p_usuario: id, p_contratos: e.contr }); U.rel[id] = e.contr; }
+    if (hayMant && JSON.stringify(orig.mant) !== JSON.stringify(e.mant)) { await rpc('set_mantenedores_usuario', { p_usuario: id, p_mantenedores: e.mant }); U.relM[id] = e.mant; }
     if (id === S.perfil.id) { S.perfil.nombre = e.nombre; S.perfil.rol = u.rol; S.perfil.foto_obligatoria = e.foto; await cargarFunciones(); $('#barraNombre').textContent = e.nombre; $('#barraAvatar').textContent = iniciales(e.nombre); $('#barraRol').textContent = rolVisible(); }
     cerrarHoja(); pintarU(); toast('Usuario guardado', 'ok');
   }));
