@@ -3979,13 +3979,6 @@ async function abrirPopupFalla(feat){
     </div>
   ` : '';
 
-  const puedePasarMasivo = !!currentUser.puede_pasar_a_masivo && !p.masivo && !p.cascada && !p._vistaHistorica && p.estado !== 'reparada';
-  const pasarMasivoHtml = puedePasarMasivo ? `
-    <div style="margin-top:8px;">
-      <button type="button" class="popup-btn" id="pasarMasivoBtn" style="background:#8a949d;">⇄ Pasar a masivo</button>
-    </div>
-  ` : '';
-
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
@@ -4020,7 +4013,6 @@ async function abrirPopupFalla(feat){
       ${tarjetaDatos}
       ${infoReparacion}
       ${asignarCamionHtml}
-      ${pasarMasivoHtml}
       <div class="rp-sec">Información adicional</div>
       <textarea class="popup-input" id="cierreDesc" placeholder="Ej: Información adicional" style="width:100%; min-height:90px; box-sizing:border-box; margin-top:0;"></textarea>
       <button type="button" class="popup-btn" id="guardarComentarioBtn" style="margin-top:6px; background:#fff; color:var(--primary); border:1.5px solid var(--primary);">💬 Guardar comentario (sin cerrar)</button>
@@ -4049,7 +4041,6 @@ async function abrirPopupFalla(feat){
       ${infoGeneral}
       ${infoReparacion}
       ${asignarCamionHtml}
-      ${pasarMasivoHtml}
       ${puedeComentar ? `<div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
         <div class="hint" style="margin-bottom:4px;">Agregar un comentario:</div>
         <textarea class="popup-input" id="comentarioNuevoInput" placeholder="Escribe un comentario sobre esta falla" style="width:100%; min-height:60px; box-sizing:border-box; margin-bottom:6px;"></textarea>
@@ -4105,21 +4096,6 @@ async function abrirPopupFalla(feat){
     };
     if(!puedeComentar) btnGuardarCom.style.display = 'none';
     protegerClick(btnGuardarCom);
-  }
-
-  const btnPasarMasivo = panel.querySelector('#pasarMasivoBtn');
-  if(btnPasarMasivo){
-    btnPasarMasivo.onclick = async () => {
-      const aviso = p.asignado_camion_id || p.asignado_camion_nombre ? '\n\nEstá asignada a un camión: se quitará la asignación.' : '';
-      if(!confirm('¿Pasar esta falla a Masivo? Cambiará al contrato Elecnor y dejará de verse en tu contrato.' + aviso)) return;
-      btnPasarMasivo.disabled = true;
-      try{
-        await db.rpc('pasar_a_masivo', {p_falla: p.id});
-        cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
-        cerrarPanel();
-      }catch(e){ btnPasarMasivo.disabled = false; alert('No se pudo pasar a masivo: ' + e.message); }
-    };
-    protegerClick(btnPasarMasivo);
   }
 
   const btnQuitarAsig = panel.querySelector('#quitarAsignacionBtn');
