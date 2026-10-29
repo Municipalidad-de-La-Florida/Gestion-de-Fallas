@@ -3338,15 +3338,22 @@ setInterval(() => { if (S.perfil && vencioModo()) cerrarPorTiempo(); }, 30000);
 const LS_NAV_OCULTOS = 'fm_nav_ocultos_v1';
 const NAV_OPCIONES = [['navLista', 'Activas'], ['navInspC3', 'Inspecciones'], ['navInsp', 'Inspección'], ['navCuad', 'Cuadrillas'], ['navCuaderno', 'Cuaderno'], ['navHist', 'Historial']];
 function navOcultos() { try { const v = JSON.parse(localStorage.getItem(LS_NAV_OCULTOS) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+// Qué botones opcionales tiene esta persona según sus funciones (antes de ocultar los que ella elija)
+function navDisponibles() {
+  const ok = { navLista: true, navInspC3: tiene('inspeccion_asignar_lote'), navInsp: tiene('informar_inspeccion'), navCuad: puedeCuadrillas(), navCuaderno: puedeCuaderno(), navHist: tiene('modo_historial') };
+  return NAV_OPCIONES.filter(([id]) => ok[id]);
+}
+// «Botones de la barra» lo tienen los perfiles con 4 o más de esos botones
+const puedeOpcionesBarra = () => !!S.perfil && navDisponibles().length >= 4;
 function aplicarNavOcultos() {
-  if (rol() !== 'admin') return;
+  if (!puedeOpcionesBarra()) return;
   const oc = navOcultos();
   NAV_OPCIONES.forEach(([id]) => { if (oc.includes(id)) $('#' + id).hidden = true; });
 }
 function abrirOpcionesBarra() {
   const oc = navOcultos();
   const h = abrirHoja(`<h2>Botones de la barra</h2><div class="hint">Elige cuáles se muestran abajo. Solo cambia en este teléfono. «Mapa» y «Más» siempre están.</div>
-    <div class="m-lista">${NAV_OPCIONES.map(([id, t]) => `<label class="m-fila" style="cursor:pointer"><span class="t">${t}</span><input type="checkbox" data-nav="${id}" ${oc.includes(id) ? '' : 'checked'} style="width:22px;height:22px"></label>`).join('')}</div>`);
+    <div class="m-lista">${navDisponibles().map(([id, t]) => `<label class="m-fila" style="cursor:pointer"><span class="t">${t}</span><input type="checkbox" data-nav="${id}" ${oc.includes(id) ? '' : 'checked'} style="width:22px;height:22px"></label>`).join('')}</div>`);
   $$('[data-nav]', h).forEach((c) => c.addEventListener('change', () => {
     const o = new Set(navOcultos());
     if (c.checked) o.delete(c.dataset.nav); else o.add(c.dataset.nav);
@@ -3454,7 +3461,7 @@ function pintarCuaderno() {
   const pc = puedeCuaderno(), nc = $('#navCuaderno'), cb = $('#chipCuaderno'), bd = $('#cuadBadge');
   if (!nc) return;
   nc.hidden = !pc;
-  if (pc && rol() === 'admin' && navOcultos().includes('navCuaderno')) nc.hidden = true;
+  aplicarNavOcultos();
   if (!pc && CQ.abierto) { CQ.abierto = false; guardarCuad(); }
   bd.hidden = !pc || !CQ.total; bd.textContent = CQ.total > 99 ? '99+' : CQ.total;
   nc.classList.toggle('sel', CQ.abierto);
@@ -3726,13 +3733,24 @@ async function forzarActualizacion() {
 // Compara la versión que corre con la publicada (sin usar copias guardadas) y avisa si hay una nueva.
 async function revisarVersion() {
   try {
+    if (S.avisoVersion) return;
     const r = await fetch('app.js?v=' + Date.now(), { cache: 'no-store' });
     const m = (await r.text()).match(/const VERSION_APP = '([^']+)'/);
-    if (!m || m[1] === VERSION_APP || S.avisoVersion) return;
+    let nueva = m ? m[1] : null, hay = !!m && m[1] !== VERSION_APP;
+    // Además del número de versión, se compara la copia del service worker: así avisa aunque en un cambio no se haya subido el número
+    if (!hay) {
+      try {
+        const sw = await fetch('sw.js?v=' + Date.now(), { cache: 'no-store' });
+        const v = (await sw.text()).match(/const VERSION = '(fm-v\d+)'/);
+        const claves = (await caches.keys()).filter((k) => /^fm-v\d+$/.test(k));
+        if (v && claves.length && !claves.includes(v[1])) { hay = true; nueva = nueva || VERSION_APP; }
+      } catch (e) { /* sin caches: se usa solo el número */ }
+    }
+    if (!hay) return;
     S.avisoVersion = true;
     const b = $('#avisoVersion');
     b.hidden = false;
-    b.textContent = `Hay una versión nueva (${m[1]}). Toca aquí para actualizar.`;
+    b.textContent = nueva && nueva !== VERSION_APP ? `Hay una versión nueva (${nueva}). Toca aquí para actualizar.` : 'Hay una actualización disponible. Toca aquí para actualizar.';
     b.onclick = () => { b.textContent = 'Actualizando…'; forzarActualizacion(); };
   } catch (e) { /* sin conexión: se revisa después */ }
 }
@@ -3765,7 +3783,7 @@ $('#btnMenu').addEventListener('click', () => {
       ${tiene('admin_catalogos') || tiene('admin_contratos') ? `<button id="mConfig" class="m-fila"><span class="m-ico m-ambar">${ico('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>')}</span><span class="t">Configuración</span>${chev}</button>` : ''}
       <div class="m-grupo">Cuenta</div>
       <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
-      ${tiene('admin_catalogos') ? `<button id="mBarra" class="m-fila"><span class="m-ico m-azul">${ico('<rect x="3" y="15" width="18" height="5" rx="2"/><path d="M7 9h10M7 5h10"/>')}</span><span class="t">Botones de la barra</span>${chev}</button>` : ''}
+      ${puedeOpcionesBarra() ? `<button id="mBarra" class="m-fila"><span class="m-ico m-azul">${ico('<rect x="3" y="15" width="18" height="5" rx="2"/><path d="M7 9h10M7 5h10"/>')}</span><span class="t">Botones de la barra</span>${chev}</button>` : ''}
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <div id="mDiag" class="hint" style="margin:8px 6px 0;white-space:pre-line"></div>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
