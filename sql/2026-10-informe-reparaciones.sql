@@ -152,7 +152,7 @@ begin
       select jsonb_build_object(
         'falla_id', f.id, 'ot', f.ot, 'orden_externa', f.orden_externa, 'tipo', f.tipo, 'codigo', f.tipo_falla,
         'descripcion_falla', cf.descripcion,
-        'llave', p.llave, 'nro_mun', p.nro_mun, 'calle', nullif(concat_ws(' ', p.calle_1, p.direccion), ''), 'poste', p.simb_poste,
+        'llave', p.llave, 'nro_mun', coalesce(to_jsonb(p.nro_mun), to_jsonb(p.nro_aut)), 'calle', nullif(concat_ws(' ', p.calle_1, p.direccion), ''), 'poste', p.simb_poste,
         'circuito', c.id,
         'puntos_afectados', case when f.tipo = 'linea' then (select count(*) from public.fallas fc where fc.circuito_origen_id = f.id) end,
         'comentario', (select fc.comentario from public.fallas_comentarios fc where fc.falla_id = f.id and fc.tipo = 'reporte' order by fc.creado_en limit 1),
