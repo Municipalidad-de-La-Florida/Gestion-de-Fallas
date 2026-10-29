@@ -2621,17 +2621,19 @@ const msgNotif = (e) => {
 const msgContrato = (e) => (/duplicate|unique|contratos_nombre/i.test(e.message) ? 'Ya existe un contrato con ese nombre.' : e.message);
 
 async function cargarUsuariosAdmin() {
-  const [us, cs, rel, ns, pf, relM] = await Promise.all([
+  const [us, cs, rel, ns, pf, relM, conex] = await Promise.all([
     select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
     select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc').catch(() => []),
     select('usuario_contratos', 'select=usuario_id,contrato_id').catch(() => []),
     select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc').catch(() => []),
     select('perfiles', 'select=clave,nombre,base_rol,sistema,orden&order=orden.asc').catch(() => []),
     select('usuario_mantenedores', 'select=usuario_id,mantenedor_id').catch(() => []),
+    select('usuarios', 'select=id,ultima_conexion').catch(() => null),   // sin el SQL de última conexión: queda en «—»
   ]);
   U.perfiles = pf || [];
   U.relM = {};
   (relM || []).forEach((r) => { (U.relM[r.usuario_id] = U.relM[r.usuario_id] || []).push(r.mantenedor_id); });
+  if (conex) { const cx = Object.fromEntries(conex.map((c) => [c.id, c.ultima_conexion || null])); us.forEach((x) => { x.ultima_conexion = cx[x.id] === undefined ? null : cx[x.id]; }); }
   U.usuarios = us; U.contratos = cs; U.rel = {};
   rel.forEach((r) => { (U.rel[r.usuario_id] = U.rel[r.usuario_id] || []).push(r.contrato_id); });
   U.notifs = ns.map((n) => ({ ...n, nFallas: (n.fallas && n.fallas[0] && n.fallas[0].count) || 0 }));
@@ -3036,7 +3038,7 @@ function tarjetaUsuarioU(u) {
   const ic = [ROLES_CON_NOTIF.includes(u.rol) && u.notificador_externo_habilitado ? '🔔' : '', ROLES_CON_FOTO.includes(u.rol) && u.foto_obligatoria ? '📷' : ''].filter(Boolean).join(' ');
   return `<button type="button" class="u-card" data-uid="${esc(u.id)}"><span class="u-ini" style="background:${colorAv(u.nombre)}">${esc(iniciales(u.nombre))}</span>
     <span class="u-mid"><span class="u-nm">${esc(u.nombre || '—')} <span class="u-rol ${ROL_CLASE[u.rol] || ''}">${esc(nombrePerfilU(u))}</span></span>
-    <span class="u-em">${esc(u.email || '—')}</span><span>${cont}${ic ? `<span class="u-ic">${ic}</span>` : ''}</span></span><span class="u-chev">›</span></button>`;
+    <span class="u-em">${esc(u.email || '—')}</span>${textoUltCon(u.ultima_conexion)}<span>${cont}${ic ? `<span class="u-ic">${ic}</span>` : ''}</span></span><span class="u-chev">›</span></button>`;
 }
 function pintarListaU() {
   const nSin = U.usuarios.filter(sinContratoU).length;
@@ -3054,12 +3056,20 @@ function pintarListaU() {
     $('#uLista').innerHTML = l2.map(tarjetaUsuarioU).join('') || '<div class="u-vacio">Sin resultados.</div>'; });
 }
 
+// Última conexión de un usuario: «hoy 14:05», «ayer 09:10» o la fecha; verde si fue en las últimas 24 h
+function textoUltCon(iso) {
+  if (iso === undefined) return '<span class="u-em">Última conexión: —</span>';
+  if (!iso) return '<span class="u-em">Nunca se ha conectado</span>';
+  const d = new Date(iso), horas = (Date.now() - d.getTime()) / 3600000;
+  const txt = d.toLocaleString('es-CL', { timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  return `<span class="u-em" style="color:${horas < 24 ? '#1f7a4d' : 'var(--tinta-2)'}">Última conexión: ${txt}</span>`;
+}
 function editarUsuarioU(id) {
   const u = U.usuarios.find((x) => x.id === id); if (!u) return;
   const orig = { nombre: u.nombre || '', perfil: u.perfil || u.rol, rol: u.rol, notif: !!u.notificador_externo_habilitado, foto: !!u.foto_obligatoria, contr: (U.rel[id] || []).slice().sort() };
   const ed = { ...orig, contr: new Set(orig.contr) };
   const estado = () => ({ nombre: ed.nombre.trim(), perfil: ed.perfil, rol: ed.rol, notif: ROLES_CON_NOTIF.includes(ed.rol) && ed.notif, foto: ROLES_CON_FOTO.includes(ed.rol) && ed.foto, contr: ROLES_CON_CONTRATO.includes(ed.rol) ? [...ed.contr].sort() : [] });
-  const h = abrirHoja(`<div class="u-sh"><span class="u-ini" style="background:${colorAv(u.nombre)};width:46px;height:46px">${esc(iniciales(u.nombre))}</span><div><div class="u-nm" style="font-size:17px">${esc(u.nombre || '—')}</div><div class="u-em">${esc(u.email || '—')}</div></div></div>
+  const h = abrirHoja(`<div class="u-sh"><span class="u-ini" style="background:${colorAv(u.nombre)};width:46px;height:46px">${esc(iniciales(u.nombre))}</span><div><div class="u-nm" style="font-size:17px">${esc(u.nombre || '—')}</div><div class="u-em">${esc(u.email || '—')}</div><div>${textoUltCon(u.ultima_conexion)}</div></div></div>
     <div class="u-lbl" style="margin-top:2px">Nombre</div><input id="eNom" class="campo" value="${esc(orig.nombre)}" maxlength="80" autocomplete="off">
     <div id="eDin"></div>
     <div id="eHerr"></div>
@@ -3082,8 +3092,7 @@ function editarUsuarioU(id) {
     const cont = $('#eHerr', h);
     if (u.rol === 'camion') { cont.innerHTML = ''; return; }
     const t = (k, tit, sub) => `<button type="button" class="u-tog ${u[k] ? 'on' : ''}" data-p="${k}" style="margin-top:8px"><span class="u-tx"><b>${tit}</b><span>${sub}</span></span><span class="u-sw ${u[k] ? 'on' : ''}"></span></button>`;
-    cont.innerHTML = `<div class="u-lbl" style="margin-top:14px">Herramientas</div>` + t('ver_cuadrillas', '🚚 Cuadrillas', 'Rendimiento de las cuadrillas por turno') + t('ver_ubicacion', '📍 Ubicación de camiones', 'Ver dónde están los camiones (permiso aparte)')
-      + (['contratista', 'contratista2', 'contratista3'].includes(u.rol) && u.puede_pasar_a_masivo !== undefined ? t('puede_pasar_a_masivo', '⇄ Pasar a masivo', 'Puede pasar una falla a Masivo (contrato Elecnor) y quitarle el camión') : '');
+    cont.innerHTML = `<div class="u-lbl" style="margin-top:14px">Herramientas</div>` + t('ver_cuadrillas', '🚚 Cuadrillas', 'Rendimiento de las cuadrillas por turno') + t('ver_ubicacion', '📍 Ubicación de camiones', 'Ver dónde están los camiones (permiso aparte)');
   };
   pintarHerr();
   $('#eHerr', h).addEventListener('click', async (ev) => {
