@@ -44,7 +44,15 @@ Deno.serve(async (req) => {
     if (!u || !u.length) return json(400, { error: "Esa dirección no es de ningún usuario del sistema" });
     if (body.ejemplo) {
       // Ejemplo con la plantilla real y datos inventados (no toca fallas)
-      const g = { nombre: u[0].nombre, fallas: [{ placa: "AV001", tipo_falla: "F01", descripcion: "Luminaria vial apagada", ot: "26-0000", orden_externa: "OS-EJEMPLO-001", fecha_falla: new Date().toISOString(), llave: 42670, lat: -33.5149624885833, lon: -70.5929835377407 }] };
+      const base = [
+        ["AV001", "F01", "Luminaria vial apagada", 42670, -33.5149624885833, -70.5929835377407],
+        ["AV002", "F01", "Luminaria vial apagada", 42666, -33.5148948546053, -70.5930859655945],
+        ["AV003", "F02", "Circuito vial apagado", 42671, -33.5148751285163, -70.5929449787721],
+        ["AV004", "F01", "Luminaria vial apagada", 42665, -33.514807580256, -70.5930283404583],
+        ["AV005", "F02", "Circuito vial apagado", 42668, -33.5147758990992, -70.5929233775798],
+      ];
+      const cant = Math.min(Math.max(Number(body.ejemplo) || 1, 1), base.length);
+      const g = { nombre: u[0].nombre, fallas: base.slice(0, cant).map((b, i) => ({ placa: b[0], tipo_falla: b[1], descripcion: b[2], ot: "26-000" + (i + 1), orden_externa: "OS-EJEMPLO-00" + (i + 1), fecha_falla: new Date(Date.now() - i * 3600000).toISOString(), llave: b[3], lat: b[4], lon: b[5] })) };
       const m = armar(g);
       try { await correo.sendMail({ from: `Alumbrado Público La Florida <${gmail}>`, to: u[0].email, subject: "[EJEMPLO] " + m.asunto, text: m.texto, html: m.html }); return json(200, { ejemplo: "enviado", a: u[0].email }); }
       catch (e) { return json(500, { ejemplo: "error", error: String(e) }); }
