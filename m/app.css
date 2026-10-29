@@ -450,20 +450,21 @@ textarea.campo{ min-height:70px; }
 #navCuaderno{ position:relative; }
 .nav-badge{ position:absolute; top:2px; left:calc(50% + 4px); min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#5b4bd5; color:#fff; font-size:11px; font-weight:700; line-height:18px; text-align:center; }
 .nav-badge[hidden]{ display:none; }
-.cq-chips{ display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 10px; }
-.cq-chip{ border:1.5px solid var(--linea); background:#fff; border-radius:18px; padding:0 12px; height:34px; font-size:13px; font-weight:600; color:var(--tinta); max-width:100%; }
-.cq-chip.sel{ background:#ebe8fb; border-color:#5b4bd5; color:#3c2fa8; }
-select.cq-chip{ padding-right:6px; }
-.cq-card{ display:block; width:100%; text-align:left; border:1px solid var(--linea); border-left:5px solid #5b4bd5; background:#fff; border-radius:12px; padding:8px 12px; margin-bottom:7px; }
-.cq-card.circuito{ border-left-color:var(--verde); }
-.cq-card:active{ background:#f4f7f5; }
-.cq-l1{ display:flex; justify-content:space-between; gap:8px; font-size:14.5px; }
-.cq-l1 b{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
-.cq-l1 span{ color:var(--tinta-2); font-size:12.5px; white-space:nowrap; }
-.cq-l2{ font-size:13.5px; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.cq-l3{ display:flex; justify-content:space-between; gap:8px; font-size:12.5px; color:var(--tinta-2); margin-top:2px; }
-.cq-l3 .ven{ color:#c62828; font-weight:700; }
+#vistaCuaderno{ overflow-y:auto; -webkit-overflow-scrolling:touch; background:var(--fondo); }
+#vistaCuaderno[hidden]{ display:none; }
+#cqItems{ padding:10px 12px 96px; display:flex; flex-direction:column; gap:10px; }
+.cq-titulo{ margin:0 0 8px; font-size:18px; }
+#vistaCuaderno .lf-fila{ display:flex; gap:8px; }
+.cq-ord{ flex:none; height:44px; border:1.5px solid #5b4bd5; background:#ebe8fb; color:#3c2fa8; border-radius:12px; padding:0 12px; font-size:13px; font-weight:700; }
+.tarjeta.cq-t{ border-left-color:#5b4bd5; }
+.tarjeta.cq-t.circuito{ border-left-color:var(--verde); }
 .cq-b3{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:14px; }
 .cq-b3 .btn{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; height:64px !important; padding:0 4px; font-size:13px !important; line-height:1.1; text-align:center; margin-top:0; }
 .cq-b3 .btn:disabled{ opacity:.45; }
 .cq-nota{ background:#ebe8fb; color:#3c2fa8; border-radius:10px; padding:9px 12px; font-size:13px; margin-top:12px; }
+
+/* Ventanas inferiores: se pueden bajar con la alita para ver mejor el mapa */
+.hoja-asa{ position:relative; touch-action:none; cursor:grab; }
+.hoja-asa::after{ content:''; position:absolute; left:-80px; right:-80px; top:-10px; bottom:-14px; }
+#hoja.bajada{ box-shadow:0 -4px 16px rgba(0,0,0,.18); }
+#velo.bajada{ background:transparent; pointer-events:none; }

@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.2.0';
+const VERSION_APP = '2.3.0';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -544,6 +544,7 @@ function ocupar(btn, fn) {
 /* ------------------------- hoja inferior ------------------------- */
 let hojaAbierta = false, hojaVolviendo = false;
 function abrirHoja(html) {
+  bajarHoja(0);
   $('#hojaContenido').innerHTML = html;
   $('#hoja').classList.remove('hoja-menu', 'hoja-form');
   $('#hoja').hidden = false;
@@ -553,11 +554,44 @@ function abrirHoja(html) {
   return $('#hojaContenido');
 }
 // Formulario en dos columnas: la confirmación queda fija abajo y solo se desplaza el listado
+/* La alita de las ventanas inferiores se puede arrastrar hacia abajo para ver mejor el mapa; arrastrándola hacia arriba (o tocándola) vuelve a su lugar */
+let hojaBajada = 0;
+function bajarHoja(dy) {
+  const hoja = $('#hoja'); if (!hoja) return 0;
+  const tope = Math.max(0, hoja.offsetHeight - 120);   // siempre queda a la vista la alita y el título
+  hojaBajada = Math.min(Math.max(0, dy), tope);
+  hoja.style.transform = hojaBajada ? `translateY(${hojaBajada}px)` : '';
+  hoja.style.animation = hojaBajada ? 'none' : '';
+  hoja.classList.toggle('bajada', hojaBajada > 8);
+  $('#velo').classList.toggle('bajada', hojaBajada > 8);
+  return hojaBajada;
+}
+{
+  const asa = $('.hoja-asa');
+  let y0 = null, base = 0, movio = false;
+  asa.addEventListener('pointerdown', (e) => { y0 = e.clientY; base = hojaBajada; movio = false; try { asa.setPointerCapture(e.pointerId); } catch (er) { /* */ } });
+  asa.addEventListener('pointermove', (e) => {
+    if (y0 == null) return;
+    const dy = e.clientY - y0;
+    if (Math.abs(dy) > 4) movio = true;
+    if (movio) bajarHoja(base + dy);
+  });
+  const fin = () => {
+    if (y0 == null) return;
+    y0 = null;
+    if (!movio) bajarHoja(hojaBajada ? 0 : Math.round($('#hoja').offsetHeight * 0.55));   // un toque alterna
+    else if (hojaBajada < 40) bajarHoja(0);
+  };
+  asa.addEventListener('pointerup', fin); asa.addEventListener('pointercancel', fin);
+}
 function abrirHojaForm(html) { const h = abrirHoja(html); $('#hoja').classList.add('hoja-form'); return h; }
 function cerrarHoja(desdePop) {
   if (!hojaAbierta) return;
   hojaAbierta = false;
+  bajarHoja(0);
   // Se había corrido el mapa para ver la falla sobre la ficha: al cerrarla vuelve a quedar en el centro
+  if (typeof quitarMarcaCuaderno === 'function') quitarMarcaCuaderno();
+  if (S.cqVolver) { S.cqVolver = false; setTimeout(() => { cambiarVista('cuaderno'); cargarCuaderno(false); }, 0); }
   const sf = S.sobreFicha; S.sobreFicha = null;
   if (sf && sf.aplicado > 1 && !sf.movido && map) map.panBy([0, -sf.aplicado], { animate: true, duration: 0.25 });
   $('#hoja').hidden = true;
@@ -2448,6 +2482,7 @@ function cambiarVista(v) {
   $('#vistaMapa').hidden = v !== 'mapa';
   $('#vistaLista').hidden = v !== 'lista';
   $('#vistaInsp').hidden = v !== 'insp';
+  $('#vistaCuaderno').hidden = v !== 'cuaderno';
   $$('.nav-btn[data-vista]').forEach((b) => b.classList.toggle('sel', b.dataset.vista === v));
   if (v === 'mapa' && map) { setTimeout(() => { map.invalidateSize(); cargarArea(); }, 50); }
   if (v === 'lista') renderLista();
@@ -3517,49 +3552,65 @@ function venceTexto(it) {
 }
 function htmlTarjetaCuad(it, i) {
   const dir = it.tipo === 'circuito' ? `Circuito ${esc(it.circuito_id ?? '')}${it.cant_lum != null ? ` · ${esc(it.cant_lum)} luminarias` : ''}` : `${esc(it.direccion || 'Sin dirección')}${it.llave != null ? ` · llave ${esc(it.llave)}` : ''}`;
-  const dist = S.pos && it.lat != null ? ` · ${fmtDist(distanciaM([S.pos.lat, S.pos.lng], [it.lat, it.lng]))}` : '';
+  const dist = S.pos && it.lat != null ? fmtDist(distanciaM([S.pos.lat, S.pos.lng], [it.lat, it.lng])) : '';
   const v = venceTexto(it);
-  return `<button type="button" class="cq-card ${it.tipo}" data-i="${i}">
-    <div class="cq-l1"><b>${esc(it.tipo_falla)} · ${esc(descCodigoCuad(it) || '')}</b><span>${esc(hace(it.anotado_en))}</span></div>
-    <div class="cq-l2">${dir}</div>
-    <div class="cq-l3"><span>${esc(nombreCorto(it.anotador))}${dist}</span>${v ? `<span class="ven">● ${v}</span>` : ''}</div></button>`;
+  return `<button type="button" class="tarjeta cq-t ${it.tipo}" data-i="${i}">
+    <div class="tarjeta-top"><b>${esc(it.tipo_falla)} · ${esc(descCodigoCuad(it) || '')}</b>${dist ? `<span class="dist">${esc(dist)}</span>` : ''}</div>
+    <div class="sub">${dir}</div>
+    <div class="sub">${esc(nombreCorto(it.anotador))} · ${esc(hace(it.anotado_en))}${v ? ` · <b style="color:#c62828">${v}</b>` : ''}</div></button>`;
 }
 let CQ_ITEMS = [];
-async function abrirListaCuaderno() {
-  const f = CQ.f;
-  try { CQ.anotadores = (await rpc('cuaderno_anotadores')) || []; } catch (e) { CQ.anotadores = []; }
-  const codigos = [...new Map([...catalogoActivo('punto'), ...catalogoActivo('circuito')].map((x) => [x.c, x])).values()];
-  const h = abrirHoja(`
-    <h2 id="cqTit">📓 Cuaderno</h2>
-    <input id="cqTxt" class="campo" placeholder="Dirección o llave…" value="${esc(f.texto)}" autocomplete="off">
-    <div class="cq-chips">
-      <button type="button" id="cqOrd" class="cq-chip sel">⇅ ${f.orden === 'desc' ? 'Más nuevas' : 'Más antiguas'}</button>
-      <select id="cqAn" class="cq-chip ${f.anotador ? 'sel' : ''}" aria-label="Quién anotó"><option value="">Anotó: todos</option>${CQ.anotadores.map((a) => `<option value="${esc(a.id)}" ${f.anotador === a.id ? 'selected' : ''}>${esc(nombreCorto(a.nombre))} (${a.n})</option>`).join('')}</select>
-      <select id="cqCod" class="cq-chip ${f.codigo ? 'sel' : ''}" aria-label="Código"><option value="">Código: todos</option>${codigos.map((x) => `<option value="${esc(x.c)}" ${f.codigo === x.c ? 'selected' : ''}>${esc(x.c)} · ${esc(x.d)}</option>`).join('')}</select>
-      <select id="cqTipo" class="cq-chip ${f.tipo ? 'sel' : ''}" aria-label="Tipo"><option value="">Punto / Circuito</option><option value="punto" ${f.tipo === 'punto' ? 'selected' : ''}>Solo puntos</option><option value="circuito" ${f.tipo === 'circuito' ? 'selected' : ''}>Solo circuitos</option></select>
-      <button type="button" id="cqVen" class="cq-chip ${f.vencen ? 'sel' : ''}">Vencen pronto</button>
-    </div>
-    <div id="cqLista"><div class="hint">Cargando…</div></div>`);
-  const cargar = async (mas) => {
-    const lista = $('#cqLista', h); if (!lista) return;
-    try {
-      if (!mas) CQ_ITEMS = [];
-      const r = await rpc('cuaderno_listar', { p_orden: f.orden, p_anotador: f.anotador || null, p_codigo: f.codigo || null, p_tipo: f.tipo || null, p_vencen: f.vencen, p_texto: f.texto || null, p_limite: 40, p_desde: CQ_ITEMS.length });
-      CQ_ITEMS = CQ_ITEMS.concat(r.items || []);
-      $('#cqTit', h).textContent = `📓 Cuaderno · ${r.total} anotación${r.total === 1 ? '' : 'es'}`;
-      lista.innerHTML = CQ_ITEMS.length ? CQ_ITEMS.map(htmlTarjetaCuad).join('') + (CQ_ITEMS.length < r.total ? '<button type="button" id="cqMas" class="btn btn-secundario" style="width:100%">Ver más</button>' : '')
-        : '<div class="hint" style="padding:14px 0">No hay anotaciones con estos filtros.</div>';
-      $$('.cq-card', lista).forEach((b) => b.addEventListener('click', () => abrirDetalleCuaderno(CQ_ITEMS[+b.dataset.i])));
-      const m = $('#cqMas', lista); if (m) m.addEventListener('click', () => cargar(true));
-    } catch (e) { lista.innerHTML = `<div class="hint" style="color:#c62828">No se pudo cargar: ${esc(e.message)}</div>`; }
-  };
+// El Cuaderno se ve como «Activas»: una vista con buscador y orden (la ficha de cada anotación se abre encima)
+function abrirListaCuaderno() {
+  S.cqVolver = false;
+  cerrarHojaSiAbierta();
+  quitarMarcaCuaderno();
+  cambiarVista('cuaderno');
+  cargarCuaderno(false);
+}
+async function cargarCuaderno(mas) {
+  const f = CQ.f, lista = $('#cqItems'); if (!lista) return;
+  $('#cqOrden').textContent = `⇅ ${f.orden === 'desc' ? 'Más nuevas' : 'Más antiguas'}`;
+  if (!mas) lista.innerHTML = '<div class="vacio">Cargando…</div>';
+  try {
+    if (!mas) CQ_ITEMS = [];
+    const r = await rpc('cuaderno_listar', { p_orden: f.orden, p_texto: f.texto || null, p_limite: 40, p_desde: CQ_ITEMS.length });
+    CQ_ITEMS = CQ_ITEMS.concat(r.items || []);
+    CQ.total = r.total != null && !f.texto ? r.total : CQ.total; pintarCuaderno();
+    $('#cqTitulo').textContent = `📓 Cuaderno · ${r.total} anotación${r.total === 1 ? '' : 'es'}`;
+    lista.innerHTML = CQ_ITEMS.length ? CQ_ITEMS.map(htmlTarjetaCuad).join('') + (CQ_ITEMS.length < r.total ? '<button type="button" id="cqMas" class="btn btn-secundario">Ver más</button>' : '')
+      : `<div class="vacio">${f.texto ? 'Ninguna anotación coincide con la búsqueda.' : 'El Cuaderno está vacío.'}</div>`;
+    $$('.tarjeta', lista).forEach((b) => b.addEventListener('click', () => abrirDetalleCuaderno(CQ_ITEMS[+b.dataset.i])));
+    const m = $('#cqMas', lista); if (m) m.addEventListener('click', () => cargarCuaderno(true));
+  } catch (e) { lista.innerHTML = `<div class="vacio" style="color:#c62828">No se pudo cargar: ${esc(e.message)}</div>`; }
+}
+{
   let t = null;
-  $('#cqTxt', h).addEventListener('input', (e) => { f.texto = e.target.value.trim(); clearTimeout(t); t = setTimeout(() => cargar(false), 300); });
-  $('#cqOrd', h).addEventListener('click', (e) => { f.orden = f.orden === 'desc' ? 'asc' : 'desc'; e.currentTarget.textContent = `⇅ ${f.orden === 'desc' ? 'Más nuevas' : 'Más antiguas'}`; cargar(false); });
-  const sel = (id, k) => $(id, h).addEventListener('change', (e) => { f[k] = e.target.value; e.target.classList.toggle('sel', !!f[k]); cargar(false); });
-  sel('#cqAn', 'anotador'); sel('#cqCod', 'codigo'); sel('#cqTipo', 'tipo');
-  $('#cqVen', h).addEventListener('click', (e) => { f.vencen = !f.vencen; e.currentTarget.classList.toggle('sel', f.vencen); cargar(false); });
-  cargar(false);
+  $('#cqBuscar').addEventListener('input', (e) => { CQ.f.texto = e.target.value.trim(); clearTimeout(t); t = setTimeout(() => cargarCuaderno(false), 300); });
+  $('#cqOrden').addEventListener('click', () => { CQ.f.orden = CQ.f.orden === 'desc' ? 'asc' : 'desc'; cargarCuaderno(false); });
+}
+// Marca anaranjada del punto o circuito de la anotación elegida (solo para ubicarla; se quita al cerrar)
+let cqMarca = null;
+function quitarMarcaCuaderno() { if (cqMarca && map) { map.removeLayer(cqMarca); } cqMarca = null; }
+function mostrarEnMapaCuaderno(it) {
+  quitarMarcaCuaderno();
+  if (!map || it.lat == null || it.lng == null) return;
+  const ll = [it.lat, it.lng];
+  if (S.vista === 'cuaderno') S.cqVolver = true;
+  if (S.vista !== 'mapa') cambiarVista('mapa');
+  if (!map.getPane('cuadPane')) { map.createPane('cuadPane'); map.getPane('cuadPane').style.zIndex = 660; map.getPane('cuadPane').style.pointerEvents = 'none'; }
+  const capas = [];
+  if (it.tipo === 'circuito' && it.geo) {
+    // todo el circuito en naranja (sin el punto central: el trazado ya lo indica)
+    capas.push(L.geoJSON(it.geo, { pane: 'cuadPane', interactive: false, style: { color: '#ff8a00', weight: 7, opacity: 0.9 }, pointToLayer: (f, p) => L.circleMarker(p, { radius: 6, color: '#fff', weight: 2, fillColor: '#ff8a00', fillOpacity: 1, pane: 'cuadPane', interactive: false }) }));
+  } else {
+    capas.push(L.circleMarker(ll, { radius: 22, weight: 3, color: '#ff8a00', fillColor: '#ff8a00', fillOpacity: 0.22, pane: 'cuadPane', interactive: false }),
+      L.circleMarker(ll, { radius: 7, weight: 2, color: '#fff', fillColor: '#ff8a00', fillOpacity: 1, pane: 'cuadPane', interactive: false }));
+  }
+  cqMarca = L.layerGroup(capas).addTo(map);
+  if (it.tipo === 'circuito' && it.geo && capas[0].getBounds && capas[0].getBounds().isValid()) map.fitBounds(capas[0].getBounds(), { animate: false, maxZoom: 18, paddingBottomRight: [20, Math.round(window.innerHeight * 0.45)], paddingTopLeft: [20, 20] });
+  else map.setView(ll, Math.max(map.getZoom(), 18), { animate: false });
+  if (!(it.tipo === 'circuito' && it.geo)) verSobreFicha(ll);
 }
 function abrirDetalleCuaderno(it) {
   if (!it) return;
@@ -3577,13 +3628,14 @@ function abrirDetalleCuaderno(it) {
     </div>
     ${puedeEliminar ? '' : '<div class="hint" style="margin-top:8px">Solo quien la anotó o un administrador puede eliminarla.</div>'}
     <div class="cq-nota">Al informar se crea la falla con la fecha y hora de ese momento, a tu nombre, y recién ahí recibe número de OS.${S.modo.tipo === 'inspeccion' ? ' Si es válida, entra a tu inspección.' : ''}</div>`);
+  mostrarEnMapaCuaderno(it);
   const inf = $('#cqInf', h);
   inf.addEventListener('click', ocupar(inf, async () => {
     inf.textContent = 'Informando…';
     let insp = null;
     if (S.modo.tipo === 'inspeccion' && S.modo.fecha) { try { insp = (await contextoReporte()).p_inspeccion_id || null; } catch (e) { insp = null; } }
     const r = await rpc('cuaderno_informar', { p_id: it.id, p_inspeccion_id: insp });
-    cerrarHoja();
+    S.cqVolver = false; cerrarHoja();
     if (r.ya_no_esta) toast('Esa anotación ya no existe (la informó o eliminó otra persona).', 'error');
     else if (r.ya_informada) toast(`Ya estaba informada · OS ${r.ot}${r.informante ? ' por ' + nombreCorto(r.informante) : ''}`, 'error');
     else toast(`Falla informada · OS ${r.ot}${r.estado === 'reiterada' ? ' (reiterada)' : ''}${r.en_inspeccion ? ' · en tu inspección' : ''}`, 'ok');
