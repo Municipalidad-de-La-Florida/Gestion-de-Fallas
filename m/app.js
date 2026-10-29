@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.3.0';
+const VERSION_APP = '2.3.2';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -910,10 +910,8 @@ function actualizarFiltrosOtrosUI() {
   grupo.hidden = !puedeFiltrarSinAsignar();
   const base = S.activas.filter((f) => !f.properties.cascada);
   const nSin = base.filter((f) => !f.properties.asignado_camion_id).length;
-  const nMas = base.filter((f) => f.properties.masivo).length;
-  const poner = (id, n) => { $(id).textContent = '(' + n + ')'; };
+  const poner = (id, n) => { const el = $(id); if (el) el.textContent = '(' + n + ')'; };
   poner('#listaSinAsignarN', nSin); poner('#listaAsignadasN', base.length - nSin);
-  poner('#listaMasivoN', nMas); poner('#listaNormalN', base.length - nMas);
   $$('#listaAsig .fchip').forEach((c) => c.classList.toggle('on', c.dataset.asig === FO.asig));
   $$('#listaSub .fchip').forEach((c) => c.classList.toggle('on', c.dataset.sub === FO.sub));
   pintarChipsCodigo(base);
@@ -2036,7 +2034,6 @@ async function abrirFalla(p, geom) {
   const puedeCerrarEsta = puedeCerrar() && !p.cascada && p.estado !== 'reparada';
   const puedeNuevaAqui = puedeReportar() && p.estado === 'reparada';
   const puedeAsignarEsta = puedeAsignar() && !p.cascada && p.estado !== 'reparada';
-  const puedePasarMasivo = tiene('pasar_a_masivo') && !p.masivo && !p.cascada && p.estado !== 'reparada';
   // Eliminar: el creador su propia falla (no reparada) dentro de 15 min desde que la ingresó; el admin cualquiera (la base lo exige igual)
   const minDesdeIngreso = p.fecha_falla_real ? (Date.now() - new Date(p.fecha_falla_real).getTime()) / 60000 : Infinity;
   const puedeEliminarEsta = !p.cascada && !!S.perfil && (tiene('falla_editar_cualquiera') || (tiene('falla_editar_propia') && p.creado_por === S.perfil.id && p.estado !== 'reparada' && minDesdeIngreso <= 15));
@@ -2062,7 +2059,6 @@ async function abrirFalla(p, geom) {
         ${puedeEditarEsta ? `<button id="bEditar" class="acc-t">${ICO_ACC.editar}<span>Editar${tiene('falla_editar_cualquiera') ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
         ${puedeNuevaAqui ? `<button id="bNueva" class="acc-t">${ICO_ACC.nueva}<span>Nueva falla<small>${p.tipo === 'linea' ? 'en este circuito' : 'en este punto'}</small></span></button>` : ''}
         ${puedeAsignarEsta ? `<button id="bAsignar" class="acc-t">${ICO_ACC.camion}<span>${p.asignado_camion_id ? 'Cambiar camión' : 'Asignar camión'}</span></button>` : ''}
-        ${puedePasarMasivo ? `<button id="bMasivo" class="acc-t" style="background:#8a949d;color:#fff">${ICO_ACC.masivo.replace('<svg', '<svg style="color:#fff"')}<span>Pasar a masivo</span></button>` : ''}
         <a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>
         ${puedeEliminarEsta ? `<button id="bEliminar" class="acc-t acc-peligro">${ICO_ACC.borrar}<span>Eliminar${tiene('falla_editar_cualquiera') ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
       </div>
@@ -2078,15 +2074,6 @@ async function abrirFalla(p, geom) {
   if (bn) bn.addEventListener('click', ocupar(bn, () => reportarNuevaSobre(p)));
   const ba = $('#bAsignar', h);
   if (ba) ba.addEventListener('click', () => formAsignar(p));
-  const bm = $('#bMasivo', h);
-  if (bm) bm.addEventListener('click', ocupar(bm, async () => {
-    const asignada = !!(p.asignado_camion_id || p.asignado_camion_nombre);
-    if (!confirm('¿Pasar esta falla a Masivo? Cambiará al contrato Elecnor y dejará de verse en tu contrato.' + (asignada ? '\n\nEstá asignada a un camión: se quitará la asignación.' : ''))) return;
-    await rpc('pasar_a_masivo', { p_falla: p.id });
-    cerrarHoja();
-    toast('Falla pasada a masivo', 'ok');
-    cargarFallas();
-  }));
   const bq = $('#bQuitarAsig', h);
   if (bq) bq.addEventListener('click', ocupar(bq, async () => {
     if (!confirm('¿Quitar la asignación de esta falla?')) return;
