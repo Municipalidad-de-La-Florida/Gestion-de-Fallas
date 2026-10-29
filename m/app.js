@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.2.1';
+const VERSION_APP = '2.2.2';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -3572,12 +3572,18 @@ function mostrarEnMapaCuaderno(it) {
   const ll = [it.lat, it.lng];
   if (S.vista !== 'mapa') cambiarVista('mapa');
   if (!map.getPane('cuadPane')) { map.createPane('cuadPane'); map.getPane('cuadPane').style.zIndex = 660; map.getPane('cuadPane').style.pointerEvents = 'none'; }
-  cqMarca = L.layerGroup([
-    L.circleMarker(ll, { radius: 22, weight: 3, color: '#ff8a00', fillColor: '#ff8a00', fillOpacity: 0.22, pane: 'cuadPane', interactive: false }),
-    L.circleMarker(ll, { radius: 7, weight: 2, color: '#fff', fillColor: '#ff8a00', fillOpacity: 1, pane: 'cuadPane', interactive: false })
-  ]).addTo(map);
-  map.setView(ll, Math.max(map.getZoom(), 18), { animate: false });
-  verSobreFicha(ll);
+  const capas = [];
+  if (it.tipo === 'circuito' && it.geo) {
+    // todo el circuito en naranja (sin el punto central: el trazado ya lo indica)
+    capas.push(L.geoJSON(it.geo, { pane: 'cuadPane', interactive: false, style: { color: '#ff8a00', weight: 7, opacity: 0.9 }, pointToLayer: (f, p) => L.circleMarker(p, { radius: 6, color: '#fff', weight: 2, fillColor: '#ff8a00', fillOpacity: 1, pane: 'cuadPane', interactive: false }) }));
+  } else {
+    capas.push(L.circleMarker(ll, { radius: 22, weight: 3, color: '#ff8a00', fillColor: '#ff8a00', fillOpacity: 0.22, pane: 'cuadPane', interactive: false }),
+      L.circleMarker(ll, { radius: 7, weight: 2, color: '#fff', fillColor: '#ff8a00', fillOpacity: 1, pane: 'cuadPane', interactive: false }));
+  }
+  cqMarca = L.layerGroup(capas).addTo(map);
+  if (it.tipo === 'circuito' && it.geo && capas[0].getBounds && capas[0].getBounds().isValid()) map.fitBounds(capas[0].getBounds(), { animate: false, maxZoom: 18, paddingBottomRight: [20, Math.round(window.innerHeight * 0.45)], paddingTopLeft: [20, 20] });
+  else map.setView(ll, Math.max(map.getZoom(), 18), { animate: false });
+  if (!(it.tipo === 'circuito' && it.geo)) verSobreFicha(ll);
 }
 function abrirDetalleCuaderno(it) {
   if (!it) return;

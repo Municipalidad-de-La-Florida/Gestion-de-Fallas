@@ -127,7 +127,8 @@ begin
            pl.llave, pl.nro_mun, nullif(btrim(concat_ws(' ', pl.calle_1, pl.direccion::text)), '') as direccion,
            ci.id as circuito_id, ci.cantidad_luminarias_cliente as cant_lum,
            coalesce(ST_Y(ST_PointOnSurface(pl.geom::geometry)), ST_Y(ST_PointOnSurface(ci.geom::geometry))) as lat,
-           coalesce(ST_X(ST_PointOnSurface(pl.geom::geometry)), ST_X(ST_PointOnSurface(ci.geom::geometry))) as lng
+           coalesce(ST_X(ST_PointOnSurface(pl.geom::geometry)), ST_X(ST_PointOnSurface(ci.geom::geometry))) as lng,
+           case when c.tipo = 'circuito' then ST_AsGeoJSON(ci.geom::geometry)::jsonb end as geo
       from cuaderno_fallas c
       left join usuarios u on u.id = c.anotado_por
       left join puntos_luminarios pl on pl.gid = c.ref_punto_gid
