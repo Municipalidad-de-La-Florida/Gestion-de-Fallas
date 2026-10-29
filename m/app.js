@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.2.0';
+const VERSION_APP = '2.2.1';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -558,6 +558,7 @@ function cerrarHoja(desdePop) {
   if (!hojaAbierta) return;
   hojaAbierta = false;
   // Se había corrido el mapa para ver la falla sobre la ficha: al cerrarla vuelve a quedar en el centro
+  if (typeof quitarMarcaCuaderno === 'function') quitarMarcaCuaderno();
   const sf = S.sobreFicha; S.sobreFicha = null;
   if (sf && sf.aplicado > 1 && !sf.movido && map) map.panBy([0, -sf.aplicado], { animate: true, duration: 0.25 });
   $('#hoja').hidden = true;
@@ -3526,6 +3527,7 @@ function htmlTarjetaCuad(it, i) {
 }
 let CQ_ITEMS = [];
 async function abrirListaCuaderno() {
+  quitarMarcaCuaderno();
   const f = CQ.f;
   try { CQ.anotadores = (await rpc('cuaderno_anotadores')) || []; } catch (e) { CQ.anotadores = []; }
   const codigos = [...new Map([...catalogoActivo('punto'), ...catalogoActivo('circuito')].map((x) => [x.c, x])).values()];
@@ -3561,6 +3563,22 @@ async function abrirListaCuaderno() {
   $('#cqVen', h).addEventListener('click', (e) => { f.vencen = !f.vencen; e.currentTarget.classList.toggle('sel', f.vencen); cargar(false); });
   cargar(false);
 }
+// Marca anaranjada del punto o circuito de la anotación elegida (solo para ubicarla; se quita al cerrar)
+let cqMarca = null;
+function quitarMarcaCuaderno() { if (cqMarca && map) { map.removeLayer(cqMarca); } cqMarca = null; }
+function mostrarEnMapaCuaderno(it) {
+  quitarMarcaCuaderno();
+  if (!map || it.lat == null || it.lng == null) return;
+  const ll = [it.lat, it.lng];
+  if (S.vista !== 'mapa') cambiarVista('mapa');
+  if (!map.getPane('cuadPane')) { map.createPane('cuadPane'); map.getPane('cuadPane').style.zIndex = 660; map.getPane('cuadPane').style.pointerEvents = 'none'; }
+  cqMarca = L.layerGroup([
+    L.circleMarker(ll, { radius: 22, weight: 3, color: '#ff8a00', fillColor: '#ff8a00', fillOpacity: 0.22, pane: 'cuadPane', interactive: false }),
+    L.circleMarker(ll, { radius: 7, weight: 2, color: '#fff', fillColor: '#ff8a00', fillOpacity: 1, pane: 'cuadPane', interactive: false })
+  ]).addTo(map);
+  map.setView(ll, Math.max(map.getZoom(), 18), { animate: false });
+  verSobreFicha(ll);
+}
 function abrirDetalleCuaderno(it) {
   if (!it) return;
   const puedeEliminar = it.anotado_por === S.perfil.id || rol() === 'admin';
@@ -3577,6 +3595,7 @@ function abrirDetalleCuaderno(it) {
     </div>
     ${puedeEliminar ? '' : '<div class="hint" style="margin-top:8px">Solo quien la anotó o un administrador puede eliminarla.</div>'}
     <div class="cq-nota">Al informar se crea la falla con la fecha y hora de ese momento, a tu nombre, y recién ahí recibe número de OS.${S.modo.tipo === 'inspeccion' ? ' Si es válida, entra a tu inspección.' : ''}</div>`);
+  mostrarEnMapaCuaderno(it);
   const inf = $('#cqInf', h);
   inf.addEventListener('click', ocupar(inf, async () => {
     inf.textContent = 'Informando…';
