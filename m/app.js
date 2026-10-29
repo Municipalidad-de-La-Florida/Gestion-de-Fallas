@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.3.1';
+const VERSION_APP = '2.3.2';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -910,10 +910,8 @@ function actualizarFiltrosOtrosUI() {
   grupo.hidden = !puedeFiltrarSinAsignar();
   const base = S.activas.filter((f) => !f.properties.cascada);
   const nSin = base.filter((f) => !f.properties.asignado_camion_id).length;
-  const nMas = base.filter((f) => f.properties.masivo).length;
-  const poner = (id, n) => { $(id).textContent = '(' + n + ')'; };
+  const poner = (id, n) => { const el = $(id); if (el) el.textContent = '(' + n + ')'; };
   poner('#listaSinAsignarN', nSin); poner('#listaAsignadasN', base.length - nSin);
-  poner('#listaMasivoN', nMas); poner('#listaNormalN', base.length - nMas);
   $$('#listaAsig .fchip').forEach((c) => c.classList.toggle('on', c.dataset.asig === FO.asig));
   $$('#listaSub .fchip').forEach((c) => c.classList.toggle('on', c.dataset.sub === FO.sub));
   pintarChipsCodigo(base);
