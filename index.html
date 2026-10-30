@@ -802,6 +802,7 @@
           <span class="tf-sep"></span>
           <div id="todasFiltroAsignacion" class="tf-pill" style="display:none;"></div>
           <div id="todasFiltroAsignador" class="tf-pill" style="display:none;"></div>
+          <div id="todasFiltroMasivo" class="tf-pill"></div>
           <div id="todasFiltroContrato" class="tf-pill" style="display:none;"></div>
           <div id="todasFiltroMantenedor" class="tf-pill" style="display:none;"></div>
           <div id="todasFiltroPeriodo" class="tf-pill"></div>
@@ -925,6 +926,14 @@
               <button type="button" class="fchip fchip-sel on" data-asig="todas">Todas</button>
               <button type="button" class="fchip fchip-sel" data-asig="sin">Sin asignar <span class="n" id="sinAsignarN"></span></button>
               <button type="button" class="fchip fchip-sel" data-asig="asignadas">Asignadas <span class="n" id="asignadasN"></span></button>
+            </div>
+          </div>
+          <div id="filtroSubcontratoGrupo">
+            <div class="lat-pt" style="margin-top:5px;">Masivo</div>
+            <div class="lat-chips" id="chipsSubcontrato">
+              <button type="button" class="fchip fchip-sel on" data-sub="todas">Todas</button>
+              <button type="button" class="fchip fchip-sel" data-sub="masivo">Masivo <span class="n" id="masivoN"></span></button>
+              <button type="button" class="fchip fchip-sel" data-sub="normal">Normal <span class="n" id="normalN"></span></button>
             </div>
           </div>
           <div id="filtroContratoGrupo" hidden>
@@ -5479,6 +5488,9 @@ function pasaFiltrosAsignacionTodas(f){
   return true;
 }
 function actualizarChipsAsignacionTodas(){
+  const contMas = document.getElementById('todasFiltroMasivo');
+  if(contMas) pintarMultiTodas(contMas, 'Masivo', [{id: 'todas', nombre: 'Todas'}, {id: 'si', nombre: 'Masivo'}, {id: 'no', nombre: 'Normal'}],
+    filtroMasivoTodasFallas, filtrarTodasFallasPorMasivo, 'Todas', {single: true, sinBuscador: true, neutro: 'todas'});
   const contAsig = document.getElementById('todasFiltroAsignacion');
   const contPor = document.getElementById('todasFiltroAsignador');
   if(!contAsig || !contPor) return;
