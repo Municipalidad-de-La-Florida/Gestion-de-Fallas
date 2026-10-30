@@ -1733,7 +1733,7 @@ function evaluarMantencion(ops, codigo, mono, lums) {
   const usos = [...new Set(filas.map((o) => o.uso_grupo))];
   if (!uso && usos.length === 1) uso = usos[0];
   const ok = distintas.filter((o) => o.estado === 'ok');
-  if (!ok.length) return { tipo: 'sin', uso };
+  if (!ok.length) return { tipo: 'sin', uso, recepcion: filas.every((o) => o.mantenedor === 'EN RECEPCION') };
   if (distintas.length === 1 || ok.length === 1) return { tipo: 'info', uso, texto: `${ok[0].contrato} · ${ok[0].mantenedor}` };
   const items = listaLuminarias(lums, uso);
   if (items.length > 1 && !poste) return { tipo: 'luminarias', uso, items };      // se elige la luminaria: de ella salen uso, contrato y mantenedor
@@ -1745,15 +1745,16 @@ function evaluarMantencion(ops, codigo, mono, lums) {
     opciones: ok.map((o) => ({ contrato_id: o.contrato_id, mantenedor_id: o.mantenedor_id, etiqueta: (mismoContrato || variosMant) ? `${o.contrato} · ${o.mantenedor}` : o.contrato })),
   };
 }
-const htmlSinMantenimiento = (que) => `<div class="aviso"><b>Sin Mantenimiento</b><br>${que} no tiene contrato de mantención. Puedes reportar igual: la falla la verá la administración / ITO.</div>`;
+// recepcion: 'Luminaria' | 'Circuito' cuando la capa lo marca «EN RECEPCION»
+const htmlSinMantenimiento = (que, recepcion) => `<div class="aviso"><b>${recepcion ? `Sin Mantenimiento - ${recepcion} en recepción` : 'Sin Mantenimiento'}</b><br>${recepcion ? `${que} está en recepción y aún no tiene contrato de mantención.` : `${que} no tiene contrato de mantención.`} Puedes reportar igual: la falla la verá la administración / ITO.</div>`;
 function htmlMantencion(ev, sel) {
   if (ev.tipo === 'info') return `<div class="mant-box">Mantiene: <b>${esc(ev.texto)}</b></div>`;
-  if (ev.tipo === 'sin') return htmlSinMantenimiento('Este punto');
+  if (ev.tipo === 'sin') return htmlSinMantenimiento('Este punto', ev.recepcion ? 'Luminaria' : null);
   if (ev.tipo === 'comentario') return '<div class="mant-box">Este punto tiene luminarias vial y peatonal con distinto mantenedor. <b>Escribe en el comentario cuál es.</b></div>';
   if (ev.tipo === 'luminarias') {
     const filas = ev.items.map((l) => `<button type="button" class="lum-op${l.key === sel ? ' sel' : ''}" data-k="${esc(l.key)}">
       <span class="lum-t">${esc(l.modelo)} - ${l.potencia == null ? 's/d' : l.potencia + ' W'} - ${esc(l.uso)}${l.n > 1 ? ' (×' + l.n + ')' : ''}</span>
-      <span class="lum-s">${l.estado === 'ok' ? `<span class="tag-ctr n" style="margin-left:0">${esc(l.contrato)}</span><span class="tag-mant">${esc(l.mantenedor)}</span>` : '<span class="tag-sinmant">Sin Mantenimiento</span>'}</span></button>`).join('');
+      <span class="lum-s">${l.estado === 'ok' ? `<span class="tag-ctr n" style="margin-left:0">${esc(l.contrato)}</span><span class="tag-mant">${esc(l.mantenedor)}</span>` : `<span class="tag-sinmant">Sin Mantenimiento${l.mantenedor === 'EN RECEPCION' ? ' - en recepción' : ''}</span>`}</span></button>`).join('');
     return `<div class="mant-box"><b>¿Qué luminaria está fallando?</b> ${ev.trasCodigo ? 'Esta falla no distingue entre vial y peatonal.' : 'Este punto tiene luminarias con distinto mantenimiento.'} Elige la que reportas.<div class="lum-lista">${filas}</div></div>`;
   }
   if (ev.tipo === 'elegir') {
@@ -1816,7 +1817,7 @@ function activarMantencionPunto(h, gid, mono, alUsos) {
 async function avisoMantencionCircuito(h, gid) {
   try {
     const e = await rpc('estado_mantencion_circuito', { p_gid: gid });
-    if (e !== 'ok') $('#fMant', h).innerHTML = htmlSinMantenimiento('Este circuito');
+    if (e !== 'ok') $('#fMant', h).innerHTML = htmlSinMantenimiento('Este circuito', e === 'recepcion' ? 'Circuito' : null);
   } catch (err) { /* sin datos: se reporta como siempre */ }
 }
 
