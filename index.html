@@ -802,6 +802,7 @@
           <span class="tf-sep"></span>
           <div id="todasFiltroAsignacion" class="tf-pill" style="display:none;"></div>
           <div id="todasFiltroAsignador" class="tf-pill" style="display:none;"></div>
+          <div id="todasFiltroMasivo" class="tf-pill"></div>
           <div id="todasFiltroContrato" class="tf-pill" style="display:none;"></div>
           <div id="todasFiltroMantenedor" class="tf-pill" style="display:none;"></div>
           <div id="todasFiltroPeriodo" class="tf-pill"></div>
@@ -925,6 +926,14 @@
               <button type="button" class="fchip fchip-sel on" data-asig="todas">Todas</button>
               <button type="button" class="fchip fchip-sel" data-asig="sin">Sin asignar <span class="n" id="sinAsignarN"></span></button>
               <button type="button" class="fchip fchip-sel" data-asig="asignadas">Asignadas <span class="n" id="asignadasN"></span></button>
+            </div>
+          </div>
+          <div id="filtroSubcontratoGrupo">
+            <div class="lat-pt" style="margin-top:5px;">Masivo</div>
+            <div class="lat-chips" id="chipsSubcontrato">
+              <button type="button" class="fchip fchip-sel on" data-sub="todas">Todas</button>
+              <button type="button" class="fchip fchip-sel" data-sub="masivo">Masivo <span class="n" id="masivoN"></span></button>
+              <button type="button" class="fchip fchip-sel" data-sub="normal">Normal <span class="n" id="normalN"></span></button>
             </div>
           </div>
           <div id="filtroContratoGrupo" hidden>
@@ -3980,7 +3989,7 @@ async function abrirPopupFalla(feat){
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
-  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${mantenedorTag(p.mantenedor_id)}${p.contrato_id ? '' : derivacionTag(p.derivacion)}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
+  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${mantenedorTag(p.mantenedor_id)}${masivoTag(p.masivo)}${p.contrato_id ? '' : derivacionTag(p.derivacion)}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
 
   // Quién puede dejar un comentario en una falla ya creada (todos menos el observador); los puntos de cascada comentan en su circuito
@@ -4323,6 +4332,7 @@ function derivacionTag(d){
 function mantenedorTag(id){
   return (id && MANTENEDORES_MAPA[id]) ? `<span class="tag-mantenedor" title="Mantenedor">${escHtml(MANTENEDORES_MAPA[id])}</span>` : '';
 }
+function masivoTag(m){ return m ? '<span class="tag-masivo" title="Falla masiva">Masivo</span>' : ''; }
 function contratoTag(id){
   return (id && CONTRATOS_MAPA[id]) ? `<span class="tag-contrato" title="Contrato">${escHtml(CONTRATOS_MAPA[id])}</span>` : '';
 }
@@ -4613,7 +4623,7 @@ function renderFallasList(){
     const lineaLlave = (buscando && f.llave != null && terminos.some(t => String(f.llave).toLowerCase().includes(t.toLowerCase())))
       ? `<div class="fi-nom" style="margin-top:1px;">Llave ${resaltarTexto(f.llave, terminos)}</div>` : '';
     return `<div class="fi fi-est-${claveColorFalla(f.estado, f.creado_en || f.fecha, null)}" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
-      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${contratoTag(f.contrato_id)}${mantenedorTag(f.mantenedor_id)}${f.contrato_id ? '' : derivacionTag(f.derivacion)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
+      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${contratoTag(f.contrato_id)}${mantenedorTag(f.mantenedor_id)}${masivoTag(f.masivo)}${f.contrato_id ? '' : derivacionTag(f.derivacion)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
       <div class="fi-nom">${escHtml(nombreFalla)}</div>
       <div class="fi-2"><span class="fi-q">${resaltarTexto(f.quien, terminos)}</span><span class="fi-oe${f.orden_externa ? '' : ' vacio'}">OE: ${f.orden_externa ? resaltarTexto(f.orden_externa, terminos) : '—'}</span><span class="fi-fh">${fechaTxt}</span></div>
       ${lineaLlave}
@@ -5478,6 +5488,9 @@ function pasaFiltrosAsignacionTodas(f){
   return true;
 }
 function actualizarChipsAsignacionTodas(){
+  const contMas = document.getElementById('todasFiltroMasivo');
+  if(contMas) pintarMultiTodas(contMas, 'Masivo', [{id: 'todas', nombre: 'Todas'}, {id: 'si', nombre: 'Masivo'}, {id: 'no', nombre: 'Normal'}],
+    filtroMasivoTodasFallas, filtrarTodasFallasPorMasivo, 'Todas', {single: true, sinBuscador: true, neutro: 'todas'});
   const contAsig = document.getElementById('todasFiltroAsignacion');
   const contPor = document.getElementById('todasFiltroAsignador');
   if(!contAsig || !contPor) return;
@@ -5837,7 +5850,7 @@ function renderTodasFallasTabla(){
       <td>${f.puntos_afectados}</td>
       <td><span class="badge ${f.estado}" ${tooltipEstado ? `title="${tooltipEstado.replace(/"/g,'&quot;')}"` : ''} style="${tooltipEstado ? 'cursor:help;' : ''}">${f.estado.replace('_',' ')}</span></td>
       <td style="white-space:nowrap;">${f.fecha_reparacion ? new Date(f.fecha_reparacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—'}</td>
-      ${CONTRATOS_ACTIVOS.length ? `<td style="font-size:11.5px; white-space:nowrap;">${(f.contrato_nombre || f.mantenedor_nombre) ? contratoTag(f.contrato_id) + mantenedorTag(f.mantenedor_id) || escHtml(f.contrato_nombre || '') : '—'}</td>` : ''}
+      ${CONTRATOS_ACTIVOS.length ? `<td style="font-size:11.5px; white-space:nowrap;">${(f.contrato_nombre || f.mantenedor_nombre) ? ((contratoTag(f.contrato_id) + mantenedorTag(f.mantenedor_id)) || escHtml(f.contrato_nombre || '')) + masivoTag(f.masivo) : (f.masivo ? masivoTag(true) : '—')}</td>` : ''}
       ${verAsignacionTodas() ? `<td style="font-size:11.5px; line-height:1.3;">${celdaAsignacionTodas(f)}</td><td style="font-size:11.5px; line-height:1.3;">${celdaRespondeTodas(f)}</td>` : ''}
       <td>${celdaFotosTodas(f.id)}</td>
       <td>${boton}</td>
