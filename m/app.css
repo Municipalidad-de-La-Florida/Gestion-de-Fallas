@@ -468,3 +468,8 @@ textarea.campo{ min-height:70px; }
 .hoja-asa::after{ content:''; position:absolute; left:-80px; right:-80px; top:-10px; bottom:-14px; }
 #hoja.bajada{ box-shadow:0 -4px 16px rgba(0,0,0,.18); }
 #velo.bajada{ background:transparent; pointer-events:none; }
+
+/* Inspecciones (Contratista 3 / admin): tarjetas compactas, botones en una sola fila */
+.insp-c3 .acciones{ flex-direction:row; gap:8px; margin-top:9px !important; }
+.insp-c3 .acciones .btn{ flex:1; min-width:0; height:40px; margin-top:0; padding:0 8px; font-size:14px; white-space:nowrap; }
+.insp-c3{ padding:10px 14px; }
