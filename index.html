@@ -12,6 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
   :root{
     --bg:#f4f6f4; --panel:#ffffff; --ink:#1c2b23; --ink-soft:#55665c; --line:#dbe2dc;
@@ -10392,7 +10393,7 @@ async function abrirInformeReparaciones(){
   };
   const lanzar = (btn, fn) => btn.onclick = async () => {
     ov.querySelectorAll('button').forEach(b => b.disabled = true);
-    try{ const r = await pedir(); if(r){ await fn(r, estado); estado('✔ Listo'); } }
+    try{ const r = await pedir(); if(r){ await fn(r, estado); estado('✔ Listo' + (r.aviso || '')); } }
     catch(e){ console.error(e); estado('No se pudo generar: ' + e.message); }
     ov.querySelectorAll('button').forEach(b => b.disabled = false);
   };
@@ -10400,7 +10401,8 @@ async function abrirInformeReparaciones(){
   lanzar(ov.querySelector('#infXls'), (r, est) => infGenerarExcel(r, est));
 }
 
-function infGenerarExcel(r, estado){
+// Versión simple (sin formato ni fotos): solo si no cargó la librería ExcelJS
+function infGenerarExcelBasico(r, estado){
   if(!window.XLSX) throw new Error('No se pudo cargar la librería de Excel. Recarga la página.');
   const wb = XLSX.utils.book_new(), dias = infDiasPeriodo(r.desde, r.hasta);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
@@ -10418,6 +10420,129 @@ function infGenerarExcel(r, estado){
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(fil), nom);
   });
   XLSX.writeFile(wb, `Informe_reparaciones_${r.desde}_${r.hasta}.xlsx`);
+}
+
+// Excel equivalente al PDF: resumen general, y por cada informe una hoja de resumen (indicadores, trabajos, días, tipos de falla) y una de detalle con fotos
+async function infGenerarExcel(r, estado){
+  if(!window.ExcelJS) return infGenerarExcelBasico(r, estado);
+  const hex = (c) => c.map(n => n.toString(16).padStart(2, '0')).join('').toUpperCase();
+  const AZUL = 'FF' + hex(INF_AZUL), NAVY = 'FF' + hex(INF_NAVY), CELESTE = 'FF' + hex(INF_CELESTE), DORADO = 'FF' + hex(INF_DORADO), GRIS = 'FF' + hex(INF_GRIS), TINTA = 'FF' + hex(INF_TINTA);
+  const borde = {style: 'thin', color: {argb: 'FFE3EAF1'}};
+  const dias = infDiasPeriodo(r.desde, r.hasta), periodo = `${infFmtDia(r.desde)} al ${infFmtDia(r.hasta)}`;
+  const quien = (currentUser && currentUser.nombre) || '';
+  const filasTotales = r.datos.reduce((a, p) => a + p.detalle.length, 0);
+  const conFotos = filasTotales <= 400;
+  const mapa = conFotos ? await infCargarMiniaturas(r.datos, estado) : {};
+  estado('Armando el Excel…');
+  const wb = new ExcelJS.Workbook(); wb.creator = 'Gestión de Fallas · La Florida'; wb.created = new Date();
+  const usados = new Set();
+  const nombreHoja = (txt) => { let base = String(txt).replace(/[\\\/\?\*\[\]:]/g, '').slice(0, 27).trim() || 'Informe', n = base, k = 2; while(usados.has(n.toLowerCase())) n = base.slice(0, 25) + ' ' + (k++); usados.add(n.toLowerCase()); return n; };
+  const banda = (ws, ultCol, titulo, sub) => {
+    ws.mergeCells(1, 1, 1, ultCol); ws.mergeCells(2, 1, 2, ultCol); ws.mergeCells(3, 1, 3, ultCol);
+    const c1 = ws.getCell(1, 1); c1.value = 'INFORME DE REPARACIONES'; c1.font = {bold: true, size: 9, color: {argb: GRIS}};
+    const c2 = ws.getCell(2, 1); c2.value = titulo; c2.font = {bold: true, size: 15, color: {argb: NAVY}};
+    const c3 = ws.getCell(3, 1); c3.value = sub; c3.font = {size: 10, color: {argb: GRIS}};
+    for(let f = 1; f <= 3; f++) for(let c = 1; c <= ultCol; c++) ws.getCell(f, c).fill = {type: 'pattern', pattern: 'solid', fgColor: {argb: CELESTE}};
+    ws.getRow(2).height = 24;
+    for(let c = 1; c <= ultCol; c++) ws.getCell(4, c).fill = {type: 'pattern', pattern: 'solid', fgColor: {argb: DORADO}};
+    ws.getRow(4).height = 4;
+  };
+  const encabezado = (fila, vals, desdeCol) => vals.forEach((v, i) => {
+    const c = fila.getCell((desdeCol || 1) + i); c.value = v; c.font = {bold: true, color: {argb: 'FFFFFFFF'}, size: 10};
+    c.fill = {type: 'pattern', pattern: 'solid', fgColor: {argb: AZUL}}; c.alignment = {vertical: 'middle', wrapText: true}; c.border = {bottom: borde};
+  });
+  const celda = (c, v, op) => { c.value = v; c.font = {size: 10, color: {argb: TINTA}, ...(op && op.font)}; c.alignment = {vertical: 'top', wrapText: true, ...(op && op.align)}; c.border = {top: borde, bottom: borde, left: borde, right: borde}; };
+  const tituloSec = (ws, fila, txt, ultCol) => {
+    const c = ws.getCell(fila, 1); c.value = txt; c.font = {bold: true, size: 11, color: {argb: NAVY}};
+    for(let k = 1; k <= ultCol; k++) ws.getCell(fila, k).border = {bottom: {style: 'medium', color: {argb: DORADO}}};
+  };
+  const barra = (n, max, ancho) => '█'.repeat(Math.max(n > 0 ? 1 : 0, Math.round(n / Math.max(1, max) * ancho)));
+
+  // ===== Resumen general (solo si hay más de un informe) =====
+  if(r.datos.length > 1){
+    const ws = wb.addWorksheet(nombreHoja('Resumen general'), {views: [{showGridLines: false}]});
+    ws.columns = [{width: 38}, {width: 18}, {width: 16}, {width: 16}];
+    banda(ws, 4, 'Resumen general', `Municipalidad de La Florida · ${periodo}`);
+    encabezado(ws.getRow(6), ['Contrato', 'Mantenedor', 'Reparaciones', 'Media diaria']);
+    r.datos.forEach((p, i) => {
+      const f = ws.getRow(7 + i);
+      celda(f.getCell(1), p.contrato); celda(f.getCell(2), p.mantenedor || '—');
+      celda(f.getCell(3), p.resumen.total, {align: {horizontal: 'right'}}); f.getCell(3).numFmt = '#,##0';
+      celda(f.getCell(4), Math.round(p.resumen.total / dias * 10) / 10, {align: {horizontal: 'right'}}); f.getCell(4).numFmt = '#,##0.0';
+    });
+  }
+
+  r.datos.forEach((p) => {
+    const R = p.resumen, base = p.mantenedor ? `${p.mantenedor} ${p.contrato_corto || ''}` : (p.contrato_corto || p.contrato);
+    const subTxt = `Municipalidad de La Florida · ${periodo}` + (r.muestra ? ` · Muestra de ${r.muestra} reparaciones (repartidas entre los informes y los días)` : ' · Todas las reparaciones');
+
+    // ----- Hoja de resumen -----
+    const ws = wb.addWorksheet(nombreHoja(base + ' Resumen'), {views: [{showGridLines: false}]});
+    ws.columns = [{width: 34}, {width: 14}, {width: 12}, {width: 34}];
+    banda(ws, 4, p.mantenedor ? `${p.contrato} · ${p.mantenedor}` : p.contrato, subTxt);
+    encabezado(ws.getRow(6), ['Indicador', 'Valor']);
+    [['Reparaciones', R.total, '#,##0'], ['Media de trabajos diarios', Math.round(R.total / dias * 10) / 10, '#,##0.0'], ['Filas del detalle (muestra)', p.detalle.length, '#,##0']].forEach((x, i) => {
+      const f = ws.getRow(7 + i); celda(f.getCell(1), x[0]); celda(f.getCell(2), x[1], {align: {horizontal: 'right'}, font: {bold: true}}); f.getCell(2).numFmt = x[2];
+    });
+    let fila = 11;
+    tituloSec(ws, fila++, 'TRABAJOS REALIZADOS', 4);
+    encabezado(ws.getRow(fila++), ['Trabajo', 'Cant.', '%', '']);
+    const totT = R.trabajos.reduce((a, t) => a + t.cant, 0) || 1, maxT = Math.max(1, ...R.trabajos.map(t => t.cant));
+    R.trabajos.forEach(t => {
+      const f = ws.getRow(fila++);
+      celda(f.getCell(1), t.trabajo); celda(f.getCell(2), t.cant, {align: {horizontal: 'right'}}); celda(f.getCell(3), t.cant / totT, {align: {horizontal: 'right'}}); f.getCell(3).numFmt = '0%';
+      celda(f.getCell(4), barra(t.cant, maxT, 28), {font: {color: {argb: DORADO}}});
+    });
+    fila++;
+    tituloSec(ws, fila++, `REPARACIONES POR DÍA  (media ${(Math.round(R.total / dias * 10) / 10).toLocaleString('es-CL')})`, 4);
+    encabezado(ws.getRow(fila++), ['Día', 'Reparaciones', '', '']);
+    const porDia = {}; R.por_dia.forEach(d => porDia[String(d.dia).slice(0, 10)] = d.cant);
+    const maxD = Math.max(1, ...R.por_dia.map(d => d.cant));
+    for(let k = 0; k < dias; k++){
+      const d = new Date(r.desde + 'T12:00:00'); d.setDate(d.getDate() + k);
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, c = porDia[iso] || 0, f = ws.getRow(fila++);
+      celda(f.getCell(1), infFmtDia(iso)); celda(f.getCell(2), c, {align: {horizontal: 'right'}}); celda(f.getCell(3), ''); celda(f.getCell(4), barra(c, maxD, 28), {font: {color: {argb: AZUL}}});
+    }
+    fila++;
+    tituloSec(ws, fila++, 'POR TIPO DE FALLA', 4);
+    encabezado(ws.getRow(fila++), ['Descripción', 'Código', 'Cant.', '']);
+    R.por_codigo.forEach(c => { const f = ws.getRow(fila++); celda(f.getCell(1), c.descripcion || ''); celda(f.getCell(2), c.codigo); celda(f.getCell(3), c.cant, {align: {horizontal: 'right'}}); celda(f.getCell(4), ''); });
+
+    // ----- Hoja de detalle -----
+    const wd = wb.addWorksheet(nombreHoja(base + ' Detalle'), {views: [{showGridLines: false}]});
+    const cols = [['N.º', 6], ['OS', 12], ['Orden externa', 14], ['Código', 8], ['Falla', 28], ['Llave', 9], ['N.º municipal', 11], ['Ubicación', 34], ['Comentario notificado', 36], ['Informada', 16], ['Informada por', 20], ['Reparada', 16], ['Trabajo realizado', 30], ['Repara', 20], ['Cuadrilla', 16]];
+    const nF = conFotos ? Math.min(3, Math.max(0, ...p.detalle.map(d => (d.fotos || []).filter(f => mapa[f]).slice(0, 3).length))) : 0;
+    for(let k = 0; k < nF; k++) cols.push([`Foto ${k + 1}`, 17]);
+    wd.columns = cols.map(c => ({width: c[1]}));
+    banda(wd, cols.length, `Detalle de las reparaciones${p.mantenedor ? ' · ' + p.mantenedor : ''}`, `${p.contrato} · ${periodo}`);
+    encabezado(wd.getRow(6), cols.map(c => c[0]));
+    wd.getRow(6).height = 22;
+    const lineas = (txt, ancho) => String(txt ?? '').split('\n').reduce((a, l) => a + Math.max(1, Math.ceil(l.length / Math.max(4, ancho * 1.05))), 0);
+    p.detalle.forEach((d, i) => {
+      const fi = 7 + i, f = wd.getRow(fi);
+      const ubic = d.tipo === 'linea' ? `Circuito ${d.circuito ?? ''} (${d.puntos_afectados ?? 0} puntos afectados)` : (d.calle || '');
+      const vals = [i + 1, d.ot || '', d.orden_externa || '', d.codigo, d.descripcion_falla || '', d.llave ?? '', d.nro_mun ?? '', ubic, d.comentario || '', infFmt(d.informada_en), d.informada_por || '', infFmt(d.reparada_en), d.trabajo || '', d.repara || '', d.cuadrilla || ''];
+      vals.forEach((v, k) => celda(f.getCell(k + 1), v, {align: k === 0 ? {horizontal: 'center'} : undefined}));
+      for(let k = 0; k < nF; k++) celda(f.getCell(16 + k), '');
+      const fotos = conFotos ? (d.fotos || []).slice(0, 3).filter(x => mapa[x]) : [];
+      const maxL = Math.max(...vals.map((v, k) => lineas(v, cols[k][1])));
+      f.height = Math.max(fotos.length ? 66 : 18, maxL * 13 + 4);
+      if(i % 2) for(let k = 1; k <= cols.length; k++) wd.getCell(fi, k).fill = {type: 'pattern', pattern: 'solid', fgColor: {argb: 'FFF3F7FB'}};
+      fotos.forEach((ruta, k) => {
+        const id = wb.addImage({base64: mapa[ruta], extension: 'jpeg'});
+        wd.addImage(id, {tl: {col: 15 + k + 0.06, row: fi - 1 + 0.06}, ext: {width: 108, height: 81}, editAs: 'oneCell'});
+      });
+    });
+    wd.views = [{state: 'frozen', ySplit: 6, showGridLines: false}];
+    wd.autoFilter = {from: {row: 6, column: 1}, to: {row: 6 + Math.max(1, p.detalle.length), column: 15}};
+    wd.getRow(wd.rowCount + 2).getCell(1).value = `Generado el ${typeof fechaGeneracionPdf === 'function' ? fechaGeneracionPdf() : ''}${quien ? ' por ' + quien : ''}`;
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  const url = URL.createObjectURL(new Blob([buf], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  const a = document.createElement('a'); a.href = url; a.download = `Informe_reparaciones_${r.desde}_${r.hasta}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+  if(!conFotos) r.aviso = ' (sin fotos: más de 400 reparaciones; usa una muestra para incluirlas)';
 }
 
 // Miniaturas: se bajan firmadas y se reducen para que el PDF pese poco
