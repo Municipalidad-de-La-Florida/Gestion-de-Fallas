@@ -6,8 +6,10 @@
   --safe-b:env(safe-area-inset-bottom,0px); --safe-t:env(safe-area-inset-top,0px);
 }
 *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html{ background:var(--verde); }
 html,body{ margin:0; height:100%; overflow:hidden; background:var(--fondo); color:var(--tinta);
   font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; color-scheme:light; overscroll-behavior:none; }
+body{ background:var(--fondo); }
 [hidden]{ display:none !important; }
 button{ font:inherit; color:inherit; cursor:pointer; }
 input,textarea,select{ font:inherit; color:inherit; }

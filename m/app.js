@@ -3736,10 +3736,29 @@ async function abrirPendienteDeAviso() {
     try { localStorage.setItem('fm_aviso_reciente', JSON.stringify({ id, t: Date.now() })); } catch (e) { /* */ }
     // Desde ya (no cuando termine de cargar la falla): sin seguimiento ni centrado automático sobre tu ubicación
     S.sinAutoSeguir = true; S.centrarAlFijar = false; detenerSeguir();
-    try { await abrirFallaPorId(id); avisoDiag('abierta'); }
-    catch (e) { avisoDiag('error', e.message); toast('No se pudo abrir la falla del aviso.', 'error'); }
+    try {
+      await abrirFallaPorId(id);
+      // Si al volver desde otra app la ficha no quedó a la vista, se reintenta una vez
+      if (!hojaAbierta) { await new Promise((r) => setTimeout(r, 900)); repararPantalla(); await abrirFallaPorId(id); }
+      avisoDiag(hojaAbierta ? 'abierta' : 'error', hojaAbierta ? '' : 'la ficha no se abrió');
+    }
+    catch (e) { S._avisoAbriendo = null; avisoDiag('error', e.message); toast('No se pudo abrir la falla del aviso.', 'error'); }
   }
 }
+// iPhone: al volver desde otra app (con la barra «◀ Instagram») el navegador puede desplazar la página o dejar el velo oscuro
+// sin ficha; se deja la pantalla en su sitio y velo y ficha siempre juntos.
+function repararPantalla() {
+  try {
+    window.scrollTo(0, 0); document.documentElement.scrollTop = 0; document.body.scrollTop = 0;
+    const hoja = $('#hoja'), velo = $('#velo');
+    if (hoja && velo) {
+      if (!hojaAbierta || hoja.hidden) { velo.hidden = true; if (!hojaAbierta) hoja.hidden = true; }
+    }
+    if (typeof map !== 'undefined' && map) map.invalidateSize();
+  } catch (e) { /* */ }
+}
+window.addEventListener('resize', repararPantalla);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', repararPantalla);
 async function textoDiagAviso() {
   const partes = [];
   try {
@@ -3961,9 +3980,9 @@ async function entrarApp() {
   clearInterval(S.timer);
   S.timer = setInterval(() => { if (!document.hidden && !hojaAbierta) cargarFallas(); }, REFRESCO_MS);
 }
-document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil) { cargarFallas(); revisarVersion(); setTimeout(recogerAvisoPendiente, 400); } });
-window.addEventListener('focus', () => setTimeout(recogerAvisoPendiente, 400));
-window.addEventListener('pageshow', () => setTimeout(recogerAvisoPendiente, 400));
+document.addEventListener('visibilitychange', () => { if (!document.hidden) repararPantalla(); if (!document.hidden && S.perfil) { cargarFallas(); revisarVersion(); setTimeout(recogerAvisoPendiente, 400); } });
+window.addEventListener('focus', () => { repararPantalla(); setTimeout(recogerAvisoPendiente, 400); });
+window.addEventListener('pageshow', () => { repararPantalla(); setTimeout(recogerAvisoPendiente, 400); });
 
 (async function iniciar() {
   if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
