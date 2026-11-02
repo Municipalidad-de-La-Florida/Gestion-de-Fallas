@@ -1,0 +1,7 @@
+-- Rendimiento de cuadrillas: una falla ya cerrada no puede aparecer «por atender» (aplicado en Supabase el 2026-11-02).
+-- Caso 26-0349: se reparó el 8-oct 16:56 y quedó asignada a la Cuadrilla N.° 1 con fecha 8-oct 23:50 (posterior al cierre).
+-- Como no había ninguna reparación posterior a la asignación, la función la dejaba «por atender» en todos los turnos.
+-- Cambio en rendimiento_cuadrillas_v2 (bloque 'filas'), nueva condición:
+--     and not (f.estado = 'reparada' and r.fecha_reparacion is null)
+-- Cuerpo completo: migración "rendimiento_no_listar_cerradas_antes_de_asignar" ya aplicada.
+-- Revisión hecha: es el único caso en toda la base (1 de 647 asignaciones vigentes).
