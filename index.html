@@ -9614,7 +9614,7 @@ async function generarPdfPeriodo(resumido){
 
 // ---------- INFORME "ESTADO ACTUAL" ----------
 // Mismo formato del informe de día o período, pero solo con las fallas activas (no reparadas) a la hora en que se genera.
-// Hoja 1: mapa de la comuna con los puntos + indicadores. Desde la hoja 2: detalle de cada falla (tabla).
+// Hoja 1: mapa de la comuna con los puntos + indicadores. Hoja 2: resumen por tipo de falla (gráfico, antigüedad y tabla).
 async function generarPdfEstadoActual(){
   const btn = document.getElementById('descargarPdfBtn');
   const textoOriginal = btn ? btn.textContent : '';
@@ -9692,36 +9692,89 @@ async function generarPdfEstadoActual(){
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.2); pdf.setTextColor(...VERDE);
     pdf.text(`Fallas activas (${total}) = Reportadas (${porColor.reportada}) + Reiteradas (${porColor.reiterada}) + Pendientes (${porColor.pendiente}) + Atrasadas (${porColor.vencida})`, margen + 4, py + 48.5);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.8); pdf.setTextColor(...gris);
-    pdf.text('Solo fallas sin reparar. El rojo es una falla fuera de plazo (reportada, reiterada o pendiente). El detalle de cada una está en las hojas siguientes.', margen + 4, py + 52.5);
+    pdf.text('Solo fallas sin reparar. El rojo es una falla fuera de plazo (reportada, reiterada o pendiente). La hoja siguiente las resume por tipo de falla.', margen + 4, py + 52.5);
     conOpacidad(0.85, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
 
-    // ---------- HOJA 2 en adelante: detalle de las fallas ----------
-    const ETQ = {reportada: 'Reportada', reiterada: 'Reiterada', pendiente: 'Pendiente', vencida: 'Atrasada'};
-    const fmtF = (v) => { if(!v) return '—'; const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {timeZone: ZONA_CHILE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}).formatToParts(new Date(v)).map(x => [x.type, x.value])); return `${p.day}-${p.month}-${p.year} ${p.hour === '24' ? '00' : p.hour}:${p.minute}`; };
-    const antig = (v) => { const h = (ahora.getTime() - new Date(v).getTime()) / 3600000; if(isNaN(h)) return '—'; return h < 48 ? `${Math.max(0, Math.round(h))} h` : `${Math.floor(h / 24)} d`; };
-    const filas = feats.slice().sort((a, b) => new Date(inf(a)) - new Date(inf(b))).map((f, i) => {
-      const p = f.properties, k = clave(f);
-      const cm = [p.contrato_id ? CONTRATOS_MAPA[p.contrato_id] : '', p.mantenedor_id ? MANTENEDORES_MAPA[p.mantenedor_id] : '', p.masivo ? '#Masivo' : ''].filter(Boolean).join(' · ') || '—';
-      const lugar = p.tipo === 'punto' ? `Llave ${p.llave ?? '—'}${p.nro_mun ? ` · N.° mun. ${p.nro_mun}` : ''}` : 'Circuito';
-      return {k, fila: [String(i + 1), p.ot || '—', p.tipo_falla || '', lugar, cm, k === 'vencida' ? `${ETQ[k]} (${p.estado})` : ETQ[k], fmtF(p.fecha_falla), antig(p.fecha_falla), String(p.puntos_afectados ?? '—'), p.asignado_camion_nombre || 'Sin asignar']};
+    // ---------- HOJA 2: resumen por tipo de falla ----------
+    const grupos = {};
+    feats.forEach(f => {
+      const p = f.properties, key = `${p.tipo}|${p.tipo_falla}`;
+      const gr = grupos[key] || (grupos[key] = {codigo: p.tipo_falla || '—', desc: descripcionCodigoFalla({tipo: p.tipo, tipo_falla: p.tipo_falla, simb_poste: p.simb_poste}) || '', n: 0, ptos: 0, c: {reportada: 0, reiterada: 0, pendiente: 0, vencida: 0}, t0: Infinity});
+      gr.n++; gr.ptos += p.puntos_afectados || 0;
+      const k = clave(f); if(gr.c[k] !== undefined) gr.c[k]++;
+      const t = new Date(p.fecha_falla).getTime(); if(!isNaN(t) && t < gr.t0) gr.t0 = t;
     });
+    const lista = Object.values(grupos).sort((a, b) => b.n - a.n || String(a.codigo).localeCompare(String(b.codigo)));
+    const fmtF = (t) => { if(!isFinite(t)) return '—'; const p = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {timeZone: ZONA_CHILE, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false}).formatToParts(new Date(t)).map(x => [x.type, x.value])); return `${p.day}-${p.month}-${p.year}`; };
+    const antig = (t) => { const h = (ahora.getTime() - t) / 3600000; if(!isFinite(h)) return '—'; return h < 48 ? `${Math.max(0, Math.round(h))} h` : `${Math.floor(h / 24)} d`; };
     const banda = () => {
       pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 24, 'F'); pdf.setFillColor(...LIMA); pdf.rect(0, 24, ancho, 1, 'F');
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(255, 255, 255); pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen, 7.5);
-      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text('Detalle de fallas activas', margen, 15.5);
-      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...LIMA); pdf.text(`Al ${ahoraTxt} · ${total} ${total === 1 ? 'falla' : 'fallas'} · ordenadas de la más antigua a la más reciente`, margen, 21);
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(17); pdf.text('Resumen por tipo de falla', margen, 15.5);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...LIMA); pdf.text(`Fallas activas al ${ahoraTxt}`, margen, 21);
     };
-    pdf.addPage();
+    pdf.addPage(); banda();
+    const tarjeta = (x, y, w, h, titulo) => {
+      pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x, y, w, h, 3, 3, 'FD');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10); pdf.setTextColor(...VERDE); pdf.text(titulo, x + 5, y + 8);
+    };
+    const anchoU = ancho - margen * 2;
+    // Gráfico de barras apiladas: una fila por tipo de falla, partida por estado (los mismos colores del mapa)
+    const MAXF = 12, filasG = lista.slice(0, MAXF), resto = lista.slice(MAXF);
+    if(resto.length) filasG.push({codigo: 'Otros', desc: `${resto.length} tipos más`, n: resto.reduce((a, r) => a + r.n, 0), c: resto.reduce((a, r) => ({reportada: a.reportada + r.c.reportada, reiterada: a.reiterada + r.c.reiterada, pendiente: a.pendiente + r.c.pendiente, vencida: a.vencida + r.c.vencida}), {reportada: 0, reiterada: 0, pendiente: 0, vencida: 0})});
+    const hFila = 7.4, yG = 31, hG = 17 + filasG.length * hFila;
+    tarjeta(margen, yG, anchoU, hG, 'Fallas activas por tipo');
+    {
+      let lx = margen + anchoU - 5;   // leyenda, alineada a la derecha
+      [['Atrasadas', 'vencida'], ['Pendientes', 'pendiente'], ['Reiteradas', 'reiterada'], ['Reportadas', 'reportada']].forEach(([t, k]) => {
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); const w = pdf.getTextWidth(t);
+        lx -= w; pdf.setTextColor(30, 40, 35); pdf.text(t, lx, yG + 7.6);
+        lx -= 3.4; pdf.setFillColor(...COLOR_EST_PDF[k]); pdf.circle(lx + 1, yG + 6.6, 1.3, 'F'); lx -= 4.2;
+      });
+    }
+    const xEt = margen + 5, xBarra = margen + 70, anchoBarra = anchoU - 70 - 14, maxN = Math.max(...filasG.map(r => r.n));
+    filasG.forEach((r, i) => {
+      const yy = yG + 14 + i * hFila;
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(...VERDE); pdf.text(String(r.codigo), xEt, yy + 3.9);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...gris);
+      let d = r.desc || ''; const wDesc = xBarra - xEt - 16;
+      while(d.length > 3 && pdf.getTextWidth(d) > wDesc) d = d.slice(0, -2).trimEnd() + '…';
+      pdf.text(d, xEt + 13, yy + 3.9);
+      let x = xBarra;
+      [['reportada', r.c.reportada], ['reiterada', r.c.reiterada], ['pendiente', r.c.pendiente], ['vencida', r.c.vencida]].forEach(([k, v]) => {
+        if(!v) return; const w = Math.max(0.8, v / maxN * anchoBarra);
+        pdf.setFillColor(...COLOR_EST_PDF[k]); pdf.rect(x, yy, w, 5.2, 'F'); x += w;
+      });
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text(String(r.n), x + 2, yy + 3.9);
+    });
+    // Antigüedad de las fallas activas (cuatro tramos)
+    const yA = yG + hG + 6;
+    const tramos = [['Menos de 24 h', 0, 24, [58, 138, 92]], ['1 a 3 días', 24, 72, [242, 183, 5]], ['3 a 7 días', 72, 168, [230, 126, 34]], ['Más de 7 días', 168, Infinity, [211, 58, 44]]];
+    const wT = (anchoU - 3 * 4) / 4;
+    tramos.forEach(([t, h0, h1, col], i) => {
+      const n = feats.filter(f => { const h = (ahora.getTime() - new Date(f.properties.fecha_falla).getTime()) / 3600000; return h >= h0 && h < h1; }).length;
+      const x = margen + i * (wT + 4);
+      pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x, yA, wT, 20, 3, 3, 'FD');
+      pdf.setFillColor(...col); pdf.rect(x + 0.2, yA + 4, 1.4, 12, 'F');
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(20); pdf.setTextColor(...col); pdf.text(String(n), x + 6, yA + 12.5);
+      pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(t, x + 6, yA + 17);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(`${total ? Math.round(n / total * 100) : 0} %`, x + wT - 4, yA + 12.5, {align: 'right'});
+    });
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text('ANTIGÜEDAD DESDE QUE SE INFORMÓ LA FALLA', margen, yA - 1.6);
+    // Tabla de apoyo con las cifras
+    const filasT = lista.map(r => [r.codigo, r.desc || '', String(r.n), String(r.ptos), String(r.c.reportada), String(r.c.reiterada), String(r.c.pendiente), String(r.c.vencida), `${fmtF(r.t0)} (${antig(r.t0)})`]);
+    const sum = (k) => lista.reduce((a, r) => a + (k === 'n' ? r.n : k === 'ptos' ? r.ptos : r.c[k]), 0);
+    filasT.push(['Total', '', String(sum('n')), String(sum('ptos')), String(sum('reportada')), String(sum('reiterada')), String(sum('pendiente')), String(sum('vencida')), '']);
     pdf.autoTable({
-      startY: 30, margin: {top: 30, left: margen, right: margen, bottom: 14},
-      styles: {fontSize: 7.4, cellPadding: {top: 1.8, bottom: 1.8, left: 1.6, right: 1.6}, textColor: [30, 40, 35], lineColor: [226, 232, 227], lineWidth: 0.1, valign: 'middle'},
-      headStyles: {fillColor: VERDE, textColor: LIMA, fontSize: 7.4, fontStyle: 'bold', lineWidth: 0},
+      startY: yA + 26, margin: {top: 30, left: margen, right: margen, bottom: 14},
+      styles: {fontSize: 7.8, cellPadding: {top: 1.9, bottom: 1.9, left: 2, right: 2}, textColor: [30, 40, 35], lineColor: [226, 232, 227], lineWidth: 0.1, valign: 'middle'},
+      headStyles: {fillColor: VERDE, textColor: LIMA, fontSize: 7.8, fontStyle: 'bold', lineWidth: 0},
       alternateRowStyles: {fillColor: [246, 249, 246]},
-      head: [['N.°', 'OS', 'Código', 'Ubicación', 'Contrato · Mantenedor', 'Estado', 'Informada', 'Antig.', 'Pts.', 'Asignada a']],
-      body: filas.map(x => x.fila),
-      columnStyles: {0: {halign: 'right', cellWidth: 8}, 1: {cellWidth: 17, fontStyle: 'bold'}, 2: {cellWidth: 12, fontStyle: 'bold'}, 4: {cellWidth: 28}, 5: {cellWidth: 22}, 6: {cellWidth: 24}, 7: {halign: 'right', cellWidth: 13}, 8: {halign: 'right', cellWidth: 10}, 9: {cellWidth: 27}},
-      didParseCell: (d) => { if(d.section === 'body' && d.column.index === 5){ d.cell.styles.textColor = COLOR_EST_PDF[filas[d.row.index].k] || [30, 40, 35]; d.cell.styles.fontStyle = 'bold'; } },
-      didDrawPage: banda
+      head: [['Código', 'Descripción', 'Fallas', 'Puntos', 'Rep.', 'Reit.', 'Pend.', 'Atras.', 'Más antigua']],
+      body: filasT,
+      columnStyles: {0: {fontStyle: 'bold', cellWidth: 15}, 2: {halign: 'right', fontStyle: 'bold', cellWidth: 13}, 3: {halign: 'right', cellWidth: 13}, 4: {halign: 'right', cellWidth: 13}, 5: {halign: 'right', cellWidth: 11}, 6: {halign: 'right', cellWidth: 11}, 7: {halign: 'right', cellWidth: 12}, 8: {cellWidth: 33}},
+      didParseCell: (d) => { if(d.section === 'body' && d.row.index === filasT.length - 1){ d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [226, 238, 228]; } },
+      didDrawPage: (d) => { if(d.pageNumber > 2) banda(); }
     });
 
     const paginas = pdf.internal.getNumberOfPages();
