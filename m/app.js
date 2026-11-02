@@ -2109,14 +2109,14 @@ async function abrirFalla(p, geom) {
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span>${p.contrato_id && CONTR[p.contrato_id] ? `<span class="tag-ctr n">${esc(CONTR[p.contrato_id].nombre)}</span>` : ''}${p.mantenedor_id && MANT[p.mantenedor_id] ? `<span class="tag-mant">${esc(MANT[p.mantenedor_id])}</span>` : ''}${p.masivo ? '<span class="tag-masivo" style="margin-left:4px">#Masivo</span>' : ''}</div>
     <dl class="kv info-card">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && tiene('asignacion_quitar') ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
+    ${(p.estado === 'pendiente' || p.estado === 'reparada') && p.pendiente_por_nombre ? `<div class="info-warn"><h3>Pendiente</h3>
+      <dl class="kv"><dt>Responde</dt><dd>${esc(p.pendiente_por_nombre)}</dd><dt>Fecha respuesta</dt><dd>${esc(fmtFecha(p.fecha_pendiente))}</dd></dl>
+      <h4>Motivo</h4><pre class="texto">${esc(p.motivo_pendiente || '')}</pre>
+    </div>` : ''}
     ${p.estado === 'reparada' ? `<div class="info-ok"><h3>Reparación</h3>
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
       ${p.descripcion_reparacion ? `<h4>Trabajo realizado</h4><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
       <div id="fotosFalla"></div>
-    </div>` : ''}
-    ${p.estado === 'pendiente' ? `<div class="info-warn"><h3>Pendiente</h3>
-      <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-      <h4>Motivo</h4><pre class="texto">${esc(p.motivo_pendiente || '')}</pre>
     </div>` : ''}
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
