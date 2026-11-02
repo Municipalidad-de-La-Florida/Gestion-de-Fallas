@@ -475,3 +475,21 @@ textarea.campo{ min-height:70px; }
 .insp-c3 .acciones{ flex-direction:row; gap:8px; margin-top:9px !important; }
 .insp-c3 .acciones .btn{ flex:1; min-width:0; height:40px; margin-top:0; padding:0 8px; font-size:14px; white-space:nowrap; }
 .insp-c3{ padding:10px 14px; }
+
+/* Filtros de fallas activas: conteo en las opciones y lista desplegable de códigos */
+.fchip-sel .n{ font-weight:500; opacity:.7; }
+.cod-btn{ width:100%; min-height:40px; display:flex; align-items:center; gap:6px; padding:4px 12px; border:1.5px solid var(--linea); border-radius:12px; background:#fff; text-align:left; font-size:14px; }
+.cod-btn[aria-expanded="true"]{ border-color:var(--verde); }
+.cod-btn .cod-fl{ margin-left:auto; color:var(--tinta-2); }
+.cod-btn .tg{ display:inline-block; background:var(--verde); color:#fff; border-radius:8px; padding:1px 8px; font-size:12px; font-weight:700; margin-right:4px; }
+.cod-pop{ margin-top:6px; border:1.5px solid var(--verde); border-radius:14px; background:#fff; overflow:hidden; }
+.cod-pop input[type=search]{ width:100%; height:42px; border:0; border-bottom:1px solid var(--linea); padding:0 12px; background:#f4f7f5; font-size:15px; outline:none; }
+.cod-lista{ max-height:260px; overflow:auto; }
+.cod-it{ display:flex; align-items:center; gap:10px; padding:9px 12px; font-size:14px; }
+.cod-it.s{ background:#f1f7f3; }
+.cod-it input{ width:20px; height:20px; accent-color:var(--verde); flex:none; }
+.cod-it b{ width:40px; flex:none; }
+.cod-it .cod-t{ flex:1; min-width:0; }
+.cod-it .n{ margin-left:auto; color:var(--tinta-2); font-size:13px; }
+.cod-pie{ display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border-top:1px solid var(--linea); background:#f8faf9; }
+.cod-listo{ border:0; border-radius:10px; background:var(--verde); color:#fff; font-weight:700; padding:8px 18px; }

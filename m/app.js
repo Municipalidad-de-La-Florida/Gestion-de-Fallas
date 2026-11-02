@@ -870,55 +870,114 @@ function abrirEmpalme(p) {
    sin importar los filtros puestos. */
 try { localStorage.removeItem('fa_sin_asignar'); localStorage.removeItem('fa_solo_masivo'); } catch (e) { /* */ }
 const puedeFiltrarSinAsignar = () => tiene('filtro_asignacion');
-const FO = { asig: 'todas', sub: 'todas', cod: new Set() };   // asig: todas | sin | asignadas · sub: todas | masivo | normal · cod: códigos de falla marcados (vacío = todos)
-const asigActiva = () => (puedeFiltrarSinAsignar() ? FO.asig : 'todas');
-const cuentaFiltrosOtros = () => (asigActiva() !== 'todas' ? 1 : 0) + (FO.sub !== 'todas' ? 1 : 0) + (FO.cod.size ? 1 : 0);
-function pasaFiltrosOtros(masivo, asignadoId, tipoFalla) {
-  const a = asigActiva();
-  if (FO.cod.size && !FO.cod.has(tipoFalla)) return false;
-  if (a === 'sin' && asignadoId) return false;
-  if (a === 'asignadas' && !asignadoId) return false;
-  if (FO.sub === 'masivo' && !masivo) return false;
-  if (FO.sub === 'normal' && masivo) return false;
+const FO = { asig: 'todas', sub: 'todas', con: 'todos', mant: 'todos', cod: new Set() };   // asig: todas | sin | asignadas · sub: todas | masivo | normal (TAG) · con/mant: todos | sin | id · cod: códigos marcados (vacío = todos)
+// Qué filtros ve cada perfil: ITO no ve Asignación, Contrato ni Mantenedor; quien trabaja por mantenedor (camiones y contratistas de
+// un mantenedor) ve Contrato; el contratista de un contrato ve Mantenedor; el admin ve ambos.
+const ROLES_CONTRATISTA = ['contratista', 'contratista2', 'contratista3'];
+const veFiltroAsig = () => puedeFiltrarSinAsignar() && rol() !== 'ito' && rol() !== 'ito2';
+const veFiltroContrato = () => rol() === 'admin' || MODO_MANT;
+const veFiltroMant = () => rol() === 'admin' || (!MODO_MANT && ROLES_CONTRATISTA.includes(rol()));
+const asigActiva = () => (veFiltroAsig() ? FO.asig : 'todas');
+const conActivo = () => (veFiltroContrato() ? FO.con : 'todos');
+const mantActivo = () => (veFiltroMant() ? FO.mant : 'todos');
+const cuentaFiltrosOtros = () => (asigActiva() !== 'todas' ? 1 : 0) + (FO.sub !== 'todas' ? 1 : 0) + (conActivo() !== 'todos' ? 1 : 0) + (mantActivo() !== 'todos' ? 1 : 0) + (FO.cod.size ? 1 : 0);
+// «omitir» deja fuera un grupo ('asig' | 'tag' | 'con' | 'mant' | 'cod') para contar cuántas fallas daría cada opción de ese grupo
+function pasaFiltrosOtros(masivo, asignadoId, tipoFalla, contratoId, mantenedorId, omitir) {
+  const a = asigActiva(), c = conActivo(), m = mantActivo();
+  if (omitir !== 'cod' && FO.cod.size && !FO.cod.has(tipoFalla)) return false;
+  if (omitir !== 'asig') { if (a === 'sin' && asignadoId) return false; if (a === 'asignadas' && !asignadoId) return false; }
+  if (omitir !== 'tag') { if (FO.sub === 'masivo' && !masivo) return false; if (FO.sub === 'normal' && masivo) return false; }
+  if (omitir !== 'con') { if (c === 'sin' && contratoId) return false; if (c !== 'todos' && c !== 'sin' && contratoId !== c) return false; }
+  if (omitir !== 'mant') { if (m === 'sin' && mantenedorId) return false; if (m !== 'todos' && m !== 'sin' && mantenedorId !== m) return false; }
   return true;
 }
-/* Filtro por código de falla (varios a la vez). Solo aparecen los códigos presentes, con su cantidad.
-   El grupo se crea aquí, así funciona aunque el teléfono tenga un index.html antiguo en caché. */
-function pintarChipsCodigo(base) {
+const refrescarFiltros = () => { actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista(); };
+/* Grupos Contrato y Mantenedor: se crean aquí (así funcionan aunque el teléfono tenga un index.html antiguo en caché) */
+function grupoFiltro(id, titulo) {
+  let g = $('#' + id);
+  if (!g) {
+    const pie = $('#filtrosListaPanel .lf-pie'); if (!pie) return null;
+    g = document.createElement('div'); g.id = id;
+    g.innerHTML = `<div class="lf-t" style="margin-top:12px">${titulo}</div><div class="lf-chips"></div>`;
+    pie.parentNode.insertBefore(g, pie);
+  }
+  return g;
+}
+function pintarGrupoChips(id, titulo, clave, ver, opciones, cuentaTodos) {
+  const g = grupoFiltro(id, titulo); if (!g) return;
+  g.hidden = !ver || !opciones.length;
+  if (g.hidden) return;
+  const chip = (v, nombre, n) => `<button type="button" class="fchip fchip-sel${FO[clave] === v ? ' on' : ''}" data-v="${esc(v)}">${esc(nombre)} <span class="n">${n}</span></button>`;
+  g.querySelector('.lf-chips').innerHTML = chip('todos', 'Todos', cuentaTodos) + opciones.map((o) => chip(o.id, o.nombre, o.n)).join('');
+  if (!g._ok) {
+    g._ok = true;
+    g.addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (!b) return; FO[clave] = b.dataset.v; refrescarFiltros(); });
+  }
+}
+/* Código de falla: lista desplegable con buscador y selección múltiple (solo los códigos presentes, con su cantidad) */
+function pintarCodigos(codigos, cuenta) {
   let g = $('#listaCodGrupo');
   if (!g) {
     const pie = $('#filtrosListaPanel .lf-pie'); if (!pie) return;
     g = document.createElement('div'); g.id = 'listaCodGrupo';
-    g.innerHTML = '<div class="lf-t" style="margin-top:12px">Código de falla</div><div class="lf-chips" id="listaCod"></div>';
+    g.innerHTML = '<div class="lf-t" style="margin-top:12px">Código de falla</div>'
+      + '<button type="button" id="listaCodBtn" class="cod-btn" aria-expanded="false"><span id="listaCodVal"></span><span class="cod-fl">▾</span></button>'
+      + '<div id="listaCodPop" class="cod-pop" hidden><input id="listaCodQ" type="search" placeholder="Buscar código o nombre…" autocomplete="off"><div id="listaCodLista" class="cod-lista"></div>'
+      + '<div class="cod-pie"><button type="button" id="listaCodBorrar" class="btn-link">Borrar</button><button type="button" id="listaCodListo" class="cod-listo">Listo</button></div></div>';
     pie.parentNode.insertBefore(g, pie);
-    g.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-cod]'); if (!b) return;
-      if (b.dataset.cod === '__todos') FO.cod.clear(); else if (FO.cod.has(b.dataset.cod)) FO.cod.delete(b.dataset.cod); else FO.cod.add(b.dataset.cod);
-      actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista();
+    $('#listaCodBtn').addEventListener('click', () => { const pop = $('#listaCodPop'); pop.hidden = !pop.hidden; $('#listaCodBtn').setAttribute('aria-expanded', String(!pop.hidden)); });
+    $('#listaCodListo').addEventListener('click', () => { $('#listaCodPop').hidden = true; $('#listaCodBtn').setAttribute('aria-expanded', 'false'); });
+    $('#listaCodBorrar').addEventListener('click', () => { FO.cod.clear(); refrescarFiltros(); });
+    $('#listaCodQ').addEventListener('input', () => pintarCodigos(g._cods, g._cuenta));
+    $('#listaCodLista').addEventListener('change', (e) => {
+      const c = e.target.dataset && e.target.dataset.cod; if (!c) return;
+      if (e.target.checked) FO.cod.add(c); else FO.cod.delete(c);
+      refrescarFiltros();
     });
   }
-  const cuenta = {};
-  base.forEach((f) => { const c = f.properties.tipo_falla; if (c) cuenta[c] = (cuenta[c] || 0) + 1; });
-  FO.cod.forEach((c) => { if (!(c in cuenta)) cuenta[c] = 0; });
-  const codigos = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a] || a.localeCompare(b));
+  g._cods = codigos; g._cuenta = cuenta;
   g.hidden = !codigos.length;
-  $('#listaCod').innerHTML = `<button type="button" class="fchip fchip-sel${FO.cod.size ? '' : ' on'}" data-cod="__todos">Todos</button>` +
-    codigos.map((c) => `<button type="button" class="fchip fchip-sel${FO.cod.has(c) ? ' on' : ''}" data-cod="${esc(c)}"><b>${esc(c)}</b> <span class="n">(${cuenta[c]})</span></button>`).join('');
+  const sel = [...FO.cod];
+  $('#listaCodVal').innerHTML = sel.length ? sel.slice(0, 4).map((c) => `<span class="tg">${esc(c)}</span>`).join('') + (sel.length > 4 ? ` <span class="hint">+${sel.length - 4}</span>` : '') : '<span class="hint">Todos los códigos</span>';
+  const q = ($('#listaCodQ').value || '').trim().toLowerCase();
+  const vis = codigos.filter((c) => !q || (c + ' ' + (DESC_CODIGO[c] || '')).toLowerCase().includes(q));
+  $('#listaCodLista').innerHTML = vis.length ? vis.map((c) => `<label class="cod-it${FO.cod.has(c) ? ' s' : ''}"><input type="checkbox" data-cod="${esc(c)}"${FO.cod.has(c) ? ' checked' : ''}><b>${esc(c)}</b><span class="cod-t">${esc(DESC_CODIGO[c] || '')}</span><span class="n">${cuenta[c]}</span></label>`).join('') : '<div class="hint" style="padding:8px">Sin resultados.</div>';
 }
 function actualizarFiltrosOtrosUI() {
   const grupo = $('#listaAsigGrupo'); if (!grupo) return;
-  grupo.hidden = !puedeFiltrarSinAsignar();
-  const base = S.activas.filter((f) => !f.properties.cascada);
-  const nSin = base.filter((f) => !f.properties.asignado_camion_id).length;
-  const poner = (id, n) => { const el = $(id); if (el) el.textContent = '(' + n + ')'; };
-  poner('#listaSinAsignarN', nSin); poner('#listaAsignadasN', base.length - nSin);
+  // Los números de cada opción son las fallas que quedarían al elegirla, con los demás filtros (y los estados) ya puestos:
+  // así las opciones de un grupo siempre suman «Todas» y calzan con lo que muestra la lista.
+  const base = S.activas.filter((f) => !f.properties.cascada && !S.estadosOff[f.properties.estado]);
+  const cuenta = (omitir, extra) => base.filter((f) => { const p = f.properties; return pasaFiltrosOtros(!!p.masivo, p.asignado_camion_id, p.tipo_falla, p.contrato_id || null, p.mantenedor_id || null, omitir) && (!extra || extra(p)); }).length;
+  const poner = (id, n) => { const el = $(id); if (el) el.textContent = n; };
+  grupo.hidden = !veFiltroAsig();
+  const nSin = cuenta('asig', (p) => !p.asignado_camion_id), nAsigTodas = cuenta('asig');
+  poner('#listaSinAsignarN', nSin); poner('#listaAsignadasN', nAsigTodas - nSin); poner('#listaAsigTodasN', nAsigTodas);
+  const nTagTodas = cuenta('tag'), nMas = cuenta('tag', (p) => !!p.masivo);
+  poner('#listaTagTodasN', nTagTodas); poner('#listaMasivoN', nMas); poner('#listaNormalN', nTagTodas - nMas);
   $$('#listaAsig .fchip').forEach((c) => c.classList.toggle('on', c.dataset.asig === FO.asig));
   $$('#listaSub .fchip').forEach((c) => c.classList.toggle('on', c.dataset.sub === FO.sub));
-  pintarChipsCodigo(base);
-  // Aviso sobre el mapa mientras haya filtros de Asignación o Subcontrato puestos
+  // Contrato (perfiles de mantenedor y admin)
+  const nomCon = Object.entries(CONTR).map(([id, c]) => ({ id, nombre: c.nombre }));
+  const opCon = nomCon.map((c) => ({ ...c, n: cuenta('con', (p) => p.contrato_id === c.id) })).filter((o) => o.n > 0 || FO.con === o.id);
+  const nSinC = cuenta('con', (p) => !p.contrato_id); if (nSinC || FO.con === 'sin') opCon.push({ id: 'sin', nombre: 'Sin contrato', n: nSinC });
+  pintarGrupoChips('listaConGrupo', 'Contrato', 'con', veFiltroContrato() && nomCon.length > 1, opCon, cuenta('con'));
+  // Mantenedor (perfiles de contrato y admin)
+  const nomMan = Object.entries(MANT).map(([id, nombre]) => ({ id, nombre }));
+  const opMan = nomMan.map((m) => ({ ...m, n: cuenta('mant', (p) => p.mantenedor_id === m.id) })).filter((o) => o.n > 0 || FO.mant === o.id).sort((x, y) => y.n - x.n);
+  const nSinM = cuenta('mant', (p) => !p.mantenedor_id); if (nSinM || FO.mant === 'sin') opMan.push({ id: 'sin', nombre: 'Sin mantenedor', n: nSinM });
+  pintarGrupoChips('listaMantGrupo', 'Mantenedor', 'mant', veFiltroMant() && nomMan.length > 0, opMan, cuenta('mant'));
+  // Código de falla
+  const cu = {};
+  base.filter((f) => { const p = f.properties; return pasaFiltrosOtros(!!p.masivo, p.asignado_camion_id, p.tipo_falla, p.contrato_id || null, p.mantenedor_id || null, 'cod'); }).forEach((f) => { const c = f.properties.tipo_falla; if (c) cu[c] = (cu[c] || 0) + 1; });
+  FO.cod.forEach((c) => { if (!(c in cu)) cu[c] = 0; });
+  pintarCodigos(Object.keys(cu).sort((a, b) => cu[b] - cu[a] || a.localeCompare(b)), cu);
+  // Aviso sobre el mapa mientras haya filtros puestos
   const partes = [];
   if (asigActiva() === 'sin') partes.push('sin asignar'); else if (asigActiva() === 'asignadas') partes.push('asignadas');
-  if (FO.sub === 'masivo') partes.push('masivo'); else if (FO.sub === 'normal') partes.push('normal');
+  if (FO.sub === 'masivo') partes.push('TAG masivo'); else if (FO.sub === 'normal') partes.push('sin TAG');
+  if (conActivo() !== 'todos') partes.push(conActivo() === 'sin' ? 'sin contrato' : ((CONTR[FO.con] || {}).nombre || 'contrato'));
+  if (mantActivo() !== 'todos') partes.push(mantActivo() === 'sin' ? 'sin mantenedor' : (MANT[FO.mant] || 'mantenedor'));
   if (FO.cod.size) partes.push([...FO.cod].join(', '));
   const b = $('#badgeSinAsignar');
   b.hidden = !partes.length;
@@ -993,6 +1052,10 @@ function dibujarFallas() {
     if (p.estado === 'reparada' && ((p.ref_punto_gid != null && activasEn.has('p' + p.ref_punto_gid)) || (p.ref_circuito_gid != null && !p.cascada && activasEn.has('c' + p.ref_circuito_gid)))) return;
     // Subcontrato: los puntos de cascada se ocultan (manda el circuito); las reparadas recientes se siguen viendo
     if (subF !== 'todas') { if (p.cascada) return; if (subF === 'masivo' ? !p.masivo : !!p.masivo) return; }
+    // Contrato y Mantenedor: igual, manda el circuito
+    const conF = conActivo(), mantF = mantActivo();
+    if (conF !== 'todos') { if (p.cascada) return; const cid = p.contrato_id || null; if (conF === 'sin' ? cid : cid !== conF) return; }
+    if (mantF !== 'todos') { if (p.cascada) return; const mid = p.mantenedor_id || null; if (mantF === 'sin' ? mid : mid !== mantF) return; }
     // Código de falla: igual que Subcontrato, manda el circuito
     if (FO.cod.size) { if (p.cascada) return; if (!FO.cod.has(p.tipo_falla)) return; }
     // Asignación: solo fallas activas (los puntos de cascada se ocultan; manda el circuito)
@@ -2390,7 +2453,7 @@ function renderLista() {
   const q = S.busqueda.trim().toLowerCase();
   actualizarFiltrosOtrosUI();
   let items = S.activas.filter((f) => !f.properties.cascada);
-  items = items.filter((f) => pasaFiltrosOtros(!!f.properties.masivo, f.properties.asignado_camion_id, f.properties.tipo_falla));
+  items = items.filter((f) => pasaFiltrosOtros(!!f.properties.masivo, f.properties.asignado_camion_id, f.properties.tipo_falla, f.properties.contrato_id || null, f.properties.mantenedor_id || null));
   const total = items.length;
   items = items.filter((f) => !S.estadosOff[f.properties.estado]);
   actualizarFiltrosListaUI();
@@ -2445,7 +2508,7 @@ function renderLista() {
 }
 $$('#listaAsig .fchip').forEach((c) => c.addEventListener('click', () => fijarFiltroOtros('asig', c.dataset.asig)));
 $$('#listaSub .fchip').forEach((c) => c.addEventListener('click', () => fijarFiltroOtros('sub', c.dataset.sub)));
-$('#badgeSinAsignar').addEventListener('click', () => { FO.asig = 'todas'; FO.sub = 'todas'; FO.cod.clear(); actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista(); });
+$('#badgeSinAsignar').addEventListener('click', () => { FO.asig = 'todas'; FO.sub = 'todas'; FO.con = 'todos'; FO.mant = 'todos'; FO.cod.clear(); actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista(); });
 $('#listaBuscar').addEventListener('input', (e) => { S.busqueda = e.target.value; renderLista(); });
 /* Panel de filtros (estado, sin asignar, masivo): afecta a la lista y al mapa */
 function cuentaFiltrosLista() { return Object.values(S.estadosOff).filter(Boolean).length + cuentaFiltrosOtros(); }
@@ -2463,7 +2526,7 @@ $$('#listaChips .fchip').forEach((b) => b.addEventListener('click', () => {
 }));
 $('#filtrosListaLimpiar').addEventListener('click', () => {
   S.estadosOff = {};
-  FO.asig = 'todas'; FO.sub = 'todas'; FO.cod.clear();
+  FO.asig = 'todas'; FO.sub = 'todas'; FO.con = 'todos'; FO.mant = 'todos'; FO.cod.clear();
   actualizarFiltrosOtrosUI(); dibujarFallas(); renderLista();
 });
 
