@@ -989,15 +989,22 @@
         </div>
         <h3>Ver estadísticas por</h3>
         <div class="toggle-row" style="margin-bottom:12px; flex-wrap:wrap;">
+          <button id="tabEstadoActual" class="active">Estado actual</button>
           <button id="tabDia" style="display:none;">Día específico</button>
-          <button id="tabPeriodo" class="active">Día o período</button>
+          <button id="tabPeriodo" style="display:none;">Día o período</button>
           <button id="tabInspecciones" style="display:none;">Inspecciones</button>
           <button id="tabAnalisis" style="display:none;">Informe Mensual</button>
+        </div>
+        <div id="selectorEstadoActual">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div class="hint" style="margin:0; flex:1;">Fallas activas en este momento (todas las que siguen sin reparar).</div>
+            <button type="button" id="estadoActualRefrescarBtn" title="Actualizar" style="height:30px; padding:0 10px; border:1.5px solid var(--line); border-radius:8px; background:#fff; font-size:12px; font-weight:600; cursor:pointer;">↻ Actualizar</button>
+          </div>
         </div>
         <div id="selectorDia" style="display:none;">
           <input type="date" id="fechaDiaEspecifico" class="popup-input" style="width:100%;">
         </div>
-        <div id="selectorPeriodo">
+        <div id="selectorPeriodo" style="display:none;">
           <div class="periodo-row" style="margin-bottom:6px;">
             <span class="periodo-lbl">Últimos</span>
             <button class="periodo-btn" data-p="semana">7 días</button>
@@ -4980,7 +4987,7 @@ function actualizarLayoutStats(){
   div.addEventListener('pointerup', soltar); div.addEventListener('pointercancel', soltar);
   div.addEventListener('dblclick', () => { poner(55); try{ localStorage.removeItem(CLAVE); }catch(e){} if(typeof map !== 'undefined' && map) map.invalidateSize(); });
 })();
-['tabDia','tabPeriodo','tabInspecciones','tabAnalisis'].forEach(id => new MutationObserver(actualizarLayoutStats).observe(document.getElementById(id), {attributes:true, attributeFilter:['class']}));
+['tabEstadoActual','tabDia','tabPeriodo','tabInspecciones','tabAnalisis'].forEach(id => new MutationObserver(actualizarLayoutStats).observe(document.getElementById(id), {attributes:true, attributeFilter:['class']}));
 function mostrarSidebarStats(){
   document.getElementById('sidebarNormal').style.display = 'none';
   document.getElementById('sidebarStats').style.display = 'flex';
@@ -4993,19 +5000,18 @@ function mostrarSidebarStats(){
   if(!tiene('estadisticas') && tiene('inspecciones_todas')){
     // Quien no tiene las estadísticas pero sí las inspecciones de todos (Contratista 3): solo ve la pestaña Inspecciones
     document.getElementById('tabPeriodo').style.display = 'none';
+    document.getElementById('tabEstadoActual').style.display = 'none';
     document.getElementById('tabInspecciones').style.display = '';
     document.getElementById('tabAnalisis').style.display = 'none';
     document.getElementById('tabInspecciones').click();
     return;
   }
-  document.getElementById('tabPeriodo').style.display = '';
+  // "Día o período" (con su informe PDF) es solo de ITO 2 y administración; todos los demás parten y se quedan en "Estado actual"
+  document.getElementById('tabPeriodo').style.display = tiene('analisis') ? '' : 'none';
+  document.getElementById('tabEstadoActual').style.display = '';
   reiniciarFiltrosEst();
   actualizarBarraFiltrosEst();
-  if(!document.getElementById('fechaInicioRango').value){
-    seleccionarPeriodoRapido('hoy');   // por defecto, el día de hoy (también carga las estadísticas)
-  } else {
-    actualizarEstadisticasYMapa();
-  }
+  document.getElementById('tabEstadoActual').click();   // por defecto, cómo está todo ahora
 }
 function ocultarSidebarStats(){
   if(document.getElementById('tabInspecciones').classList.contains('active') || document.getElementById('tabAnalisis').classList.contains('active')){
@@ -5998,6 +6004,75 @@ function mostrarCapaActivas(){
   if(!map.hasLayer(fallasLayerGroup)) map.addLayer(fallasLayerGroup);
 }
 
+// ---------- PESTAÑA "ESTADO ACTUAL" (dentro de Estadísticas): cómo están las fallas activas ahora ----------
+let estadoActualReq = 0;   // evita que una respuesta lenta pise a una más nueva
+function salirTabEstadoActual(){
+  const tab = document.getElementById('tabEstadoActual');
+  if(!tab.classList.contains('active')) return;
+  tab.classList.remove('active');
+  document.getElementById('selectorEstadoActual').style.display = 'none';
+  estadoActualReq++;
+}
+document.getElementById('tabEstadoActual').onclick = () => {
+  salirTabInspecciones();
+  salirTabAnalisis();
+  ['tabDia', 'tabPeriodo'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById('tabEstadoActual').classList.add('active');
+  ['selectorDia', 'selectorPeriodo', 'selectorInspecciones', 'selectorAnalisis'].forEach(id => { const el = document.getElementById(id); if(el) el.style.display = 'none'; });
+  document.getElementById('selectorEstadoActual').style.display = 'block';
+  document.getElementById('descargarPdfBtn').style.display = 'flex';
+  limpiarCapaPeriodo();
+  mostrarCapaActivas();   // en el mapa, las fallas activas de siempre
+  cargarEstadoActual();
+};
+document.getElementById('estadoActualRefrescarBtn').onclick = () => { try{ renderFallasOnMap(); }catch(e){} cargarEstadoActual(); };
+async function cargarEstadoActual(){
+  const content = document.getElementById('statsContent');
+  const req = ++estadoActualReq;
+  content.innerHTML = '<div class="empty-state">Cargando...</div>';
+  try{
+    await asegurarContratos();
+    const g = await db.rpc('fallas_geojson', {});
+    if(req !== estadoActualReq) return;
+    const feats = ((g && g.features) || []).filter(f => f.properties && f.properties.estado !== 'reparada' && !f.properties.cascada);
+    if(!feats.length){ content.innerHTML = '<div class="empty-state">No hay fallas activas en este momento.</div>'; return; }
+    const inf = (f) => f.properties.fecha_falla_real || f.properties.fecha_falla;
+    const clave = (f) => claveColorFalla(f.properties.estado, inf(f), f.properties.fecha_pendiente);
+    const total = feats.length, circ = feats.filter(f => f.properties.tipo === 'linea').length;
+    const puntos = feats.reduce((a, f) => a + (f.properties.puntos_afectados || 0), 0);
+    const nPend = feats.filter(f => f.properties.estado === 'pendiente').length;
+    const nVenc = feats.filter(f => clave(f) === 'vencida').length;
+    const ahora = Date.now();
+    const tramos = [['Menos de 24 h', 0, 24, '#3a8a5c'], ['1 a 3 días', 24, 72, '#f2b705'], ['3 a 7 días', 72, 168, '#e67e22'], ['Más de 7 días', 168, Infinity, '#d33a2c']].map(([t, h0, h1, col]) => [t, col, feats.filter(f => { const h = (ahora - new Date(f.properties.fecha_falla).getTime()) / 3600000; return h >= h0 && h < h1; }).length]);
+    // Por tipo de falla (los 6 más frecuentes), con la barra partida por estado
+    const grupos = {};
+    feats.forEach(f => {
+      const p = f.properties, k = `${p.tipo}|${p.tipo_falla}`;
+      const gr = grupos[k] || (grupos[k] = {codigo: p.tipo_falla || '—', desc: descripcionCodigoFalla({tipo: p.tipo, tipo_falla: p.tipo_falla, simb_poste: p.simb_poste}) || '', n: 0, c: {reportada: 0, reiterada: 0, pendiente: 0, vencida: 0}});
+      gr.n++; const c = clave(f); if(gr.c[c] !== undefined) gr.c[c]++;
+    });
+    const lista = Object.values(grupos).sort((a, b) => b.n - a.n || String(a.codigo).localeCompare(String(b.codigo)));
+    const top = lista.slice(0, 6), maxN = Math.max(...top.map(r => r.n));
+    const barras = top.map(r => `<div style="display:flex; align-items:center; gap:8px; margin:5px 0;">
+        <div style="width:118px; flex:none; font-size:11.5px; line-height:1.2;"><b>${escHtml(r.codigo)}</b> <span style="color:var(--ink-soft);">${escHtml(r.desc)}</span></div>
+        <div style="flex:1; display:flex; height:14px; min-width:0;">${[['reportada', r.c.reportada], ['reiterada', r.c.reiterada], ['pendiente', r.c.pendiente], ['vencida', r.c.vencida]].filter(x => x[1]).map(([k, v]) => `<div title="${v}" style="width:${v / maxN * 100}%; background:${colorEstado[k]};"></div>`).join('')}</div>
+        <b style="font-size:12px; width:24px; text-align:right;">${r.n}</b></div>`).join('');
+    const leyenda = [['reportada', 'Reportadas'], ['reiterada', 'Reiteradas'], ['pendiente', 'Pendientes'], ['vencida', 'Atrasadas']].map(([k, t]) => `<span style="display:inline-flex; align-items:center; gap:4px; margin-right:10px;"><i style="width:9px; height:9px; border-radius:50%; background:${colorEstado[k]}; display:inline-block;"></i>${t}</span>`).join('');
+    const hora = new Date().toLocaleTimeString('es-CL', {hour: '2-digit', minute: '2-digit', timeZone: ZONA_CHILE});
+    content.innerHTML = kpiGrid(
+      kpiHtml(total, 'Fallas activas', `${total - circ} individuales · ${circ} de circuito`),
+      kpiHtml(puntos, 'Puntos afectados', `${((puntos / TOTAL_PUNTOS_COMUNA) * 100).toFixed(2).replace('.', ',')}% de la comuna`),
+      kpiHtml(nPend, 'Pendientes', 'dejadas pendientes'),
+      kpiHtml(nVenc, 'Con atraso', 'fuera de plazo')
+    ) + `<div class="hint">Sin atender: <b>${total - nPend}</b> (reportadas y reiteradas) · actualizado a las ${hora}</div>
+      <h3 style="margin:14px 0 4px; font-size:13px;">Antigüedad</h3>
+      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr); gap:6px;">${tramos.map(([t, col, n]) => `<div class="kpi" style="padding:8px 8px 6px; border-top:3px solid ${col};"><div class="kn" style="font-size:20px; color:${col};">${n}</div><div class="kl" style="font-size:10.5px;">${t}</div></div>`).join('')}</div>
+      <h3 style="margin:14px 0 2px; font-size:13px;">Por tipo de falla</h3>
+      <div class="hint" style="margin:0 0 4px;">${leyenda}</div>${barras}${lista.length > top.length ? `<div class="hint">y ${lista.length - top.length} tipo${lista.length - top.length === 1 ? '' : 's'} más (están en el informe PDF)</div>` : ''}`;
+  }catch(e){
+    if(req === estadoActualReq) content.innerHTML = `<div class="empty-state">Error cargando el estado actual: ${escHtml(e.message)}</div>`;
+  }
+}
 document.getElementById('tabDia').onclick = () => {
   salirTabInspecciones();
   salirTabAnalisis();
@@ -6175,6 +6250,7 @@ function obtenerRangoSeleccionado(){
 }
 
 function actualizarEstadisticasYMapa(){
+  if(document.getElementById('tabEstadoActual').classList.contains('active')){ cargarEstadoActual(); return; }
   const rango = obtenerRangoSeleccionado();
   if(!rango) return;
   cargarEstadisticas(rango.inicio, rango.fin);
@@ -7117,6 +7193,13 @@ document.querySelectorAll('.ana-rango-btn').forEach(b => b.onclick = () => selec
   const el = document.getElementById(id), previo = el.onclick;
   el.onclick = function(ev){ const r = previo.call(this, ev); actualizarBarraFiltrosEst(); return r; };
 });
+// Al pasar a cualquier otra pestaña se sale de "Estado actual" (va después de que todas tengan su propio clic)
+['tabDia', 'tabPeriodo', 'tabInspecciones', 'tabAnalisis'].forEach(id => {
+  const el = document.getElementById(id), previo = el.onclick;
+  el.onclick = function(ev){ salirTabEstadoActual(); return previo ? previo.call(this, ev) : undefined; };
+});
+// "Estado actual" también actualiza qué filtros se muestran
+{ const el = document.getElementById('tabEstadoActual'), previo = el.onclick; el.onclick = function(ev){ const r = previo.call(this, ev); actualizarBarraFiltrosEst(); return r; }; }
 
 async function cargarAnalisis(){
   const content = document.getElementById('statsContent');
@@ -9565,7 +9648,7 @@ document.getElementById('descargarPdfBtn').onclick = async (e) => {
   e.stopPropagation();
   const menu = document.getElementById('menuPdfPeriodo');
   // El informe de día o período es solo de quien tiene "Análisis y PDF" (ITO 2 y administración); el resto saca el de Estado actual
-  if(!tiene('analisis')){ generarPdfEstadoActual(); return; }
+  if(!tiene('analisis') || document.getElementById('tabEstadoActual').classList.contains('active')){ generarPdfEstadoActual(); return; }
   try{ await asegurarContratos(); }catch(err){}
   const resumido = menu.querySelector('[data-resumido="1"]'), completo = menu.querySelector('[data-resumido="0"]');
   if(resumido) resumido.style.display = CONTRATOS_ACTIVOS.length ? '' : 'none';   // sin contratos, ambos informes serían iguales
