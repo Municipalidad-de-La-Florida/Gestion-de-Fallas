@@ -1178,7 +1178,7 @@ async function cargarContratosEtiqueta() {
 }
 const tagDerivacion = (p) => (p.contrato_id ? '' : p.derivacion === 'sin_mantencion' ? ' <span class="tag-sinmant">Sin mantenimiento</span>' : p.derivacion === 'pendiente' ? ' <span class="tag-pend">Pendiente</span>' : '');
 const tagMantenedor = (id) => (id && MANT[id] ? ` <span class="tag-mant">${esc(MANT[id])}</span>` : '');
-const tagMasivo = (m) => (m ? ' <span class="tag-masivo">Masivo</span>' : '');
+const tagMasivo = (m) => (m ? ' <span class="tag-masivo">#Masivo</span>' : '');
 const tagContrato = (id) => (id && CONTR[id] ? ` <span class="tag-ctr ${CONTR[id].masivo ? 'm' : 'n'}">${esc(CONTR[id].nombre)}</span>` : '');
 
 /* ---------- Suministro eléctrico (Enel): indicador + transformadores sin suministro ----------
@@ -1818,7 +1818,7 @@ function htmlMantencion(ev, sel) {
   if (ev.tipo === 'luminarias') {
     const filas = ev.items.map((l) => `<button type="button" class="lum-op${l.key === sel ? ' sel' : ''}" data-k="${esc(l.key)}">
       <span class="lum-t">${esc(l.modelo)} - ${l.potencia == null ? 's/d' : l.potencia + ' W'} - ${esc(l.uso)}${l.n > 1 ? ' (×' + l.n + ')' : ''}</span>
-      <span class="lum-s">${l.estado === 'ok' ? `<span class="tag-ctr n" style="margin-left:0">${esc(l.contrato)}</span><span class="tag-mant">${esc(l.mantenedor)}</span>${l.masivo ? '<span class="tag-masivo">Masivo</span>' : ''}` : `<span class="tag-sinmant">Sin Mantenimiento${l.mantenedor === 'EN RECEPCION' ? ' - en recepción' : ''}</span>`}</span></button>`).join('');
+      <span class="lum-s">${l.estado === 'ok' ? `<span class="tag-ctr n" style="margin-left:0">${esc(l.contrato)}</span><span class="tag-mant">${esc(l.mantenedor)}</span>${l.masivo ? '<span class="tag-masivo">#Masivo</span>' : ''}` : `<span class="tag-sinmant">Sin Mantenimiento${l.mantenedor === 'EN RECEPCION' ? ' - en recepción' : ''}</span>`}</span></button>`).join('');
     return `<div class="mant-box"><b>¿Qué luminaria está fallando?</b> ${ev.trasCodigo ? 'Esta falla no distingue entre vial y peatonal.' : 'Este punto tiene luminarias con distinto mantenimiento.'} Elige la que reportas.<div class="lum-lista">${filas}</div></div>`;
   }
   if (ev.tipo === 'elegir') {
@@ -2107,7 +2107,7 @@ async function abrirFalla(p, geom) {
   const minRestantes = Math.max(1, Math.ceil(15 - minDesdeIngreso));
   const h = abrirHoja(`
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
-    <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span>${p.contrato_id && CONTR[p.contrato_id] ? `<span class="tag-ctr n">${esc(CONTR[p.contrato_id].nombre)}</span>` : ''}${p.mantenedor_id && MANT[p.mantenedor_id] ? `<span class="tag-mant">${esc(MANT[p.mantenedor_id])}</span>` : ''}${p.masivo ? '<span class="tag-masivo" style="margin-left:4px">Masivo</span>' : ''}</div>
+    <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span>${p.contrato_id && CONTR[p.contrato_id] ? `<span class="tag-ctr n">${esc(CONTR[p.contrato_id].nombre)}</span>` : ''}${p.mantenedor_id && MANT[p.mantenedor_id] ? `<span class="tag-mant">${esc(MANT[p.mantenedor_id])}</span>` : ''}${p.masivo ? '<span class="tag-masivo" style="margin-left:4px">#Masivo</span>' : ''}</div>
     <dl class="kv info-card">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && tiene('asignacion_quitar') ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
     ${p.estado === 'reparada' ? `<div class="info-ok"><h3>Reparación</h3>
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
