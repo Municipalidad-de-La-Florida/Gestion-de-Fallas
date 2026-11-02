@@ -3939,25 +3939,26 @@ async function abrirPopupFalla(feat){
     ${infoComentarioAsignacion}
     ${infoComentariosLibres}
   `;
+  // La ficha cuenta toda la historia: Falla -> Pendiente (si se dejó pendiente alguna vez) -> Reparación (si ya se reparó)
+  const fmtFichaFecha = (v) => v ? new Date(v).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
   let infoReparacion = '';
+  if((p.estado === 'pendiente' || p.estado === 'reparada') && p.pendiente_por_nombre){
+    infoReparacion += `<div class="rp-ok rp-warn">
+      <b>Pendiente</b>
+      <div class="hint">Responde: <b>${p.pendiente_por_nombre}</b></div>
+      <div class="hint">Fecha: <b>${fmtFichaFecha(p.fecha_pendiente)}</b></div>
+      <div class="hint" style="margin-top:2px;">Motivo:</div>
+      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.motivo_pendiente || '—'}</div></div>
+    `;
+  }
   if(p.estado === 'reparada' && p.reparado_por_nombre){
-    const fechaResp = p.fecha_reparacion ? new Date(p.fecha_reparacion).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-    infoReparacion = `<div class="rp-ok">
+    infoReparacion += `<div class="rp-ok"${p.pendiente_por_nombre ? ' style="margin-top:8px;"' : ''}>
       <b>Reparación</b>
       <div class="hint">Responde: <b>${p.reparado_por_nombre}</b></div>
-      <div class="hint">Fecha: <b>${fechaResp}</b></div>
+      <div class="hint">Fecha: <b>${fmtFichaFecha(p.fecha_reparacion)}</b></div>
       <div class="hint" style="margin-top:2px;">Trabajo realizado:</div>
       <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.descripcion_reparacion || '—'}</div>
       <div class="fotos-falla" data-falla="${escHtml(p.id)}"></div></div>
-    `;
-  } else if(p.estado === 'pendiente' && p.pendiente_por_nombre){
-    const fechaResp = p.fecha_pendiente ? new Date(p.fecha_pendiente).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-    infoReparacion = `<div class="rp-ok rp-warn">
-      <b>Pendiente</b>
-      <div class="hint">Responde: <b>${p.pendiente_por_nombre}</b></div>
-      <div class="hint">Fecha: <b>${fechaResp}</b></div>
-      <div class="hint" style="margin-top:2px;">Motivo:</div>
-      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.motivo_pendiente || '—'}</div></div>
     `;
   }
   const CATALOGO_CIERRES = catalogoActivo('cierre');
