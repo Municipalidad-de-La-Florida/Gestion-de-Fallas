@@ -494,3 +494,4 @@ textarea.campo{ min-height:70px; }
 .cod-it .n{ margin-left:auto; color:var(--tinta-2); font-size:13px; }
 .cod-pie{ display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border-top:1px solid var(--linea); background:#f8faf9; }
 .cod-listo{ border:0; border-radius:10px; background:var(--verde); color:#fff; font-weight:700; padding:8px 18px; }
+.com-bloque .quien{ font-size:12px; color:var(--tinta-2); }
