@@ -152,7 +152,7 @@
   .tag-mantenedor{display:inline-block; background:#5b21b6; color:#fff; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:1px;}
   .tag-sinmant{display:inline-block; background:#eceff3; color:#4b5563; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:1px;}
   .tag-pend{display:inline-block; background:#fff0d6; color:#9a5b00; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:1px;}
-  .tag-masivo{display:inline-block; background:#7c3aed; color:#fff; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:middle;}
+  .tag-masivo{display:inline-block; background:#7c3aed; color:#fff; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:1px;}
   .chip-estado.morado:hover{border-color:#7c3aed;}
   .chip-estado.morado.activo{border-color:#7c3aed; background:#f3edff; color:#7c3aed;}
 
@@ -4340,7 +4340,7 @@ function derivacionTag(d){
 function mantenedorTag(id){
   return (id && MANTENEDORES_MAPA[id]) ? `<span class="tag-mantenedor" title="Mantenedor">${escHtml(MANTENEDORES_MAPA[id])}</span>` : '';
 }
-function masivoTag(m){ return m ? '<span class="tag-masivo" title="Falla masiva">Masivo</span>' : ''; }
+function masivoTag(m){ return m ? '<span class="tag-masivo" title="Falla masiva">#Masivo</span>' : ''; }
 function contratoTag(id){
   return (id && CONTRATOS_MAPA[id]) ? `<span class="tag-contrato" title="Contrato">${escHtml(CONTRATOS_MAPA[id])}</span>` : '';
 }
