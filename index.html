@@ -97,7 +97,8 @@
   .rp-cols textarea.popup-input{min-height:120px;}
   .rp-cols #ordenExternaInput{min-height:0 !important; height:30px; min-width:0; flex:1;}
   .rp-cols #ordenExternaInput::placeholder{font-size:11px;}
-  .rp-card{background:#f4f7f5; border:1px solid var(--line); border-radius:10px; padding:8px 10px;}
+  .rp-card{background:#fffbe6; border:1px solid #f0e2a0; border-radius:10px; padding:8px 10px;}
+  .rp-falla{background:#fffbe6; border:1px solid #f0e2a0; border-radius:8px; padding:7px 10px; margin:6px 0;}
   .rp-kv{display:grid; grid-template-columns:1fr 1fr; gap:6px 10px;}
   .rp-kv > div{font-size:10px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em;}
   .rp-kv b{display:block; font-size:12.5px; color:var(--ink); text-transform:none; letter-spacing:0; margin-top:1px;}
@@ -106,7 +107,7 @@
   .rp-sum{font-size:12px; background:#e9f3ee; border:1px solid #b9dccb; border-radius:8px; padding:7px 10px; margin:8px 0 0; color:var(--primary); flex:none;}
   .rp-sum:empty{display:none;}
   .rp-ok{background:#e9f7ee; border:1px solid #b9e2c6; border-radius:8px; padding:7px 10px; margin:8px 0;}
-  .rp-ok.rp-warn{background:#fff6df; border-color:#f0d58a;}
+  .rp-ok.rp-warn{background:#e8f3fc; border-color:#a9cdea;}
   .rp-lum{background:#f4f7f5; border:1px solid var(--line); border-radius:8px; padding:6px 9px; margin:5px 0; font-size:12px;}
   .rp-lum .tg{display:inline-block; border-radius:6px; padding:0 6px; font-size:11px; font-weight:700; margin:3px 4px 0 0; background:#e6eefb; color:#2a5db0;}
   .rp-lum .tg.m{background:#5b21b6; color:#fff;}
@@ -3867,14 +3868,14 @@ async function abrirPopupFalla(feat){
   }
   // Último comentario de asignación (el más reciente que haya dejado
   // contratista/admin al asignar o reasignar la falla a un camión).
-  let ultimoComentarioAsignacion = null;
+  let comentariosAsignacion = [];
   if(p.id){
     try{
       const filasComentario = await db.select(
         'fallas_comentarios',
-        `falla_id=eq.${p.id}&tipo=eq.asignacion&select=comentario,autor_nombre,creado_en&order=creado_en.desc&limit=1`
+        `falla_id=eq.${p.id}&tipo=eq.asignacion&select=comentario,autor_nombre,creado_en&order=creado_en.asc`
       );
-      if(filasComentario && filasComentario.length) ultimoComentarioAsignacion = filasComentario[0];
+      if(filasComentario && filasComentario.length) comentariosAsignacion = filasComentario;
     }catch(e){ console.error('No se pudo cargar el comentario de asignación:', e); }
   }
   // Comentarios agregados a la falla después de creada (sin cerrarla ni editarla)
@@ -3899,21 +3900,6 @@ async function abrirPopupFalla(feat){
   const infoComentario = p.descripcion_otro
     ? `<div class="hint" style="margin-top:4px;">Comentario:</div><div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.descripcion_otro}</div>`
     : '';
-  const infoComentarioAsignacion = ultimoComentarioAsignacion ? (() => {
-    const fechaCom = new Date(ultimoComentarioAsignacion.creado_en).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    return `
-      <div style="margin-top:6px; padding:6px 8px; background:#eef4fb; border-left:3px solid #2563a8; border-radius:4px;">
-        <div class="hint" style="margin-bottom:2px;">💬 Comentario de Asignación — <b>${ultimoComentarioAsignacion.autor_nombre || '—'}</b> · ${fechaCom}</div>
-        <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${ultimoComentarioAsignacion.comentario}</div>
-      </div>
-    `;
-  })() : '';
-  const infoComentariosLibres = comentariosLibres.map(c => {
-    const f = new Date(c.creado_en).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    return `<div style="margin-top:6px; padding:6px 8px; background:#f4f7f4; border-left:3px solid var(--primary); border-radius:4px;">
-      <div class="hint" style="margin-bottom:2px;">💬 <b>${escHtml(c.autor_nombre || '—')}</b> · ${f}</div>
-      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${escHtml(c.comentario)}</div></div>`;
-  }).join('');
   const infoLlaveMun = p.tipo === 'punto'
     ? `<div class="hint" style="margin-top:6px;">N.° de Llave: <b>${escHtml(p.llave ?? '—')}</b> · N.° Municipal: <b>${escHtml(p.nro_mun ?? '—')}</b></div>`
     : '';
@@ -3935,31 +3921,35 @@ async function abrirPopupFalla(feat){
     ${p.asignado_camion_nombre ? `<div class="hint">Asignado por: <b>${p.asignado_por_nombre || '—'}</b>${fechaAsignacionCorta ? ` · ${fechaAsignacionCorta}` : ''}</div>` : ''}
     ${lineaAsignadoA}
     ${infoComentario}
-    ${infoComentarioAsignacion}
-    ${infoComentariosLibres}
   `;
   // La ficha cuenta toda la historia: Falla -> Pendiente (si se dejó pendiente alguna vez) -> Reparación (si ya se reparó)
   const fmtFichaFecha = (v) => v ? new Date(v).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
-  let infoReparacion = '';
+  const bloqueComentario = (c, asig) => `<div style="margin:8px 0; padding:6px 8px; background:${asig ? '#eef4fb' : '#f4f7f4'}; border-left:3px solid ${asig ? '#2563a8' : 'var(--primary)'}; border-radius:4px;">
+      <div class="hint" style="margin-bottom:2px;">💬 ${asig ? 'Comentario de Asignación — ' : ''}<b>${escHtml(c.autor_nombre || '—')}</b> · ${fmtFichaFecha(c.creado_en)}</div>
+      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${escHtml(c.comentario)}</div></div>`;
+  const lineaTiempo = [];
   if((p.estado === 'pendiente' || p.estado === 'reparada') && p.pendiente_por_nombre){
-    infoReparacion += `<div class="rp-ok rp-warn">
+    lineaTiempo.push({ t: p.fecha_pendiente, html: `<div class="rp-ok rp-warn">
       <b>Pendiente</b>
       <div class="hint">Responde: <b>${p.pendiente_por_nombre}</b></div>
       <div class="hint">Fecha: <b>${fmtFichaFecha(p.fecha_pendiente)}</b></div>
       <div class="hint" style="margin-top:2px;">Motivo:</div>
-      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.motivo_pendiente || '—'}</div></div>
-    `;
+      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.motivo_pendiente || '—'}</div></div>` });
   }
+  comentariosAsignacion.forEach(c => lineaTiempo.push({ t: c.creado_en, html: bloqueComentario(c, true) }));
+  comentariosLibres.forEach(c => lineaTiempo.push({ t: c.creado_en, html: bloqueComentario(c, false) }));
   if(p.estado === 'reparada' && p.reparado_por_nombre){
-    infoReparacion += `<div class="rp-ok"${p.pendiente_por_nombre ? ' style="margin-top:8px;"' : ''}>
+    lineaTiempo.push({ t: p.fecha_reparacion, html: `<div class="rp-ok">
       <b>Reparación</b>
       <div class="hint">Responde: <b>${p.reparado_por_nombre}</b></div>
       <div class="hint">Fecha: <b>${fmtFichaFecha(p.fecha_reparacion)}</b></div>
       <div class="hint" style="margin-top:2px;">Trabajo realizado:</div>
       <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.descripcion_reparacion || '—'}</div>
-      <div class="fotos-falla" data-falla="${escHtml(p.id)}"></div></div>
-    `;
+      <div class="fotos-falla" data-falla="${escHtml(p.id)}"></div></div>` });
   }
+  // Cronología: todo en el orden en que ocurrió (pendiente, comentarios, reparación)
+  lineaTiempo.sort((a, b) => new Date(a.t || 0) - new Date(b.t || 0));
+  const infoReparacion = lineaTiempo.map(e => e.html).join('');
   const CATALOGO_CIERRES = catalogoActivo('cierre');
 
 // Botón "Eliminar": admin puede eliminar cualquiera en cualquier momento;
@@ -4022,8 +4012,6 @@ async function abrirPopupFalla(feat){
         ${lineaAsignadoA}
         ${infoCardinalidad}
         ${infoComentario}
-        ${infoComentarioAsignacion}
-        ${infoComentariosLibres}
       </div>`;
     const columnaIzquierda = `
       ${tarjetaDatos}
@@ -4054,7 +4042,7 @@ async function abrirPopupFalla(feat){
     contenidoPanel = `
       ${tituloConEliminar}
       ${infoCardinalidad}
-      ${infoGeneral}
+      <div class="rp-falla">${infoGeneral}</div>
       ${infoReparacion}
       ${asignarCamionHtml}
       ${puedeComentar ? `<div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--line);">
