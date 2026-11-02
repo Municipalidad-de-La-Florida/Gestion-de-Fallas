@@ -2105,19 +2105,31 @@ async function abrirFalla(p, geom) {
   const puedeEliminarEsta = !p.cascada && !!S.perfil && (tiene('falla_editar_cualquiera') || (tiene('falla_editar_propia') && p.creado_por === S.perfil.id && p.estado !== 'reparada' && minDesdeIngreso <= 15));
   const puedeEditarEsta = puedeEliminarEsta && p.estado !== 'reparada';
   const minRestantes = Math.max(1, Math.ceil(15 - minDesdeIngreso));
+  // Cronología de la ficha: pendiente, comentarios y reparación en el orden en que ocurrieron
+  let comsFicha = [];
+  try { comsFicha = await Promise.race([select('fallas_comentarios', `falla_id=eq.${p.id}&select=tipo,comentario,autor_nombre,creado_en&order=creado_en.asc`), new Promise((r) => setTimeout(() => r([]), 4000))]) || []; } catch (e) { /* sin comentarios */ }
+  const evFicha = [];
+  if ((p.estado === 'pendiente' || p.estado === 'reparada') && p.pendiente_por_nombre) {
+    evFicha.push({ t: p.fecha_pendiente, html: `<div class="info-warn"><h3>Pendiente</h3>
+      <dl class="kv"><dt>Responde</dt><dd>${esc(p.pendiente_por_nombre)}</dd><dt>Fecha respuesta</dt><dd>${esc(fmtFecha(p.fecha_pendiente))}</dd></dl>
+      <h4>Motivo</h4><pre class="texto">${esc(p.motivo_pendiente || '')}</pre>
+    </div>` });
+  }
+  comsFicha.forEach((r) => evFicha.push({ t: r.creado_en, html: `<div class="com-bloque t-${esc(r.tipo)}"><div class="quien">💬 ${r.tipo === 'asignacion' ? 'Comentario de asignación' : 'Comentario'} · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre></div>` }));
+  if (p.estado === 'reparada') {
+    evFicha.push({ t: p.fecha_reparacion, html: `<div class="info-ok"><h3>Reparación</h3>
+      <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
+      ${p.descripcion_reparacion ? `<h4>Trabajo realizado</h4><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
+      <div id="fotosFalla"></div>
+    </div>` });
+  }
+  evFicha.sort((a, b) => new Date(a.t || 0) - new Date(b.t || 0));
+  const lineaFicha = evFicha.map((e) => e.html).join('');
   const h = abrirHoja(`
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span>${p.contrato_id && CONTR[p.contrato_id] ? `<span class="tag-ctr n">${esc(CONTR[p.contrato_id].nombre)}</span>` : ''}${p.mantenedor_id && MANT[p.mantenedor_id] ? `<span class="tag-mant">${esc(MANT[p.mantenedor_id])}</span>` : ''}${p.masivo ? '<span class="tag-masivo" style="margin-left:4px">#Masivo</span>' : ''}</div>
     <dl class="kv info-card">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && tiene('asignacion_quitar') ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
-    ${(p.estado === 'pendiente' || p.estado === 'reparada') && p.pendiente_por_nombre ? `<div class="info-warn"><h3>Pendiente</h3>
-      <dl class="kv"><dt>Responde</dt><dd>${esc(p.pendiente_por_nombre)}</dd><dt>Fecha respuesta</dt><dd>${esc(fmtFecha(p.fecha_pendiente))}</dd></dl>
-      <h4>Motivo</h4><pre class="texto">${esc(p.motivo_pendiente || '')}</pre>
-    </div>` : ''}
-    ${p.estado === 'reparada' ? `<div class="info-ok"><h3>Reparación</h3>
-      <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-      ${p.descripcion_reparacion ? `<h4>Trabajo realizado</h4><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
-      <div id="fotosFalla"></div>
-    </div>` : ''}
+    ${lineaFicha}
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
       ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.ok}Registrar reparación</button>` : ''}
@@ -2129,8 +2141,7 @@ async function abrirFalla(p, geom) {
         ${puedeEliminarEsta ? `<button id="bEliminar" class="acc-t acc-peligro">${ICO_ACC.borrar}<span>Eliminar${tiene('falla_editar_cualquiera') ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
       </div>
     </div>
-    <h3>Comentarios</h3>
-    <ul class="linea-tiempo" id="histFalla"><li class="hint">Cargando…</li></ul>`);
+    `);
   ofrecerEdicionReparacion(p, h);
   const bc = $('#bCerrar', h);
   if (bc) bc.addEventListener('click', () => formCierre(p));
@@ -2162,14 +2173,6 @@ async function abrirFalla(p, geom) {
       $$('.foto', box).forEach((b) => b.addEventListener('click', () => abrirFotoGrande(ok, +b.dataset.i)));
     }).catch(() => {});
   }
-  // Historial de comentarios
-  select('fallas_comentarios', `falla_id=eq.${p.id}&select=tipo,comentario,autor_nombre,creado_en&order=creado_en.asc`).then((rows) => {
-    const ul = $('#histFalla');
-    if (!ul || !document.body.contains(ul)) return;
-    ul.innerHTML = rows && rows.length
-      ? rows.map((r) => `<li class="t-${esc(r.tipo)}"><div class="quien">${esc(r.tipo)} · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre></li>`).join('')
-      : '<li class="hint">Sin comentarios registrados.</li>';
-  }).catch(() => { const ul = $('#histFalla'); if (ul) ul.innerHTML = '<li class="hint">No se pudo cargar el historial.</li>'; });
   // Falla en cascada: ofrecer ir a la falla del circuito
   if (p.cascada) {
     select('fallas', `id=eq.${p.id}&select=circuito_origen_id`).then((r) => {
