@@ -9772,7 +9772,7 @@ async function generarPdfEstadoActual(){
       alternateRowStyles: {fillColor: [246, 249, 246]},
       head: [['Código', 'Descripción', 'Fallas', 'Puntos', 'Rep.', 'Reit.', 'Pend.', 'Atras.', 'Más antigua']],
       body: filasT,
-      columnStyles: {0: {fontStyle: 'bold', cellWidth: 15}, 2: {halign: 'right', fontStyle: 'bold', cellWidth: 13}, 3: {halign: 'right', cellWidth: 13}, 4: {halign: 'right', cellWidth: 13}, 5: {halign: 'right', cellWidth: 11}, 6: {halign: 'right', cellWidth: 11}, 7: {halign: 'right', cellWidth: 12}, 8: {cellWidth: 33}},
+      columnStyles: {0: {fontStyle: 'bold', cellWidth: 15}, 2: {halign: 'right', fontStyle: 'bold', cellWidth: 13}, 3: {halign: 'right', cellWidth: 13}, 4: {halign: 'right', cellWidth: 13}, 5: {halign: 'right', cellWidth: 11}, 6: {halign: 'right', cellWidth: 13}, 7: {halign: 'right', cellWidth: 12}, 8: {cellWidth: 31}},
       didParseCell: (d) => { if(d.section === 'body' && d.row.index === filasT.length - 1){ d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [226, 238, 228]; } },
       didDrawPage: (d) => { if(d.pageNumber > 2) banda(); }
     });
