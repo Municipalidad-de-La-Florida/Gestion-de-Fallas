@@ -1863,6 +1863,7 @@ function activarMantencionPunto(h, gid, mono, alUsos) {
         const l = ev.items.find((x) => x.key === est.lum);
         if (!l) return { error: 'Elige la luminaria que está fallando.' };
         args.p_uso_grupo = l.uso_grupo;
+        args.p_lum_modelo = l.modelo; args.p_lum_potencia = l.potencia;   // la ficha muestra la luminaria que falló
         if (l.estado === 'ok') args.p_lum_masivo = !!l.masivo;   // el tag Masivo sale de la luminaria elegida
         if (l.estado === 'ok') { args.p_contrato_id = l.contrato_id; args.p_mantenedor_id = l.mantenedor_id; }
         return { args };
@@ -2108,6 +2109,15 @@ async function abrirFalla(p, geom) {
   // Cronología de la ficha: pendiente, comentarios y reparación en el orden en que ocurrieron
   let comsFicha = [];
   try { comsFicha = await Promise.race([select('fallas_comentarios', `falla_id=eq.${p.id}&select=tipo,comentario,autor_nombre,creado_en&order=creado_en.asc`), new Promise((r) => setTimeout(() => r([]), 4000))]) || []; } catch (e) { /* sin comentarios */ }
+  let luminariaFicha = null;
+  if (p.tipo === 'punto' && !p.cascada) {
+    try {
+      const fl = await Promise.race([select('fallas', `id=eq.${p.id}&select=lum_modelo,lum_potencia,uso_grupo`), new Promise((r) => setTimeout(() => r([]), 4000))]);
+      const lf = fl && fl[0];
+      if (lf && lf.lum_modelo) luminariaFicha = [lf.uso_grupo === 'VIAL' ? 'Vial' : lf.uso_grupo === 'PEATONAL' ? 'Peatonal' : '', lf.lum_modelo + (lf.lum_potencia != null ? ' ' + lf.lum_potencia + ' W' : '')].filter(Boolean).join(' · ');
+    } catch (e) { /* sin luminaria: la ficha sigue igual */ }
+  }
+  if (luminariaFicha) kv.push(['Luminaria que falló', luminariaFicha]);
   const evFicha = [];
   if ((p.estado === 'pendiente' || p.estado === 'reparada') && p.pendiente_por_nombre) {
     evFicha.push({ t: p.fecha_pendiente, html: `<div class="info-warn"><h3>Pendiente</h3>
