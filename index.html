@@ -3909,9 +3909,12 @@ async function ofrecerSegundaFallaWeb(p, panel){
   cont.style.marginTop = '8px';
   cont.innerHTML = '<button type="button" class="popup-btn" id="otraFallaBtn" style="background:#fff; color:var(--primary); border:1.5px solid var(--primary);">➕ Reportar otra falla de este punto</button>';
   panel.appendChild(cont);
-  cont.querySelector('button').onclick = () => {
-    const esMono = (p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
-    abrirFormularioFallaPunto(p.ref_punto_gid, p.llave, esMono, p.nro_mun, cubiertos);
+  cont.querySelector('button').onclick = (ev) => {
+    if(ev) ev.stopPropagation();
+    try{
+      const esMono = (p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
+      abrirFormularioFallaPunto(p.ref_punto_gid, p.llave, esMono, p.nro_mun, cubiertos);
+    }catch(e){ console.error('Otra falla del punto:', e); alert('No se pudo abrir el formulario: ' + (e && e.message ? e.message : e)); }
   };
 }
 async function abrirPopupFalla(feat){
