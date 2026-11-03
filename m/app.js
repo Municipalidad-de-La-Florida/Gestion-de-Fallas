@@ -1428,6 +1428,12 @@ function elementoBajoFalla(p, ll) {
 function fallaActivaCargada(tipo, gid) {
   return S.features.find((x) => { const q = x.properties; return q.estado !== 'reparada' && (tipo === 'punto' ? q.ref_punto_gid === gid : (q.ref_circuito_gid === gid && !q.cascada)); });
 }
+const nombreUso = (u) => u === 'VIAL' ? 'Vial' : u === 'PEATONAL' ? 'Peatonal' : (u || 'Punto');
+// Fallas activas del punto (según la base): hay una por luminaria/uso. Con más de una, la ficha muestra una pestaña por falla.
+async function fallasActivasPunto(gid) {
+  try { return await select('fallas', `ref_punto_gid=eq.${gid}&tipo=eq.punto&cascada=eq.false&estado=neq.reparada&select=id,tipo_falla,uso_grupo,estado&order=fecha_falla.asc`) || []; }
+  catch (e) { return []; }
+}
 function fallaReparadaCargada(tipo, gid) {
   return S.features.find((x) => { const q = x.properties; return q.estado === 'reparada' && (tipo === 'punto' ? q.ref_punto_gid === gid : (q.ref_circuito_gid === gid && !q.cascada)); });
 }
@@ -1829,7 +1835,8 @@ function htmlMantencion(ev, sel) {
   }
   return '';
 }
-function activarMantencionPunto(h, gid, mono, alUsos) {
+function activarMantencionPunto(h, gid, mono, alUsos, excluirUsos) {
+  const sinExcluidos = (lista) => excluirUsos && excluirUsos.size ? (lista || []).filter((x) => !excluirUsos.has(x.uso_grupo)) : (lista || []);   // segunda falla en el punto: solo las luminarias sin falla activa
   const est = { ops: null, lums: null, codigo: null, sel: '', lum: '', ev: { tipo: 'nada' }, cargado: { o: false, l: false } };
   const caja = $('#fMant', h);
   const cuerpo0 = $('#fCuerpo', h);
@@ -1852,8 +1859,8 @@ function activarMantencionPunto(h, gid, mono, alUsos) {
     // con opciones distintas, las opciones de falla aparecen recién después de elegir la luminaria
     if (cuerpo) cuerpo.style.display = (!(est.cargado.o && est.cargado.l) || (lista && !est.ev.trasCodigo && !est.ev.items.some((l) => l.key === est.lum))) ? 'none' : '';
   };
-  rpc('opciones_punto', { p_gid: gid }).then((r) => { est.ops = r || []; est.cargado.o = true; pintar(); }).catch(() => { est.cargado.o = true; pintar(); /* sin datos: se reporta como siempre */ });
-  rpc('luminarias_punto', { p_gid: gid }).then((r) => { est.lums = r || []; est.cargado.l = true; pintar(); }).catch(() => { est.cargado.l = true; pintar(); /* sin el SQL: se usa el selector de contrato */ });
+  rpc('opciones_punto', { p_gid: gid }).then((r) => { est.ops = sinExcluidos(r); est.cargado.o = true; pintar(); }).catch(() => { est.cargado.o = true; pintar(); /* sin datos: se reporta como siempre */ });
+  rpc('luminarias_punto', { p_gid: gid }).then((r) => { est.lums = sinExcluidos(r); est.cargado.l = true; pintar(); }).catch(() => { est.cargado.l = true; pintar(); /* sin el SQL: se usa el selector de contrato */ });
   return {
     elegirCodigo(c) { est.codigo = c; pintar(); },
     // devuelve { error } o { args } con los parámetros extra de crear_falla_punto
@@ -1887,14 +1894,15 @@ async function avisoMantencionCircuito(h, gid) {
   } catch (err) { /* sin datos: se reporta como siempre */ }
 }
 
-function formReportePunto(p) {
+function formReportePunto(p, excluirUsos) {
   const mono = String(p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
   const nomCat = mono ? 'monoposte' : 'punto';
   const cat = catalogoActivo(nomCat);
   let codigo = null, card = null;
   const h = abrirHojaForm(`
-    <h2>Reportar falla</h2>
+    <h2>${excluirUsos && excluirUsos.size ? 'Reportar otra falla de este punto' : 'Reportar falla'}</h2>
     <div class="hint">Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}${mono ? ' · monoposte' : ''}</div>
+    ${excluirUsos && excluirUsos.size ? `<div class="aviso">Este punto ya tiene una falla activa (${esc([...excluirUsos].map(nombreUso).join(', '))}). Aquí reportas otra luminaria.</div>` : ''}
     <div id="fMantTop"></div>
     <div id="fCuerpo">
       <div class="dos-col">
@@ -1922,7 +1930,7 @@ function formReportePunto(p) {
     $('.codigos', h).outerHTML = htmlCodigos(items, nomCat);
     if (codigo && !items.some((x) => x.c === codigo)) { codigo = null; mant.elegirCodigo(null); }
     ligarCodigos();
-  });
+  }, excluirUsos);
   const env = $('#fEnviar', h);
   env.addEventListener('click', ocupar(env, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -1996,6 +2004,28 @@ async function reportarNuevaSobre(p) {
   const dup = await hayFallaActiva('ref_punto_gid', gid);
   if (dup) return avisoDuplicado(dup);
   formReportePunto({ gid, llave: p.llave, nro_mun: p.nro_mun, simb_poste: p.simb_poste });
+}
+
+// Ficha de una falla de punto: pestañas si el punto tiene más de una falla activa y botón para reportar otra luminaria
+async function ofrecerSegundaFalla(p, h) {
+  const act = await fallasActivasPunto(p.ref_punto_gid);
+  if (!document.body.contains(h) || !act.length) return;
+  const tit = h.querySelector('h2');
+  if (act.length > 1 && tit && !h.querySelector('.tabs-fallas')) {
+    tit.insertAdjacentHTML('beforebegin', `<div class="tabs-fallas">${act.map((f) => `<button type="button" class="tab-falla${f.id === p.id ? ' on' : ''}" data-id="${esc(f.id)}">${esc(f.uso_grupo ? nombreUso(f.uso_grupo) + ' · ' : '')}${esc(f.tipo_falla)}</button>`).join('')}</div>`);
+    h.querySelectorAll('.tab-falla').forEach((b) => b.addEventListener('click', () => { if (b.dataset.id !== p.id) abrirFallaPorId(b.dataset.id); }));
+  }
+  if (!puedeReportar()) return;
+  const cubiertos = new Set(act.map((f) => f.uso_grupo));
+  if (cubiertos.has(null)) return;   // una falla antigua sin uso cubre todo el punto
+  let lums = [];
+  try { lums = await rpc('luminarias_punto', { p_gid: p.ref_punto_gid }) || []; } catch (e) { return; }
+  if (!document.body.contains(h) || !lums.some((l) => !cubiertos.has(l.uso_grupo))) return;
+  const acc = h.querySelector('#accFalla');
+  if (!acc || h.querySelector('#bOtra')) return;
+  acc.insertAdjacentHTML('afterend', '<div style="margin-top:8px"><button id="bOtra" class="btn btn-secundario">➕ Reportar otra falla de este punto</button></div>');
+  const bo = h.querySelector('#bOtra');
+  bo.addEventListener('click', () => formReportePunto({ gid: p.ref_punto_gid, llave: p.llave, nro_mun: p.nro_mun, simb_poste: p.simb_poste }, cubiertos));
 }
 
 // Edita una falla recién ingresada (dentro de 15 min) o cualquiera si eres admin. La base valida el permiso (editar_falla).
@@ -2153,6 +2183,7 @@ async function abrirFalla(p, geom) {
     </div>
     `);
   ofrecerEdicionReparacion(p, h);
+  if (p.tipo === 'punto' && !p.cascada && p.estado !== 'reparada' && p.ref_punto_gid != null) ofrecerSegundaFalla(p, h);
   const bc = $('#bCerrar', h);
   if (bc) bc.addEventListener('click', () => formCierre(p));
   const bed = $('#bEditar', h);
