@@ -264,6 +264,21 @@
   }
   .search-box button:hover{background:var(--primary-light);}
 
+  .ie-head{display:flex; flex-wrap:wrap; gap:10px 18px; align-items:center; margin-bottom:12px;}
+  .ie-av{width:46px; height:46px; border-radius:50%; background:#1d4e3d; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; flex:none;}
+  .ie-who b{display:block; font-size:17px;}
+  .ie-who span{color:var(--ink-soft); font-size:12px;}
+  .ie-kp{border:1px solid #e1e8e4; background:#f7faf8; border-radius:10px; padding:7px 14px; min-width:120px;}
+  .ie-kp small{display:block; color:var(--ink-soft); font-size:11px; text-transform:uppercase; letter-spacing:.04em; font-weight:600;}
+  .ie-kp b{font-size:20px;}
+  .ie-kp span{color:var(--ink-soft); font-size:12px;}
+  .ie-bar{display:flex; height:8px; border-radius:99px; overflow:hidden; margin-top:6px; background:#e8edea; width:190px; max-width:100%;}
+  .ie-acts{margin-left:auto; display:flex; gap:8px; flex-wrap:wrap;}
+  .ie-btn{border-radius:10px; padding:9px 15px; font-weight:700; font-size:13px; border:1.5px solid; cursor:pointer; display:inline-flex; gap:7px; align-items:center;}
+  .ie-azul{background:#2563a8; border-color:#2563a8; color:#fff;}  .ie-azul:hover{background:#1d5190;}
+  .ie-ambar{background:#fff6e0; border-color:#e3b55a; color:#7a4b00;}  .ie-ambar:hover{background:#ffedc2;}
+  .ie-verde{background:#eaf5ef; border-color:#9fd0b5; color:#1d4e3d;}  .ie-verde:hover{background:#d8eee1;}
+  .ie-btn:disabled{opacity:.6; cursor:default;}
   .modal-overlay{
     display:none; position:fixed; inset:0; background:rgba(20,30,25,0.45);
     z-index:2000; align-items:center; justify-content:center;
@@ -5100,6 +5115,7 @@ document.getElementById('toggleExportBtn').onclick = () => {
 function mostrarModalTodas(){
   quitarResaltadoConsulta();
   document.getElementById('panelInferiorTitulo').textContent = 'Todas las fallas de la comuna';
+  { const cu = document.getElementById('todasCuenta'); if(cu) cu.style.display = ''; }
   document.getElementById('panelInferiorPista').style.display = '';
   document.getElementById('todasContenido').style.display = 'block';
   document.getElementById('historialContenido').style.display = 'none';
@@ -5119,6 +5135,7 @@ function cerrarModalTodas(){
 
 async function mostrarHistorial(tipoEntidad, gid, etiqueta){
   document.getElementById('panelInferiorTitulo').textContent = `Historial — ${etiqueta}`;
+  { const cu = document.getElementById('todasCuenta'); if(cu) cu.style.display = ''; }
   document.getElementById('panelInferiorPista').style.display = 'none';
   document.getElementById('todasContenido').style.display = 'none';
   document.getElementById('historialContenido').style.display = 'block';
@@ -6720,8 +6737,8 @@ async function abrirDetalleInspeccion(id){
   const contenedor = document.getElementById('inspeccionContenido');
 
   quitarResaltadoConsulta();
-  document.getElementById('panelInferiorTitulo').textContent =
-    `Inspección — ${resumen ? resumen.ito_nombre + ' · ' + fmtDiaInspeccion(resumen.fecha) : ''}`;
+  document.getElementById('panelInferiorTitulo').textContent = 'Inspección';
+  { const cu = document.getElementById('todasCuenta'); if(cu) cu.style.display = 'none'; }   // el contador de fallas de la comuna no aplica aquí
   document.getElementById('panelInferiorPista').style.display = 'none';
   document.getElementById('todasContenido').style.display = 'none';
   document.getElementById('historialContenido').style.display = 'none';
@@ -6758,18 +6775,22 @@ function renderDetalleInspeccion(det){
   propias.forEach(f => { if(cuenta[f.estado] !== undefined) cuenta[f.estado]++; });
   const puntos = propias.reduce((s, f) => s + (f.puntos_afectados || 0), 0);
 
+  const iniciales = String(insp.ito_nombre || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('') || '?';
+  const otroRegistro = insp.ingresado_por && insp.ingresado_por !== insp.ito_nombre;
+  const hechas = cuenta.reparada, totalP = propias.length;
+  const tramo = (e) => totalP ? `<div style="width:${(cuenta[e] / totalP * 100).toFixed(2)}%; background:${colorEstado[e]};" title="${cuenta[e]} ${e}${cuenta[e] === 1 ? '' : 's'}"></div>` : '';
   const encabezado = `
-    <div style="display:flex; flex-wrap:wrap; gap:8px 28px; margin-bottom:12px;">
-      <div><div class="hint" style="margin:0;">ITO</div><b>${escHtml(insp.ito_nombre)}</b></div>
-      <div><div class="hint" style="margin:0;">Día de la inspección</div><b>${escHtml(fmtDiaInspeccion(insp.fecha))}</b></div>
-      <div><div class="hint" style="margin:0;">Ingresada por</div><b>${escHtml(insp.ingresado_por || '—')}</b> <span class="hint">· ${escHtml(fmtFechaHoraChile(insp.creado_en))}</span></div>
-      <div><div class="hint" style="margin:0;">Fallas</div><b>${propias.length}</b> <span class="hint">· ${puntos} punto${puntos===1?'':'s'} afectado${puntos===1?'':'s'}${ajenas ? ` · ${ajenas} de otros contratos (en gris)` : ''}</span></div>
-      <div style="align-self:flex-end;"><div class="insp-pills" style="margin:0;">${pillsEstadoHtml({reparadas:cuenta.reparada, pendientes:cuenta.pendiente, reiteradas:cuenta.reiterada, reportadas:cuenta.reportada})}</div></div>
-      <div style="margin-left:auto; align-self:flex-end; display:flex; gap:8px;">
-        ${tiene('inspeccion_editar') ? '<button class="popup-btn" id="inspEditarBtn" style="width:auto; margin:0; padding:7px 14px; background:#7a4b00; border:1.5px solid #000;">✏️ Editar inspección</button>' : ''}
-        ${esC3 && tiene('inspeccion_asignar_lote') && asignables ? '<button class="popup-btn" id="inspAsignarBtn" style="width:auto; margin:0; padding:7px 14px; background:#1f8a4c; border:1.5px solid #000;">🚚 Asignar a camión</button>' : ''}
-        ${puedeContinuarInspeccion(insp) ? '<button class="popup-btn" id="inspContinuarBtn" style="width:auto; margin:0; padding:7px 14px; background:#2563a8; border:1.5px solid #000;">✏️ Continuar esta inspección</button>' : ''}
-        <button class="popup-btn" id="inspPdfBtn" style="width:auto; margin:0; padding:7px 14px;">📄 Exportar PDF</button>
+    <div class="ie-head">
+      <div class="ie-av">${escHtml(iniciales)}</div>
+      <div class="ie-who"><b>${escHtml(insp.ito_nombre)}</b><span>${escHtml(fmtDiaInspeccion(insp.fecha))} · registrada${otroRegistro ? ' por ' + escHtml(insp.ingresado_por) : ''} ${escHtml(fmtFechaHoraChile(insp.creado_en))}</span></div>
+      <div class="ie-kp"><small>Puntos afectados</small><b>${puntos}</b> <span>en ${totalP} falla${totalP === 1 ? '' : 's'}${ajenas ? ` · ${ajenas} de otros contratos (en gris)` : ''}</span></div>
+      ${totalP ? `<div class="ie-kp"><small>Avance de reparación</small><b>${hechas} de ${totalP}</b> <span>${Math.round(hechas / totalP * 100)} %</span>
+        <div class="ie-bar">${tramo('reparada')}${tramo('pendiente')}${tramo('reiterada')}${tramo('reportada')}</div></div>` : ''}
+      <div class="ie-acts">
+        ${esC3 && tiene('inspeccion_asignar_lote') && asignables ? '<button class="ie-btn ie-verde" id="inspAsignarBtn">🚚 Asignar a camión</button>' : ''}
+        ${puedeContinuarInspeccion(insp) ? '<button class="ie-btn ie-azul" id="inspContinuarBtn">▶ Continuar inspección</button>' : ''}
+        ${tiene('inspeccion_editar') ? '<button class="ie-btn ie-ambar" id="inspEditarBtn">⚙ Editar</button>' : ''}
+        <button class="ie-btn ie-verde" id="inspPdfBtn">📄 Exportar PDF</button>
       </div>
     </div>`;
 
@@ -6784,7 +6805,7 @@ function renderDetalleInspeccion(det){
     `<button type="button" class="chip-estado" data-dest="${e}"><span class="dot" style="background:${colorEstado[e]}"></span>${e.charAt(0).toUpperCase() + e.slice(1)} <span class="n">(${cuenta[e]})</span></button>`).join('');
   cont.innerHTML = encabezado + `
     <div id="inspFiltroDetalle" style="display:flex; flex-wrap:wrap; gap:5px; align-items:center; margin-bottom:8px;">
-      <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Estado:</span>
+      <span style="font-size:11.5px; color:var(--ink-soft); margin-right:2px;">Filtrar:</span>
       <button type="button" class="chip-estado activo" data-dest="todas">Todas <span class="n">(${propias.length})</span></button>${chipsDetalle}
     </div>
     <table id="inspeccionTabla" style="width:100%; border-collapse:collapse;">
