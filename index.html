@@ -6933,13 +6933,13 @@ function abrirModalEditarInspeccion(det){
       #editarInspModal .ei-note{color:#5b6b64; font-size:12px; margin:8px 0;}
       #editarInspModal .ei-tools{display:flex; gap:6px; align-items:center; margin:8px 0; font-size:12px; color:#5b6b64; flex-wrap:wrap;}
       #editarInspModal .ei-lista{border:1px solid #e1e8e4; border-radius:8px; overflow:auto; max-height:260px; background:#fff;}
-      #editarInspModal .ei-lh, #editarInspModal .ei-row{display:grid; grid-template-columns:28px 86px 60px minmax(0,1fr) 92px 118px; gap:8px; align-items:center; padding:8px 10px; font-size:12.5px;}
+      #editarInspModal .ei-lh, #editarInspModal .ei-row{display:grid; grid-template-columns:28px 86px 60px minmax(0,1fr) 92px 215px; gap:8px; align-items:center; padding:8px 10px; font-size:12.5px;}
       #editarInspModal .ei-lh{background:#f0f4f2; color:#5b6b64; font-size:11px; text-transform:uppercase; letter-spacing:.04em; font-weight:600; position:sticky; top:0; z-index:1;}
       #editarInspModal .ei-row{border-top:1px solid #edf1ef; cursor:pointer;}
       #editarInspModal .ei-row:hover{background:#fafcfb;}
       #editarInspModal .ei-os{font-family:ui-monospace,Consolas,monospace; font-weight:700;}
       #editarInspModal .ei-cod{background:#eef2f0; border-radius:6px; padding:1px 7px; font-weight:600; text-align:center; font-size:12px;}
-      #editarInspModal .ei-fe{color:#5b6b64; font-size:12px; text-align:right;}
+      #editarInspModal .ei-fe{color:#5b6b64; font-size:12px; text-align:right; white-space:nowrap;}
       #editarInspModal .ei-md{color:#1f8a4c; font-weight:600;}
       #editarInspModal .ei-btn{margin-top:10px; border:0; border-radius:8px; padding:9px 16px; font-weight:600; color:#fff; font-size:13px; cursor:pointer;}
       #editarInspModal .ei-btn:disabled{opacity:.5; cursor:default;}
@@ -7082,7 +7082,7 @@ function abrirModalEditarInspeccion(det){
     if(d) d.textContent = filas.length ? `${filas.length} suelta${filas.length === 1 ? '' : 's'} de ${insp.ito_nombre} (±5 días)` : 'No hay fallas sueltas en ese rango';
     if(!filas.length){ lista.textContent = 'No hay fallas sueltas de este ITO entre 5 días antes y 5 después.'; return; }
     lista.className = 'ei-lista';
-    lista.innerHTML = cabLista + filas.map(f => filaFalla(f, 'editInspAgrChk', f.mismo_dia, `<br>${f.mismo_dia ? '<span class="ei-md">mismo día</span>' : 'otro día'}`)).join('');
+    lista.innerHTML = cabLista + filas.map(f => filaFalla(f, 'editInspAgrChk', f.mismo_dia, ` · ${f.mismo_dia ? '<span class="ei-md">mismo día</span>' : 'otro día'}`)).join('');
     bAgr.style.display = '';
     const marcadasAgr = () => [...m.querySelectorAll('.editInspAgrChk:checked')].map(x => x.value);
     const refAgr = () => {
