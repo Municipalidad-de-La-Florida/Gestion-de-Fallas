@@ -682,6 +682,10 @@
   #sidebarCuad div.cu-fila:hover, #sidebarFisc div.cu-fila:hover{ background:#eef4fb; box-shadow:inset 4px 0 0 #1f4d3d; }
   #sidebarCuad div.cu-fila .cu-go, #sidebarFisc div.cu-fila .cu-go{ display:inline-block; margin-left:8px; color:#1f4d3d; font-size:20px; font-weight:700; opacity:.35; transition:opacity .12s, transform .12s; }
   #sidebarCuad div.cu-fila:hover .cu-go, #sidebarFisc div.cu-fila:hover .cu-go{ opacity:1; transform:translateX(3px); }
+  .tabs-fallas{ display:flex; gap:6px; flex-wrap:wrap; margin:0 0 8px; }
+  .tab-falla{ border:1.5px solid #d5ded9; background:#fff; color:#1b2b24; border-radius:10px; padding:5px 11px; font-size:12.5px; font-weight:700; cursor:pointer; }
+  .tab-falla.on{ background:#1d4e3d; border-color:#1d4e3d; color:#fff; }
+  .aviso-otra{ background:#fff7e0; border:1px solid #f0d98a; color:#6b5200; border-radius:8px; padding:7px 10px; margin:6px 0; font-size:12.5px; }
 </style>
 </head>
 <body>
@@ -2905,6 +2909,7 @@ async function verificarDuplicadoYAbrir(campo, gid, siguientePaso){
     const activas = (existentes || []).filter(f => f.estado !== 'reparada' && !(f.reparaciones && f.reparaciones.length));
     if(activas.length){
       const f = activas[0];
+      if(campo === 'ref_punto_gid'){ enfocarFalla(f.id, true); return; }   // el punto ya tiene una falla: se abre su ficha (desde ahí se puede reportar otra luminaria)
       mostrarPanel(`<b>Ya existe una falla activa aquí</b><div class="hint">Código ${f.tipo_falla} · estado: ${f.estado.replace('_',' ')}.<br>No se puede duplicar el reporte; si crees que es un error, revísala en la lista lateral.</div>`);
       return;
     }
@@ -3315,7 +3320,8 @@ function htmlMantencion(ev, sel){
   }
   return '';
 }
-function activarMantencionPunto(panel, gid, mono, alUsos){
+function activarMantencionPunto(panel, gid, mono, alUsos, excluirUsos){
+  const sinExcluidos = lista => excluirUsos && excluirUsos.size ? (lista || []).filter(x => !excluirUsos.has(x.uso_grupo)) : (lista || []);   // segunda falla en el punto: solo las luminarias sin falla activa
   const est = {ops:null, lums:null, codigo:null, sel:'', lum:'', ev:{tipo:'nada'}, cargado:{o:false, l:false}};
   const caja = panel.querySelector('#mantBox');
   const cuerpo0 = panel.querySelector('#fallaCuerpo');
@@ -3337,8 +3343,8 @@ function activarMantencionPunto(panel, gid, mono, alUsos){
     const cuerpo = panel.querySelector('#fallaCuerpo');
     if(cuerpo) cuerpo.style.display = (!(est.cargado.o && est.cargado.l) || (est.ev.tipo === 'luminarias' && !est.ev.trasCodigo && !est.ev.items.some(l => l.key === est.lum))) ? 'none' : '';
   };
-  db.rpc('opciones_punto', {p_gid: gid}).then(r => { est.ops = r || []; est.cargado.o = true; pintar(); }).catch(() => { est.cargado.o = true; pintar(); /* sin datos: se reporta como siempre */ });
-  db.rpc('luminarias_punto', {p_gid: gid}).then(r => { est.lums = r || []; est.cargado.l = true; pintar(); }).catch(() => { est.cargado.l = true; pintar(); /* sin el SQL: se usa el selector de contrato */ });
+  db.rpc('opciones_punto', {p_gid: gid}).then(r => { est.ops = sinExcluidos(r); est.cargado.o = true; pintar(); }).catch(() => { est.cargado.o = true; pintar(); /* sin datos: se reporta como siempre */ });
+  db.rpc('luminarias_punto', {p_gid: gid}).then(r => { est.lums = sinExcluidos(r); est.cargado.l = true; pintar(); }).catch(() => { est.cargado.l = true; pintar(); /* sin el SQL: se usa el selector de contrato */ });
   return {
     elegirCodigo(c){ est.codigo = c; pintar(); },
     // devuelve {error} o {datos} con uso_grupo / contrato_id / mantenedor_id para la falla
@@ -3371,7 +3377,7 @@ async function avisoMantencionCircuito(panel, gid){
   }catch(err){ /* sin datos: se reporta como siempre */ }
 }
 
-function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
+function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun, excluirUsos){
   let codigoSel = null, cardSel = null;
   const catPunto = esMonoposte ? 'monoposte' : 'punto';
   const filaCodigo = item => `
@@ -3382,7 +3388,8 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
   `;
   const filasCatalogo = htmlCodigosAgrupados(catPunto, catalogoActivo(catPunto), filaCodigo);
   const panel = mostrarPanel(`
-    <b>Falla individual - Pto. Lumínico Llave N.° ${llave}</b>
+    <b>${excluirUsos && excluirUsos.size ? 'Otra falla de este punto' : 'Falla individual'} - Pto. Lumínico Llave N.° ${llave}</b>
+    ${excluirUsos && excluirUsos.size ? `<div class="aviso-otra">Este punto ya tiene una falla activa (${escHtml([...excluirUsos].map(u => u === 'VIAL' ? 'Vial' : u === 'PEATONAL' ? 'Peatonal' : u).join(', '))}). Aquí reportas otra luminaria.</div>` : ''}
     <div id="mantBox"></div>
     <div id="fallaCuerpo" class="rp-cuerpo">
     <div class="rp-cols">
@@ -3424,7 +3431,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun){
     panel.querySelector('#codigosCont').innerHTML = htmlCodigosAgrupados(catPunto, items, filaCodigo);
     if(codigoSel && !items.some(x => x.c === codigoSel)){ codigoSel = null; mant.elegirCodigo(null); }
     ligarCodigos(); resumenFalla();
-  });
+  }, excluirUsos);
   panel.querySelector('#confirmarBtn').onclick = async () => {
     if(!codigoSel){ alert('Selecciona un código de falla.'); return; }
     const desc = panel.querySelector('#otroDesc').value.trim();
@@ -3881,6 +3888,32 @@ function formatearDuracion(fechaInicio, fechaFin){
   return partes.length ? partes.join(' ') : '0 min';
 }
 
+// Un punto puede tener una falla activa por luminaria (vial / peatonal): pestañas para pasar de una a otra y botón para reportar la que falta.
+async function ofrecerSegundaFallaWeb(p, panel){
+  let act = [];
+  try{ act = await db.select('fallas', `ref_punto_gid=eq.${p.ref_punto_gid}&tipo=eq.punto&cascada=eq.false&estado=neq.reparada&select=id,tipo_falla,uso_grupo&order=fecha_falla.asc`) || []; }catch(e){ return; }
+  if(!act.length || !document.body.contains(panel)) return;
+  const nomUso = u => u === 'VIAL' ? 'Vial' : u === 'PEATONAL' ? 'Peatonal' : (u || 'Punto');
+  const tit = panel.querySelector('b');
+  if(act.length > 1 && tit && !panel.querySelector('.tabs-fallas')){
+    tit.insertAdjacentHTML('beforebegin', `<div class="tabs-fallas">${act.map(f => `<button type="button" class="tab-falla${f.id === p.id ? ' on' : ''}" data-id="${escHtml(f.id)}">${escHtml((f.uso_grupo ? nomUso(f.uso_grupo) + ' · ' : '') + f.tipo_falla)}</button>`).join('')}</div>`);
+    panel.querySelectorAll('.tab-falla').forEach(b => b.onclick = () => { if(b.dataset.id !== p.id) enfocarFalla(b.dataset.id, true); });
+  }
+  if(!puedeReportar()) return;
+  const cubiertos = new Set(act.map(f => f.uso_grupo));
+  if(cubiertos.has(null) || cubiertos.has(undefined)) return;   // una falla antigua sin uso cubre todo el punto
+  let lums = [];
+  try{ lums = await db.rpc('luminarias_punto', {p_gid: p.ref_punto_gid}) || []; }catch(e){ return; }
+  if(!document.body.contains(panel) || !lums.some(l => !cubiertos.has(l.uso_grupo)) || panel.querySelector('#otraFallaBtn')) return;
+  const cont = document.createElement('div');
+  cont.style.marginTop = '8px';
+  cont.innerHTML = '<button type="button" class="popup-btn" id="otraFallaBtn" style="background:#fff; color:var(--primary); border:1.5px solid var(--primary);">➕ Reportar otra falla de este punto</button>';
+  panel.appendChild(cont);
+  cont.querySelector('button').onclick = () => {
+    const esMono = (p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
+    abrirFormularioFallaPunto(p.ref_punto_gid, p.llave, esMono, p.nro_mun, cubiertos);
+  };
+}
 async function abrirPopupFalla(feat){
   const p = feat.properties;
   if(!p._vistaHistorica) quitarFallaHistorica();
@@ -4094,6 +4127,7 @@ async function abrirPopupFalla(feat){
 
   const panel = mostrarPanel(contenidoPanel, panelDosColumnas);
   llenarFotos(panel);
+  if(p.tipo === 'punto' && !p.cascada && p.estado !== 'reparada' && !p._vistaHistorica && p.ref_punto_gid != null) ofrecerSegundaFallaWeb(p, panel);
   if(p.estado === 'reparada' && !p.cascada && !p._vistaHistorica && tiene('reparacion_editar_propia')){
     activarEdicionReparacion(panel, p);
   }
@@ -4893,7 +4927,7 @@ async function abrirEditarReparacion(p, est, modo){
     <button class="popup-btn" id="erGuardar" style="background:#1f8a4c; margin-top:12px;">Guardar cambios</button>
     <div style="border:1.5px solid #c9d3df; border-radius:8px; padding:10px; margin-top:12px;">
       <b>Me equivoqué al cerrar</b>
-      ${bloq ? '<div class="hint">Ya hay otra falla activa en este mismo punto o circuito: no se puede quitar la reparación.</div>' : `
+      ${bloq ? '<div class="hint">Ya hay otra falla activa de esa luminaria (o circuito): no se puede quitar la reparación.</div>' : `
       <div class="hint">La reparación se borra (con su comentario y fotos) y la falla vuelve a su estado anterior.</div>
       <button class="popup-btn" id="erQuitar" style="background:#c0392b; margin-top:6px;">↩ Quitar reparación</button>
       <div class="hint" style="margin-top:8px;">O déjala pendiente (motivo obligatorio):</div>
