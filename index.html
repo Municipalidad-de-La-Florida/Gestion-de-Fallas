@@ -6904,7 +6904,8 @@ function abrirModalEditarInspeccion(det){
       #editarInspModal .ei-card{background:#fff; border-radius:16px; width:min(880px, 96vw); max-height:92vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.3); overflow:hidden;}
       #editarInspModal .ei-head{padding:18px 22px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:flex-start; gap:12px;}
       #editarInspModal .ei-head h3{margin:0 0 6px; font-size:18px; text-transform:none; letter-spacing:0; color:var(--ink);}
-      #editarInspModal .ei-x{border:0; background:none; font-size:24px; line-height:1; cursor:pointer; color:#8a9a93;}
+      #editarInspModal .ei-x{border:1.5px solid #e8a7a0; background:#fde8e6; color:#b03a2e; border-radius:10px; width:34px; height:34px; font-size:22px; line-height:1; cursor:pointer; flex:none; font-weight:700;}
+      #editarInspModal .ei-x:hover{background:#fbd5d1;}
       #editarInspModal .ei-body{padding:14px 22px 6px; background:#f6f8f7; overflow-y:auto; flex:1 1 auto;}
       #editarInspModal .ei-sec{background:#fff; border:1px solid #dfe6e2; border-left:5px solid var(--c); border-radius:10px; margin-bottom:10px; overflow:hidden;}
       #editarInspModal .ei-sh{display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; user-select:none;}
@@ -6927,9 +6928,6 @@ function abrirModalEditarInspeccion(det){
       #editarInspModal .ei-md{color:#1f8a4c; font-weight:600;}
       #editarInspModal .ei-btn{margin-top:10px; border:0; border-radius:8px; padding:9px 16px; font-weight:600; color:#fff; font-size:13px; cursor:pointer;}
       #editarInspModal .ei-btn:disabled{opacity:.5; cursor:default;}
-      #editarInspModal .ei-foot{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:12px 22px; border-top:1px solid var(--line); background:#fff;}
-      #editarInspModal .ei-cerrar{border:1.5px solid #e8a7a0; background:#fde8e6; color:#b03a2e; border-radius:10px; padding:8px 22px; font-weight:700; cursor:pointer;}
-      #editarInspModal .ei-cerrar:hover{background:#fbd5d1;}
       @media (max-width:760px){ #editarInspModal .ei-lh, #editarInspModal .ei-row{grid-template-columns:24px 76px 50px minmax(0,1fr); } #editarInspModal .ei-lh span:nth-child(n+5), #editarInspModal .ei-row > span:nth-child(n+5){display:none;} }`;
     document.head.appendChild(st);
   }
@@ -6954,7 +6952,7 @@ function abrirModalEditarInspeccion(det){
         <h3>✏️ Editar inspección</h3>
         <div><b>${escHtml(insp.ito_nombre)}</b> · ${escHtml(fmtDiaInspeccion(insp.fecha))}</div>
         <div class="insp-pills" style="margin:8px 0 0;">${pillsEstadoHtml({reparadas:cuenta.reparada, pendientes:cuenta.pendiente, reiteradas:cuenta.reiterada, reportadas:cuenta.reportada})}</div>
-      </div><button class="ei-x" id="editInspCerrar" aria-label="Cerrar">×</button></div>
+      </div><button class="ei-x" id="editInspCerrar" aria-label="Cerrar" title="Cerrar">×</button></div>
       <div class="ei-body">
         ${seccion('editInspAgregar', '#b7791f', '➕', 'Agregar fallas a esta inspección', 'Fallas sueltas del mismo ITO (±5 días)', `
           <div class="ei-note">Fallas <b>sueltas</b> (sin inspección) que registró ${escHtml(insp.ito_nombre)}. Conservan su OS, fecha, hora y estado; solo se unen a esta inspección.</div>
@@ -6977,13 +6975,12 @@ function abrirModalEditarInspeccion(det){
           <button class="ei-btn" id="editInspCompleta" disabled style="background:#c0392b;">Eliminar todo</button>`, '#c0392b')}
         <div id="editInspError" class="hint" style="color:#c0392b; display:none; margin-bottom:10px;"></div>
       </div>
-      <div class="ei-foot"><span></span><button class="ei-cerrar" id="editInspCancelar">Cerrar</button></div>
     </div>`;
   document.body.appendChild(m);
   const $ = id => m.querySelector('#' + id);
   m.querySelectorAll('.ei-sh').forEach(h => h.onclick = () => h.parentElement.classList.toggle('abierta'));
   const inp = $('editInspConfirma'), bComp = $('editInspCompleta'), bSue = $('editInspSueltas');
-  $('editInspCerrar').onclick = $('editInspCancelar').onclick = cerrarModalEditarInspeccion;
+  $('editInspCerrar').onclick = cerrarModalEditarInspeccion;
   inp.oninput = () => {
     const ok = inp.value.trim() === 'ELIMINAR';
     bComp.disabled = !ok;
