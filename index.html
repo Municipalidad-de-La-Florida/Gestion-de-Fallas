@@ -3894,7 +3894,7 @@ async function ofrecerSegundaFallaWeb(p, panel){
   try{ act = await db.select('fallas', `ref_punto_gid=eq.${p.ref_punto_gid}&tipo=eq.punto&cascada=eq.false&estado=neq.reparada&select=id,tipo_falla,uso_grupo&order=fecha_falla.asc`) || []; }catch(e){ return; }
   if(!act.length || !document.body.contains(panel)) return;
   const nomUso = u => u === 'VIAL' ? 'Vial' : u === 'PEATONAL' ? 'Peatonal' : (u || 'Punto');
-  const tit = panel.querySelector('b');
+  const tit = [...panel.querySelectorAll('.hint')].find(x => x.textContent.includes('OS:'));   // la línea "Punto lumínico · OS: n.°": las pestañas van justo encima
   if(act.length > 1 && tit && !panel.querySelector('.tabs-fallas')){
     tit.insertAdjacentHTML('beforebegin', `<div class="tabs-fallas">${act.map(f => `<button type="button" class="tab-falla${f.id === p.id ? ' on' : ''}" data-id="${escHtml(f.id)}">${escHtml((f.uso_grupo ? nomUso(f.uso_grupo) + ' · ' : '') + f.tipo_falla)}</button>`).join('')}</div>`);
     panel.querySelectorAll('.tab-falla').forEach(b => b.onclick = () => { if(b.dataset.id !== p.id) enfocarFalla(b.dataset.id, true); });
