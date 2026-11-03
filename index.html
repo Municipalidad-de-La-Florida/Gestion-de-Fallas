@@ -6913,61 +6913,107 @@ function abrirModalEditarInspeccion(det){
   const cuenta = {reparada:0, pendiente:0, reiterada:0, reportada:0};
   fallas.forEach(f => { if(cuenta[f.estado] !== undefined) cuenta[f.estado]++; });
   const puntos = fallas.reduce((s, f) => s + (f.puntos_afectados || 0), 0);
+  if(!document.getElementById('editInspCss')){
+    const st = document.createElement('style'); st.id = 'editInspCss';
+    st.textContent = `
+      #editarInspModal .ei-card{background:#fff; border-radius:16px; width:min(880px, 96vw); max-height:92vh; display:flex; flex-direction:column; box-shadow:0 20px 60px rgba(0,0,0,.3); overflow:hidden;}
+      #editarInspModal .ei-head{padding:18px 22px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:flex-start; gap:12px;}
+      #editarInspModal .ei-head h3{margin:0 0 6px; font-size:18px; text-transform:none; letter-spacing:0; color:var(--ink);}
+      #editarInspModal .ei-x{border:1.5px solid #e8a7a0; background:#fde8e6; color:#b03a2e; border-radius:10px; width:34px; height:34px; font-size:22px; line-height:1; cursor:pointer; flex:none; font-weight:700;}
+      #editarInspModal .ei-x:hover{background:#fbd5d1;}
+      #editarInspModal .ei-body{padding:14px 22px 6px; background:#f6f8f7; overflow-y:auto; flex:1 1 auto;}
+      #editarInspModal .ei-sec{background:#fff; border:1px solid #dfe6e2; border-left:5px solid var(--c); border-radius:10px; margin-bottom:10px; overflow:hidden;}
+      #editarInspModal .ei-sh{display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; user-select:none;}
+      #editarInspModal .ei-sh b{font-size:14px;}
+      #editarInspModal .ei-sh .ei-d{color:#6b7b74; font-size:12px; flex:1;}
+      #editarInspModal .ei-sh .ei-ch{color:#8a9a93; font-size:13px; transition:transform .15s;}
+      #editarInspModal .ei-sec.abierta .ei-ch{transform:rotate(90deg);}
+      #editarInspModal .ei-sb{display:none; padding:4px 14px 14px; border-top:1px solid #eef2f0;}
+      #editarInspModal .ei-sec.abierta .ei-sb{display:block;}
+      #editarInspModal .ei-note{color:#5b6b64; font-size:12px; margin:8px 0;}
+      #editarInspModal .ei-tools{display:flex; gap:6px; align-items:center; margin:8px 0; font-size:12px; color:#5b6b64; flex-wrap:wrap;}
+      #editarInspModal .ei-lista{border:1px solid #e1e8e4; border-radius:8px; overflow:auto; max-height:260px; background:#fff;}
+      #editarInspModal .ei-lh, #editarInspModal .ei-row{display:grid; grid-template-columns:28px 86px 60px minmax(0,1fr) 92px 118px; gap:8px; align-items:center; padding:8px 10px; font-size:12.5px;}
+      #editarInspModal .ei-lh{background:#f0f4f2; color:#5b6b64; font-size:11px; text-transform:uppercase; letter-spacing:.04em; font-weight:600; position:sticky; top:0; z-index:1;}
+      #editarInspModal .ei-row{border-top:1px solid #edf1ef; cursor:pointer;}
+      #editarInspModal .ei-row:hover{background:#fafcfb;}
+      #editarInspModal .ei-os{font-family:ui-monospace,Consolas,monospace; font-weight:700;}
+      #editarInspModal .ei-cod{background:#eef2f0; border-radius:6px; padding:1px 7px; font-weight:600; text-align:center; font-size:12px;}
+      #editarInspModal .ei-fe{color:#5b6b64; font-size:12px; text-align:right;}
+      #editarInspModal .ei-md{color:#1f8a4c; font-weight:600;}
+      #editarInspModal .ei-btn{margin-top:10px; border:0; border-radius:8px; padding:9px 16px; font-weight:600; color:#fff; font-size:13px; cursor:pointer;}
+      #editarInspModal .ei-btn:disabled{opacity:.5; cursor:default;}
+      @media (max-width:760px){ #editarInspModal .ei-lh, #editarInspModal .ei-row{grid-template-columns:24px 76px 50px minmax(0,1fr); } #editarInspModal .ei-lh span:nth-child(n+5), #editarInspModal .ei-row > span:nth-child(n+5){display:none;} }`;
+    document.head.appendChild(st);
+  }
+  const ubic = (f) => f.tipo === 'linea' ? `Circuito ${escHtml(f.circuito_id ?? '—')} (+${f.puntos_afectados || 0} pts)` : `Llave ${escHtml(f.llave ?? '—')}${f.nro_mun != null ? ' · N.° ' + escHtml(f.nro_mun) : ''}`;
+  // Fila de falla: la misma para «Agregar» y «Dejar sueltas»
+  const filaFalla = (f, clase, marcada, extra) => `<label class="ei-row">
+    <input type="checkbox" class="${clase}" value="${escHtml(f.id)}" ${marcada ? 'checked' : ''}>
+    <span class="ei-os">${escHtml(f.ot || '—')}</span><span class="ei-cod">${escHtml(f.tipo_falla)}</span><span>${ubic(f)}</span>
+    <span><span class="badge ${escHtml(f.estado)}">${escHtml(String(f.estado).replace('_',' '))}</span></span>
+    <span class="ei-fe">${escHtml(fmtFechaHoraChile(f.fecha_ingreso))}${extra || ''}</span></label>`;
+  const cabLista = '<div class="ei-lh"><span></span><span>OS</span><span>Código</span><span>Ubicación</span><span>Estado</span><span style="text-align:right">Ingresada</span></div>';
+  const seccion = (id, color, ico, titulo, desc, cuerpo, colorTitulo) => `<div class="ei-sec" id="${id}" style="--c:${color}">
+    <div class="ei-sh"><span>${ico}</span><b${colorTitulo ? ` style="color:${colorTitulo}"` : ''}>${titulo}</b><span class="ei-d">${desc}</span><span class="ei-ch">▸</span></div>
+    <div class="ei-sb">${cuerpo}</div></div>`;
+  const ordenadas = [...fallas].sort((a, b) => String(a.fecha_ingreso || '').localeCompare(String(b.fecha_ingreso || '')) || String(a.ot || '').localeCompare(String(b.ot || '')));
   const m = document.createElement('div');
   m.id = 'editarInspModal';
   m.className = 'modal-overlay visible';
   m.innerHTML = `
-    <div class="modal-card" style="max-width:600px; max-height:92vh; overflow:auto;">
-      <button class="close-x" id="editInspCerrar" aria-label="Cerrar">×</button>
-      <h3 style="margin-top:0;">✏️ Editar inspección</h3>
-      <div style="margin-bottom:12px;">
-        <b>${escHtml(insp.ito_nombre)}</b> · ${escHtml(fmtDiaInspeccion(insp.fecha))}
-        <div class="insp-pills" style="margin:6px 0 0;">${pillsEstadoHtml({reparadas:cuenta.reparada, pendientes:cuenta.pendiente, reiteradas:cuenta.reiterada, reportadas:cuenta.reportada})}</div>
+    <div class="ei-card">
+      <div class="ei-head"><div>
+        <h3>✏️ Editar inspección</h3>
+        <div><b>${escHtml(insp.ito_nombre)}</b> · ${escHtml(fmtDiaInspeccion(insp.fecha))}</div>
+        <div class="insp-pills" style="margin:8px 0 0;">${pillsEstadoHtml({reparadas:cuenta.reparada, pendientes:cuenta.pendiente, reiteradas:cuenta.reiterada, reportadas:cuenta.reportada})}</div>
+      </div><button class="ei-x" id="editInspCerrar" aria-label="Cerrar" title="Cerrar">×</button></div>
+      <div class="ei-body">
+        ${seccion('editInspAgregar', '#b7791f', '➕', 'Agregar fallas a esta inspección', 'Fallas sueltas del mismo ITO (±5 días)', `
+          <div class="ei-note">Fallas <b>sueltas</b> (sin inspección) que registró ${escHtml(insp.ito_nombre)}. Conservan su OS, fecha, hora y estado; solo se unen a esta inspección.</div>
+          <div id="editInspAgrLista" class="ei-note">Buscando fallas sueltas…</div>
+          <button class="ei-btn" id="editInspAgrBtn" disabled style="background:#b7791f; display:none;">Agregar las marcadas</button>`)}
+        ${fallas.length ? seccion('editInspSoltar', '#2563a8', '✂️', 'Dejar sueltas solo algunas fallas', 'Saca fallas de la inspección sin borrarlas', `
+          <div class="ei-note">Marca las fallas que no corresponden a esta inspección. Quedan sueltas (con su OS, fecha, hora y estado) y la inspección sigue con las demás. Luego puedes agruparlas con «Armar inspección».</div>
+          <div class="ei-tools"><span>Ordenar por fecha de registro:</span>
+            <button type="button" class="chip-estado activo" id="editInspOrdAsc">Más antigua primero</button>
+            <button type="button" class="chip-estado" id="editInspOrdDesc">Más reciente primero</button>
+            <span style="flex:1"></span><button type="button" class="chip-estado" id="editInspTodasSel">Marcar todas</button></div>
+          <div class="ei-lista" id="editInspLista">${cabLista}${ordenadas.map(f => filaFalla(f, 'editInspChk', false, '')).join('')}</div>
+          <button class="ei-btn" id="editInspSoltarSel" disabled style="background:#2563a8;">Dejar sueltas las marcadas</button>`) : ''}
+        ${seccion('editInspQuitar', '#1f8a4c', '📤', 'Quitar la inspección y dejar las fallas sueltas', `Borra solo el registro; las ${fallas.length} falla${fallas.length===1?'':'s'} se conservan`, `
+          <div class="ei-note">Se borra solo el registro de la inspección. Las ${fallas.length} falla${fallas.length===1?'':'s'} se conservan con su OS, fecha y hora, como si se hubieran ingresado una a una.</div>
+          <button class="ei-btn" id="editInspSueltas" style="background:#1f8a4c;">Quitar inspección</button>`)}
+        ${seccion('editInspEliminar', '#c0392b', '🗑️', 'Eliminar la inspección completa', `Borra la inspección y sus ${fallas.length} falla${fallas.length===1?'':'s'}`, `
+          <div class="ei-note">Se borran la inspección y sus <b>${fallas.length}</b> falla${fallas.length===1?'':'s'} (${cuenta.reparada} reparada${cuenta.reparada===1?'':'s'}, ${puntos} punto${puntos===1?'':'s'}), con sus cierres y comentarios. No se puede deshacer.</div>
+          <input id="editInspConfirma" type="text" autocomplete="off" placeholder="Escribe ELIMINAR para confirmar" style="width:100%; margin-top:4px; padding:8px; box-sizing:border-box;">
+          <button class="ei-btn" id="editInspCompleta" disabled style="background:#c0392b;">Eliminar todo</button>`, '#c0392b')}
+        <div id="editInspError" class="hint" style="color:#c0392b; display:none; margin-bottom:10px;"></div>
       </div>
-      ${fallas.length ? `<div style="border:1.5px solid #2563a8; border-radius:8px; padding:12px; margin-bottom:12px;">
-        <b>Dejar sueltas solo algunas fallas</b>
-        <div class="hint">Marca las fallas que no corresponden a esta inspección. Quedan sueltas (con su OS, fecha, hora y estado) y la inspección sigue con las demás. Luego puedes agruparlas con «Armar inspección».</div>
-        <div style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:12px;">
-          <span class="hint" style="margin:0;">Ordenar por fecha de registro:</span>
-          <button type="button" class="chip-estado activo" id="editInspOrdAsc">Más antigua primero</button>
-          <button type="button" class="chip-estado" id="editInspOrdDesc">Más reciente primero</button>
-        </div>
-        <div id="editInspLista" style="max-height:240px; overflow:auto; margin-top:8px; border:1px solid var(--line); border-radius:6px;">
-          ${[...fallas].sort((a, b) => String(a.fecha_ingreso || '').localeCompare(String(b.fecha_ingreso || '')) || String(a.ot || '').localeCompare(String(b.ot || ''))).map(f => `<label style="display:flex; gap:8px; align-items:flex-start; padding:6px 8px; border-bottom:1px solid var(--line); cursor:pointer; font-size:12.5px;">
-            <input type="checkbox" class="editInspChk" value="${escHtml(f.id)}" style="margin-top:3px;">
-            <span><b class="mono">${escHtml(f.ot || '—')}</b> · ${escHtml(f.tipo_falla)} · ${f.tipo === 'linea' ? 'Circuito ' + escHtml(f.circuito_id ?? '—') + ' (' + (f.puntos_afectados || 0) + ' pts)' : 'Llave ' + escHtml(f.llave ?? '—')}
-              <span class="badge ${escHtml(f.estado)}">${escHtml(String(f.estado).replace('_',' '))}</span>
-              <div class="hint" style="margin:0;">Ingresada ${escHtml(fmtFechaHoraChile(f.fecha_ingreso))}</div></span></label>`).join('')}
-        </div>
-        <button class="popup-btn" id="editInspSoltarSel" disabled style="margin-top:8px; background:#2563a8; opacity:.5;">Dejar sueltas las marcadas</button>
-      </div>` : ''}
-      <div id="editInspAgregar" style="border:1.5px solid #7a4b00; border-radius:8px; padding:12px; margin-bottom:12px; background:#fffbe9;">
-        <b>➕ Agregar fallas a esta inspección</b>
-        <div class="hint">Fallas <b>sueltas</b> (sin inspección) que registró ${escHtml(insp.ito_nombre)} entre 5 días antes y 5 después. Conservan su OS, fecha, hora y estado; solo se unen a esta inspección.</div>
-        <div id="editInspAgrLista" class="hint" style="margin-top:8px;">Buscando fallas sueltas…</div>
-        <button class="popup-btn" id="editInspAgrBtn" disabled style="margin-top:8px; background:#7a4b00; opacity:.5; display:none;">Agregar las marcadas</button>
-      </div>
-      <div style="border:1.5px solid #1f8a4c; border-radius:8px; padding:12px; margin-bottom:12px;">
-        <b>Quitar la inspección y dejar las fallas sueltas</b>
-        <div class="hint">Se borra solo el registro de la inspección. Las ${fallas.length} falla${fallas.length===1?'':'s'} se conservan con su OS, fecha y hora, como si se hubieran ingresado una a una.</div>
-        <button class="popup-btn" id="editInspSueltas" style="margin-top:8px; background:#1f8a4c;">Quitar inspección</button>
-      </div>
-      <div style="border:1.5px solid #c0392b; border-radius:8px; padding:12px; margin-bottom:12px;">
-        <b style="color:#c0392b;">Eliminar la inspección completa</b>
-        <div class="hint">Se borran la inspección y sus <b>${fallas.length}</b> falla${fallas.length===1?'':'s'} (${cuenta.reparada} reparada${cuenta.reparada===1?'':'s'}, ${puntos} punto${puntos===1?'':'s'}), con sus cierres y comentarios. No se puede deshacer.</div>
-        <input id="editInspConfirma" type="text" autocomplete="off" placeholder="Escribe ELIMINAR para confirmar" style="width:100%; margin-top:8px; padding:8px; box-sizing:border-box;">
-        <button class="popup-btn" id="editInspCompleta" disabled style="margin-top:8px; background:#c0392b; opacity:.5;">Eliminar todo</button>
-      </div>
-      <div id="editInspError" class="hint" style="color:#c0392b; display:none;"></div>
-      <button class="popup-btn" id="editInspCancelar" style="background:#666;">Cancelar</button>
     </div>`;
   document.body.appendChild(m);
   const $ = id => m.querySelector('#' + id);
+  m.querySelectorAll('.ei-sh').forEach(h => h.onclick = () => h.parentElement.classList.toggle('abierta'));
   const inp = $('editInspConfirma'), bComp = $('editInspCompleta'), bSue = $('editInspSueltas');
-  $('editInspCerrar').onclick = $('editInspCancelar').onclick = cerrarModalEditarInspeccion;
+  $('editInspCerrar').onclick = cerrarModalEditarInspeccion;
   inp.oninput = () => {
     const ok = inp.value.trim() === 'ELIMINAR';
-    bComp.disabled = !ok; bComp.style.opacity = ok ? '1' : '.5';
+    bComp.disabled = !ok;
+  };
+  inp.oninput();
+  // Tras cambiar las fallas de la inspección: se refresca todo y se vuelve a abrir la ventana con datos frescos
+  const recargarTras = async (btn) => {
+    btn.textContent = 'Actualizando…';
+    if(inspeccionCache && inspeccionCache.id === insp.id) inspeccionCache = {clave:null, id:null};
+    invalidarCacheTodasFallas();
+    try{
+      await cargarListadoInspecciones();
+      await abrirDetalleInspeccion(insp.id);   // actualiza la tabla y el mapa de la inspección
+      if(ultimoDetalleInspeccion && ultimoDetalleInspeccion.inspeccion && ultimoDetalleInspeccion.inspeccion.id === insp.id)
+        abrirModalEditarInspeccion(ultimoDetalleInspeccion);
+      else cerrarModalEditarInspeccion();
+    }catch(e){ cerrarModalEditarInspeccion(); }
+    cargarFallasDelArea().then(() => renderFallasOnMap());
   };
   const ejecutar = async (modo) => {
     bComp.disabled = true; bSue.disabled = true;
@@ -6987,14 +7033,19 @@ function abrirModalEditarInspeccion(det){
     const marcadas = () => [...m.querySelectorAll('.editInspChk:checked')].map(x => x.value);
     const refrescar = () => {
       const n = marcadas().length;
-      bSel.disabled = n === 0; bSel.style.opacity = n ? '1' : '.5';
+      bSel.disabled = n === 0;
       bSel.textContent = n ? `Dejar sueltas ${n} falla${n === 1 ? '' : 's'}` : 'Dejar sueltas las marcadas';
     };
     m.querySelectorAll('.editInspChk').forEach(c => c.onchange = refrescar);
+    refrescar();
+    $('editInspTodasSel').onclick = () => {
+      const chks = [...m.querySelectorAll('.editInspChk')], todas = chks.every(c => c.checked);
+      chks.forEach(c => c.checked = !todas); refrescar();
+    };
     // Orden de la lista por fecha de registro (las marcas se conservan: solo se reordenan las filas)
     const lista = m.querySelector('#editInspLista');
     const ordenar = (desc) => {
-      const filas = [...lista.children];
+      const filas = [...lista.querySelectorAll('.ei-row')];
       filas.reverse().forEach(f => lista.appendChild(f));   // invierte el orden actual
       m.querySelector('#editInspOrdAsc').classList.toggle('activo', !desc);
       m.querySelector('#editInspOrdDesc').classList.toggle('activo', desc);
@@ -7013,45 +7064,30 @@ function abrirModalEditarInspeccion(det){
         err.textContent = 'No se pudo: ' + e.message + ' ¿Ejecutaste sql/2026-10-soltar-fallas-de-inspeccion.sql en Supabase?'; err.style.display = 'block';
         refrescar(); return;
       }
-      // La ventana se queda abierta (para seguir sacando otras) pero sin las fallas que justo se sacaron
-      m.querySelectorAll('.editInspChk:checked').forEach(c => c.closest('label').remove());
-      bSel.textContent = 'Actualizando…';
-      if(inspeccionCache && inspeccionCache.id === insp.id) inspeccionCache = {clave:null, id:null};
-      invalidarCacheTodasFallas();
-      try{
-        await cargarListadoInspecciones();
-        await abrirDetalleInspeccion(insp.id);   // actualiza la tabla y el mapa de la inspección
-        if(ultimoDetalleInspeccion && ultimoDetalleInspeccion.inspeccion && ultimoDetalleInspeccion.inspeccion.id === insp.id)
-          abrirModalEditarInspeccion(ultimoDetalleInspeccion);   // vuelve a armar la ventana con los datos frescos
-        else cerrarModalEditarInspeccion();
-      }catch(e){ cerrarModalEditarInspeccion(); }
-      cargarFallasDelArea().then(() => renderFallasOnMap());
+      await recargarTras(bSel);
     };
   }
   // Agregar a esta inspección fallas sueltas del mismo ITO (±5 días)
   (async () => {
     const lista = $('editInspAgrLista'), bAgr = $('editInspAgrBtn');
-    if(!lista || !bAgr) return;
     const fechaInsp = String(insp.fecha).slice(0, 10);
     let filas = [];
     try{
       filas = await db.rpc('fallas_sueltas_ito', {p_ito: insp.ito_id, p_fecha: fechaInsp, p_dias: 5});
       filas = Array.isArray(filas) ? filas : [];
     }catch(e){
-      lista.innerHTML = `No se pudo buscar: ${escHtml(e.message)}`; return;
+      lista.textContent = 'No se pudo buscar: ' + e.message; return;
     }
-    if(!filas.length){ lista.textContent = 'No hay fallas sueltas de este ITO en ese rango.'; return; }
-    const ubic = (f) => f.tipo === 'linea' ? `Circuito ${escHtml(f.circuito_id ?? '—')} (+${f.puntos_afectados || 0} pts)` : `Llave ${escHtml(f.llave ?? '—')} · N.° ${escHtml(f.nro_mun ?? '—')}`;
-    lista.className = ''; lista.style.cssText = 'max-height:220px; overflow:auto; margin-top:8px; border:1px solid var(--line); border-radius:6px; background:#fff;';
-    lista.innerHTML = filas.map(f => `<label style="display:flex; gap:8px; align-items:flex-start; padding:7px 9px; border-bottom:1px solid var(--line); cursor:pointer;">
-      <input type="checkbox" class="editInspAgrChk" value="${escHtml(f.id)}" ${f.mismo_dia ? 'checked' : ''} style="margin-top:3px;">
-      <span><b class="mono">${escHtml(f.ot || '—')}</b> · ${escHtml(f.tipo_falla)} · ${ubic(f)} <span class="badge ${escHtml(f.estado)}">${escHtml(String(f.estado).replace('_',' '))}</span>
-        <div class="hint" style="margin:0;">Ingresada ${escHtml(fmtFechaHoraChile(f.fecha_ingreso))}${f.mismo_dia ? ' · <b style="color:#1f8a4c;">mismo día</b>' : ' · otro día'}</div></span></label>`).join('');
+    const d = m.querySelector('#editInspAgregar .ei-d');
+    if(d) d.textContent = filas.length ? `${filas.length} suelta${filas.length === 1 ? '' : 's'} de ${insp.ito_nombre} (±5 días)` : 'No hay fallas sueltas en ese rango';
+    if(!filas.length){ lista.textContent = 'No hay fallas sueltas de este ITO entre 5 días antes y 5 después.'; return; }
+    lista.className = 'ei-lista';
+    lista.innerHTML = cabLista + filas.map(f => filaFalla(f, 'editInspAgrChk', f.mismo_dia, `<br>${f.mismo_dia ? '<span class="ei-md">mismo día</span>' : 'otro día'}`)).join('');
     bAgr.style.display = '';
     const marcadasAgr = () => [...m.querySelectorAll('.editInspAgrChk:checked')].map(x => x.value);
     const refAgr = () => {
       const n = marcadasAgr().length;
-      bAgr.disabled = n === 0; bAgr.style.opacity = n ? '1' : '.5';
+      bAgr.disabled = n === 0;
       bAgr.textContent = n ? `Agregar ${n} falla${n === 1 ? '' : 's'} a esta inspección` : 'Agregar las marcadas';
     };
     m.querySelectorAll('.editInspAgrChk').forEach(c => c.onchange = refAgr);
@@ -7066,17 +7102,7 @@ function abrirModalEditarInspeccion(det){
       }catch(e){
         err.textContent = 'No se pudo: ' + e.message; err.style.display = 'block'; refAgr(); return;
       }
-      bAgr.textContent = 'Actualizando…';
-      if(inspeccionCache && inspeccionCache.id === insp.id) inspeccionCache = {clave:null, id:null};
-      invalidarCacheTodasFallas();
-      try{
-        await cargarListadoInspecciones();
-        await abrirDetalleInspeccion(insp.id);
-        if(ultimoDetalleInspeccion && ultimoDetalleInspeccion.inspeccion && ultimoDetalleInspeccion.inspeccion.id === insp.id)
-          abrirModalEditarInspeccion(ultimoDetalleInspeccion);
-        else cerrarModalEditarInspeccion();
-      }catch(e){ cerrarModalEditarInspeccion(); }
-      cargarFallasDelArea().then(() => renderFallasOnMap());
+      await recargarTras(bAgr);
     };
   })();
   bSue.onclick = () => ejecutar('sueltas');
