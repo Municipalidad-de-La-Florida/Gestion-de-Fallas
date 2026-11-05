@@ -1792,6 +1792,8 @@ function evaluarMantencion(ops, codigo, mono, lums) {
   const decideCodigo = porUso.size > 1 && [...porUso.values()].every((x) => x.size === 1);
   if (distintasLum.size > 1 && !decideCodigo) return { tipo: 'luminarias', uso: null, items: todas };
   if (!codigo) return { tipo: 'nada' };
+  // «Luminaria faltante»: si el punto tiene luminarias distintas (modelo o potencia), se indica cuál falta aunque todas las mantenga el mismo contrato
+  if (codigo === 'F38' && new Set(todas.map((l) => [l.uso_grupo, l.modelo, l.potencia].join('/'))).size > 1) return { tipo: 'luminarias', uso: null, items: todas, trasCodigo: true, faltante: true };
   let uso = mono ? 'VIAL' : (USO_POR_CODIGO[codigo] || null);
   if (uso && !ops.some((o) => o.uso_grupo === uso)) uso = null;       // el punto no tiene ese uso
   const poste = !mono && CODIGOS_ELEGIR_CONTRATO.includes(codigo);
@@ -1825,7 +1827,7 @@ function htmlMantencion(ev, sel) {
     const filas = ev.items.map((l) => `<button type="button" class="lum-op${l.key === sel ? ' sel' : ''}" data-k="${esc(l.key)}">
       <span class="lum-t">${esc(l.modelo)} - ${l.potencia == null ? 's/d' : l.potencia + ' W'} - ${esc(l.uso)}${l.n > 1 ? ' (×' + l.n + ')' : ''}</span>
       <span class="lum-s">${l.estado === 'ok' ? `<span class="tag-ctr n" style="margin-left:0">${esc(l.contrato)}</span><span class="tag-mant">${esc(l.mantenedor)}</span>${l.masivo ? '<span class="tag-masivo">#Masivo</span>' : ''}` : `<span class="tag-sinmant">Sin Mantenimiento${l.mantenedor === 'EN RECEPCION' ? ' - en recepción' : ''}</span>`}</span></button>`).join('');
-    return `<div class="mant-box"><b>¿Qué luminaria está fallando?</b> ${ev.trasCodigo ? 'Esta falla no distingue entre vial y peatonal.' : 'Este punto tiene luminarias con distinto mantenimiento.'} Elige la que reportas.<div class="lum-lista">${filas}</div></div>`;
+    return `<div class="mant-box"><b>¿Qué luminaria está fallando?</b> ${ev.faltante ? 'Indica cuál luminaria falta.' : ev.trasCodigo ? 'Esta falla no distingue entre vial y peatonal.' : 'Este punto tiene luminarias con distinto mantenimiento.'} Elige la que reportas.<div class="lum-lista">${filas}</div></div>`;
   }
   if (ev.tipo === 'elegir') {
     const ops = ev.opciones.map((o, i) => `<option value="${i}"${String(i) === String(sel) ? ' selected' : ''}>${esc(o.etiqueta)}</option>`).join('');
