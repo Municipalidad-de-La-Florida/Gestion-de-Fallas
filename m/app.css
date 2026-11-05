@@ -500,3 +500,27 @@ textarea.campo{ min-height:70px; }
 .tabs-fallas{ display:flex; gap:6px; flex-wrap:wrap; margin:0 0 8px; }
 .tab-falla{ border:1.5px solid #d5ded9; background:#fff; color:var(--tinta); border-radius:10px; padding:6px 11px; font-size:13px; font-weight:700; }
 .tab-falla.on{ background:#1d4e3d; border-color:#1d4e3d; color:#fff; }
+
+/* Historial agrupado por falla */
+.hx{ display:flex; flex-direction:column; gap:10px; }
+.hx-card{ border:1px solid var(--linea); border-radius:14px; overflow:hidden; background:#fff; }
+.hx-cab{ display:flex; align-items:center; gap:7px; padding:8px 10px; background:#f8faf8; border-bottom:1px solid var(--linea); }
+.hx-os{ font-weight:800; font-size:13.5px; border-radius:8px; padding:3px 8px; white-space:nowrap; color:#000; }
+.hx-os.rep{ background:#fdf3cf; } .hx-os.pen{ background:#dff2fa; } .hx-os.reit{ background:#f1e6f7; } .hx-os.ok{ background:#e3f2e8; }
+.hx-cod{ color:var(--tinta-2); }
+.hx-desc{ flex:1; min-width:0; color:var(--tinta-2); font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.hx-abrir{ height:30px; padding:0 11px; border:1.5px solid var(--verde); background:#fff; color:var(--verde); border-radius:9px; font-weight:800; font-size:12.5px; white-space:nowrap; }
+.hx-tl{ padding:10px 12px 12px 14px; }
+.hx-ev{ display:grid; grid-template-columns:14px 1fr; gap:8px; padding-bottom:10px; }
+.hx-ev:last-child{ padding-bottom:0; }
+.hx-pt{ position:relative; }
+.hx-pt:before{ content:""; position:absolute; left:3px; top:5px; width:8px; height:8px; border-radius:50%; background:var(--c); }
+.hx-pt:after{ content:""; position:absolute; left:6.5px; top:15px; bottom:-10px; width:1px; background:var(--linea); }
+.hx-ev:last-child .hx-pt:after{ display:none; }
+.hx-q{ min-width:0; font-size:13px; }
+.hx-l1{ display:flex; align-items:center; gap:5px; }
+.hx-b{ display:inline-block; border-radius:999px; padding:2px 8px; font-size:11px; font-weight:800; }
+.hx-b.rep{ background:#fdf3cf; color:#8a6700; } .hx-b.pen{ background:#dff2fa; color:#17708f; } .hx-b.ok{ background:#e3f2e8; color:#3a8a5c; } .hx-b.asi{ background:#eef4fb; color:#2563a8; }
+.hx-quien{ flex:1; min-width:0; color:var(--tinta-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hx-fh{ color:var(--tinta-2); font-size:12px; white-space:nowrap; }
+.hx-det{ margin-top:2px; white-space:pre-wrap; word-break:break-word; }
