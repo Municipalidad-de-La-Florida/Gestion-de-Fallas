@@ -1532,20 +1532,31 @@ async function abrirHistorial(tipo, gid, titulo, geom) {
     try { coms = await select('fallas_comentarios', `falla_id=in.(${ids.join(',')})&tipo=eq.asignacion&select=falla_id,comentario,autor_nombre,creado_en&order=creado_en.asc`) || []; } catch (e) { /* sin comentarios */ }
     try { desc = await select('fallas', `id=in.(${ids.join(',')})&select=id,descripcion_otro`) || []; } catch (e) { /* sin descripción */ }
     const dRep = {}; desc.forEach((r) => { if (r.descripcion_otro) dRep[r.id] = r.descripcion_otro; });
-    const ev = [];
-    filas.forEach((f) => {
-      const cod = esc(f.tipo_falla || '') + (f.cascada ? ' (por cascada de circuito)' : '');
-      ev.push({ t: f.fecha_falla, ot: f.ot, k: 'Reportada', c: 'rep', cod, q: f.nombre_creador, d: dRep[f.falla_id] });
-      if (f.pendiente_por_nombre) ev.push({ t: f.fecha_pendiente, ot: f.ot, k: 'Dejada pendiente', c: 'pen', cod: esc(f.tipo_falla || ''), q: f.pendiente_por_nombre, d: f.motivo_pendiente });
-      if (f.reparado_por_nombre) ev.push({ t: f.fecha_reparacion, ot: f.ot, k: 'Reparada', c: 'ok', cod: esc(f.tipo_falla || ''), q: f.reparado_por_nombre, d: f.descripcion_reparacion });
-      coms.filter((c) => c.falla_id === f.falla_id).forEach((c) => ev.push({ t: c.creado_en, ot: f.ot, k: 'Comentario de asignación', c: 'asi', cod: esc(f.tipo_falla || ''), q: c.autor_nombre, d: c.comentario }));
-    });
-    ev.sort((a, b) => new Date(b.t) - new Date(a.t));
-    const col = { rep: '#c1443c', pen: '#8a5200', ok: '#1f7a4d', asi: '#2563a8' };
-    caja.outerHTML = `<div class="m-lista">${ev.map((e) => `<div class="m-fila" style="display:block">
-      <div style="display:flex;justify-content:space-between;gap:8px"><b style="color:${col[e.c]}">${esc(e.k)}</b><span class="hint">${esc(fmtFechaHoraCorta(e.t))}</span></div>
-      <div class="hint">${e.ot ? 'OS ' + esc(e.ot) + ' · ' : ''}${e.cod}${e.q ? ' · ' + esc(e.q) : ''}</div>
-      ${e.d ? `<div style="margin-top:4px">${esc(e.d)}</div>` : ''}</div>`).join('')}</div>`;
+    const colPunto = { rep: '#d98e2f', pen: '#17708f', ok: '#3a8a5c', asi: '#2563a8' };
+    const claseEst = (e) => e === 'reparada' ? 'ok' : e === 'pendiente' ? 'pen' : e === 'reiterada' ? 'reit' : 'rep';
+    const descCod = (f) => {
+      const cat = (f.cascada || tipo === 'linea') ? 'circuito' : (['F02', 'F03'].includes(f.tipo_falla) ? 'monoposte' : 'punto');
+      const it = catalogoActivo(cat, f.tipo_falla).find((x) => x.c === f.tipo_falla);
+      return it ? it.d : '';
+    };
+    // una tarjeta por falla; dentro, su línea de tiempo (lo más nuevo arriba)
+    caja.outerHTML = `<div class="hx">${filas.map((f) => {
+      const ev = [{ t: f.fecha_falla, k: 'Reportada', c: 'rep', q: f.nombre_creador, d: dRep[f.falla_id] }];
+      if (f.pendiente_por_nombre) ev.push({ t: f.fecha_pendiente, k: 'Pendiente', c: 'pen', q: f.pendiente_por_nombre, d: f.motivo_pendiente });
+      if (f.reparado_por_nombre) ev.push({ t: f.fecha_reparacion, k: 'Reparada', c: 'ok', q: f.reparado_por_nombre, d: f.descripcion_reparacion });
+      coms.filter((c) => c.falla_id === f.falla_id).forEach((c) => ev.push({ t: c.creado_en, k: 'Asignación', c: 'asi', q: c.autor_nombre, d: c.comentario }));
+      ev.sort((x, y) => new Date(y.t) - new Date(x.t));
+      return `<div class="hx-card">
+        <div class="hx-cab">
+          <span class="hx-os ${claseEst(f.estado)}">${esc(f.ot || '—')}</span><b class="hx-cod">${esc(f.tipo_falla || '')}</b>
+          <span class="hx-desc">${esc(descCod(f))}${f.cascada ? ' (por circuito)' : ''}</span>
+          <button type="button" class="hx-abrir" data-id="${esc(f.falla_id)}">Abrir falla →</button>
+        </div>
+        <div class="hx-tl">${ev.map((e) => `<div class="hx-ev" style="--c:${colPunto[e.c]}"><span class="hx-pt"></span>
+          <div class="hx-q"><div class="hx-l1"><span class="hx-b ${e.c}">${e.k}</span><span class="hx-quien">${esc(e.q || '—')}</span><span class="hx-fh">${esc(fmtFechaHoraCorta(e.t))}</span></div>${e.d ? `<div class="hx-det">${esc(e.d)}</div>` : ''}</div></div>`).join('')}</div>
+      </div>`;
+    }).join('')}</div>`;
+    h.querySelectorAll('.hx-abrir').forEach((b) => b.addEventListener('click', () => { cerrarHoja(); abrirFallaPorId(b.dataset.id); }));
   } catch (e) { caja.textContent = 'No se pudo cargar el historial: ' + e.message; }
 }
 function alternarModoHist(on) {
