@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.3.3';
+const VERSION_APP = '2.3.4';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -4104,6 +4104,8 @@ async function entrarApp() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) repararPantalla(); if (!document.hidden && S.perfil) { cargarFallas(); revisarVersion(); setTimeout(recogerAvisoPendiente, 400); } });
 window.addEventListener('focus', () => { repararPantalla(); setTimeout(recogerAvisoPendiente, 400); });
 window.addEventListener('pageshow', () => { repararPantalla(); setTimeout(recogerAvisoPendiente, 400); });
+// Con la app ya abierta, ni el foco ni el mensaje del service worker llegan siempre (Android): se revisa el aviso anotado cada 1,5 s mientras la app está a la vista
+setInterval(() => { if (!document.hidden && S.perfil) recogerAvisoPendiente(); }, 1500);
 
 (async function iniciar() {
   if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
@@ -4118,6 +4120,7 @@ window.addEventListener('pageshow', () => { repararPantalla(); setTimeout(recoge
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { /* sin SW: la app funciona igual */ });
   S.fallaPendiente = fallaDeUrl();
   if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
+    try { navigator.serviceWorker.startMessages && navigator.serviceWorker.startMessages(); } catch (e) { /* */ }
     navigator.serviceWorker.addEventListener('message', (ev) => {
       const id = ev.data && ev.data.tipo === 'abrir-falla' && ev.data.id;
       if (!id || !/^[\w-]{1,64}$/.test(id)) return;
