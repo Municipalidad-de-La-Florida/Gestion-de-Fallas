@@ -4055,6 +4055,52 @@ $('#btnCampana').addEventListener('click', async () => {
   });
 });
 
+/* ---------------- Atrasos (botón aparte: una fila por falla atrasada; camiones, mantenedores y admin) ---------------- */
+let ATRASOS = [];
+const veAtrasos = () => MODO_MANT || (S.perfil && S.perfil.rol === 'admin');
+function pintarAtrasos() {
+  const n = ATRASOS.filter((x) => !x.leida).length, b = $('#atrasosBadge');
+  if (b) { b.hidden = !n; b.textContent = n > 99 ? '99+' : n; }
+}
+async function cargarAtrasos() {
+  if (!veAtrasos()) return;
+  try { ATRASOS = await select('notificaciones_atraso', 'select=id,falla_id,dias,mensaje,creado_en,leida&order=creado_en.desc&limit=100') || []; }
+  catch (e) { if (e.name === 'SesionExpirada') throw e; }
+  pintarAtrasos();
+}
+function listaAtrasosHtml() {
+  return ATRASOS.length ? ATRASOS.map((n) => `<div class="av-it${n.leida ? '' : ' nueva'}" data-id="${esc(n.id)}" data-f="${esc(n.falla_id)}" role="button" tabindex="0"><div class="tx"><b>${esc(n.mensaje)}</b><small>${esc(hace(n.creado_en))} · toca para verla en el mapa</small></div></div>`).join('')
+    : '<div class="u-vacio">No hay fallas con atraso.</div>';
+}
+function iniciarAtrasos() {
+  clearInterval(_atrasosTimer);
+  const btn = $('#btnAtrasos');
+  if (!btn) return;
+  btn.style.display = veAtrasos() ? '' : 'none';
+  if (!veAtrasos()) return;
+  cargarAtrasos();
+  _atrasosTimer = setInterval(() => { if (!document.hidden) cargarAtrasos(); }, 5 * 60 * 1000);
+}
+let _atrasosTimer = null;
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil && veAtrasos()) cargarAtrasos(); });
+$('#btnAtrasos').addEventListener('click', async () => {
+  const h = abrirHoja(`<div id="atRaiz"><div class="av-cab"><b>Fallas con atraso</b><div class="av-acc"><button type="button" data-a="leer">Marcar leídos</button></div></div><div id="avLista">${listaAtrasosHtml()}</div></div>`);
+  const repintar = () => { const l = $('#avLista', h); if (l) l.innerHTML = listaAtrasosHtml(); pintarAtrasos(); };
+  cargarAtrasos().then(repintar);
+  $('#atRaiz', h).addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-a]'), it = e.target.closest('.av-it');
+    try {
+      if (a && a.dataset.a === 'leer') { await api('/rest/v1/notificaciones_atraso?leida=eq.false', { method: 'PATCH', body: { leida: true } }); ATRASOS.forEach((n) => { n.leida = true; }); repintar(); return; }
+      if (it) {
+        const n = ATRASOS.find((x) => x.id === it.dataset.id);
+        if (n && !n.leida) { n.leida = true; pintarAtrasos(); api(`/rest/v1/notificaciones_atraso?id=eq.${n.id}`, { method: 'PATCH', body: { leida: true } }).catch(() => {}); }
+        cerrarHoja();
+        abrirFallaPorId(it.dataset.f);
+      }
+    } catch (err) { if (err.name === 'SesionExpirada') throw err; toast('No se pudo actualizar los atrasos.', 'error'); }
+  });
+});
+
 async function entrarApp() {
   if (typeof L === 'undefined') throw new Error('No se pudo cargar el mapa. Revisa tu conexión y recarga la página.');
   await cargarPerfil();
@@ -4097,6 +4143,7 @@ async function entrarApp() {
   iniciarGPS();
   iniciarPush();
   iniciarCampana();
+  iniciarAtrasos();
   revisarVersion();
   clearInterval(S.timer);
   S.timer = setInterval(() => { if (!document.hidden && !hojaAbierta) cargarFallas(); }, REFRESCO_MS);

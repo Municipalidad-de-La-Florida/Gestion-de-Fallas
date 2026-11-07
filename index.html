@@ -739,8 +739,12 @@
       <button type="button" class="hb" id="inspC3Btn" style="display:none;"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="bt">Inspecciones</span></button>
       <button type="button" class="hb" id="cuadBtn" title="Rendimiento de las cuadrillas" style="display:none;"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 6h13v10H1zM14 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></span><span class="bt">Rendimiento</span></button>
       <span id="notifBox" style="position:relative; display:none;">
-        <button type="button" class="hb" id="notifBtn" title="Notificaciones" aria-haspopup="true" aria-expanded="false"><span class="hb-chip" style="background:#fde8e8;color:#c1443c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></span><span class="bt">Avisos</span><span id="notifBadge" class="notif-badge" hidden>0</span></button>
+        <button type="button" class="hb" id="notifBtn" title="Notificaciones" aria-haspopup="true" aria-expanded="false"><span class="hb-chip" style="background:#fde8e8;color:#c1443c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></span><span class="bt">Notificaciones</span><span id="notifBadge" class="notif-badge" hidden>0</span></button>
         <div id="notifPanel" class="um-panel notif-panel" hidden></div>
+      </span>
+      <span id="atrBox" style="position:relative; display:none;">
+        <button type="button" class="hb" id="atrBtn" title="Fallas con atraso" aria-haspopup="true" aria-expanded="false"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9 3h6"/></svg></span><span class="bt">Atrasos</span><span id="atrBadge" class="notif-badge" hidden>0</span></button>
+        <div id="atrPanel" class="um-panel notif-panel" hidden></div>
       </span>
       <button type="button" class="hb" id="infRepBtn" style="display:none;"><span class="hb-chip" style="background:#e4eef7;color:#2f5d8a;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span><span class="bt">Informe reparaciones</span></button>
       <button type="button" class="hb" id="fiscBtn" style="display:none;"><span class="hb-chip" style="background:#fbe7e5;color:#c1443c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v3.5M11 14h.01"/></svg></span><span class="bt">Fiscalización</span></button>
@@ -10741,9 +10745,10 @@ function iniciarNotifs(){
   const box = document.getElementById('notifBox');
   if(!box) return;
   box.style.display = (veCampana() && !modoVista) ? '' : 'none';
+  const ab = document.getElementById('atrBox'); if(ab) ab.style.display = (veAtrasos() && !modoVista) ? '' : 'none';
   if(!veCampana()) return;
-  cargarNotifs();
-  notifTimer = setInterval(cargarNotifs, 5 * 60 * 1000);
+  cargarNotifs(); cargarAtrasos();
+  notifTimer = setInterval(() => { cargarNotifs(); cargarAtrasos(); }, 5 * 60 * 1000);
 }
 (function(){
   const btn = document.getElementById('notifBtn'), panel = document.getElementById('notifPanel');
@@ -10767,6 +10772,49 @@ function iniciarNotifs(){
         if(it.dataset.f) enfocarFalla(it.dataset.f, true);   // acerca el mapa a la falla y abre su ficha, igual que el aviso del celular
       }
     }catch(err){ alert('No se pudo actualizar los avisos: ' + err.message); }
+  });
+})();
+
+// ---------- ATRASOS (lista aparte: una fila por falla atrasada; solo camiones, mantenedores y admin) ----------
+let ATR = [];
+const veAtrasos = () => MODO_MANT || (currentUser && currentUser.rol === 'admin');
+function pintarAtrasos(){
+  const badge = document.getElementById('atrBadge'), panel = document.getElementById('atrPanel');
+  if(!badge || !panel) return;
+  const nuevas = ATR.filter(n => !n.leida).length;
+  badge.hidden = !nuevas; badge.textContent = nuevas;
+  if(panel.hidden) return;
+  panel.innerHTML = `<div class="notif-head"><span>Fallas con atraso</span><span><button type="button" data-a="leer">Marcar leídos</button></span></div>` +
+    (ATR.length ? ATR.map(n => `<div class="notif-it${n.leida ? '' : ' nueva'}" data-id="${n.id}" data-f="${n.falla_id}"><div class="nt"><b>${escHtml(n.mensaje)}</b><div class="nh">${tiempoHace(n.creado_en)} · clic: ver en el mapa</div></div></div>`).join('') : '<div class="notif-vacio">No hay fallas con atraso.</div>');
+}
+async function cargarAtrasos(){
+  if(!veAtrasos() || !accessToken) return;
+  try{ ATR = await db.select('notificaciones_atraso', 'select=id,falla_id,dias,mensaje,creado_en,leida&order=creado_en.desc&limit=100') || []; }
+  catch(_){ ATR = []; }
+  pintarAtrasos();
+}
+(function(){
+  const btn = document.getElementById('atrBtn'), panel = document.getElementById('atrPanel');
+  if(!btn || !panel) return;
+  const cerrar = () => { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    panel.hidden = !panel.hidden; btn.setAttribute('aria-expanded', String(!panel.hidden));
+    if(!panel.hidden){ await cargarAtrasos(); pintarAtrasos(); }
+  });
+  document.addEventListener('click', (e) => { if(!panel.hidden && !e.target.closest('#atrBox')) cerrar(); });
+  panel.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    const a = e.target.closest('[data-a]'), it = e.target.closest('.notif-it');
+    try{
+      if(a && a.dataset.a === 'leer'){ await db.update('notificaciones_atraso', 'leida=eq.false', {leida: true}); ATR.forEach(n => n.leida = true); pintarAtrasos(); return; }
+      if(it){
+        const n = ATR.find(x => x.id === it.dataset.id);
+        if(n && !n.leida){ n.leida = true; db.update('notificaciones_atraso', `id=eq.${n.id}`, {leida: true}).catch(() => {}); }
+        cerrar(); pintarAtrasos();
+        enfocarFalla(it.dataset.f, true);
+      }
+    }catch(err){ alert('No se pudo actualizar los atrasos: ' + err.message); }
   });
 })();
 // ---------- INFORME DE REPARACIONES (por contrato y mantenedor; solo usuarios habilitados) ----------
