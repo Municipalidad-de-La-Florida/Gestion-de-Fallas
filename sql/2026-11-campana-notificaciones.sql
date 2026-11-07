@@ -53,3 +53,13 @@ end $$;
 -- Limpieza: nada dura más de 24 h
 select cron.unschedule('limpiar-notificaciones') where exists (select 1 from cron.job where jobname = 'limpiar-notificaciones');
 select cron.schedule('limpiar-notificaciones', '*/15 * * * *', $$delete from public.notificaciones where creado_en < now() - interval '24 hours'$$);
+
+-- Los contratistas también se enteran de las fallas que ellos mismos informan y de las reparaciones que ellos mismos registran
+do $$ declare d text; begin
+  select pg_get_functiondef('public.push_falla_nueva()'::regprocedure) into d;
+  d := replace(d, 'and u.id is distinct from coalesce(NEW.creado_por, NEW.informado_por)', 'and (u.id is distinct from coalesce(NEW.creado_por, NEW.informado_por) or u.rol in (''contratista'', ''contratista2'', ''contratista3''))');
+  execute d;
+  select pg_get_functiondef('public.push_falla_reparada()'::regprocedure) into d;
+  d := replace(d, 'and u.id is distinct from v_repara', 'and (u.id is distinct from v_repara or u.rol in (''contratista'', ''contratista2'', ''contratista3''))');
+  execute d;
+end $$;
