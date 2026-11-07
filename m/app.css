@@ -524,3 +524,6 @@ textarea.campo{ min-height:70px; }
 .hx-quien{ flex:1; min-width:0; color:var(--tinta-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .hx-fh{ color:var(--tinta-2); font-size:12px; white-space:nowrap; }
 .hx-det{ margin-top:2px; white-space:pre-wrap; word-break:break-word; }
+
+.av-it .tx .cu{ display:block; margin-top:2px; font-size:13px; color:var(--tinta-2); font-weight:400; }
+#avLista{ max-height:62vh; overflow-y:auto; -webkit-overflow-scrolling:touch; }

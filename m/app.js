@@ -4012,14 +4012,14 @@ window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); S.in
 /* ---------------- Avisos de atraso (campana de la esquina superior derecha) ---------------- */
 // Los genera la base cada hora; cada falla tiene un solo aviso (el del día siguiente reemplaza al anterior).
 let NOTIFS = [], _campanaTimer = null;
-const veCampana = () => MODO_MANT || (S.perfil && S.perfil.rol === 'admin');   // camiones, mantenedores y admin
+const veCampana = () => !!S.perfil;   // todos los usuarios con sesión: ven las notificaciones que reciben
 function pintarCampana() {
   const n = NOTIFS.filter((x) => !x.leida).length, b = $('#campanaBadge');
   if (b) { b.hidden = !n; b.textContent = n > 99 ? '99+' : n; }
 }
 async function cargarNotifs() {
   if (!veCampana()) return;
-  try { NOTIFS = await select('notificaciones_atraso', 'select=id,falla_id,dias,mensaje,creado_en,leida&order=creado_en.desc&limit=100') || []; }
+  try { NOTIFS = await select('notificaciones', 'select=id,falla_id,titulo,cuerpo,creado_en,leida&creado_en=gte.' + encodeURIComponent(new Date(Date.now() - 864e5).toISOString()) + '&order=creado_en.desc&limit=200') || []; }
   catch (e) { if (e.name === 'SesionExpirada') throw e; /* sin el SQL de avisos o sin red: se deja lo que hay */ }
   pintarCampana();
 }
@@ -4034,24 +4034,70 @@ function iniciarCampana() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil && veCampana()) cargarNotifs(); });
 function listaNotifsHtml() {
-  return NOTIFS.length ? NOTIFS.map((n) => `<div class="av-it${n.leida ? '' : ' nueva'}" data-id="${esc(n.id)}" data-f="${esc(n.falla_id)}" role="button" tabindex="0"><div class="tx"><b>${esc(n.mensaje)}</b><small>${esc(hace(n.creado_en))} · toca para verla en el mapa</small></div></div>`).join('')
-    : '<div class="u-vacio">No hay avisos de atraso.</div>';
+  return NOTIFS.length ? NOTIFS.map((n) => `<div class="av-it${n.leida ? '' : ' nueva'}" data-id="${esc(n.id)}" data-f="${esc(n.falla_id || '')}" role="button" tabindex="0"><div class="tx"><b>${esc(n.titulo)}</b>${n.cuerpo ? `<span class="cu">${esc(n.cuerpo)}</span>` : ''}<small>${esc(hace(n.creado_en))}${n.falla_id ? ' · toca para verla en el mapa' : ''}</small></div></div>`).join('')
+    : '<div class="u-vacio">No hay notificaciones en las últimas 24 horas.</div>';
 }
 $('#btnCampana').addEventListener('click', async () => {
-  const h = abrirHoja(`<div id="avRaiz"><div class="av-cab"><b>Avisos de atraso</b><div class="av-acc"><button type="button" data-a="leer">Marcar leídos</button></div></div><div id="avLista">${listaNotifsHtml()}</div></div>`);
+  const h = abrirHoja(`<div id="avRaiz"><div class="av-cab"><b>Notificaciones</b><div class="av-acc"><button type="button" data-a="leer">Marcar leídos</button></div></div><div id="avLista">${listaNotifsHtml()}</div></div>`);
   const repintar = () => { const l = $('#avLista', h); if (l) l.innerHTML = listaNotifsHtml(); pintarCampana(); };
   cargarNotifs().then(repintar);
   $('#avRaiz', h).addEventListener('click', async (e) => {   // el oyente va en un contenedor que se recrea cada vez que se abre
     const a = e.target.closest('[data-a]'), it = e.target.closest('.av-it');
     try {
-      if (a && a.dataset.a === 'leer') { await api('/rest/v1/notificaciones_atraso?leida=eq.false', { method: 'PATCH', body: { leida: true } }); NOTIFS.forEach((n) => { n.leida = true; }); repintar(); return; }
+      if (a && a.dataset.a === 'leer') { await api('/rest/v1/notificaciones?leida=eq.false', { method: 'PATCH', body: { leida: true } }); NOTIFS.forEach((n) => { n.leida = true; }); repintar(); return; }
       if (it) {
         const n = NOTIFS.find((x) => x.id === it.dataset.id);
-        if (n && !n.leida) { n.leida = true; pintarCampana(); api(`/rest/v1/notificaciones_atraso?id=eq.${n.id}`, { method: 'PATCH', body: { leida: true } }).catch(() => {}); }
+        if (n && !n.leida) { n.leida = true; pintarCampana(); api(`/rest/v1/notificaciones?id=eq.${n.id}`, { method: 'PATCH', body: { leida: true } }).catch(() => {}); }
         cerrarHoja();
-        abrirFallaPorId(it.dataset.f);   // acerca el mapa a la falla y abre su ficha, igual que el aviso del celular
+        if (it.dataset.f) abrirFallaPorId(it.dataset.f);   // acerca el mapa a la falla y abre su ficha, igual que el aviso del celular
       }
     } catch (err) { if (err.name === 'SesionExpirada') throw err; toast('No se pudo actualizar los avisos.', 'error'); }
+  });
+});
+
+/* ---------------- Atrasos (botón aparte: una fila por falla atrasada; camiones, mantenedores y admin) ---------------- */
+let ATRASOS = [];
+const veAtrasos = () => MODO_MANT || (S.perfil && S.perfil.rol === 'admin');
+function pintarAtrasos() {
+  const n = ATRASOS.filter((x) => !x.leida).length, b = $('#atrasosBadge');
+  if (b) { b.hidden = !n; b.textContent = n > 99 ? '99+' : n; }
+}
+async function cargarAtrasos() {
+  if (!veAtrasos()) return;
+  try { ATRASOS = await select('notificaciones_atraso', 'select=id,falla_id,dias,mensaje,creado_en,leida&order=creado_en.desc&limit=100') || []; }
+  catch (e) { if (e.name === 'SesionExpirada') throw e; }
+  pintarAtrasos();
+}
+function listaAtrasosHtml() {
+  return ATRASOS.length ? ATRASOS.map((n) => `<div class="av-it${n.leida ? '' : ' nueva'}" data-id="${esc(n.id)}" data-f="${esc(n.falla_id)}" role="button" tabindex="0"><div class="tx"><b>${esc(n.mensaje)}</b><small>${esc(hace(n.creado_en))} · toca para verla en el mapa</small></div></div>`).join('')
+    : '<div class="u-vacio">No hay fallas con atraso.</div>';
+}
+function iniciarAtrasos() {
+  clearInterval(_atrasosTimer);
+  const btn = $('#btnAtrasos');
+  if (!btn) return;
+  btn.style.display = veAtrasos() ? '' : 'none';
+  if (!veAtrasos()) return;
+  cargarAtrasos();
+  _atrasosTimer = setInterval(() => { if (!document.hidden) cargarAtrasos(); }, 5 * 60 * 1000);
+}
+let _atrasosTimer = null;
+document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil && veAtrasos()) cargarAtrasos(); });
+$('#btnAtrasos').addEventListener('click', async () => {
+  const h = abrirHoja(`<div id="atRaiz"><div class="av-cab"><b>Fallas con atraso</b><div class="av-acc"><button type="button" data-a="leer">Marcar leídos</button></div></div><div id="avLista">${listaAtrasosHtml()}</div></div>`);
+  const repintar = () => { const l = $('#avLista', h); if (l) l.innerHTML = listaAtrasosHtml(); pintarAtrasos(); };
+  cargarAtrasos().then(repintar);
+  $('#atRaiz', h).addEventListener('click', async (e) => {
+    const a = e.target.closest('[data-a]'), it = e.target.closest('.av-it');
+    try {
+      if (a && a.dataset.a === 'leer') { await api('/rest/v1/notificaciones_atraso?leida=eq.false', { method: 'PATCH', body: { leida: true } }); ATRASOS.forEach((n) => { n.leida = true; }); repintar(); return; }
+      if (it) {
+        const n = ATRASOS.find((x) => x.id === it.dataset.id);
+        if (n && !n.leida) { n.leida = true; pintarAtrasos(); api(`/rest/v1/notificaciones_atraso?id=eq.${n.id}`, { method: 'PATCH', body: { leida: true } }).catch(() => {}); }
+        cerrarHoja();
+        abrirFallaPorId(it.dataset.f);
+      }
+    } catch (err) { if (err.name === 'SesionExpirada') throw err; toast('No se pudo actualizar los atrasos.', 'error'); }
   });
 });
 
@@ -4097,6 +4143,7 @@ async function entrarApp() {
   iniciarGPS();
   iniciarPush();
   iniciarCampana();
+  iniciarAtrasos();
   revisarVersion();
   clearInterval(S.timer);
   S.timer = setInterval(() => { if (!document.hidden && !hojaAbierta) cargarFallas(); }, REFRESCO_MS);
