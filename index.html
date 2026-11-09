@@ -3444,6 +3444,7 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun, excluir
         <textarea class="popup-input" id="otroDesc" placeholder="Opcional (obligatorio si elegiste OTRO)" style="margin-top:0;"></textarea>
         <div class="rp-sec">Orden externa (opcional)</div>
         ${htmlOrdenExterna()}
+        ${htmlFotoReporte()}
       </div>
       <div class="rp-der">
         <div class="rp-lt">Listado de fallas</div>
@@ -3488,11 +3489,12 @@ function abrirFormularioFallaPunto(puntoGid, llave, esMonoposte, nroMun, excluir
     const ordenExterna = oe.valor;
     const notif = puedeNotificadorExterno() ? await leerNotificador(panel) : null;
     if(notif && notif.error){ alert(notif.error); return; }
-    const ok = await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna, notif && notif.extra, false, null, mv.datos);
+    const ok = await crearFallaPunto(puntoGid, codigoSel, cardSel, desc || null, fechaCustom, ordenExterna, notif && notif.extra, false, null, mv.datos, leerFotoReporte());
     if(ok) recordarNotificador(notif);
     cerrarPanel();
   };
   activarOrdenExterna(panel);
+  const leerFotoReporte = activarFotoReporte(panel);
   activarNotificador(panel);
   protegerClick(panel.querySelector('#confirmarBtn'));
 }
@@ -3526,6 +3528,7 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
         <textarea class="popup-input" id="otroDesc" placeholder="Opcional (obligatorio si elegiste OTRO)" style="margin-top:0;"></textarea>
         <div class="rp-sec">Orden externa (opcional)</div>
         ${htmlOrdenExterna()}
+        ${htmlFotoReporte()}
       </div>
       <div class="rp-der">
         <div class="rp-lt">Listado de fallas</div>
@@ -3551,12 +3554,13 @@ function abrirFormularioFallaCircuito(circuitoGid, idOriginal){
     const fechaCustom = modoIngreso === 'inspeccion' && fechaInspeccionSesion ? fechaInspeccionSesion : null;
     const notif = puedeNotificadorExterno() ? await leerNotificador(panel) : null;
     if(notif && notif.error){ alert(notif.error); return; }
-    const ok = await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna, notif && notif.extra, false, null);
+    const ok = await crearFallaCircuito(circuitoGid, codigoSel, fechaCustom, desc || null, ordenExterna, notif && notif.extra, false, null, leerFotoReporte());
     if(ok) recordarNotificador(notif);
     cerrarPanel();
   };
   avisoMantencionCircuito(panel, circuitoGid);
   activarOrdenExterna(panel);
+  const leerFotoReporte = activarFotoReporte(panel);
   activarNotificador(panel);
   protegerClick(panel.querySelector('#confirmarBtn'));
 }
@@ -4108,7 +4112,7 @@ async function abrirPopupFalla(feat){
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
   const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${mantenedorTag(p.mantenedor_id)}${masivoTag(p.masivo)}${p.contrato_id ? '' : derivacionTag(p.derivacion)}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
-    <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div>`;
+    <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div><div id="fotoReporteWeb"></div>`;
 
   // Quién puede dejar un comentario en una falla ya creada (todos menos el observador); los puntos de cascada comentan en su circuito
   const puedeComentar = tiene('falla_comentar') && !p.cascada && !p._vistaHistorica;
@@ -4173,6 +4177,7 @@ async function abrirPopupFalla(feat){
   }
 
   const panel = mostrarPanel(contenidoPanel, panelDosColumnas);
+  mostrarFotoReporte(p, panel);
   llenarFotos(panel);
   if(p.tipo === 'punto' && !p.cascada && p.estado !== 'reparada' && !p._vistaHistorica && p.ref_punto_gid != null) ofrecerSegundaFallaWeb(p, panel);
   if(p.estado === 'reparada' && !p.cascada && !p._vistaHistorica && tiene('reparacion_editar_propia')){
@@ -4469,7 +4474,7 @@ function htmlBotonMasivo(on){
 function leerMasivo(panel){ return !!panel.querySelector('.btn-masivo.on'); }
 
 // extra (opcional): {fechaISO, notificadorId} elegidos en la ventana de "Agregar falla" (usuarios con el permiso)
-async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna, extra, masivo, contratoId, mantDatos){
+async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna, extra, masivo, contratoId, mantDatos, fotoReporte){
   try{
     const fila = {
       tipo:'punto', ref_punto_gid:puntoGid, tipo_falla:tipoFalla,
@@ -4489,12 +4494,13 @@ async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtr
     const filaCreada = await db.insert('fallas', fila);
     if(filaCreada && filaCreada[0] && masivo) await guardarComentarioFalla(filaCreada[0].id, 'masivo', 'Masivo');
     if(filaCreada && filaCreada[0]) await guardarComentarioFalla(filaCreada[0].id, 'reporte', descripcionOtro);
+    if(fotoReporte && filaCreada && filaCreada[0]) await subirFotoReporte(filaCreada[0].id, fotoReporte);
     cargarFallasDelArea(); renderFallasOnMap(); invalidarCacheTodasFallas();
     return true;
   }catch(e){ alert('Error al crear la falla: ' + e.message); return false; }
 }
 
-async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripcionOtro, ordenExterna, extra, masivo, contratoId){
+async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripcionOtro, ordenExterna, extra, masivo, contratoId, fotoReporte){
   try{
     const filaLineaObj = {
       tipo:'linea', ref_circuito_gid:circuitoGid, tipo_falla:tipoFalla,
@@ -4514,6 +4520,7 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
     const fallaLinea = filaLinea[0];
     if(fallaLinea && masivo) await guardarComentarioFalla(fallaLinea.id, 'masivo', 'Masivo');
     if(fallaLinea) await guardarComentarioFalla(fallaLinea.id, 'reporte', descripcionOtro);
+    if(fotoReporte && fallaLinea) await subirFotoReporte(fallaLinea.id, fotoReporte);
 
     const puntos = await db.rpc('puntos_de_circuito', {circuito_gid: circuitoGid});
     if(puntos && puntos.length){
@@ -4880,7 +4887,7 @@ async function registrarReparacion(fallaId, descripcion){
 }
 
 // ----- Fotos de reparación desde el computador (opcionales) -----
-const MAX_FOTOS_CIERRE = 3, FOTO_LADO_WEB = 1280, FOTO_CALIDAD_WEB = 0.7, FOTO_MAX_BYTES_WEB = 400 * 1024;
+const MAX_FOTOS_CIERRE = 4, FOTO_LADO_WEB = 1280, FOTO_CALIDAD_WEB = 0.7, FOTO_MAX_BYTES_WEB = 400 * 1024;
 async function comprimirFotoWeb(file){
   let img;
   try{ img = await createImageBitmap(file, {imageOrientation: 'from-image'}); }
@@ -4902,7 +4909,7 @@ async function comprimirFotoWeb(file){
   }
   return blob;
 }
-async function subirFotoReparacion(fallaId, blob){
+async function subirFotoReparacion(fallaId, blob, rpcRegistro){
   const ruta = `${fallaId}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2))}.jpg`;
   let res;
   try{
@@ -4911,7 +4918,52 @@ async function subirFotoReparacion(fallaId, blob){
     });
   }catch(e){ throw new Error('Sin conexión al subir la foto. Intenta de nuevo.'); }
   if(!res.ok) throw new Error('No se pudo subir la foto (' + res.status + ').');
-  await db.rpc('registrar_foto_falla', {p_falla_id: fallaId, p_ruta: ruta, p_bytes: blob.size});
+  await db.rpc(rpcRegistro || 'registrar_foto_falla', {p_falla_id: fallaId, p_ruta: ruta, p_bytes: blob.size});
+}
+// ---------- FOTO OPCIONAL AL REPORTAR UNA FALLA (1 por falla; aparte de las fotos de la reparación) ----------
+function htmlFotoReporte(){
+  return `<div class="rp-sec">Foto (opcional)</div>
+    <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
+      <button type="button" class="rp-link" id="fpBtn" style="margin:0;">📷 Agregar foto</button>
+      <div id="fpVista"></div>
+    </div>
+    <input type="file" id="fpIn" accept="image/*" style="display:none;">`;
+}
+// Devuelve () => blob|null con la foto elegida
+function activarFotoReporte(panel){
+  let foto = null;
+  const pintar = () => {
+    const v = panel.querySelector('#fpVista');
+    v.innerHTML = foto ? `<span style="position:relative; display:inline-block;"><img src="${foto.url}" style="width:56px; height:56px; object-fit:cover; border-radius:6px; border:2px solid #1f8a4c;"><span id="fpQuitar" title="Quitar foto" style="position:absolute; top:-6px; right:-6px; background:#555; color:#fff; border-radius:50%; width:18px; height:18px; text-align:center; line-height:18px; font-size:12px; cursor:pointer;">✕</span></span>` : '';
+    const q = panel.querySelector('#fpQuitar');
+    if(q) q.onclick = () => { URL.revokeObjectURL(foto.url); foto = null; pintar(); };
+    panel.querySelector('#fpBtn').style.display = foto ? 'none' : '';
+  };
+  panel.querySelector('#fpBtn').onclick = () => panel.querySelector('#fpIn').click();
+  panel.querySelector('#fpIn').onchange = async e => {
+    const f = e.target.files && e.target.files[0]; e.target.value = '';
+    if(!f) return;
+    try{ const blob = await comprimirFotoWeb(f); foto = {blob, url: URL.createObjectURL(blob)}; }
+    catch(err){ alert(err.message); }
+    pintar();
+  };
+  return () => foto ? foto.blob : null;
+}
+async function subirFotoReporte(fallaId, blob){
+  if(!blob || !fallaId) return;
+  try{ await subirFotoReparacion(fallaId, blob, 'registrar_foto_reporte'); }
+  catch(e){ alert('La falla quedó registrada, pero la foto no se pudo subir: ' + e.message); }
+}
+// Muestra en la ficha la foto que se adjuntó al reportar la falla
+async function mostrarFotoReporte(p, panel){
+  try{
+    const box = panel.querySelector('#fotoReporteWeb'); if(!box || p.cascada) return;
+    const fs = await db.select('fallas_foto_reporte', `falla_id=eq.${p.id}&select=ruta`);
+    if(!fs || !fs.length) return;
+    const u = await urlFotoFirmada(fs[0].ruta);
+    box.innerHTML = `<div class="rp-sec" style="margin-top:6px;">Foto del reporte</div><img src="${escHtml(u)}" alt="Foto del reporte" title="Ampliar" style="width:84px; height:84px; object-fit:cover; border-radius:6px; border:1px solid var(--line); cursor:pointer;">`;
+    box.querySelector('img').onclick = () => abrirFotoGrande([u], 0);
+  }catch(e){ /* sin foto */ }
 }
 
 // ===== Editar / quitar una reparación (quien la registró, 30 minutos; el admin siempre) =====
