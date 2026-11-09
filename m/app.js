@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.4.3';
+const VERSION_APP = '2.4.4';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1762,7 +1762,7 @@ function htmlCodigos(cat, nombreCat) {
 }
 function htmlOrdenExterna() {
   return `<div class="fila">
-    <select id="fOeEmp" class="campo" aria-label="Empresa"><option value="">Sin orden</option><option value="S">Sinec</option><option value="E">Elecnor</option></select>
+    <select id="fOeEmp" class="campo" aria-label="Empresa"><option value="">Sin orden</option><option value="S">Sinec</option></select>
     <input id="fOeNum" class="campo" inputmode="numeric" placeholder="N.° de orden" autocomplete="off">
   </div>`;
 }
@@ -1770,7 +1770,7 @@ function leerOrdenExterna(h) {
   const emp = $('#fOeEmp', h).value;
   const num = $('#fOeNum', h).value.trim().replace(/\s+/g, '');
   if (!emp && !num) return { valor: null };
-  if (num && !emp) return { error: 'Elige la empresa de la orden externa (Sinec o Elecnor).' };
+  if (num && !emp) return { error: 'Elige la empresa de la orden externa (Sinec).' };
   if (emp && !num) return { error: 'Escribe el número de la orden externa, o deja "Sin orden".' };
   if (num.length > 38) return { error: 'El número de la orden externa es demasiado largo.' };
   return { valor: `${emp}-${num}` };
@@ -2072,7 +2072,7 @@ async function editarFallaApp(p) {
   });
   $('#fDesc', h).value = fila.descripcion_otro || '';
   const m = /^([SE])-(.*)$/.exec(fila.orden_externa || '');
-  if (m) { $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
+  if (m) { if (m[1] === 'E') $('#fOeEmp', h).add(new Option('Elecnor', 'E')); /* órdenes antiguas de Elecnor se conservan */ $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
   const gu = $('#fGuardar', h);
   gu.addEventListener('click', ocupar(gu, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -2292,7 +2292,7 @@ async function editarReparacionApp(p, est) {
   $('#rDesc', h).value = est.descripcion || '';
   $('#rOtro', h).value = est.descripcion_otro || '';
   const m = /^([SE])-(.*)$/.exec(est.orden_externa || '');
-  if (m) { $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
+  if (m) { if (m[1] === 'E') $('#fOeEmp', h).add(new Option('Elecnor', 'E')); /* órdenes antiguas de Elecnor se conservan */ $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
   // Los códigos de trabajo se marcan/desmarcan (como al registrar) y reflejan lo escrito en el cuadro
   const lineasRep = () => $('#rDesc', h).value.split('\n').map((x) => x.trim());
   const marcarCodigosRep = () => { const ls = lineasRep(); $$('.codigos .codigo[data-t]', h).forEach((b) => b.classList.toggle('sel', ls.includes(b.dataset.t))); };
