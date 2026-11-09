@@ -531,3 +531,41 @@ textarea.campo{ min-height:70px; }
 
 .av-it .tx .cu{ display:block; margin-top:2px; font-size:13px; color:var(--tinta-2); font-weight:400; }
 #avLista{ max-height:62vh; overflow-y:auto; -webkit-overflow-scrolling:touch; }
+
+/* ===== Modo oscuro (html[data-tema=oscuro]; lo pone el JS según Ajustes / el teléfono) ===== */
+html[data-tema=oscuro]{ --fondo:#0e1412; --tinta:#e7eeeb; --tinta-2:#9db0a7; --linea:#2a3833; --blanco:#17201d; --verde:#2b6a55; --verde-2:#4fae8a; --sombra:0 6px 24px rgba(0,0,0,.6); --sup:#17201d; --sup2:#1e2925; }
+html[data-tema=oscuro],html[data-tema=oscuro] body{ color-scheme:dark; }
+html[data-tema=oscuro] #barra{ background:#12261f; }
+html[data-tema=oscuro] #hoja{ background:var(--sup); }
+html[data-tema=oscuro] .hoja-asa{ background:#3a4a44; }
+html[data-tema=oscuro] .hoja-x{ background:#26332e; color:var(--tinta); }
+html[data-tema=oscuro] .tarjeta,html[data-tema=oscuro] .campo,html[data-tema=oscuro] .codigo,html[data-tema=oscuro] .login-caja,html[data-tema=oscuro] .login-caja input{ background:var(--sup2); color:var(--tinta); }
+html[data-tema=oscuro] .codigo b{ color:#7fd1a8; }
+html[data-tema=oscuro] .codigo.sel{ background:#1d3d31; border-color:#4fae8a; box-shadow:inset 0 0 0 1px #4fae8a; }
+html[data-tema=oscuro] .btn-secundario{ background:#26332e; color:var(--tinta); }
+html[data-tema=oscuro] .btn-primario{ background:#2b6a55; color:#fff; }
+html[data-tema=oscuro] .campo::placeholder{ color:#6f8279; }
+html[data-tema=oscuro] select.campo{ color:var(--tinta); }
+html[data-tema=oscuro] .fab{ background:var(--sup2); color:var(--tinta); }
+html[data-tema=oscuro] .fab.activo{ background:#2b6a55; }
+html[data-tema=oscuro] .tag-ctr,html[data-tema=oscuro] .tag-mant{ filter:brightness(.95); }
+html[data-tema=oscuro] .kv dd{ color:var(--tinta); }
+html[data-tema=oscuro] #navInferior{ background:var(--sup); box-shadow:0 4px 18px rgba(0,0,0,.6); }
+html[data-tema=oscuro] .nav-btn.sel{ color:#7fd1a8; background:#1d3d31; }
+html[data-tema=oscuro] .acciones.fija{ background:var(--sup) !important; }
+html[data-tema=oscuro] .hoja-form .acciones.fija{ background:var(--sup) !important; }
+html[data-tema=oscuro] .leaflet-tile-pane{ filter:invert(1) hue-rotate(180deg) brightness(.98) contrast(.85) saturate(.55); }
+html[data-tema=oscuro] .leaflet-container{ background:#1b211f; }
+html[data-tema=oscuro] .m-fila{ border-top-color:#26332e; }
+html[data-tema=oscuro] .m-fila:active{ background:#1e2925; }
+html[data-tema=oscuro] .m-fila.m-segm{ height:auto; padding:8px 4px; }
+.seg-tema{ display:flex; gap:6px; margin:4px 0 10px; }
+.seg-tema button{ flex:1; height:40px; border:1px solid var(--linea); border-radius:10px; background:var(--blanco); font-weight:600; font-size:14px; }
+.seg-tema button.sel{ background:var(--verde); border-color:var(--verde); color:#fff; }
+html[data-tema=oscuro] .aviso{ background:#3a2f17; border-color:#6b5420; color:#f0d9a0; }
+html[data-tema=oscuro] .aviso.peligro{ background:#3d1f1c; border-color:#7a3028; color:#f3b7b2; }
+html[data-tema=oscuro] .aviso.ok{ background:#1b3326; border-color:#2f5a42; color:#a9e0c0; }
+html[data-tema=oscuro] .m-ambar{ background:#3a2f17; color:#f0b84a; }
+html[data-tema=oscuro] .m-azul{ background:#1c2c45; color:#8db4f0; }
+html[data-tema=oscuro] .m-verde{ background:#1b3326; color:#6fd3a0; }
+html[data-tema=oscuro] .m-rojo-ico{ background:#3d1f1c; color:#ff8a7e; }
