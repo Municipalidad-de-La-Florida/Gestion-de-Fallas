@@ -10866,7 +10866,7 @@ async function cargarAtrasos(){
 const INF_AZUL = [47, 93, 138], INF_NAVY = [31, 58, 95], INF_CELESTE = [228, 238, 247], INF_DORADO = [232, 199, 104], INF_GRIS = [108, 127, 148], INF_TINTA = [35, 54, 77];
 const infFmt = (iso) => iso ? new Date(iso).toLocaleString('es-CL', {timeZone: ZONA_CHILE, day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false}) : '—';
 const infFmtDia = (d) => { const [y, m, dd] = String(d).slice(0, 10).split('-'); return `${dd}-${m}-${y}`; };
-const infNombrePar = (r) => r.mantenedor ? `${r.mantenedor} · ${r.contrato_corto}` : r.contrato_corto;
+const infNombrePar = (r) => r.mantenedor ? `${r.mantenedor} - ${r.contrato_corto}` : r.contrato_corto;
 const infDiasPeriodo = (d, h) => Math.round((new Date(h + 'T12:00:00') - new Date(d + 'T12:00:00')) / 86400000) + 1;
 
 async function abrirInformeReparaciones(){
@@ -10877,15 +10877,14 @@ async function abrirInformeReparaciones(){
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(20,30,40,.45);z-index:5000;display:flex;align-items:center;justify-content:center;padding:16px;';
   ov.innerHTML = `<div style="background:#fff;border-radius:12px;max-width:600px;width:100%;max-height:92vh;overflow:auto;padding:18px 20px;box-shadow:0 10px 40px rgba(0,0,0,.3);font-size:13px;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><b style="font-size:16px;flex:1;">📄 Informe de reparaciones</b><button type="button" id="infCerrar" style="border:none;background:none;font-size:22px;cursor:pointer;">×</button></div>
-    <div style="margin:10px 0 4px;"><b>Período</b></div>
+    <div id="infQuien" style="margin:8px 0 2px;padding:8px 10px;background:#eef4f0;border-left:3px solid #7dd100;border-radius:6px;font-size:13.5px;"><b>${escHtml((currentUser && currentUser.nombre) || '')}</b> : <span id="infEmpresa">…</span></div>
+    <div style="margin:12px 0 4px;"><b>Período del informe</b></div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">Desde <input type="date" id="infDesde" value="${mesIso}"> hasta <input type="date" id="infHasta" value="${hoyIso}"></div>
-    <div style="margin:14px 0 4px;"><b>Qué informes sacar</b> <span class="hint">(solo lo que tu perfil permite)</span></div>
+    <div style="margin:14px 0 4px;"><b>Qué informes sacar</b> <span class="hint">(los de tu empresa)</span></div>
     <div id="infOpciones" class="hint">Cargando…</div>
-    <div id="infAsigBox" style="display:none;"><div style="margin:14px 0 4px;"><b>Asignada por</b> <span class="hint">(opcional; si no marcas a nadie, todas)</span></div>
-      <div id="infAsig" style="max-height:110px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;"></div></div>
     <div style="margin:14px 0 4px;"><b>Detalle</b></div>
     <label style="display:block;margin:3px 0;"><input type="radio" name="infDet" value="todas" checked> Todas las reparaciones</label>
-    <label style="display:block;margin:3px 0;"><input type="radio" name="infDet" value="muestra"> Muestra de <input type="number" id="infN" value="50" min="1" max="2000" style="width:70px;"> reparaciones al azar, repartidas entre todos los días <span class="hint">(en total, entre los informes marcados)</span></label>
+    <label style="display:block;margin:3px 0;"><input type="radio" name="infDet" value="muestra"> Muestra de <input type="number" id="infN" value="50" min="1" max="2000" style="width:70px;"> reparaciones al azar <span class="hint">(en total, entre los informes marcados)</span></label>
     <div style="display:flex;gap:10px;margin-top:16px;align-items:center;flex-wrap:wrap;">
       <button type="button" id="infPdf" class="popup-btn" style="width:auto;padding:9px 18px;">Descargar PDF</button>
       <button type="button" id="infXls" class="popup-btn" style="width:auto;padding:9px 18px;background:#fff;color:var(--primary);border:1.5px solid var(--primary);">Excel</button>
@@ -10900,25 +10899,23 @@ async function abrirInformeReparaciones(){
     opciones = await db.rpc('informe_reparaciones_opciones', {}) || [];
     const caja = ov.querySelector('#infOpciones');
     caja.className = '';
-    caja.innerHTML = opciones.length ? opciones.map((o, i) => `<label style="display:block;margin:4px 0;"><input type="checkbox" class="infOp" data-i="${i}" ${opciones.length === 1 ? 'checked' : ''}> ${o.mantenedor ? `<b>${escHtml(o.mantenedor)}</b> · ` : ''}${escHtml(o.contrato)}</label>`).join('') : '<div class="hint">No hay reparaciones disponibles para tu perfil.</div>';
+    const etq = o => `${o.mantenedor ? o.mantenedor + ' - ' : ''}Contrato ${o.contrato}${o.masivo ? ' #Masivo' : ''}`;
+    caja.innerHTML = opciones.length ? opciones.map((o, i) => `<label style="display:block;margin:4px 0;"><input type="checkbox" class="infOp" data-i="${i}" ${opciones.length === 1 ? 'checked' : ''}> ${escHtml(etq(o))}</label>`).join('') : '<div class="hint">No hay reparaciones disponibles para tu perfil.</div>';
+    // Encabezado: «Nombre : Mantenedor Sinec» / «Contratista Elecnor» / rol
+    const mants = [...new Set(opciones.map(o => o.mantenedor).filter(Boolean))], contr = [...new Set(opciones.map(o => o.contrato).filter(Boolean))];
+    const esContratista = currentUser && ['contratista', 'contratista2', 'contratista3', 'camion'].includes(currentUser.rol);
+    ov.querySelector('#infEmpresa').textContent = esContratista && mants.length ? 'Mantenedor ' + mants.join(' / ') : (esContratista && contr.length ? 'Contratista ' + contr.join(' / ') : ((document.getElementById('userRol') || {}).textContent || ''));
   }catch(e){ ov.querySelector('#infOpciones').innerHTML = `<span style="color:var(--red);">No se pudo cargar: ${escHtml(e.message)}<br>¿Ejecutaste sql/2026-10-informe-reparaciones.sql?</span>`; }
-  try{
-    const us = await db.select('usuarios', 'select=id,nombre,rol&rol=in.(admin,ito,ito2,contratista,contratista2,contratista3)&order=nombre.asc');
-    if(us && us.length > 1){
-      ov.querySelector('#infAsigBox').style.display = '';
-      ov.querySelector('#infAsig').innerHTML = us.map(u => `<label style="display:block;margin:2px 0;"><input type="checkbox" class="infAs" value="${escHtml(u.id)}"> ${escHtml(u.nombre || '')} <span class="hint">${escHtml(u.rol)}</span></label>`).join('');
-    }
-  }catch(e){ /* sin acceso a la lista de usuarios: se omite el filtro */ }
 
   const pedir = async () => {
     const desde = ov.querySelector('#infDesde').value, hasta = ov.querySelector('#infHasta').value;
-    const pares = [...ov.querySelectorAll('.infOp:checked')].map(c => ({contrato_id: opciones[+c.dataset.i].contrato_id, mantenedor_id: opciones[+c.dataset.i].mantenedor_id}));
+    const pares = [...ov.querySelectorAll('.infOp:checked')].map(c => ({contrato_id: opciones[+c.dataset.i].contrato_id, mantenedor_id: opciones[+c.dataset.i].mantenedor_id, masivo: !!opciones[+c.dataset.i].masivo}));
     if(!desde || !hasta || hasta < desde){ estado('Revisa el período.'); return null; }
     if(!pares.length){ estado('Marca al menos un informe.'); return null; }
-    const asig = [...ov.querySelectorAll('.infAs:checked')].map(c => c.value);
     const muestra = ov.querySelector('input[name=infDet]:checked').value === 'muestra' ? Math.max(1, parseInt(ov.querySelector('#infN').value, 10) || 50) : null;
     estado('Preparando datos…');
-    const datos = await db.rpc('informe_reparaciones', {p_desde: desde, p_hasta: hasta, p_pares: pares, p_asignadores: asig.length ? asig : null, p_muestra: muestra});
+    const datos = await db.rpc('informe_reparaciones', {p_desde: desde, p_hasta: hasta, p_pares: pares, p_asignadores: null, p_muestra: muestra});
+    (datos || []).forEach(p => { if(p.masivo) p.mantenedor = (p.mantenedor ? p.mantenedor + ' ' : '') + '#Masivo'; });
     if(!datos || !datos.length){ estado('No hay informes para esa selección.'); return null; }
     return {datos, desde, hasta, muestra};
   };
