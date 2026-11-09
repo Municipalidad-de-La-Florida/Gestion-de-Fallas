@@ -8,7 +8,19 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.4.11';
+const VERSION_APP = '2.5.0';
+
+/* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
+function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
+function aplicarTema() {
+  const t = temaGuardado();
+  const osc = t === 'oscuro' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-tema', osc ? 'oscuro' : 'claro');
+  const m = document.querySelector('meta[name="theme-color"]'); if (m) m.setAttribute('content', osc ? '#12261f' : '#1f4d3d');
+}
+function fijarTema(t) { try { localStorage.setItem('fm_tema', t); } catch (e) { /* */ } aplicarTema(); }
+try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', aplicarTema); } catch (e) { /* */ }
+aplicarTema();
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -4089,12 +4101,15 @@ $('#btnMenu').addEventListener('click', () => {
       <div class="m-grupo">Cuenta</div>
       <button id="mPush" class="m-fila" hidden><span class="m-ico m-ambar">${ico('<path d="M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8"/><path d="M10 21h4"/>')}</span><span class="t">Avisos</span>${chev}</button>
       ${puedeOpcionesBarra() ? `<button id="mBarra" class="m-fila"><span class="m-ico m-azul">${ico('<rect x="3" y="15" width="18" height="5" rx="2"/><path d="M7 9h10M7 5h10"/>')}</span><span class="t">Botones de la barra</span>${chev}</button>` : ''}
+      <div class="m-grupo">Apariencia</div>
+      <div class="seg-tema" id="mTema">${[['auto', 'Automático'], ['claro', 'Claro'], ['oscuro', 'Oscuro']].map(([v, n]) => `<button data-t="${v}" class="${temaGuardado() === v ? 'sel' : ''}">${n}</button>`).join('')}</div>
       <button id="mActualizar" class="m-fila"><span class="m-ico m-verde">${ico('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>')}</span><span class="t">Actualizar la app</span></button>
       <div id="mDiag" class="hint" style="margin:8px 6px 0;white-space:pre-line"></div>
       <button id="mSalir" class="m-fila m-rojo"><span class="m-ico m-rojo-ico">${ico('<path d="M9 4H5v16h4"/><path d="M16 8l4 4-4 4M20 12H9"/>')}</span><span class="t">Cerrar sesión</span></button>
     </div>`);
   $('#hoja').classList.add('hoja-menu');
   textoDiagAviso().then((t) => { const d = $('#mDiag', h); if (d && t) d.textContent = t; });
+  h.querySelectorAll('#mTema button').forEach((b) => b.addEventListener('click', () => { fijarTema(b.dataset.t); h.querySelectorAll('#mTema button').forEach((x) => x.classList.toggle('sel', x === b)); }));
   const i = $('#mInstalar', h);
   if (i) i.addEventListener('click', async () => { S.instalar.prompt(); await S.instalar.userChoice; S.instalar = null; cerrarHoja(); });
   const mp = $('#mPush', h);
