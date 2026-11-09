@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.5.1';
+const VERSION_APP = '2.6.0';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -484,7 +484,57 @@ function abrirFotoGrande(urls, i) {
     <div class="lb-barra"><button id="lbAnt" aria-label="Anterior">‹</button><span id="lbPos"></span><button id="lbSig" aria-label="Siguiente">›</button></div>
     <button class="lb-cerrar" aria-label="Cerrar">Cerrar</button>`;
   document.body.appendChild(lb);
+  // Zoom con los dedos (pellizcar), arrastrar al ampliar y doble toque para acercar/alejar
+  const img = lb.querySelector('img');
+  let z = 1, tx = 0, ty = 0;
+  const ptrs = new Map();
+  let pin = null, arr = null, ultimoToque = 0;
+  const aplicar = () => {
+    if (z <= 1.001) { z = 1; tx = 0; ty = 0; }
+    else {
+      const mx = (img.clientWidth * z - window.innerWidth) / 2, my = (img.clientHeight * z - window.innerHeight) / 2;
+      tx = Math.max(-Math.max(mx, 0) - 60, Math.min(Math.max(mx, 0) + 60, tx));
+      ty = Math.max(-Math.max(my, 0) - 60, Math.min(Math.max(my, 0) + 60, ty));
+    }
+    img.style.transform = `translate(${tx}px,${ty}px) scale(${z})`;
+    lb.classList.toggle('lb-zoom', z > 1.001);
+  };
+  const reiniciarZoom = () => { z = 1; tx = 0; ty = 0; aplicar(); };
+  const dist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+  img.addEventListener('pointerdown', (e) => {
+    try { img.setPointerCapture(e.pointerId); } catch (x) { /* */ }
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 2) { pin = { d: dist(), z }; arr = null; }
+    else if (ptrs.size === 1) arr = { x: e.clientX, y: e.clientY, tx, ty, t: Date.now(), mov: false };
+  });
+  img.addEventListener('pointermove', (e) => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 2 && pin) { z = Math.max(1, Math.min(6, pin.z * dist() / pin.d)); aplicar(); }
+    else if (ptrs.size === 1 && arr) {
+      const dx = e.clientX - arr.x, dy = e.clientY - arr.y;
+      if (Math.abs(dx) + Math.abs(dy) > 6) arr.mov = true;
+      if (z > 1.001) { tx = arr.tx + dx; ty = arr.ty + dy; aplicar(); }
+    }
+  });
+  const soltar = (e) => {
+    const era = arr;
+    ptrs.delete(e.pointerId);
+    if (ptrs.size < 2) pin = null;
+    if (ptrs.size === 1) { const [r] = [...ptrs.values()]; arr = { x: r.x, y: r.y, tx, ty, t: Date.now(), mov: true }; }
+    else if (ptrs.size === 0) {
+      arr = null;
+      if (e.type === 'pointerup' && era && !era.mov) {   // un toque simple: dos seguidos = zoom
+        const ahora = Date.now();
+        if (ahora - ultimoToque < 320) { z = z > 1.001 ? 1 : 2.5; if (z > 1) { const r = img.getBoundingClientRect(); tx = (r.left + r.width / 2 - e.clientX) * 1.5; ty = (r.top + r.height / 2 - e.clientY) * 1.5; } aplicar(); ultimoToque = 0; }
+        else ultimoToque = ahora;
+      }
+    }
+  };
+  img.addEventListener('pointerup', soltar); img.addEventListener('pointercancel', soltar);
+  img.addEventListener('wheel', (e) => { e.preventDefault(); z = Math.max(1, Math.min(6, z * (e.deltaY < 0 ? 1.15 : 1 / 1.15))); aplicar(); }, { passive: false });
   const pintar = () => {
+    reiniciarZoom();
     lb.querySelector('img').src = urls[k];
     lb.querySelector('#lbPos').textContent = `${k + 1} / ${urls.length}`;
     lb.querySelector('#lbAnt').style.visibility = lb.querySelector('#lbSig').style.visibility = urls.length > 1 ? 'visible' : 'hidden';
