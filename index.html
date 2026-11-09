@@ -55,6 +55,30 @@
   .um-r{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:#ffd9a0;}
   .um-panel{position:absolute;top:calc(100% + 8px);right:0;width:260px;background:#fff;color:var(--ink);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden;z-index:3000;}
   .um-panel[hidden]{display:none;}
+  /* ---- Barra superior: orden y estilo (verde lima del logo) ---- */
+  :root{--lima:#7dd100;}
+  header .brand{white-space:nowrap;flex:none;}
+  .um-n{white-space:nowrap;}
+  header .hb{background:transparent;color:#e9f3ee;transition:box-shadow .12s,background .12s;}
+  header .hb .hb-chip{background:transparent !important;color:var(--lima) !important;width:20px;height:26px;}
+  header .hb:hover,header .hb-ic:hover,header .um-btn:hover{background:rgba(255,255,255,.1);box-shadow:inset 0 0 0 1px var(--lima);}
+  header .hb-ic{background:rgba(255,255,255,.08);color:#e9f3ee;transition:box-shadow .12s,background .12s;}
+  header .um-btn{transition:box-shadow .12s,background .12s;}
+  header .hb:focus-visible,header .hb-ic:focus-visible,header .um-btn:focus-visible{outline:none;box-shadow:inset 0 0 0 1px var(--lima);}
+  /* Avisos: solo ícono, con el contador en la esquina */
+  #notifBtn,#atrBtn{position:relative;width:38px;padding:0;justify-content:center;background:rgba(255,255,255,.08);}
+  #notifBtn .bt,#atrBtn .bt{display:none;}
+  #notifBtn .hb-chip,#atrBtn .hb-chip{width:22px;}
+  #atrBtn .hb-chip{color:#ffb74d !important;}
+  #notifBadge,#atrBadge{position:absolute;top:-5px;right:-5px;border:2px solid #24604b;line-height:14px;font-size:10.5px;padding:0 4px;min-width:18px;box-sizing:border-box;}
+  /* Menú Más */
+  .hb-mas{border:1px solid rgba(255,255,255,.28);padding:0 10px 0 6px;gap:6px;}
+  .mas-panel{width:240px;padding:4px 0;}
+  .mas-panel .hb{width:100%;height:42px;border-radius:0;padding:0 14px;gap:10px;color:#24342c;background:transparent;}
+  .mas-panel .hb .bt{display:inline !important;}
+  .mas-panel .hb .hb-chip{color:#2a6a53 !important;}
+  .mas-panel .hb:hover{background:#f1f9e6;box-shadow:none;}
+  body.modo-movil #masBox{ margin-left:0; } body.modo-movil #masBtn .bt{ display:inline; }
   .notif-badge{background:#c1443c;color:#fff;border-radius:10px;font-size:11px;font-weight:700;padding:0 6px;min-width:18px;line-height:18px;text-align:center;}
   .notif-badge[hidden]{display:none;}
   .notif-panel{width:340px;max-height:70vh;overflow:auto;}
@@ -738,18 +762,23 @@
       <button type="button" class="hb" id="todasBtn" style="display:none;"><span class="hb-chip" style="background:#e6eefb;color:#2a5db0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg></span><span class="bt">Todas las fallas</span></button>
       <button type="button" class="hb" id="inspC3Btn" style="display:none;"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="bt">Inspecciones</span></button>
       <button type="button" class="hb" id="cuadBtn" title="Rendimiento de las cuadrillas" style="display:none;"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 6h13v10H1zM14 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></span><span class="bt">Rendimiento</span></button>
-      <span id="notifBox" style="position:relative; display:none;">
-        <button type="button" class="hb" id="notifBtn" title="Notificaciones" aria-haspopup="true" aria-expanded="false"><span class="hb-chip" style="background:#fde8e8;color:#c1443c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></span><span class="bt">Notificaciones</span><span id="notifBadge" class="notif-badge" hidden>0</span></button>
-        <div id="notifPanel" class="um-panel notif-panel" hidden></div>
-      </span>
       <span id="atrBox" style="position:relative; display:none;">
         <button type="button" class="hb" id="atrBtn" title="Fallas con atraso" aria-haspopup="true" aria-expanded="false"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 5.8V10l2.8 1.8"/><circle cx="18" cy="18" r="5" fill="#d33a2c" stroke="#fff" stroke-width="1.4"/><path d="M18 15.6v2.9M18 20.4h.01" stroke="#fff" stroke-width="1.7"/></svg></span><span class="bt">Atrasos</span><span id="atrBadge" class="notif-badge" hidden>0</span></button>
         <div id="atrPanel" class="um-panel notif-panel" hidden></div>
       </span>
-      <button type="button" class="hb" id="infRepBtn" style="display:none;"><span class="hb-chip" style="background:#e4eef7;color:#2f5d8a;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span><span class="bt">Informe reparaciones</span></button>
-      <button type="button" class="hb" id="fiscBtn" style="display:none;"><span class="hb-chip" style="background:#fbe7e5;color:#c1443c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v3.5M11 14h.01"/></svg></span><span class="bt">Fiscalización</span></button>
-      <button type="button" class="hb" id="statsBtn"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span class="bt">Estadísticas</span></button>
-      <button type="button" class="hb" id="usuariosBtn" style="display:none;"><span class="hb-chip" style="background:#e6eefb;color:#2a5db0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/></svg></span><span class="bt">Usuarios</span></button>
+      <span id="notifBox" style="position:relative; display:none;">
+        <button type="button" class="hb" id="notifBtn" title="Notificaciones" aria-haspopup="true" aria-expanded="false"><span class="hb-chip" style="background:#fde8e8;color:#c1443c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg></span><span class="bt">Notificaciones</span><span id="notifBadge" class="notif-badge" hidden>0</span></button>
+        <div id="notifPanel" class="um-panel notif-panel" hidden></div>
+      </span>
+      <span id="masBox" class="um" style="position:relative;">
+        <button type="button" class="hb hb-mas" id="masBtn" aria-haspopup="true" aria-expanded="false"><span class="hb-chip"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></span><span class="bt">Más</span><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+        <div id="masPanel" class="um-panel mas-panel" hidden>
+        <button type="button" class="hb" id="infRepBtn" style="display:none;"><span class="hb-chip" style="background:#e4eef7;color:#2f5d8a;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg></span><span class="bt">Informe reparaciones</span></button>
+        <button type="button" class="hb" id="fiscBtn" style="display:none;"><span class="hb-chip" style="background:#fbe7e5;color:#c1443c;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M11 8v3.5M11 14h.01"/></svg></span><span class="bt">Fiscalización</span></button>
+        <button type="button" class="hb" id="statsBtn"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span><span class="bt">Estadísticas</span></button>
+        <button type="button" class="hb" id="usuariosBtn" style="display:none;"><span class="hb-chip" style="background:#e6eefb;color:#2a5db0;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/></svg></span><span class="bt">Usuarios</span></button>
+        </div>
+      </span>
       <span class="hb-sep"></span>
       <button type="button" class="hb-ic" id="toggleSearchBtn" title="Buscador" aria-label="Buscador"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
       <button type="button" class="hb-ic" id="historialModoBtn" title="Modo historial: clic en un punto o circuito para ver su historial" aria-label="Modo historial: clic en un punto o circuito para ver su historial" style="display:none;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="color:#b9a3f5"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -10715,6 +10744,21 @@ async function pintarCuadrillasAdmin(){
     c.disabled = false;
   });
 }
+
+// ---------- Menú «Más» de la barra superior ----------
+(function(){
+  const btn = document.getElementById('masBtn'), panel = document.getElementById('masPanel'), box = document.getElementById('masBox');
+  if(!btn || !panel) return;
+  const cerrar = () => { panel.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+  const visibles = () => [...panel.children].some(b => b.style.display !== 'none');
+  const ajustar = () => { box.style.display = visibles() ? '' : 'none'; };
+  new MutationObserver(ajustar).observe(panel, {attributes: true, subtree: true, attributeFilter: ['style']});
+  ajustar();
+  btn.addEventListener('click', (e) => { e.stopPropagation(); panel.hidden = !panel.hidden; btn.setAttribute('aria-expanded', String(!panel.hidden)); });
+  panel.addEventListener('click', cerrar);   // al elegir una opción se cierra el menú
+  document.addEventListener('click', (e) => { if(!panel.hidden && !e.target.closest('#masBox')) cerrar(); });
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape') cerrar(); });
+})();
 // ---------- AVISOS DE ATRASO (campana; solo camiones y mantenedores) ----------
 // Los genera la base cada hora (avisar_atrasos); aquí se acumulan y se pueden revisar. Cada falla tiene un solo aviso: el nuevo reemplaza al anterior.
 let NOTIFS = [], notifTimer = null;
