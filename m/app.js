@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.4.8';
+const VERSION_APP = '2.4.9';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1824,11 +1824,15 @@ async function activarNotificadorApp(h) {
         select('notificadores', 'select=id,nombre,validado,usuario_id&activo=eq.true&order=nombre.asc').catch(() => []),
         rpc('usuarios_notificables', {}).catch(() => []),
       ]);
-      NOTIF_LISTA = { notificadores: nots || [], usuarios: usrs || [] };
+      let perm = null;   // si el admin le asignó notificadores, solo puede informar a nombre de ellos
+      try { const r = await select('usuarios', `id=eq.${S.perfil.id}&select=notificadores_permitidos`); perm = (r && r[0] && r[0].notificadores_permitidos) || null; } catch (e) { /* sin restricción */ }
+      NOTIF_LISTA = { notificadores: nots || [], usuarios: usrs || [], perm };
     }
   } catch (e) { return; }
   if (!document.body.contains(sel)) return;
-  const { notificadores, usuarios } = NOTIF_LISTA;
+  const { perm } = NOTIF_LISTA;
+  const notificadores = perm ? NOTIF_LISTA.notificadores.filter((n) => perm.includes(n.id)) : NOTIF_LISTA.notificadores;
+  const usuarios = perm ? [] : NOTIF_LISTA.usuarios;
   const idsUsr = new Set(usuarios.map((u) => u.id));
   const opt = (v, n, x) => `<option value="${esc(v)}" data-n="${esc(n)}">${esc(n)}${x || ''}</option>`;
   const libres = notificadores.filter((n) => !(n.usuario_id && idsUsr.has(n.usuario_id)));
@@ -1836,7 +1840,7 @@ async function activarNotificadorApp(h) {
   sel.innerHTML = '<option value="">Yo mismo</option>'
     + (libres.length ? `<optgroup label="Notificadores">${libres.map((n) => opt(n.id, n.nombre)).join('')}</optgroup>` : '')
     + (usuarios.length ? `<optgroup label="ITO y contratistas">${usuarios.map((u) => opt('u:' + u.id, u.nombre, ' (' + (rolTxt[u.rol] || u.rol) + ')')).join('')}</optgroup>` : '')
-    + '<option value="__otro__">➕ Otro (escribir nombre)…</option>';
+    + (perm ? '' : '<option value="__otro__">➕ Otro (escribir nombre)…</option>');
 }
 // Devuelve { id } (null = yo mismo) o { error }
 async function leerNotificadorApp(h) {

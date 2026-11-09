@@ -3128,6 +3128,7 @@ function actualizarChipNotificador(){
 }
 
 let listaUsuariosNotificables = [];
+let notifPermitidos = null;   // si el admin le asignó notificadores, solo puede informar a nombre de ellos (null = sin restricción)
 async function cargarListaNotificadores(){
   try{ listaNotificadores = await db.select('notificadores', 'select=id,nombre,validado,usuario_id&activo=eq.true&order=nombre.asc'); }
   catch(e){
@@ -3137,13 +3138,16 @@ async function cargarListaNotificadores(){
   }
   try{ listaUsuariosNotificables = await db.rpc('usuarios_notificables', {}) || []; }
   catch(e){ listaUsuariosNotificables = []; }
+  try{ const r = await db.select('usuarios', `id=eq.${currentUser.id}&select=notificadores_permitidos`); notifPermitidos = (r && r[0] && r[0].notificadores_permitidos) || null; }
+  catch(e){ notifPermitidos = null; }
   return listaNotificadores;
 }
 
 // Dentro de su propio <form> para que el navegador no autocomplete el correo del login en el campo de nombre.
 // Opciones del selector: 1) sin registrar, línea, 2) notificadores validados, 3) ITO / contratistas / admin.
 function opcionesNotificadorHtml(lista, textoVacio, previo){
-  const usuarios = listaUsuariosNotificables || [];
+  if(notifPermitidos) lista = lista.filter(n => notifPermitidos.includes(n.id));
+  const usuarios = notifPermitidos ? [] : (listaUsuariosNotificables || []);
   const idsUsuarios = new Set(usuarios.map(u => u.id));
   const porUsuario = {};
   lista.forEach(n => { if(n.usuario_id) porUsuario[n.usuario_id] = n; });
@@ -3159,7 +3163,7 @@ function opcionesNotificadorHtml(lista, textoVacio, previo){
     + (sinReg ? `<optgroup label="Sin registrar">${sinReg}</optgroup><option disabled>──────────────────────</option>` : '')
     + (validados ? `<optgroup label="Notificadores validados">${validados}</optgroup>` : '')
     + (usrs ? `<optgroup label="ITO y contratistas">${usrs}</optgroup>` : '')
-    + `<option value="__otro__">➕ Otro (escribir nombre)…</option>`;
+    + (notifPermitidos ? '' : `<option value="__otro__">➕ Otro (escribir nombre)…</option>`);
   return { html, seleccion };
 }
 // "u:<usuario>" → id de notificador (lo crea/vincula si hace falta)
