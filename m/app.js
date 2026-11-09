@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.4.2';
+const VERSION_APP = '2.4.3';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1923,6 +1923,7 @@ function formReportePunto(p, excluirUsos) {
           <div id="fMant"></div>
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+          ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
         </div>
         <div class="col-der">
@@ -1951,10 +1952,12 @@ function formReportePunto(p, excluirUsos) {
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
     const mv = mant.validar(desc);
     if (mv.error) { toast(mv.error, 'error'); return; }
+    const oe = CQ.abierto ? { valor: null } : leerOrdenExterna(h);
+    if (oe.error) { toast(oe.error, 'error'); return; }
     env.textContent = 'Enviando…';
     if (CQ.abierto) return anotarEnCuaderno('punto', p.gid, codigo, desc, mv.args);
     const ctx = await contextoReporte();
-    const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: null, ...ctx, ...mv.args });
+    const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx, ...mv.args });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot}${r.estado === 'reiterada' ? ' (reiterada)' : ''}`, 'ok');
     cargarFallas();
@@ -1973,6 +1976,7 @@ function formReporteCircuito(p) {
         <div class="col-izq">
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+          ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
         </div>
         <div class="col-der">
@@ -1990,10 +1994,12 @@ function formReporteCircuito(p) {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
     const desc = $('#fDesc', h).value.trim();
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
+    const oe = CQ.abierto ? { valor: null } : leerOrdenExterna(h);
+    if (oe.error) { toast(oe.error, 'error'); return; }
     env.textContent = 'Enviando…';
     if (CQ.abierto) return anotarEnCuaderno('circuito', p.gid, codigo, desc, {});
     const ctx = await contextoReporte();
-    const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: null, ...ctx });
+    const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot} · ${r.puntos_afectados} puntos afectados`, 'ok');
     cargarFallas();
