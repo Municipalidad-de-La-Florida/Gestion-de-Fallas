@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.4.10';
+const VERSION_APP = '2.4.11';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1810,7 +1810,7 @@ let NOTIF_LISTA = null;   // { notificadores, usuarios }
 function puedeNotificadorApp() { return !CQ.abierto && S.modo.tipo !== 'inspeccion' && tiene('notificador_externo') && tiene('informar_falla'); }
 function htmlNotificadorApp() {
   if (!puedeNotificadorApp()) return '';
-  return `<h3>Informó (notificador)</h3>
+  return `<h3>Informa</h3>
     <select id="fNotif" class="campo" aria-label="Notificador"><option value="">Yo mismo</option></select>
     <input id="fNotifOtro" class="campo" maxlength="60" autocomplete="off" placeholder="Escribe el nombre del notificador" hidden>`;
 }
@@ -1859,7 +1859,7 @@ async function leerNotificadorApp(h) {
 
 function htmlOrdenExterna() {
   return `<div class="fila">
-    <input id="fOeNum" class="campo" data-p="S" inputmode="numeric" placeholder="N.° de orden externa (opcional)" autocomplete="off">
+    <input id="fOeNum" class="campo" data-p="S" inputmode="numeric" placeholder="N.° de orden" autocomplete="off">
   </div>`;
 }
 // Solo se escribe el número: la empresa es siempre Sinec (se guarda como S-123). Las órdenes antiguas conservan su letra.
@@ -2016,11 +2016,11 @@ function formReportePunto(p, excluirUsos) {
       <div class="dos-col">
         <div class="col-izq">
           <div id="fMant"></div>
+          ${htmlNotificadorApp()}
+          ${CQ.abierto ? '' : htmlFotoReporte()}
+          ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
-          ${htmlNotificadorApp()}
-          ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
-          ${CQ.abierto ? '' : htmlFotoReporte()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
         </div>
         <div class="col-der">
@@ -2076,11 +2076,11 @@ function formReporteCircuito(p) {
     <div id="fCuerpo">
       <div class="dos-col">
         <div class="col-izq">
+          ${htmlNotificadorApp()}
+          ${CQ.abierto ? '' : htmlFotoReporte()}
+          ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
-          ${htmlNotificadorApp()}
-          ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
-          ${CQ.abierto ? '' : htmlFotoReporte()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
         </div>
         <div class="col-der">
