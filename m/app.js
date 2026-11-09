@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.4.9';
+const VERSION_APP = '2.4.10';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -374,8 +374,8 @@ function htmlFotoReporte() {
   return `<h3>Foto (opcional)</h3>
     <div id="fpVista" class="fotos"></div>
     <div class="fila-btns">
-      <button type="button" id="fpCam" class="btn btn-secundario">📷 Tomar foto</button>
-      <button type="button" id="fpGal" class="btn btn-secundario">🖼 Galería</button>
+      <button type="button" id="fpCam" class="btn btn-secundario" aria-label="Tomar foto" title="Tomar foto">📷</button>
+      <button type="button" id="fpGal" class="btn btn-secundario" aria-label="Elegir de la galería" title="Galería">🖼</button>
     </div>
     <input id="fpInCam" type="file" accept="image/*" capture="environment" hidden>
     <input id="fpInGal" type="file" accept="image/*" hidden>`;
@@ -1644,7 +1644,7 @@ async function formAporte(tipo, p) {
     <textarea id="aRep" class="campo" placeholder="Detalle de lo realizado (opcional si marcaste un trabajo)"></textarea>
     <h3>Fotografías <span class="req">obligatorias</span> <span class="hint">(al menos 1 de antes y 1 de después; hasta ${MAX_FOTOS} en total)</span></h3>
     <div class="fotos" id="aFotos">
-      ${['antes', 'despues'].map((m) => `<div class="foto-slot" data-m="${m}"><div class="hint" style="font-weight:600">${m === 'antes' ? 'ANTES' : 'DESPUÉS'}</div><div class="vista"></div><div class="fila-btns"><button type="button" class="btn btn-secundario" data-cam="${m}">📷 Tomar</button><button type="button" class="btn btn-secundario" data-gal="${m}">🖼 Galería</button></div><input type="file" accept="image/*" hidden data-in="${m}"></div>`).join('')}
+      ${['antes', 'despues'].map((m) => `<div class="foto-slot" data-m="${m}"><div class="hint" style="font-weight:600">${m === 'antes' ? 'ANTES' : 'DESPUÉS'}</div><div class="vista"></div><div class="fila-btns"><button type="button" class="btn btn-secundario" data-cam="${m}" aria-label="Tomar foto" title="Tomar foto">📷</button><button type="button" class="btn btn-secundario" data-gal="${m}" aria-label="Elegir de la galería" title="Galería">🖼</button></div><input type="file" accept="image/*" hidden data-in="${m}"></div>`).join('')}
     </div>
     <div class="acciones fija"><button id="aOk" class="btn btn-primario">Registrar aporte</button></div>`);
   const selM = $('#aMaestro', h);
@@ -2394,8 +2394,8 @@ async function editarReparacionApp(p, est) {
     <h3>Fotografías</h3>
     <div id="rFotos" class="fotos"></div>
     <div class="fila-btns">
-      <button type="button" id="rBtnCam" class="btn btn-secundario">📷 Tomar foto</button>
-      <button type="button" id="rBtnGal" class="btn btn-secundario">🖼 Galería</button>
+      <button type="button" id="rBtnCam" class="btn btn-secundario" aria-label="Tomar foto" title="Tomar foto">📷</button>
+      <button type="button" id="rBtnGal" class="btn btn-secundario" aria-label="Elegir de la galería" title="Galería">🖼</button>
     </div>
     <input id="rInCam" type="file" accept="image/*" capture="environment" hidden>
     <input id="rInGal" type="file" accept="image/*" multiple hidden>
@@ -2539,8 +2539,8 @@ function formCierre(p, borr) {
     <div class="hint">${exigeFoto ? 'Sube al menos 1 foto de la reparación' : 'Puedes subir fotos de la reparación'} (máximo ${MAX_FOTOS}). Se reducen solas para ocupar poco espacio.</div>
     <div id="cFotos" class="fotos"></div>
     <div class="fila-btns">
-      <button type="button" id="cBtnCam" class="btn btn-secundario">📷 Tomar foto</button>
-      <button type="button" id="cBtnGal" class="btn btn-secundario">🖼 Galería</button>
+      <button type="button" id="cBtnCam" class="btn btn-secundario" aria-label="Tomar foto" title="Tomar foto">📷</button>
+      <button type="button" id="cBtnGal" class="btn btn-secundario" aria-label="Elegir de la galería" title="Galería">🖼</button>
     </div>
     <input id="cInCam" type="file" accept="image/*" capture="environment" hidden>
     <input id="cInGal" type="file" accept="image/*" multiple hidden>
