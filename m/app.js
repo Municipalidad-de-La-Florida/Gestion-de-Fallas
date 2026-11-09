@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.4.4';
+const VERSION_APP = '2.4.6';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -334,7 +334,7 @@ const rpc = (fn, args) => api(`/rest/v1/rpc/${fn}`, { method: 'POST', body: args
 
 /* ------------------------------ fotos de reparación ------------------------------ */
 // Cada foto se reduce en el teléfono antes de subirla: lado mayor 1280 px, JPEG ~70 % (unos 150–250 KB en vez de 3–6 MB).
-const MAX_FOTOS = 3, FOTO_LADO = 1280, FOTO_CALIDAD = 0.7, FOTO_MAX_BYTES = 400 * 1024;
+const MAX_FOTOS = 4, FOTO_LADO = 1280, FOTO_CALIDAD = 0.7, FOTO_MAX_BYTES = 400 * 1024;
 async function comprimirFoto(file) {
   let img;
   try { img = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
@@ -356,7 +356,7 @@ async function comprimirFoto(file) {
   }
   return blob;
 }
-async function subirFoto(fallaId, blob, soloSubir) {
+async function subirFoto(fallaId, blob, soloSubir, rpcRegistro) {
   const ruta = `${fallaId}/${(crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2))}.jpg`;
   const token = await tokenVigente();
   let res;
@@ -367,7 +367,42 @@ async function subirFoto(fallaId, blob, soloSubir) {
   } catch (e) { throw new Error('Sin conexión al subir la foto. Intenta de nuevo.'); }
   if (!res.ok) throw new Error('No se pudo subir la foto (' + res.status + ').');
   if (soloSubir) return ruta;   // aporte: la falla aún no existe; la foto se registra dentro de registrar_aporte
-  await rpc('registrar_foto_falla', { p_falla_id: fallaId, p_ruta: ruta, p_bytes: blob.size });
+  await rpc(rpcRegistro || 'registrar_foto_falla', { p_falla_id: fallaId, p_ruta: ruta, p_bytes: blob.size });
+}
+// Foto opcional al REPORTAR una falla (1 por falla, aparte de las fotos de la reparación)
+function htmlFotoReporte() {
+  return `<h3>Foto (opcional)</h3>
+    <div id="fpVista" class="fotos"></div>
+    <div class="fila-btns">
+      <button type="button" id="fpCam" class="btn btn-secundario">📷 Tomar foto</button>
+      <button type="button" id="fpGal" class="btn btn-secundario">🖼 Galería</button>
+    </div>
+    <input id="fpInCam" type="file" accept="image/*" capture="environment" hidden>
+    <input id="fpInGal" type="file" accept="image/*" hidden>`;
+}
+// Devuelve () => blob|null con la foto elegida
+function activarFotoReporte(h) {
+  let foto = null;   // { blob, url }
+  const pintar = () => {
+    $('#fpVista', h).innerHTML = foto ? `<div class="foto"><img src="${foto.url}" alt="Foto del reporte"><button type="button" aria-label="Quitar foto">✕</button></div>` : '';
+    const q = $('#fpVista button', h);
+    if (q) q.addEventListener('click', () => { URL.revokeObjectURL(foto.url); foto = null; pintar(); });
+    $('#fpCam', h).disabled = $('#fpGal', h).disabled = !!foto;
+  };
+  const poner = async (files) => {
+    const f = files && files[0]; if (!f) return;
+    try { const blob = await comprimirFoto(f); foto = { blob, url: URL.createObjectURL(blob) }; } catch (e) { toast(e.message, 'error'); }
+    pintar();
+  };
+  $('#fpCam', h).addEventListener('click', () => $('#fpInCam', h).click());
+  $('#fpGal', h).addEventListener('click', () => $('#fpInGal', h).click());
+  ['fpInCam', 'fpInGal'].forEach((id) => $('#' + id, h).addEventListener('change', (e) => { poner(e.target.files); e.target.value = ''; }));
+  return () => (foto ? foto.blob : null);
+}
+async function subirFotoReporte(fallaId, blob) {
+  if (!blob) return;
+  try { await subirFoto(fallaId, blob, false, 'registrar_foto_reporte'); }
+  catch (e) { toast('La falla quedó registrada, pero la foto no se pudo subir: ' + e.message, 'error'); }
 }
 async function urlFoto(ruta) {
   const r = await api(`/storage/v1/object/sign/fotos-reparacion/${ruta}`, { method: 'POST', body: { expiresIn: 3600 } });
@@ -1590,7 +1625,7 @@ async function formAporte(tipo, p) {
   const cat = catalogoActivo(nomCat);
   const fallaId = crypto.randomUUID();
   let codigo = null, card = null, trabajos = [];
-  const fotos = { antes: null, despues: null };   // { blob, url, ruta }
+  const fotos = { antes: [], despues: [] };   // listas de { blob, url, ruta }; hasta MAX_FOTOS en total, al menos 1 de cada momento
   const h = abrirHoja(`
     <h2>Registrar aporte</h2>
     <div class="hint">${tipo === 'punto' ? `Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}` : `Circuito ${esc(p.id ?? '')} · ${esc(p.cantidad_luminarias_cliente ?? '—')} luminarias`}</div>
@@ -1607,7 +1642,7 @@ async function formAporte(tipo, p) {
     <h3>Trabajo realizado</h3>
     ${htmlCierres()}
     <textarea id="aRep" class="campo" placeholder="Detalle de lo realizado (opcional si marcaste un trabajo)"></textarea>
-    <h3>Fotografías <span class="req">obligatorias</span></h3>
+    <h3>Fotografías <span class="req">obligatorias</span> <span class="hint">(al menos 1 de antes y 1 de después; hasta ${MAX_FOTOS} en total)</span></h3>
     <div class="fotos" id="aFotos">
       ${['antes', 'despues'].map((m) => `<div class="foto-slot" data-m="${m}"><div class="hint" style="font-weight:600">${m === 'antes' ? 'ANTES' : 'DESPUÉS'}</div><div class="vista"></div><div class="fila-btns"><button type="button" class="btn btn-secundario" data-cam="${m}">📷 Tomar</button><button type="button" class="btn btn-secundario" data-gal="${m}">🖼 Galería</button></div><input type="file" accept="image/*" hidden data-in="${m}"></div>`).join('')}
     </div>
@@ -1634,18 +1669,25 @@ async function formAporte(tipo, p) {
     $$('#aCard button', h).forEach((x) => x.classList.remove('sel'));
     card = on ? null : b.dataset.r; if (!on) b.classList.add('sel');
   }));
+  const totalFotos = () => fotos.antes.length + fotos.despues.length;
   const pintarSlot = (m) => {
-    const sl = $(`.foto-slot[data-m="${m}"]`, h), f = fotos[m];
-    $('.vista', sl).innerHTML = f ? `<div class="foto"><img src="${f.url}" alt="Foto ${m}"><button type="button" aria-label="Quitar foto">✕</button></div>` : '<div class="hint">Sin foto</div>';
-    const q = $('.vista button', sl);
-    if (q) q.addEventListener('click', () => { URL.revokeObjectURL(f.url); fotos[m] = null; pintarSlot(m); });
+    const sl = $(`.foto-slot[data-m="${m}"]`, h);
+    $('.vista', sl).innerHTML = fotos[m].length
+      ? fotos[m].map((f, i) => `<div class="foto"><img src="${f.url}" alt="Foto ${m}"><button type="button" data-q="${i}" aria-label="Quitar foto">✕</button></div>`).join('')
+      : '<div class="hint">Sin foto</div>';
+    $$('.vista button', sl).forEach((q) => q.addEventListener('click', () => { const f = fotos[m].splice(+q.dataset.q, 1)[0]; URL.revokeObjectURL(f.url); pintarTodo(); }));
+  };
+  const pintarTodo = () => {
+    ['antes', 'despues'].forEach(pintarSlot);
+    $$('[data-cam],[data-gal]', h).forEach((b) => { b.disabled = totalFotos() >= MAX_FOTOS; });
   };
   const poner = async (m, file) => {
-    try { const blob = await comprimirFoto(file); if (fotos[m]) URL.revokeObjectURL(fotos[m].url); fotos[m] = { blob, url: URL.createObjectURL(blob), ruta: null }; pintarSlot(m); }
+    if (totalFotos() >= MAX_FOTOS) { toast(`Máximo ${MAX_FOTOS} fotos.`, 'error'); return; }
+    try { const blob = await comprimirFoto(file); fotos[m].push({ blob, url: URL.createObjectURL(blob), ruta: null }); pintarTodo(); }
     catch (e) { toast(e.message, 'error'); }
   };
+  pintarTodo();
   ['antes', 'despues'].forEach((m) => {
-    pintarSlot(m);
     const inp = $(`input[data-in="${m}"]`, h);
     $(`[data-cam="${m}"]`, h).addEventListener('click', async () => {
       const r = await abrirCamara();
@@ -1665,12 +1707,15 @@ async function formAporte(tipo, p) {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
     if (!rep) { toast('Elige o describe el trabajo realizado.', 'error'); return; }
-    if (!fotos.antes || !fotos.despues) { toast('Faltan las fotos de antes y de después.', 'error'); return; }
+    if (!fotos.antes.length || !fotos.despues.length) { toast('Faltan las fotos de antes y de después.', 'error'); return; }
     const lista = [];
+    let n = 0;
     for (const m of ['antes', 'despues']) {
-      ok.textContent = `Subiendo foto ${m === 'antes' ? 'de antes' : 'de después'}…`;
-      if (!fotos[m].ruta) fotos[m].ruta = await subirFoto(fallaId, fotos[m].blob, true);
-      lista.push({ ruta: fotos[m].ruta, bytes: fotos[m].blob.size, momento: m });
+      for (const f of fotos[m]) {
+        ok.textContent = `Subiendo foto ${++n} de ${totalFotos()}…`;
+        if (!f.ruta) f.ruta = await subirFoto(fallaId, f.blob, true);
+        lista.push({ ruta: f.ruta, bytes: f.blob.size, momento: m });
+      }
     }
     ok.textContent = 'Guardando…';
     const r = await rpc('registrar_aporte', {
@@ -1924,6 +1969,7 @@ function formReportePunto(p, excluirUsos) {
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
           ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
+          ${CQ.abierto ? '' : htmlFotoReporte()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
         </div>
         <div class="col-der">
@@ -1945,6 +1991,7 @@ function formReportePunto(p, excluirUsos) {
     if (codigo && !items.some((x) => x.c === codigo)) { codigo = null; mant.elegirCodigo(null); }
     ligarCodigos();
   }, excluirUsos);
+  const leerFoto = CQ.abierto ? () => null : activarFotoReporte(h);
   const env = $('#fEnviar', h);
   env.addEventListener('click', ocupar(env, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -1958,6 +2005,7 @@ function formReportePunto(p, excluirUsos) {
     if (CQ.abierto) return anotarEnCuaderno('punto', p.gid, codigo, desc, mv.args);
     const ctx = await contextoReporte();
     const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx, ...mv.args });
+    if (leerFoto()) { env.textContent = 'Subiendo foto…'; await subirFotoReporte(r.id, leerFoto()); }
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot}${r.estado === 'reiterada' ? ' (reiterada)' : ''}`, 'ok');
     cargarFallas();
@@ -1977,6 +2025,7 @@ function formReporteCircuito(p) {
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
           ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
+          ${CQ.abierto ? '' : htmlFotoReporte()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
         </div>
         <div class="col-der">
@@ -1989,6 +2038,7 @@ function formReporteCircuito(p) {
     $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
   }));
   avisoMantencionCircuito(h, p.gid);
+  const leerFoto = CQ.abierto ? () => null : activarFotoReporte(h);
   const env = $('#fEnviar', h);
   env.addEventListener('click', ocupar(env, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -2000,6 +2050,7 @@ function formReporteCircuito(p) {
     if (CQ.abierto) return anotarEnCuaderno('circuito', p.gid, codigo, desc, {});
     const ctx = await contextoReporte();
     const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx });
+    if (leerFoto()) { env.textContent = 'Subiendo foto…'; await subirFotoReporte(r.id, leerFoto()); }
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot} · ${r.puntos_afectados} puntos afectados`, 'ok');
     cargarFallas();
@@ -2179,6 +2230,7 @@ async function abrirFalla(p, geom) {
     evFicha.push({ t: p.fecha_reparacion, html: `<div class="info-ok"><h3>Reparación</h3>
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
       ${p.descripcion_reparacion ? `<h4>Trabajo realizado</h4><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
+      <div id="fotoReporte"></div>
       <div id="fotosFalla"></div>
     </div>` });
   }
@@ -2222,6 +2274,14 @@ async function abrirFalla(p, geom) {
   }));
   const be = $('#bEliminar', h);
   if (be) be.addEventListener('click', ocupar(be, () => eliminarFallaApp(p)));
+  // Foto que se adjuntó al reportar la falla (en cualquier estado)
+  select('fallas_foto_reporte', `falla_id=eq.${p.id}&select=ruta`).then(async (fs) => {
+    const box = $('#fotoReporte'); if (!box || !document.body.contains(box) || !fs || !fs.length) return;
+    const u = await urlFoto(fs[0].ruta).catch(() => null);
+    if (!u || !document.body.contains(box)) return;
+    box.innerHTML = `<h3>Foto del reporte</h3><div class="fotos"><button type="button" class="foto" aria-label="Ampliar foto"><img src="${esc(u)}" alt="Foto del reporte"></button></div>`;
+    $('.foto', box).addEventListener('click', () => abrirFotoGrande([u], 0));
+  }).catch(() => {});
   if (p.estado === 'reparada') {
     select('fallas_fotos', `falla_id=eq.${p.id}&select=ruta,archivada_en,respaldo&order=creado_en.asc`).then(async (fs) => {
       const box = $('#fotosFalla'); if (!box || !document.body.contains(box) || !fs || !fs.length) return;
