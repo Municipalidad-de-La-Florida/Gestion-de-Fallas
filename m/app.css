@@ -710,3 +710,6 @@ html[data-tema=oscuro] .m-azul{ background:#1c2c45; color:#8db4f0; }
 html[data-tema=oscuro] .m-verde{ background:#1b3326; color:#6fd3a0; }
 html[data-tema=oscuro] .m-rojo-ico{ background:#3d1f1c; color:#ff8a7e; }
 html[data-tema=oscuro] .u-bar,html[data-tema=oscuro] .m-cab{ background:#12261f; }
+
+#lbFoto img{ touch-action:none; user-select:none; -webkit-user-select:none; -webkit-user-drag:none; transform-origin:center center; will-change:transform; position:relative; z-index:1; }
+#lbFoto .lb-barra,#lbFoto .lb-cerrar{ position:relative; z-index:3; }
