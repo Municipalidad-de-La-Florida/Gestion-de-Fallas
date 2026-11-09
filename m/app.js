@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.4.5';
+const VERSION_APP = '2.4.6';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1625,7 +1625,7 @@ async function formAporte(tipo, p) {
   const cat = catalogoActivo(nomCat);
   const fallaId = crypto.randomUUID();
   let codigo = null, card = null, trabajos = [];
-  const fotos = { antes: null, despues: null };   // { blob, url, ruta }
+  const fotos = { antes: [], despues: [] };   // listas de { blob, url, ruta }; hasta MAX_FOTOS en total, al menos 1 de cada momento
   const h = abrirHoja(`
     <h2>Registrar aporte</h2>
     <div class="hint">${tipo === 'punto' ? `Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}` : `Circuito ${esc(p.id ?? '')} · ${esc(p.cantidad_luminarias_cliente ?? '—')} luminarias`}</div>
@@ -1642,7 +1642,7 @@ async function formAporte(tipo, p) {
     <h3>Trabajo realizado</h3>
     ${htmlCierres()}
     <textarea id="aRep" class="campo" placeholder="Detalle de lo realizado (opcional si marcaste un trabajo)"></textarea>
-    <h3>Fotografías <span class="req">obligatorias</span></h3>
+    <h3>Fotografías <span class="req">obligatorias</span> <span class="hint">(al menos 1 de antes y 1 de después; hasta ${MAX_FOTOS} en total)</span></h3>
     <div class="fotos" id="aFotos">
       ${['antes', 'despues'].map((m) => `<div class="foto-slot" data-m="${m}"><div class="hint" style="font-weight:600">${m === 'antes' ? 'ANTES' : 'DESPUÉS'}</div><div class="vista"></div><div class="fila-btns"><button type="button" class="btn btn-secundario" data-cam="${m}">📷 Tomar</button><button type="button" class="btn btn-secundario" data-gal="${m}">🖼 Galería</button></div><input type="file" accept="image/*" hidden data-in="${m}"></div>`).join('')}
     </div>
@@ -1669,18 +1669,25 @@ async function formAporte(tipo, p) {
     $$('#aCard button', h).forEach((x) => x.classList.remove('sel'));
     card = on ? null : b.dataset.r; if (!on) b.classList.add('sel');
   }));
+  const totalFotos = () => fotos.antes.length + fotos.despues.length;
   const pintarSlot = (m) => {
-    const sl = $(`.foto-slot[data-m="${m}"]`, h), f = fotos[m];
-    $('.vista', sl).innerHTML = f ? `<div class="foto"><img src="${f.url}" alt="Foto ${m}"><button type="button" aria-label="Quitar foto">✕</button></div>` : '<div class="hint">Sin foto</div>';
-    const q = $('.vista button', sl);
-    if (q) q.addEventListener('click', () => { URL.revokeObjectURL(f.url); fotos[m] = null; pintarSlot(m); });
+    const sl = $(`.foto-slot[data-m="${m}"]`, h);
+    $('.vista', sl).innerHTML = fotos[m].length
+      ? fotos[m].map((f, i) => `<div class="foto"><img src="${f.url}" alt="Foto ${m}"><button type="button" data-q="${i}" aria-label="Quitar foto">✕</button></div>`).join('')
+      : '<div class="hint">Sin foto</div>';
+    $$('.vista button', sl).forEach((q) => q.addEventListener('click', () => { const f = fotos[m].splice(+q.dataset.q, 1)[0]; URL.revokeObjectURL(f.url); pintarTodo(); }));
+  };
+  const pintarTodo = () => {
+    ['antes', 'despues'].forEach(pintarSlot);
+    $$('[data-cam],[data-gal]', h).forEach((b) => { b.disabled = totalFotos() >= MAX_FOTOS; });
   };
   const poner = async (m, file) => {
-    try { const blob = await comprimirFoto(file); if (fotos[m]) URL.revokeObjectURL(fotos[m].url); fotos[m] = { blob, url: URL.createObjectURL(blob), ruta: null }; pintarSlot(m); }
+    if (totalFotos() >= MAX_FOTOS) { toast(`Máximo ${MAX_FOTOS} fotos.`, 'error'); return; }
+    try { const blob = await comprimirFoto(file); fotos[m].push({ blob, url: URL.createObjectURL(blob), ruta: null }); pintarTodo(); }
     catch (e) { toast(e.message, 'error'); }
   };
+  pintarTodo();
   ['antes', 'despues'].forEach((m) => {
-    pintarSlot(m);
     const inp = $(`input[data-in="${m}"]`, h);
     $(`[data-cam="${m}"]`, h).addEventListener('click', async () => {
       const r = await abrirCamara();
@@ -1700,12 +1707,15 @@ async function formAporte(tipo, p) {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
     if (!rep) { toast('Elige o describe el trabajo realizado.', 'error'); return; }
-    if (!fotos.antes || !fotos.despues) { toast('Faltan las fotos de antes y de después.', 'error'); return; }
+    if (!fotos.antes.length || !fotos.despues.length) { toast('Faltan las fotos de antes y de después.', 'error'); return; }
     const lista = [];
+    let n = 0;
     for (const m of ['antes', 'despues']) {
-      ok.textContent = `Subiendo foto ${m === 'antes' ? 'de antes' : 'de después'}…`;
-      if (!fotos[m].ruta) fotos[m].ruta = await subirFoto(fallaId, fotos[m].blob, true);
-      lista.push({ ruta: fotos[m].ruta, bytes: fotos[m].blob.size, momento: m });
+      for (const f of fotos[m]) {
+        ok.textContent = `Subiendo foto ${++n} de ${totalFotos()}…`;
+        if (!f.ruta) f.ruta = await subirFoto(fallaId, f.blob, true);
+        lista.push({ ruta: f.ruta, bytes: f.blob.size, momento: m });
+      }
     }
     ok.textContent = 'Guardando…';
     const r = await rpc('registrar_aporte', {
