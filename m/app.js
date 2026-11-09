@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.4.7';
+const VERSION_APP = '2.4.9';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1805,6 +1805,58 @@ function htmlCodigos(cat, nombreCat) {
   const fila = (x) => `<button type="button" class="codigo" data-c="${esc(x.c)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`;
   return `<div class="codigos">${nombreCat ? htmlCodigosGrupo(nombreCat, cat, fila) : cat.map(fila).join('')}</div>`;
 }
+// ---------- Notificador externo: reportar a nombre de otra persona (permiso notificador_externo; no en inspecciones ni Cuaderno) ----------
+let NOTIF_LISTA = null;   // { notificadores, usuarios }
+function puedeNotificadorApp() { return !CQ.abierto && S.modo.tipo !== 'inspeccion' && tiene('notificador_externo') && tiene('informar_falla'); }
+function htmlNotificadorApp() {
+  if (!puedeNotificadorApp()) return '';
+  return `<h3>Informó (notificador)</h3>
+    <select id="fNotif" class="campo" aria-label="Notificador"><option value="">Yo mismo</option></select>
+    <input id="fNotifOtro" class="campo" maxlength="60" autocomplete="off" placeholder="Escribe el nombre del notificador" hidden>`;
+}
+async function activarNotificadorApp(h) {
+  const sel = $('#fNotif', h); if (!sel) return;
+  const otro = $('#fNotifOtro', h);
+  sel.addEventListener('change', () => { otro.hidden = sel.value !== '__otro__'; if (!otro.hidden) otro.focus(); });
+  try {
+    if (!NOTIF_LISTA) {
+      const [nots, usrs] = await Promise.all([
+        select('notificadores', 'select=id,nombre,validado,usuario_id&activo=eq.true&order=nombre.asc').catch(() => []),
+        rpc('usuarios_notificables', {}).catch(() => []),
+      ]);
+      let perm = null;   // si el admin le asignó notificadores, solo puede informar a nombre de ellos
+      try { const r = await select('usuarios', `id=eq.${S.perfil.id}&select=notificadores_permitidos`); perm = (r && r[0] && r[0].notificadores_permitidos) || null; } catch (e) { /* sin restricción */ }
+      NOTIF_LISTA = { notificadores: nots || [], usuarios: usrs || [], perm };
+    }
+  } catch (e) { return; }
+  if (!document.body.contains(sel)) return;
+  const { perm } = NOTIF_LISTA;
+  const notificadores = perm ? NOTIF_LISTA.notificadores.filter((n) => perm.includes(n.id)) : NOTIF_LISTA.notificadores;
+  const usuarios = perm ? [] : NOTIF_LISTA.usuarios;
+  const idsUsr = new Set(usuarios.map((u) => u.id));
+  const opt = (v, n, x) => `<option value="${esc(v)}" data-n="${esc(n)}">${esc(n)}${x || ''}</option>`;
+  const libres = notificadores.filter((n) => !(n.usuario_id && idsUsr.has(n.usuario_id)));
+  const rolTxt = { ito: 'ITO', contratista: 'Contratista', contratista2: 'Contratista', contratista3: 'Contratista', admin: 'Admin' };
+  sel.innerHTML = '<option value="">Yo mismo</option>'
+    + (libres.length ? `<optgroup label="Notificadores">${libres.map((n) => opt(n.id, n.nombre)).join('')}</optgroup>` : '')
+    + (usuarios.length ? `<optgroup label="ITO y contratistas">${usuarios.map((u) => opt('u:' + u.id, u.nombre, ' (' + (rolTxt[u.rol] || u.rol) + ')')).join('')}</optgroup>` : '')
+    + (perm ? '' : '<option value="__otro__">➕ Otro (escribir nombre)…</option>');
+}
+// Devuelve { id } (null = yo mismo) o { error }
+async function leerNotificadorApp(h) {
+  const sel = $('#fNotif', h);
+  if (!sel || !sel.value) return { id: null };
+  try {
+    if (sel.value === '__otro__') {
+      const nombre = $('#fNotifOtro', h).value.trim().replace(/\s+/g, ' ');
+      if (nombre.length < 2) return { error: 'Escribe el nombre del notificador (mínimo 2 letras).' };
+      return { id: await rpc('obtener_o_crear_notificador', { p_nombre: nombre }) };
+    }
+    if (sel.value.startsWith('u:')) return { id: await rpc('notificador_de_usuario', { p_usuario: sel.value.slice(2) }) };
+    return { id: sel.value };
+  } catch (e) { return { error: 'No se pudo registrar al notificador: ' + e.message }; }
+}
+
 function htmlOrdenExterna() {
   return `<div class="fila">
     <input id="fOeNum" class="campo" data-p="S" inputmode="numeric" placeholder="N.° de orden externa (opcional)" autocomplete="off">
@@ -1966,6 +2018,7 @@ function formReportePunto(p, excluirUsos) {
           <div id="fMant"></div>
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+          ${htmlNotificadorApp()}
           ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
           ${CQ.abierto ? '' : htmlFotoReporte()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
@@ -1990,6 +2043,7 @@ function formReportePunto(p, excluirUsos) {
     ligarCodigos();
   }, excluirUsos);
   const leerFoto = CQ.abierto ? () => null : activarFotoReporte(h);
+  activarNotificadorApp(h);
   const env = $('#fEnviar', h);
   env.addEventListener('click', ocupar(env, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -1999,10 +2053,12 @@ function formReportePunto(p, excluirUsos) {
     if (mv.error) { toast(mv.error, 'error'); return; }
     const oe = CQ.abierto ? { valor: null } : leerOrdenExterna(h);
     if (oe.error) { toast(oe.error, 'error'); return; }
+    const nt = await leerNotificadorApp(h);
+    if (nt.error) { toast(nt.error, 'error'); return; }
     env.textContent = 'Enviando…';
     if (CQ.abierto) return anotarEnCuaderno('punto', p.gid, codigo, desc, mv.args);
     const ctx = await contextoReporte();
-    const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx, ...mv.args });
+    const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: oe.valor, ...(nt.id ? { p_notificador_id: nt.id } : {}), ...ctx, ...mv.args });
     if (leerFoto()) { env.textContent = 'Subiendo foto…'; await subirFotoReporte(r.id, leerFoto()); }
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot}${r.estado === 'reiterada' ? ' (reiterada)' : ''}`, 'ok');
@@ -2022,6 +2078,7 @@ function formReporteCircuito(p) {
         <div class="col-izq">
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+          ${htmlNotificadorApp()}
           ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
           ${CQ.abierto ? '' : htmlFotoReporte()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
@@ -2037,6 +2094,7 @@ function formReporteCircuito(p) {
   }));
   avisoMantencionCircuito(h, p.gid);
   const leerFoto = CQ.abierto ? () => null : activarFotoReporte(h);
+  activarNotificadorApp(h);
   const env = $('#fEnviar', h);
   env.addEventListener('click', ocupar(env, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -2044,10 +2102,12 @@ function formReporteCircuito(p) {
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
     const oe = CQ.abierto ? { valor: null } : leerOrdenExterna(h);
     if (oe.error) { toast(oe.error, 'error'); return; }
+    const nt = await leerNotificadorApp(h);
+    if (nt.error) { toast(nt.error, 'error'); return; }
     env.textContent = 'Enviando…';
     if (CQ.abierto) return anotarEnCuaderno('circuito', p.gid, codigo, desc, {});
     const ctx = await contextoReporte();
-    const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx });
+    const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: oe.valor, ...(nt.id ? { p_notificador_id: nt.id } : {}), ...ctx });
     if (leerFoto()) { env.textContent = 'Subiendo foto…'; await subirFotoReporte(r.id, leerFoto()); }
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot} · ${r.puntos_afectados} puntos afectados`, 'ok');
