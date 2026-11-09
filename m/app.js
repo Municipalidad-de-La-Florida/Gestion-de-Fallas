@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.4.1';
+const VERSION_APP = '2.4.2';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1328,7 +1328,7 @@ function iniciarSuministro(){
 const REP_BUSQ_HORAS = 240;
 const repBusq = { ts: 0, features: [], cargando: false };
 async function cargarRepBusq() {
-  if (rol() !== 'admin' || repBusq.cargando || Date.now() - repBusq.ts < 5 * 60e3) return;
+  if (repBusq.cargando || Date.now() - repBusq.ts < 5 * 60e3) return;
   repBusq.cargando = true;
   try {
     const rep = await rpc('fallas_geojson_reparadas', { p_horas: REP_BUSQ_HORAS });
@@ -2520,9 +2520,9 @@ function renderLista() {
       return [p.ot, p.orden_externa, p.tipo_falla, DESC_CODIGO[p.tipo_falla], p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q));
     });
   }
-  // Admin: al buscar, se suman las reparadas de los últimos 10 días (sin búsqueda no aparecen)
+  // Al buscar (cualquier perfil), se suman las reparadas de los últimos 10 días que el perfil puede ver (sin búsqueda no aparecen)
   let nRep = 0;
-  if (q && rol() === 'admin') {
+  if (q) {
     cargarRepBusq();
     const idsMostradas = new Set(items.map((f) => f.properties.id));
     const rep = repBusq.features.filter((f) => {
