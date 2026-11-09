@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.4.2';
+const VERSION_APP = '2.4.4';
 
 const LS_SESION = 'fm_sesion_v1';
 const LS_PERFIL = 'fm_perfil_v1';
@@ -1762,7 +1762,7 @@ function htmlCodigos(cat, nombreCat) {
 }
 function htmlOrdenExterna() {
   return `<div class="fila">
-    <select id="fOeEmp" class="campo" aria-label="Empresa"><option value="">Sin orden</option><option value="S">Sinec</option><option value="E">Elecnor</option></select>
+    <select id="fOeEmp" class="campo" aria-label="Empresa"><option value="">Sin orden</option><option value="S">Sinec</option></select>
     <input id="fOeNum" class="campo" inputmode="numeric" placeholder="N.° de orden" autocomplete="off">
   </div>`;
 }
@@ -1770,7 +1770,7 @@ function leerOrdenExterna(h) {
   const emp = $('#fOeEmp', h).value;
   const num = $('#fOeNum', h).value.trim().replace(/\s+/g, '');
   if (!emp && !num) return { valor: null };
-  if (num && !emp) return { error: 'Elige la empresa de la orden externa (Sinec o Elecnor).' };
+  if (num && !emp) return { error: 'Elige la empresa de la orden externa (Sinec).' };
   if (emp && !num) return { error: 'Escribe el número de la orden externa, o deja "Sin orden".' };
   if (num.length > 38) return { error: 'El número de la orden externa es demasiado largo.' };
   return { valor: `${emp}-${num}` };
@@ -1923,6 +1923,7 @@ function formReportePunto(p, excluirUsos) {
           <div id="fMant"></div>
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+          ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
         </div>
         <div class="col-der">
@@ -1951,10 +1952,12 @@ function formReportePunto(p, excluirUsos) {
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
     const mv = mant.validar(desc);
     if (mv.error) { toast(mv.error, 'error'); return; }
+    const oe = CQ.abierto ? { valor: null } : leerOrdenExterna(h);
+    if (oe.error) { toast(oe.error, 'error'); return; }
     env.textContent = 'Enviando…';
     if (CQ.abierto) return anotarEnCuaderno('punto', p.gid, codigo, desc, mv.args);
     const ctx = await contextoReporte();
-    const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: null, ...ctx, ...mv.args });
+    const r = await rpc('crear_falla_punto', { p_punto_gid: p.gid, p_tipo_falla: codigo, p_cardinalidad: card, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx, ...mv.args });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot}${r.estado === 'reiterada' ? ' (reiterada)' : ''}`, 'ok');
     cargarFallas();
@@ -1973,6 +1976,7 @@ function formReporteCircuito(p) {
         <div class="col-izq">
           <h3>Comentario</h3>
           <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+          ${CQ.abierto ? '' : '<h3>Orden externa (opcional)</h3>' + htmlOrdenExterna()}
           <div class="hint" style="margin-top:10px">${modoTexto()}</div>
         </div>
         <div class="col-der">
@@ -1990,10 +1994,12 @@ function formReporteCircuito(p) {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
     const desc = $('#fDesc', h).value.trim();
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
+    const oe = CQ.abierto ? { valor: null } : leerOrdenExterna(h);
+    if (oe.error) { toast(oe.error, 'error'); return; }
     env.textContent = 'Enviando…';
     if (CQ.abierto) return anotarEnCuaderno('circuito', p.gid, codigo, desc, {});
     const ctx = await contextoReporte();
-    const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: null, ...ctx });
+    const r = await rpc('crear_falla_circuito', { p_circuito_gid: p.gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_orden_externa: oe.valor, ...ctx });
     cerrarHoja();
     toast(`Falla registrada · OS ${r.ot} · ${r.puntos_afectados} puntos afectados`, 'ok');
     cargarFallas();
@@ -2066,7 +2072,7 @@ async function editarFallaApp(p) {
   });
   $('#fDesc', h).value = fila.descripcion_otro || '';
   const m = /^([SE])-(.*)$/.exec(fila.orden_externa || '');
-  if (m) { $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
+  if (m) { if (m[1] === 'E') $('#fOeEmp', h).add(new Option('Elecnor', 'E')); /* órdenes antiguas de Elecnor se conservan */ $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
   const gu = $('#fGuardar', h);
   gu.addEventListener('click', ocupar(gu, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -2286,7 +2292,7 @@ async function editarReparacionApp(p, est) {
   $('#rDesc', h).value = est.descripcion || '';
   $('#rOtro', h).value = est.descripcion_otro || '';
   const m = /^([SE])-(.*)$/.exec(est.orden_externa || '');
-  if (m) { $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
+  if (m) { if (m[1] === 'E') $('#fOeEmp', h).add(new Option('Elecnor', 'E')); /* órdenes antiguas de Elecnor se conservan */ $('#fOeEmp', h).value = m[1]; $('#fOeNum', h).value = m[2]; }
   // Los códigos de trabajo se marcan/desmarcan (como al registrar) y reflejan lo escrito en el cuadro
   const lineasRep = () => $('#rDesc', h).value.split('\n').map((x) => x.trim());
   const marcarCodigosRep = () => { const ls = lineasRep(); $$('.codigos .codigo[data-t]', h).forEach((b) => b.classList.toggle('sel', ls.includes(b.dataset.t))); };
