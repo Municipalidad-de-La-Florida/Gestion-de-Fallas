@@ -713,3 +713,13 @@ html[data-tema=oscuro] .u-bar,html[data-tema=oscuro] .m-cab{ background:#12261f;
 
 #lbFoto img{ touch-action:none; user-select:none; -webkit-user-select:none; -webkit-user-drag:none; transform-origin:center center; will-change:transform; position:relative; z-index:1; }
 #lbFoto .lb-barra,#lbFoto .lb-cerrar{ position:relative; z-index:3; }
+
+/* Ficha de punto/circuito: Reportar a todo el ancho y debajo dos botones iguales (icono + texto) */
+.acciones.acc-grid{ gap:8px; }
+.acc-grid .acc-prim{ display:flex; gap:8px; }
+.acc-grid .acc-prim .btn{ flex:1; display:flex; align-items:center; justify-content:center; gap:10px; height:56px; min-height:56px; padding:0 14px; font-size:16px; font-weight:700; }
+.acc-grid .acc-prim .btn span{ display:block; }
+.acc-grid .acc-sec{ display:flex; gap:8px; }
+.acc-grid .acc-sec:empty{ display:none; }
+.acc-grid .acc-sec .acc-t{ flex:1 1 0; min-width:0; flex-direction:row; gap:8px; min-height:48px; padding:0 10px; font-size:14px; font-weight:600; text-decoration:none; }
+.acc-grid .acc-sec .acc-t span{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

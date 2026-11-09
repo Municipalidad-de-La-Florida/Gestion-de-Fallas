@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.6.0';
+const VERSION_APP = '2.6.1';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1492,10 +1492,14 @@ async function contextoReporte() {
 // Acciones de la ventana de un punto o circuito: reportar (solo quien puede) + «Cómo llegar» para todos
 function accionesReporte(textoReportar, geom) {
   const c = geom ? centroGeom(geom) : null;
-  return `<div class="acciones acc-fila" id="accFalla">
-    ${puedeReportar() ? `<button id="bReportar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}${esc(textoReportar)}</button>` : ''}
-    ${tiene('aporte_registrar') ? `<button id="bAporte" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}Registrar aporte</button>` : ''}
-    ${c ? `<a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>` : ''}
+  return `<div class="acciones acc-grid" id="accFalla">
+    <div class="acc-prim">
+      ${puedeReportar() ? `<button id="bReportar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}<span>${esc(textoReportar)}</span></button>` : ''}
+      ${tiene('aporte_registrar') ? `<button id="bAporte" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}<span>Registrar aporte</span></button>` : ''}
+    </div>
+    <div class="acc-sec">
+      ${c ? `<a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>` : ''}
+    </div>
   </div>`;
 }
 // Una falla ya reparada (verde) se dibuja sobre su punto o circuito y se llevaba el toque: quien reporta quería el punto o el circuito de abajo.
@@ -1538,7 +1542,8 @@ function botonVerReparada(h, tipo, gid) {
   const f = fallaReparadaCargada(tipo, gid);
   if (!f || !puedeReportar()) return;
   const acc = $('#accFalla', h);
-  if (acc) acc.insertAdjacentHTML('afterend', '<div style="margin-top:6px"><button id="bVerRep" class="btn btn-secundario">Ver la reparación reciente</button></div>');
+  const sec = acc && acc.querySelector('.acc-sec');
+  if (sec) sec.insertAdjacentHTML('beforeend', `<button id="bVerRep" type="button" class="acc-t">${ICO_ACC.historial}<span>Última reparación</span></button>`);
   const b = $('#bVerRep', h);
   if (b) b.addEventListener('click', () => abrirFalla(f.properties, f.geometry));
 }
@@ -2288,6 +2293,7 @@ const ICO_ACC = {
   nueva: _ia('<path d="M12 5v14M5 12h14"/>'),
   masivo: _ia('<path d="M7 4L3 8l4 4"/><path d="M3 8h14"/><path d="M17 20l4-4-4-4"/><path d="M21 16H7"/>'),
   camion: _ia('<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.7"/><circle cx="17" cy="17.5" r="1.7"/>'),
+  historial: _ia('<path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5"/><path d="M12 8v4l2.5 2"/>'),
   ir: _ia('<path d="M12 21s-6-5.6-6-10.5a6 6 0 0112 0C18 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/>'),
   borrar: _ia('<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>'),
 };
