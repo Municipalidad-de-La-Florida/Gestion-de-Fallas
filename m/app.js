@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.2';
+const VERSION_APP = '2.9.3';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -3024,7 +3024,10 @@ async function cargarUsuariosAdmin() {
     select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo,ver_cuaderno&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
     select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc').catch(() => []),
     select('usuario_contratos', 'select=usuario_id,contrato_id').catch(() => []),
-    select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc').catch(() => []),
+    // fallas(count) con cascada=false: solo las fallas propias (órdenes), sin las filas en cascada de cada punto afectado
+    select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&fallas.cascada=eq.false&order=nombre.asc')
+      .catch(() => select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc'))   // respaldo: si el filtro fallara, la lista sigue viéndose
+      .catch(() => []),
     select('perfiles', 'select=clave,nombre,base_rol,sistema,orden&order=orden.asc').catch(() => []),
     select('usuario_mantenedores', 'select=usuario_id,mantenedor_id').catch(() => []),
     select('usuarios', 'select=id,ultima_conexion').catch(() => null),   // sin el SQL de última conexión: queda en «—»
