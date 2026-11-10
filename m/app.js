@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.7.1';
+const VERSION_APP = '2.8.0';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -843,6 +843,7 @@ function iniciarMapa() {
     L.polyline(contornoLL.concat([contornoLL[0]]),
       { pane: 'atenuadoPane', interactive: false, color: '#1f4d3d', weight: 2.5, opacity: 0.85 }),
   ]);
+  iniciarBuscador();
   capaAtenuado.addTo(map);   // fuera de la comuna siempre atenuado (ya no hay botón para apagarlo)
   // Brújula: la aguja sigue al norte mientras se gira el mapa con dos dedos; al tocarla vuelve al norte
   const btnBr = $('#btnBrujula'), svgBr = $('#brujulaSvg');
@@ -854,6 +855,78 @@ function iniciarMapa() {
   map.on('rotate', pintarBrujula);
   btnBr.addEventListener('click', () => { if (map.setBearing) map.setBearing(0); pintarBrujula(); });
   pintarBrujula();
+}
+
+/* Buscador de direcciones (mismo que la web: funciones sugerir_direcciones / buscar_direccion de la base) */
+function iniciarBuscador() {
+  const btn = $('#btnBuscar'), barra = $('#barraBuscar'), inp = $('#buscarDir'), sug = $('#buscarSug'), msg = $('#buscarMsg'), lim = $('#buscarLimpiar');
+  const capa = L.layerGroup().addTo(map);
+  let timer = null, seq = 0;
+  const ocultarSug = () => { sug.hidden = true; sug.innerHTML = ''; };
+  const mostrarMsg = (html, color) => { msg.hidden = !html; msg.innerHTML = html || ''; msg.style.color = color || 'var(--tinta-2)'; };
+  const abrir = () => { barra.hidden = false; btn.classList.add('activo'); setTimeout(() => inp.focus(), 50); };
+  const cerrar = () => { barra.hidden = true; btn.classList.remove('activo'); ocultarSug(); inp.blur(); };
+  const limpiar = () => { inp.value = ''; lim.hidden = true; ocultarSug(); mostrarMsg(''); capa.clearLayers(); };
+  btn.addEventListener('click', () => { if (barra.hidden) abrir(); else cerrar(); });
+  lim.addEventListener('click', () => { limpiar(); inp.focus(); });
+  inp.addEventListener('input', () => {
+    clearTimeout(timer);
+    const texto = inp.value.trim();
+    lim.hidden = !inp.value;
+    mostrarMsg('');
+    if (texto.length < 2) { ocultarSug(); return; }
+    const mi = ++seq;
+    timer = setTimeout(async () => {
+      try {
+        const items = await rpc('sugerir_direcciones', { p_texto: texto });
+        if (mi !== seq) return;
+        if (!Array.isArray(items) || !items.length) { ocultarSug(); return; }
+        sug.innerHTML = items.map((it, i) => `<div data-i="${i}">${esc(it.texto)}${it.tipo === 'calle' ? ' …' : ''}</div>`).join('');
+        sug.hidden = false;
+        $$('div', sug).forEach((el) => el.addEventListener('click', () => {
+          const it = items[+el.dataset.i];
+          ocultarSug();
+          if (it.tipo === 'calle') { inp.value = it.texto + ' '; inp.focus(); }
+          else { inp.value = it.texto; buscar(); }
+        }));
+      } catch (e) { /* sin conexión: sin sugerencias */ }
+    }, 220);
+  });
+  async function buscar() {
+    clearTimeout(timer); seq++;
+    ocultarSug();
+    const texto = inp.value.trim();
+    if (!texto) { mostrarMsg('Escribe una dirección, ej: <b>Las Nalcas 7905</b> o <b>Calle A con Calle B</b>.', '#b45309'); return; }
+    mostrarMsg('Buscando…');
+    inp.blur();
+    try {
+      const r = await rpc('buscar_direccion', { p_texto: texto });
+      capa.clearLayers();
+      if (!r || r.tipo === 'sin_resultado' || !r.geojson) {
+        let h = esc((r && r.mensaje) || 'No encontré esa dirección.');
+        const alt = (r && r.alternativas) || [];
+        if (alt.length) h += '<br>¿Quisiste decir? ' + alt.map((x, i) => `<a href="#" data-alt="${i}">${esc(x)}</a>`).join(' · ');
+        mostrarMsg(h, '#d33a2c');
+        $$('a[data-alt]', msg).forEach((a) => a.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          const num = (texto.match(/\d+\s*$/) || [''])[0].trim();
+          inp.value = alt[+a.dataset.alt] + (num ? ' ' + num : '');
+          buscar();
+        }));
+        return;
+      }
+      const g = L.geoJSON(r.geojson, {
+        interactive: false,
+        style: { color: '#2563a8', weight: 4, fillColor: '#2563a8', fillOpacity: 0.35 },
+        pointToLayer: (f, ll) => L.circleMarker(ll, { radius: 9, color: '#fff', weight: 3, fillColor: '#2563a8', fillOpacity: 1, interactive: false }),
+      }).addTo(capa);
+      map.fitBounds(g.getBounds(), { padding: [60, 60], maxZoom: 19 });
+      mostrarMsg(esc(r.mensaje || ''), r.tipo === 'cercana' ? '#b45309' : 'var(--verde-2)');
+    } catch (e) {
+      mostrarMsg('Error buscando la dirección: ' + esc(e.message || 'sin conexión'), '#d33a2c');
+    }
+  }
+  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); buscar(); } });
 }
 const radioPunto = () => { const z = map.getZoom(); return z >= 19 ? 11 : z >= 18 ? 9 : 7; };
 function ajustarRadios() { const r = radioPunto(); capaPuntos.eachLayer((l) => l.setRadius && l.setRadius(r)); }

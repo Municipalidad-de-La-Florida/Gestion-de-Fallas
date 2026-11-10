@@ -59,7 +59,13 @@
     <button id="badgeCamiones" class="badge-filtro" style="top:52px" hidden>Camiones ✕</button>
     <button id="btnUbicacion" class="fab" aria-label="Mi ubicación"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><circle cx="12" cy="12" r="8"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3"/></svg></button>
     <button id="btnBrujula" class="fab fab2" aria-label="Mapa al norte" title="Mapa al norte"><svg id="brujulaSvg" width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><circle cx="15" cy="15" r="12" fill="none" stroke="currentColor" stroke-opacity=".3" stroke-width="1.5"/><path d="M15 4l4 11h-8z" fill="#d33a2c"/><path d="M15 26l4-11h-8z" fill="currentColor" fill-opacity=".45"/></svg></button>
-    <button id="btnDistrib" class="fab fab3 activo" aria-label="Fallas de distribución" aria-pressed="true" hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l9.5 9.5-9.5 9.5L2.5 12z"/><path d="M12.8 7.5l-3 5h3l-1 4 3.2-5.2h-3z" fill="currentColor" stroke="none"/></svg></button>
+    <button id="btnBuscar" class="fab fab3" aria-label="Buscar dirección" title="Buscar dirección"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5"/></svg></button>
+    <div id="barraBuscar" class="barra-buscar" hidden>
+      <div class="bb-fila"><input id="buscarDir" type="search" inputmode="search" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Dirección o esquina (ej: Las Nalcas 7905)"><button id="buscarLimpiar" type="button" aria-label="Borrar" hidden>✕</button></div>
+      <div id="buscarSug" class="bb-sug" hidden></div>
+      <div id="buscarMsg" class="bb-msg" hidden></div>
+    </div>
+    <button id="btnDistrib" class="fab fab4 activo" aria-label="Fallas de distribución" aria-pressed="true" hidden><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l9.5 9.5-9.5 9.5L2.5 12z"/><path d="M12.8 7.5l-3 5h3l-1 4 3.2-5.2h-3z" fill="currentColor" stroke="none"/></svg></button>
   </main>
 
   <main id="vistaInsp" hidden>
