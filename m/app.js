@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.8.0';
+const VERSION_APP = '2.9.1';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -845,16 +845,49 @@ function iniciarMapa() {
   ]);
   iniciarBuscador();
   capaAtenuado.addTo(map);   // fuera de la comuna siempre atenuado (ya no hay botón para apagarlo)
-  // Brújula: la aguja sigue al norte mientras se gira el mapa con dos dedos; al tocarla vuelve al norte
+  // Brújula: la aguja sigue al norte mientras se gira el mapa con dos dedos; al tocarla vuelve al norte.
+  // Mantenerla pulsada 2 s fija el norte (el mapa deja de girar); otra vez 2 s lo suelta. Se recuerda en el dispositivo.
   const btnBr = $('#btnBrujula'), svgBr = $('#brujulaSvg');
+  let norteFijo = false;
+  try { norteFijo = localStorage.getItem('fm_norte_fijo') === '1'; } catch (e) { /* */ }
   const pintarBrujula = () => {
     const b = map.getBearing ? map.getBearing() : 0;
     svgBr.style.transform = `rotate(${b}deg)`;
     btnBr.classList.toggle('girado', Math.abs(((b + 180) % 360 + 360) % 360 - 180) > 1);
   };
+  const aplicarNorteFijo = () => {
+    if (norteFijo) { map.touchRotate.disable(); if (map.setBearing) map.setBearing(0); }
+    else map.touchRotate.enable();
+    btnBr.classList.toggle('activo', norteFijo);
+    btnBr.classList.toggle('fijo', norteFijo);
+    btnBr.setAttribute('aria-pressed', norteFijo ? 'true' : 'false');
+    btnBr.title = norteFijo ? 'Norte fijado · mantén pulsado 2 s para soltarlo' : 'Mapa al norte · mantén pulsado 2 s para fijarlo';
+    btnBr.setAttribute('aria-label', btnBr.title);
+    pintarBrujula();
+  };
   map.on('rotate', pintarBrujula);
-  btnBr.addEventListener('click', () => { if (map.setBearing) map.setBearing(0); pintarBrujula(); });
-  pintarBrujula();
+  let tPulso = null, fueLargo = false;
+  const soltarPulso = () => { clearTimeout(tPulso); btnBr.classList.remove('sosteniendo'); };
+  btnBr.addEventListener('pointerdown', () => {
+    fueLargo = false; btnBr.classList.add('sosteniendo');
+    tPulso = setTimeout(() => {
+      fueLargo = true; btnBr.classList.remove('sosteniendo');
+      norteFijo = !norteFijo;
+      try { localStorage.setItem('fm_norte_fijo', norteFijo ? '1' : '0'); } catch (e) { /* */ }
+      aplicarNorteFijo();
+      try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) { /* */ }
+      toast(norteFijo ? 'Norte fijado: el mapa no gira' : 'Norte suelto: el mapa se puede girar', 'ok');
+    }, 2000);
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => btnBr.addEventListener(ev, soltarPulso));
+  btnBr.addEventListener('contextmenu', (e) => e.preventDefault());
+  btnBr.addEventListener('click', () => {
+    if (fueLargo) { fueLargo = false; return; }   // el pulso largo no cuenta como toque
+    if (norteFijo) { toast('Norte fijado · mantén pulsado 2 s para soltarlo'); return; }
+    if (map.setBearing) map.setBearing(0);
+    pintarBrujula();
+  });
+  aplicarNorteFijo();
 }
 
 /* Buscador de direcciones (mismo que la web: funciones sugerir_direcciones / buscar_direccion de la base) */
