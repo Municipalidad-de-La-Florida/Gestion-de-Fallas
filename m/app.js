@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.1';
+const VERSION_APP = '2.9.2';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -814,7 +814,7 @@ const COMUNA_CONTORNO = [[-70.61562,-33.54644],[-70.61561,-33.54617],[-70.61545,
 function iniciarMapa() {
   definirMarcadorForma();
   if (map) { map.invalidateSize(); return; }
-  map = L.map('map', { zoomControl: false, attributionControl: true, maxZoom: 21, rotate: true, touchRotate: true, rotateControl: false, bearing: 0 }).setView([-33.52, -70.58], 14);
+  map = L.map('map', { zoomControl: false, attributionControl: true, maxZoom: 21 }).setView([-33.52, -70.58], 14);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   rend = L.canvas({ padding: 0.5, tolerance: 12 });
   rendSvg = L.svg({ padding: 0.5 });
@@ -830,10 +830,10 @@ function iniciarMapa() {
   map.on('click', () => { /* un toque en el vacío no hace nada */ });
   // Atenuar lo que queda fuera de la comuna (botón en el mapa, se recuerda la elección). No bloquea toques.
   // El círculo de precisión del GPS va BAJO las fallas: encima teñía de azul los puntos morados/rojos
-  map.createPane('precisionPane', map._rotatePane);   // con el plugin de rotación, los paneles propios van dentro de la capa que gira
+  map.createPane('precisionPane');
   map.getPane('precisionPane').style.zIndex = 300;
   map.getPane('precisionPane').style.pointerEvents = 'none';
-  map.createPane('atenuadoPane', map._rotatePane);
+  map.createPane('atenuadoPane');
   map.getPane('atenuadoPane').style.zIndex = 250;             // sobre el fondo, bajo líneas y puntos
   map.getPane('atenuadoPane').style.pointerEvents = 'none';
   const contornoLL = COMUNA_CONTORNO.map((c) => [c[1], c[0]]);
@@ -845,49 +845,6 @@ function iniciarMapa() {
   ]);
   iniciarBuscador();
   capaAtenuado.addTo(map);   // fuera de la comuna siempre atenuado (ya no hay botón para apagarlo)
-  // Brújula: la aguja sigue al norte mientras se gira el mapa con dos dedos; al tocarla vuelve al norte.
-  // Mantenerla pulsada 2 s fija el norte (el mapa deja de girar); otra vez 2 s lo suelta. Se recuerda en el dispositivo.
-  const btnBr = $('#btnBrujula'), svgBr = $('#brujulaSvg');
-  let norteFijo = false;
-  try { norteFijo = localStorage.getItem('fm_norte_fijo') === '1'; } catch (e) { /* */ }
-  const pintarBrujula = () => {
-    const b = map.getBearing ? map.getBearing() : 0;
-    svgBr.style.transform = `rotate(${b}deg)`;
-    btnBr.classList.toggle('girado', Math.abs(((b + 180) % 360 + 360) % 360 - 180) > 1);
-  };
-  const aplicarNorteFijo = () => {
-    if (norteFijo) { map.touchRotate.disable(); if (map.setBearing) map.setBearing(0); }
-    else map.touchRotate.enable();
-    btnBr.classList.toggle('activo', norteFijo);
-    btnBr.classList.toggle('fijo', norteFijo);
-    btnBr.setAttribute('aria-pressed', norteFijo ? 'true' : 'false');
-    btnBr.title = norteFijo ? 'Norte fijado · mantén pulsado 2 s para soltarlo' : 'Mapa al norte · mantén pulsado 2 s para fijarlo';
-    btnBr.setAttribute('aria-label', btnBr.title);
-    pintarBrujula();
-  };
-  map.on('rotate', pintarBrujula);
-  let tPulso = null, fueLargo = false;
-  const soltarPulso = () => { clearTimeout(tPulso); btnBr.classList.remove('sosteniendo'); };
-  btnBr.addEventListener('pointerdown', () => {
-    fueLargo = false; btnBr.classList.add('sosteniendo');
-    tPulso = setTimeout(() => {
-      fueLargo = true; btnBr.classList.remove('sosteniendo');
-      norteFijo = !norteFijo;
-      try { localStorage.setItem('fm_norte_fijo', norteFijo ? '1' : '0'); } catch (e) { /* */ }
-      aplicarNorteFijo();
-      try { if (navigator.vibrate) navigator.vibrate(40); } catch (e) { /* */ }
-      toast(norteFijo ? 'Norte fijado: el mapa no gira' : 'Norte suelto: el mapa se puede girar', 'ok');
-    }, 2000);
-  });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => btnBr.addEventListener(ev, soltarPulso));
-  btnBr.addEventListener('contextmenu', (e) => e.preventDefault());
-  btnBr.addEventListener('click', () => {
-    if (fueLargo) { fueLargo = false; return; }   // el pulso largo no cuenta como toque
-    if (norteFijo) { toast('Norte fijado · mantén pulsado 2 s para soltarlo'); return; }
-    if (map.setBearing) map.setBearing(0);
-    pintarBrujula();
-  });
-  aplicarNorteFijo();
 }
 
 /* Buscador de direcciones (mismo que la web: funciones sugerir_direcciones / buscar_direccion de la base) */
@@ -4002,7 +3959,7 @@ function mostrarEnMapaCuaderno(it) {
   const ll = [it.lat, it.lng];
   if (S.vista === 'cuaderno') S.cqVolver = true;
   if (S.vista !== 'mapa') cambiarVista('mapa');
-  if (!map.getPane('cuadPane')) { map.createPane('cuadPane', map._rotatePane); map.getPane('cuadPane').style.zIndex = 660; map.getPane('cuadPane').style.pointerEvents = 'none'; }
+  if (!map.getPane('cuadPane')) { map.createPane('cuadPane'); map.getPane('cuadPane').style.zIndex = 660; map.getPane('cuadPane').style.pointerEvents = 'none'; }
   const capas = [];
   if (it.tipo === 'circuito' && it.geo) {
     // todo el circuito en naranja (sin el punto central: el trazado ya lo indica)
