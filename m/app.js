@@ -3025,7 +3025,9 @@ async function cargarUsuariosAdmin() {
     select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc').catch(() => []),
     select('usuario_contratos', 'select=usuario_id,contrato_id').catch(() => []),
     // fallas(count) con cascada=false: solo las fallas propias (órdenes), sin las filas en cascada de cada punto afectado
-    select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&fallas.cascada=eq.false&order=nombre.asc').catch(() => []),
+    select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&fallas.cascada=eq.false&order=nombre.asc')
+      .catch(() => select('notificadores', 'select=id,nombre,validado,activo,usuario_id,fallas(count)&order=nombre.asc'))   // respaldo: si el filtro fallara, la lista sigue viéndose
+      .catch(() => []),
     select('perfiles', 'select=clave,nombre,base_rol,sistema,orden&order=orden.asc').catch(() => []),
     select('usuario_mantenedores', 'select=usuario_id,mantenedor_id').catch(() => []),
     select('usuarios', 'select=id,ultima_conexion').catch(() => null),   // sin el SQL de última conexión: queda en «—»
