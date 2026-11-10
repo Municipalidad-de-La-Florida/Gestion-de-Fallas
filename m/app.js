@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.6.2';
+const VERSION_APP = '2.6.3';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2356,7 +2356,6 @@ async function abrirFalla(p, geom) {
     evFicha.push({ t: p.fecha_reparacion, html: `<div class="info-ok"><h3>Reparación</h3>
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
       ${p.descripcion_reparacion ? `<h4>Trabajo realizado</h4><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
-      <div id="fotoReporte"></div>
       <div id="fotosFalla"></div>
     </div>` });
   }
@@ -2366,6 +2365,7 @@ async function abrirFalla(p, geom) {
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span>${p.contrato_id && CONTR[p.contrato_id] ? `<span class="tag-ctr n">${esc(CONTR[p.contrato_id].nombre)}</span>` : ''}${p.mantenedor_id && MANT[p.mantenedor_id] ? `<span class="tag-mant">${esc(MANT[p.mantenedor_id])}</span>` : ''}${p.masivo ? '<span class="tag-masivo" style="margin-left:4px">#Masivo</span>' : ''}</div>
     <dl class="kv info-card">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && tiene('asignacion_quitar') ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
+    <div id="fotoReporte"></div>
     ${lineaFicha}
     ${p.cascada ? `<div class="aviso" id="avCascada">Este punto se cierra automáticamente al reparar su circuito.</div>` : ''}
     <div class="acciones" id="accFalla">
