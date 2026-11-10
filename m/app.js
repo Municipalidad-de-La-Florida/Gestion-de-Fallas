@@ -830,10 +830,10 @@ function iniciarMapa() {
   map.on('click', () => { /* un toque en el vacío no hace nada */ });
   // Atenuar lo que queda fuera de la comuna (botón en el mapa, se recuerda la elección). No bloquea toques.
   // El círculo de precisión del GPS va BAJO las fallas: encima teñía de azul los puntos morados/rojos
-  map.createPane('precisionPane');
+  map.createPane('precisionPane', map._rotatePane);   // con el plugin de rotación, los paneles propios van dentro de la capa que gira
   map.getPane('precisionPane').style.zIndex = 300;
   map.getPane('precisionPane').style.pointerEvents = 'none';
-  map.createPane('atenuadoPane');
+  map.createPane('atenuadoPane', map._rotatePane);
   map.getPane('atenuadoPane').style.zIndex = 250;             // sobre el fondo, bajo líneas y puntos
   map.getPane('atenuadoPane').style.pointerEvents = 'none';
   const contornoLL = COMUNA_CONTORNO.map((c) => [c[1], c[0]]);
@@ -3896,7 +3896,7 @@ function mostrarEnMapaCuaderno(it) {
   const ll = [it.lat, it.lng];
   if (S.vista === 'cuaderno') S.cqVolver = true;
   if (S.vista !== 'mapa') cambiarVista('mapa');
-  if (!map.getPane('cuadPane')) { map.createPane('cuadPane'); map.getPane('cuadPane').style.zIndex = 660; map.getPane('cuadPane').style.pointerEvents = 'none'; }
+  if (!map.getPane('cuadPane')) { map.createPane('cuadPane', map._rotatePane); map.getPane('cuadPane').style.zIndex = 660; map.getPane('cuadPane').style.pointerEvents = 'none'; }
   const capas = [];
   if (it.tipo === 'circuito' && it.geo) {
     // todo el circuito en naranja (sin el punto central: el trazado ya lo indica)
