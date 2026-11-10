@@ -72,6 +72,7 @@ main{ flex:1 1 auto; position:relative; min-height:0; }
 .fab.sigue{ box-shadow:0 0 0 3px rgba(46,158,87,.45), 0 2px 8px rgba(0,0,0,.25); }
 .fab2{ bottom:calc(var(--safe-b) + 140px); }
 .fab3{ bottom:calc(var(--safe-b) + 196px); }
+.fab4{ bottom:calc(var(--safe-b) + 252px); }
 .fab[hidden]{ display:none; }
 
 #navInferior{ position:absolute; z-index:800; left:14px; right:14px; bottom:calc(var(--safe-b) + 12px); height:58px; display:flex; align-items:center; gap:4px; padding:0 6px; background:#fff; border-radius:20px; box-shadow:0 6px 22px rgba(0,0,0,.2); }
@@ -729,3 +730,15 @@ html[data-tema=oscuro] .chip-modo,
 html[data-tema=oscuro] .chip-modo.insp{ color:#2a1700; }
 html[data-tema=oscuro] .chip-modo.cuad{ color:#fff; }
 html[data-tema=oscuro] .insignia.reportada{ color:#3d2e00; }
+
+/* Buscador de direcciones del mapa */
+.barra-buscar{ position:absolute; z-index:600; left:10px; right:10px; top:10px; background:var(--blanco); border-radius:14px; box-shadow:var(--sombra); padding:8px; }
+.barra-buscar[hidden]{ display:none; }
+.bb-fila{ display:flex; align-items:center; gap:6px; border:1.5px solid var(--verde-2); border-radius:10px; padding:0 4px 0 10px; }
+.bb-fila input{ flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--tinta); font:inherit; font-size:16px; padding:10px 0; }
+.bb-fila button{ border:0; background:transparent; color:var(--tinta-2); font-size:16px; width:36px; height:36px; }
+.bb-sug div{ padding:11px 8px; border-bottom:1px solid var(--linea); color:var(--tinta); font-size:15px; }
+.bb-sug div:last-child{ border-bottom:0; }
+.bb-msg{ font-size:13px; line-height:1.35; padding:8px 4px 2px; }
+.bb-msg a{ color:var(--verde-2); font-weight:600; }
+.bb-fila input::-webkit-search-cancel-button,.bb-fila input::-webkit-search-decoration{ -webkit-appearance:none; appearance:none; display:none; }
