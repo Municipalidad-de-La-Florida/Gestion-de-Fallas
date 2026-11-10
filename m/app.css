@@ -723,3 +723,9 @@ html[data-tema=oscuro] .u-bar,html[data-tema=oscuro] .m-cab{ background:#12261f;
 .acc-grid .acc-sec:empty{ display:none; }
 .acc-grid .acc-sec .acc-t{ flex:1 1 0; min-width:0; flex-direction:row; gap:8px; min-height:48px; padding:0 10px; font-size:14px; font-weight:600; text-decoration:none; }
 .acc-grid .acc-sec .acc-t span{ display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+/* Modo oscuro: los avisos con fondo brillante (inspección amarillo, naranja, "reportada") mantienen texto oscuro */
+html[data-tema=oscuro] .chip-modo,
+html[data-tema=oscuro] .chip-modo.insp{ color:#2a1700; }
+html[data-tema=oscuro] .chip-modo.cuad{ color:#fff; }
+html[data-tema=oscuro] .insignia.reportada{ color:#3d2e00; }
