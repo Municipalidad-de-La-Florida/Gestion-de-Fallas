@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.6.3';
+const VERSION_APP = '2.7.0';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -814,7 +814,7 @@ const COMUNA_CONTORNO = [[-70.61562,-33.54644],[-70.61561,-33.54617],[-70.61545,
 function iniciarMapa() {
   definirMarcadorForma();
   if (map) { map.invalidateSize(); return; }
-  map = L.map('map', { zoomControl: false, attributionControl: true, maxZoom: 21 }).setView([-33.52, -70.58], 14);
+  map = L.map('map', { zoomControl: false, attributionControl: true, maxZoom: 21, rotate: true, touchRotate: true, rotateControl: false, bearing: 0 }).setView([-33.52, -70.58], 14);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 21, maxNativeZoom: 19, attribution: '© OpenStreetMap' }).addTo(map);
   rend = L.canvas({ padding: 0.5, tolerance: 12 });
   rendSvg = L.svg({ padding: 0.5 });
@@ -843,21 +843,17 @@ function iniciarMapa() {
     L.polyline(contornoLL.concat([contornoLL[0]]),
       { pane: 'atenuadoPane', interactive: false, color: '#1f4d3d', weight: 2.5, opacity: 0.85 }),
   ]);
-  let atenuar = true;
-  try { if (localStorage.getItem('fa_atenuar_comuna') === '0') atenuar = false; } catch (e) { /* */ }
-  const aplicarAtenuado = () => {
-    if (atenuar) capaAtenuado.addTo(map); else map.removeLayer(capaAtenuado);
-    const b = $('#btnComuna');
-    b.classList.toggle('activo', atenuar);
-    b.setAttribute('aria-pressed', atenuar ? 'true' : 'false');
-    b.title = atenuar ? 'Mostrar también fuera de la comuna' : 'Atenuar fuera de la comuna';
+  capaAtenuado.addTo(map);   // fuera de la comuna siempre atenuado (ya no hay botón para apagarlo)
+  // Brújula: la aguja sigue al norte mientras se gira el mapa con dos dedos; al tocarla vuelve al norte
+  const btnBr = $('#btnBrujula'), svgBr = $('#brujulaSvg');
+  const pintarBrujula = () => {
+    const b = map.getBearing ? map.getBearing() : 0;
+    svgBr.style.transform = `rotate(${b}deg)`;
+    btnBr.classList.toggle('girado', Math.abs(((b + 180) % 360 + 360) % 360 - 180) > 1);
   };
-  $('#btnComuna').addEventListener('click', () => {
-    atenuar = !atenuar;
-    try { localStorage.setItem('fa_atenuar_comuna', atenuar ? '1' : '0'); } catch (e) { /* */ }
-    aplicarAtenuado();
-  });
-  aplicarAtenuado();
+  map.on('rotate', pintarBrujula);
+  btnBr.addEventListener('click', () => { if (map.setBearing) map.setBearing(0); pintarBrujula(); });
+  pintarBrujula();
 }
 const radioPunto = () => { const z = map.getZoom(); return z >= 19 ? 11 : z >= 18 ? 9 : 7; };
 function ajustarRadios() { const r = radioPunto(); capaPuntos.eachLayer((l) => l.setRadius && l.setRadius(r)); }
