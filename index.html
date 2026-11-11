@@ -9184,6 +9184,40 @@ async function generarPdfAnalisis(soloResumen, opciones){
       y += Math.ceil(tarjetas.length / nCol) * (hC + gap) + 4;
     }
 
+    // Puntos que no mantiene el contrato: concesión Américo Vespucio Sur (N° de autopista) o sin mantenimiento.
+    // No se reparan por el sistema (se avisan por correo a la concesión), por eso se listan aparte, solo si existen.
+    try{
+      const q0 = `cascada=eq.false&fecha_falla=gte.${ini}T00:00:00&fecha_falla=lte.${fin}T23:59:59&order=fecha_falla.asc`;
+      const cols = 'select=id,ot,orden_externa,tipo_falla,descripcion_otro,estado,derivacion,fecha_falla,autopista_enviada_en,ref_punto_gid,ref_circuito_gid';
+      const emb = ',puntos_luminarios(llave,nro_aut,nro_mun,direccion)';
+      const [fa, fb] = await Promise.all([
+        db.select('fallas', `${cols}${emb}&derivacion=eq.sin_mantencion&${q0}`).catch(() => []),
+        db.select('fallas', `${cols},puntos_luminarios!inner(llave,nro_aut,nro_mun,direccion)&puntos_luminarios.nro_aut=not.is.null&${q0}`).catch(() => [])
+      ]);
+      const mapa = new Map(); [...(fa || []), ...(fb || [])].forEach(f => mapa.set(f.id, f));
+      const lista = [...mapa.values()].sort((a, b) => String(a.fecha_falla).localeCompare(String(b.fecha_falla)));
+      if(lista.length){
+        titulo('Puntos sin mantenimiento del contrato', 'Casos que no corresponden a los contratos de mantención. Los de la concesión Américo Vespucio Sur se informan por correo a la concesión.');
+        const fmtF = (v) => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : '-'; };
+        tabla({
+          head: [['OT', 'Fecha', 'Falla', 'Punto', 'Responsable', 'Situación']],
+          body: lista.map(f => {
+            const pt = f.puntos_luminarios || {};
+            const aut = !!pt.nro_aut;
+            const falla = (descripcionCodigoAnalisis('punto', f.tipo_falla) || f.tipo_falla || '-') + (f.descripcion_otro ? ` (${f.descripcion_otro})` : '');
+            const punto = [pt.llave ? 'Llave ' + pt.llave : (f.ref_circuito_gid ? 'Circuito' : '-'), aut ? 'N° autopista ' + pt.nro_aut : '', pt.direccion || ''].filter(Boolean).join('\n');
+            return [
+              f.ot || '-', fmtF(f.fecha_falla), falla, punto,
+              aut ? 'Concesión Américo Vespucio Sur' : 'Sin contrato de mantención',
+              aut ? (f.autopista_enviada_en ? 'Enviada por correo el ' + fmtF(f.autopista_enviada_en) : 'Por enviar a la concesión') : (f.estado === 'reparada' ? 'Reparada' : 'Sin reparar')
+            ];
+          }),
+          columnStyles: {0: {cellWidth: 20}, 1: {cellWidth: 22}}
+        });
+        y = pdf.lastAutoTable.finalY + 6;
+      }
+    }catch(eSM){ console.warn('No se pudo listar los puntos sin mantenimiento:', eSM); }
+
     // Barra horizontal dentro de la celda de tiempo (proporcional al mayor de la tabla)
     const barraTiempo = (valores, colIdx) => {
       const mx = Math.max(0, ...valores.map(v => Number(v) || 0));
