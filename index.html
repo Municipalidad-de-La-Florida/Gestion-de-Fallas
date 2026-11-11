@@ -9184,36 +9184,6 @@ async function generarPdfAnalisis(soloResumen, opciones){
       y += Math.ceil(tarjetas.length / nCol) * (hC + gap) + 4;
     }
 
-    // Puntos que no mantiene el contrato: concesión Américo Vespucio Sur (N° de autopista) o sin mantenimiento.
-    // No se reparan por el sistema (se avisan por correo a la concesión), por eso se listan aparte, solo si existen.
-    try{
-      const q0 = `cascada=eq.false&fecha_falla=gte.${ini}T00:00:00&fecha_falla=lte.${fin}T23:59:59&order=fecha_falla.asc`;
-      const cols = 'select=id,ot,orden_externa,tipo_falla,descripcion_otro,estado,derivacion,fecha_falla,autopista_enviada_en,ref_punto_gid,ref_circuito_gid';
-      const emb = ',puntos_luminarios(llave,nro_aut,nro_mun,direccion)';
-      const [fa, fb] = await Promise.all([
-        db.select('fallas', `${cols}${emb}&derivacion=eq.sin_mantencion&${q0}`).catch(() => []),
-        db.select('fallas', `${cols},puntos_luminarios!inner(llave,nro_aut,nro_mun,direccion)&puntos_luminarios.nro_aut=not.is.null&${q0}`).catch(() => [])
-      ]);
-      const mapa = new Map(); [...(fa || []), ...(fb || [])].forEach(f => mapa.set(f.id, f));
-      const lista = [...mapa.values()].sort((a, b) => String(a.fecha_falla).localeCompare(String(b.fecha_falla)));
-      if(lista.length){
-        titulo('Luminarias sin contrato de mantención', 'Fallas de luminarias que no pertenecen a un contrato de mantención. Se dan por cerradas desde el envío del correo para la gestión de la ITO; la mantención queda a cargo de quien se indica.');
-        const fmtF = (v) => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : '-'; };
-        tabla({
-          head: [['OT', 'Ingreso', 'Luminaria', 'Falla', 'Mantención a cargo de', 'Cierre']],
-          body: lista.map(f => {
-            const pt = f.puntos_luminarios || {};
-            const aut = !!pt.nro_aut;
-            const falla = (descripcionCodigoAnalisis('punto', f.tipo_falla) || f.tipo_falla || '-') + (f.descripcion_otro ? ` (${f.descripcion_otro})` : '');
-            const luminaria = [pt.llave ? 'Llave ' + pt.llave : (f.ref_circuito_gid ? 'Circuito' : '-'), pt.nro_mun ? 'N° municipal ' + pt.nro_mun : '', aut ? 'N° autopista ' + pt.nro_aut : '', pt.direccion || ''].filter(Boolean).join('\n');
-            const cierre = f.autopista_enviada_en ? 'Correo enviado el ' + fmtF(f.autopista_enviada_en) : (f.estado === 'reparada' ? 'Cerrada' : 'Sin cerrar');
-            return [f.ot || '-', fmtF(f.fecha_falla), luminaria, falla, aut ? 'Concesión Américo Vespucio Sur' : 'Sin contrato de mantención', cierre];
-          }),
-          columnStyles: {0: {cellWidth: 20}, 1: {cellWidth: 20}}
-        });
-        y = pdf.lastAutoTable.finalY + 6;
-      }
-    }catch(eSM){ console.warn('No se pudo listar los puntos sin mantenimiento:', eSM); }
 
     // Barra horizontal dentro de la celda de tiempo (proporcional al mayor de la tabla)
     const barraTiempo = (valores, colIdx) => {
@@ -9683,6 +9653,40 @@ async function generarPdfAnalisis(soloResumen, opciones){
           });
         });
         yc += 41 + 9;
+        // Fallas sin mantenimiento: luminarias sin contrato (concesión Américo Vespucio Sur u otras), solo si existen
+        try{
+          const q0 = `cascada=eq.false&fecha_falla=gte.${ini}T00:00:00&fecha_falla=lte.${fin}T23:59:59&order=fecha_falla.asc`;
+          const cols = 'select=id,ot,tipo_falla,descripcion_otro,estado,derivacion,fecha_falla,autopista_enviada_en,ref_punto_gid,ref_circuito_gid';
+          const [fa, fb] = await Promise.all([
+            db.select('fallas', `${cols},puntos_luminarios(llave,nro_aut,nro_mun,direccion)&derivacion=eq.sin_mantencion&${q0}`).catch(() => []),
+            db.select('fallas', `${cols},puntos_luminarios!inner(llave,nro_aut,nro_mun,direccion)&puntos_luminarios.nro_aut=not.is.null&${q0}`).catch(() => [])
+          ]);
+          const mapaSM = new Map(); [...(fa || []), ...(fb || [])].forEach(f => mapaSM.set(f.id, f));
+          const sinMant = [...mapaSM.values()].sort((a, b) => String(a.fecha_falla).localeCompare(String(b.fecha_falla)));
+          if(sinMant.length){
+            secC('Fallas sin mantenimiento', yc); yc += 2;
+            pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...gris);
+            const nt = pdf.splitTextToSize('Luminarias sin contrato de mantención. Se dan por cerradas desde el envío del correo para la gestión de la ITO; la mantención queda a cargo de quien se indica.', gwC - 4.5);
+            pdf.text(nt, margen + 4.5, yc + 4); yc += 4 + nt.length * 3.5 + 2;
+            const fmtF = (v) => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : '-'; };
+            pdf.autoTable({
+              startY: yc, margin: {left: margen, right: margen},
+              styles: {fontSize: 8.5, cellPadding: {top: 2, bottom: 2, left: 2.4, right: 2.4}, textColor: [30, 40, 35], lineColor: [226, 232, 227], lineWidth: 0.1, valign: 'middle'},
+              headStyles: {fillColor: VERDE, textColor: [123, 211, 0], fontSize: 8.5, fontStyle: 'bold', lineWidth: 0},
+              alternateRowStyles: {fillColor: [246, 249, 246]},
+              columnStyles: {0: {cellWidth: 20}, 1: {cellWidth: 20}},
+              head: [['OT', 'Ingreso', 'Luminaria', 'Falla', 'Mantención a cargo de', 'Cierre']],
+              body: sinMant.map(f => {
+                const pt = f.puntos_luminarios || {}, aut = !!pt.nro_aut;
+                const falla = (descripcionCodigoAnalisis('punto', f.tipo_falla) || f.tipo_falla || '-') + (f.descripcion_otro ? ` (${f.descripcion_otro})` : '');
+                const luminaria = [pt.llave ? 'Llave ' + pt.llave : (f.ref_circuito_gid ? 'Circuito' : '-'), pt.nro_mun ? 'N° municipal ' + pt.nro_mun : '', aut ? 'N° autopista ' + pt.nro_aut : '', pt.direccion || ''].filter(Boolean).join('\n');
+                const cierre = f.autopista_enviada_en ? 'Correo enviado el ' + fmtF(f.autopista_enviada_en) : (f.estado === 'reparada' ? 'Cerrada' : 'Sin cerrar');
+                return [f.ot || '-', fmtF(f.fecha_falla), luminaria, falla, aut ? 'Concesión Américo Vespucio Sur' : 'Sin contrato de mantención', cierre];
+              })
+            });
+            yc = pdf.lastAutoTable.finalY + 8;
+          }
+        }catch(eSM){ console.warn('No se pudo listar las fallas sin mantenimiento:', eSM); }
         // Barras comparativas, de a dos métricas por fila
         secC('Contrato contra contrato', yc); yc += 6;
         const mets = [
