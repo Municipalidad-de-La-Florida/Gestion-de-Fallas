@@ -9197,22 +9197,19 @@ async function generarPdfAnalisis(soloResumen, opciones){
       const mapa = new Map(); [...(fa || []), ...(fb || [])].forEach(f => mapa.set(f.id, f));
       const lista = [...mapa.values()].sort((a, b) => String(a.fecha_falla).localeCompare(String(b.fecha_falla)));
       if(lista.length){
-        titulo('Puntos sin mantenimiento del contrato', 'Casos que no corresponden a los contratos de mantención. Los de la concesión Américo Vespucio Sur se informan por correo a la concesión.');
+        titulo('Luminarias sin contrato de mantención', 'Fallas de luminarias que no pertenecen a un contrato de mantención. Se dan por cerradas desde el envío del correo para la gestión de la ITO; la mantención queda a cargo de quien se indica.');
         const fmtF = (v) => { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]}` : '-'; };
         tabla({
-          head: [['OT', 'Fecha', 'Falla', 'Punto', 'Responsable', 'Situación']],
+          head: [['OT', 'Ingreso', 'Luminaria', 'Falla', 'Mantención a cargo de', 'Cierre']],
           body: lista.map(f => {
             const pt = f.puntos_luminarios || {};
             const aut = !!pt.nro_aut;
             const falla = (descripcionCodigoAnalisis('punto', f.tipo_falla) || f.tipo_falla || '-') + (f.descripcion_otro ? ` (${f.descripcion_otro})` : '');
-            const punto = [pt.llave ? 'Llave ' + pt.llave : (f.ref_circuito_gid ? 'Circuito' : '-'), aut ? 'N° autopista ' + pt.nro_aut : '', pt.direccion || ''].filter(Boolean).join('\n');
-            return [
-              f.ot || '-', fmtF(f.fecha_falla), falla, punto,
-              aut ? 'Concesión Américo Vespucio Sur' : 'Sin contrato de mantención',
-              aut ? (f.autopista_enviada_en ? 'Enviada por correo el ' + fmtF(f.autopista_enviada_en) : 'Por enviar a la concesión') : (f.estado === 'reparada' ? 'Reparada' : 'Sin reparar')
-            ];
+            const luminaria = [pt.llave ? 'Llave ' + pt.llave : (f.ref_circuito_gid ? 'Circuito' : '-'), pt.nro_mun ? 'N° municipal ' + pt.nro_mun : '', aut ? 'N° autopista ' + pt.nro_aut : '', pt.direccion || ''].filter(Boolean).join('\n');
+            const cierre = f.autopista_enviada_en ? 'Correo enviado el ' + fmtF(f.autopista_enviada_en) : (f.estado === 'reparada' ? 'Cerrada' : 'Sin cerrar');
+            return [f.ot || '-', fmtF(f.fecha_falla), luminaria, falla, aut ? 'Concesión Américo Vespucio Sur' : 'Sin contrato de mantención', cierre];
           }),
-          columnStyles: {0: {cellWidth: 20}, 1: {cellWidth: 22}}
+          columnStyles: {0: {cellWidth: 20}, 1: {cellWidth: 20}}
         });
         y = pdf.lastAutoTable.finalY + 6;
       }
