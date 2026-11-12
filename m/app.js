@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.3';
+const VERSION_APP = '2.9.4';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2410,6 +2410,10 @@ async function abrirFalla(p, geom) {
       <h4>Motivo</h4><pre class="texto">${esc(p.motivo_pendiente || '')}</pre>
     </div>` });
   }
+  // Los comentarios que repiten el motivo del pendiente o el trabajo realizado ya salen en sus tarjetas: no se duplican
+  const normCom = (t) => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const yaMostrados = new Set([p.motivo_pendiente, p.descripcion_reparacion].map(normCom).filter(Boolean));
+  comsFicha = comsFicha.filter((r) => r.tipo === 'asignacion' || !yaMostrados.has(normCom(r.comentario)));
   comsFicha.forEach((r) => evFicha.push({ t: r.creado_en, html: `<div class="com-bloque t-${esc(r.tipo)}"><div class="quien">💬 ${r.tipo === 'asignacion' ? 'Comentario de asignación' : 'Comentario'} · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre></div>` }));
   if (p.estado === 'reparada') {
     evFicha.push({ t: p.fecha_reparacion, html: `<div class="info-ok"><h3>Reparación</h3>
