@@ -4016,6 +4016,12 @@ async function abrirPopupFalla(feat){
       comentariosLibres = await db.select('fallas_comentarios', `falla_id=eq.${p.id}&tipo=eq.comentario&select=comentario,autor_nombre,creado_en&order=creado_en.asc`) || [];
     }catch(e){ console.error('No se pudieron cargar los comentarios:', e); }
   }
+  // Los comentarios que repiten el motivo del pendiente o el trabajo realizado ya salen en sus bloques: no se duplican
+  {
+    const normCom = t => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const yaMostrados = new Set([p.motivo_pendiente, p.descripcion_reparacion].map(normCom).filter(Boolean));
+    comentariosLibres = comentariosLibres.filter(c => !yaMostrados.has(normCom(c.comentario)));
+  }
   if(p.tipo === 'punto'){
     const [lon, lat] = feat.geometry.coordinates;
     resaltarPuntoConsulta(lat, lon);
