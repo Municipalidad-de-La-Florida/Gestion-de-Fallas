@@ -3350,6 +3350,9 @@ function htmlSinMantenimiento(que, recepcion){
   const detalle = recepcion ? `${que} está en recepción y aún no tiene contrato de mantención.` : `${que} no tiene contrato de mantención.`;
   return `<div class="mant-sin"><b>${titulo}</b><br>${detalle} Puedes reportar igual: la falla la verá la administración / ITO.</div>`;
 }
+function htmlLumsInfo(lums){
+  return `<div class="mant-box" style="margin-top:6px;"><b>Luminarias del punto</b>${lums.map(l => `<div class="rp-lum"><b>${escHtml([l.modelo, l.potencia ? l.potencia + ' W' : '', l.uso].filter(Boolean).join(' - '))}${l.n > 1 ? ' ×' + l.n : ''}</b><div>${l.contrato ? `<span class="tg">${escHtml(l.contrato)}</span>` : ''}${l.mantenedor ? `<span class="tg">${escHtml(l.mantenedor)}</span>` : ''}</div></div>`).join('')}</div>`;
+}
 function htmlMantencion(ev, sel){
   if(ev.tipo === 'info') return `<div class="mant-box">Mantiene: <b>${escHtml(ev.texto)}</b></div>`;
   if(ev.tipo === 'sin') return htmlSinMantenimiento('Este punto', ev.recepcion ? 'Luminaria' : null);
@@ -3384,6 +3387,8 @@ function activarMantencionPunto(panel, gid, mono, alUsos, excluirUsos){
     }
     est.ev = evaluarMantencion(est.ops, est.codigo, mono, est.lums);
     caja.innerHTML = htmlMantencion(est.ev, est.ev.tipo === 'luminarias' ? est.lum : est.sel);
+    // A modo informativo: las luminarias del punto (cuando no hay que elegir una, ya se listan arriba)
+    if(est.ev.tipo !== 'luminarias' && est.lums && est.lums.length) caja.insertAdjacentHTML('beforeend', htmlLumsInfo(est.lums));
     const s = caja.querySelector('#mantSel');
     if(s) s.onchange = () => { est.sel = s.value; };
     caja.querySelectorAll('.lum-op').forEach(b => b.onclick = (ev) => { ev.stopPropagation(); est.lum = b.dataset.k; pintar(); });   // el botón se vuelve a dibujar: sin stopPropagation el clic llegaba al mapa y cerraba el panel
