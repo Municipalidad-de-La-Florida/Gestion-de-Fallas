@@ -8820,8 +8820,8 @@ async function generarPdfAnalisis(soloResumen, opciones){
         pdf.setDrawColor(219, 226, 220); pdf.setLineWidth(0.2); pdf.line(margen + 4, pyC + 40.5, x0P + wP - 4, pyC + 40.5);
         pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(...VERDE); pdf.text('Cómo leer este mapa', margen + 4, pyC + 47);
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.2); pdf.setTextColor(30, 40, 35);
-        const notaC = 'Cada falla suma un peso en su ubicación (un circuito cuenta una vez, en su centro) y se suaviza en un radio de ≈ 400 m (estimación de núcleo gaussiano). Esa densidad se compara con el máximo de la comuna: los colores muestran la concentración relativa de fallas, no el número absoluto. Cada curva une zonas de igual concentración (10, 22, 36, 52, 70 y 86 % del máximo) y cada banda de color agrupa los sectores comprendidos entre dos curvas.';
-        pdf.text(pdf.splitTextToSize(notaC, wP - 10), margen + 4, pyC + 52, {lineHeightFactor: 1.35});
+        const notaC = 'Cada falla suma un peso en su ubicación (un circuito cuenta una vez, en su centro) y se suaviza en un radio de unos 400 m (estimación de núcleo gaussiano). Esa densidad se compara con el máximo de la comuna: los colores muestran la concentración relativa de fallas, no el número absoluto. Cada curva une zonas de igual concentración (10, 22, 36, 52, 70 y 86 % del máximo) y cada banda de color agrupa los sectores comprendidos entre dos curvas.';
+        pdf.text(pdf.splitTextToSize(notaC, wP - 12), margen + 4, pyC + 52, {lineHeightFactor: 1.35});
         conOpacidad(0.85, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
       }
     }catch(e){ console.warn('No se pudo incluir el mapa de calor en el PDF:', e); }
