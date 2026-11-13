@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.4';
+const VERSION_APP = '2.9.5';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -844,7 +844,24 @@ function iniciarMapa() {
       { pane: 'atenuadoPane', interactive: false, color: '#1f4d3d', weight: 2.5, opacity: 0.85 }),
   ]);
   iniciarBuscador();
-  capaAtenuado.addTo(map);   // fuera de la comuna siempre atenuado (ya no hay botón para apagarlo)
+  // Botón para atenuar (o no) lo que está fuera de la comuna; la preferencia queda guardada en el dispositivo
+  let atenuar = true;
+  try { if (localStorage.getItem('fa_atenuar_comuna') === '0') atenuar = false; } catch (e) { /* sin almacenamiento */ }
+  const aplicarAtenuado = () => {
+    if (atenuar) capaAtenuado.addTo(map); else map.removeLayer(capaAtenuado);
+    const b = $('#btnComuna');
+    if (!b) return;
+    b.classList.toggle('activo', atenuar);
+    b.setAttribute('aria-pressed', atenuar ? 'true' : 'false');
+    b.title = atenuar ? 'Mostrar también fuera de la comuna' : 'Atenuar fuera de la comuna';
+  };
+  const bCom = $('#btnComuna');
+  if (bCom) bCom.addEventListener('click', () => {
+    atenuar = !atenuar;
+    try { localStorage.setItem('fa_atenuar_comuna', atenuar ? '1' : '0'); } catch (e) { /* sin almacenamiento */ }
+    aplicarAtenuado();
+  });
+  aplicarAtenuado();
 }
 
 /* Buscador de direcciones (mismo que la web: funciones sugerir_direcciones / buscar_direccion de la base) */
