@@ -3811,13 +3811,13 @@ function partesChile(iso){
 async function abrirEditorFalla(p){
   let fila;
   try{
-    const filas = await db.select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,fecha_falla,notificador_id,inspeccion_id,masivo,contrato_id`);
+    const filas = await db.select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,fecha_falla,notificador_id,inspeccion_id,masivo,contrato_id,puntos_luminarios(simb_poste)`);
     fila = filas && filas[0];
   }catch(e){ alert('No se pudo cargar la falla: ' + e.message); return; }
   if(!fila){ alert('No se encontró la falla.'); return; }
 
   const esCircuito = fila.tipo === 'linea';
-  const catEd = esCircuito ? 'circuito' : (['F02','F03'].includes(fila.tipo_falla) ? 'monoposte' : 'punto');
+  const catEd = esCircuito ? 'circuito' : ((String((fila.puntos_luminarios || {}).simb_poste || '').toUpperCase().trim() === 'MONOPOSTE' || ['F02','F03'].includes(fila.tipo_falla)) ? 'monoposte' : 'punto');
   const filasCatalogo = htmlCodigosAgrupados(catEd, catalogoActivo(catEd, fila.tipo_falla), item => `
     <div class="falla-opcion-row">
       <button class="codigo-btn${item.c === fila.tipo_falla ? ' sel' : ''}" data-c="${item.c}">${escHtml(item.c)}</button>
@@ -5019,7 +5019,7 @@ async function abrirEditarReparacion(p, est, modo){
   cerrarEditarReparacion();
   const m = document.createElement('div');
   m.id = 'editarRepModal'; m.className = 'modal-overlay visible';
-  const catalogo = catalogoActivo(est.tipo === 'linea' ? 'circuito' : (['F02','F03'].includes(p.tipo_falla) ? 'monoposte' : 'punto'), p.tipo_falla);
+  const catalogo = catalogoActivo(est.tipo === 'linea' ? 'circuito' : ((String(p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE' || ['F02','F03'].includes(p.tipo_falla)) ? 'monoposte' : 'punto'), p.tipo_falla);
   const bloq = !!est.bloqueada_por_otra_falla;
   m.innerHTML = `<div class="modal-card" style="max-width:560px; max-height:90vh; overflow-y:auto;">
     <button class="close-x" id="erX" aria-label="Cerrar">×</button>
@@ -6704,7 +6704,7 @@ function renderListadoInspecciones(){
 }
 
 // ---------- Detalle de una inspección (panel inferior + mapa) ----------
-const CODIGOS_MONOPOSTE = [{c:'F02', d:'Monoposte apagado'}, {c:'F03', d:'Monoposte encendido de día'}];
+const CODIGOS_MONOPOSTE = [{c:'F01', d:'Proyector apagado'}, {c:'F02', d:'Monoposte apagado'}, {c:'F03', d:'Monoposte encendido de día'}];
 function descripcionCodigoFalla(f){
   if(f.tipo_falla === 'OTRO') return 'Otro';
   const catalogo = f.tipo === 'linea'
