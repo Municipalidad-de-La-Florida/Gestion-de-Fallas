@@ -1,5 +1,5 @@
 -- Campana = bandeja de notificaciones. Todo lo que se envía como aviso al celular (falla nueva, reparada, atraso, aporte…)
--- queda también registrado por usuario, con "leída/no leída", y se borra a las 24 h. El admin recibe copia de todas.
+-- queda también registrado por usuario, con "leída/no leída", y se borra a las 24 h.
 create table if not exists public.notificaciones (
   id uuid primary key default gen_random_uuid(),
   usuario_id uuid not null references public.usuarios(id) on delete cascade,
@@ -21,17 +21,14 @@ grant select, update on public.notificaciones to authenticated;
 
 create or replace function public.notificar_push(p_usuarios uuid[], p_titulo text, p_cuerpo text, p_url text DEFAULT './')
 returns void language plpgsql security definer set search_path to 'public','extensions' as $$
-declare v_url text; v_sec text; v_f uuid; v_ids uuid[];
+declare v_url text; v_sec text; v_f uuid;
 begin
-  -- Registro en la campana (destinatarios + todos los admin), sin afectar el envío si algo falla
+  -- Registro en la campana: exactamente los mismos destinatarios que reciben el aviso al celular
   begin
     begin v_f := nullif(substring(coalesce(p_url,'') from '[?&]falla=([0-9a-fA-F-]{36})'), '')::uuid; exception when others then v_f := null; end;
-    select array_agg(distinct x) into v_ids from (
-      select unnest(coalesce(p_usuarios, '{}'::uuid[])) as x
-      union select u.id from public.usuarios u where u.rol = 'admin') t;
     insert into public.notificaciones (usuario_id, titulo, cuerpo, url, falla_id)
-      select d, p_titulo, coalesce(p_cuerpo,''), p_url, v_f from unnest(coalesce(v_ids,'{}'::uuid[])) d
-       where exists (select 1 from public.usuarios u where u.id = d);
+      select d, p_titulo, coalesce(p_cuerpo,''), p_url, v_f from (select distinct unnest(coalesce(p_usuarios, '{}'::uuid[])) d) q
+       where exists (select 1 from public.usuarios u where u.id = q.d);
   exception when others then raise warning 'notificar_push (registro): %', sqlerrm; end;
 
   if p_usuarios is null or coalesce(array_length(p_usuarios,1),0) = 0 then return; end if;
@@ -56,3 +53,13 @@ end $$;
 -- Limpieza: nada dura más de 24 h
 select cron.unschedule('limpiar-notificaciones') where exists (select 1 from cron.job where jobname = 'limpiar-notificaciones');
 select cron.schedule('limpiar-notificaciones', '*/15 * * * *', $$delete from public.notificaciones where creado_en < now() - interval '24 hours'$$);
+
+-- Los contratistas también se enteran de las fallas que ellos mismos informan y de las reparaciones que ellos mismos registran
+do $$ declare d text; begin
+  select pg_get_functiondef('public.push_falla_nueva()'::regprocedure) into d;
+  d := replace(d, 'and u.id is distinct from coalesce(NEW.creado_por, NEW.informado_por)', 'and (u.id is distinct from coalesce(NEW.creado_por, NEW.informado_por) or u.rol in (''contratista'', ''contratista2'', ''contratista3''))');
+  execute d;
+  select pg_get_functiondef('public.push_falla_reparada()'::regprocedure) into d;
+  d := replace(d, 'and u.id is distinct from v_repara', 'and (u.id is distinct from v_repara or u.rol in (''contratista'', ''contratista2'', ''contratista3''))');
+  execute d;
+end $$;
