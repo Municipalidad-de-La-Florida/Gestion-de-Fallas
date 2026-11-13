@@ -8774,6 +8774,58 @@ async function generarPdfAnalisis(soloResumen, opciones){
     pdf.text(pdf.splitTextToSize('Cifras de las fallas informadas dentro del período, sin filtros.', ancho - margen * 2 - 8), margen + 4, py + 52.5);
     conOpacidad(0.85, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
 
+    // ---------- HOJA 2 (informe general): mapa de calor, con el mismo formato que la portada ----------
+    if(!cid) try{
+      const gfC = await fallasGeojsonAnalisis(ini, fin, cid);
+      const modoC = ANA_CALOR.modo;
+      const ptsC = calorPuntos(gfC, modoC);
+      if(ptsC.length){
+        pdf.addPage();
+        pdf.setFillColor(238, 242, 238); pdf.rect(0, 0, ancho, alto, 'F');
+        const cvC = await renderMapaCanvas([], {w: 1588, h: 2246, padding: 150, padTop: 440, padBottom: 700, zMax: 17, contorno: true, calorContorno: {pts: ptsC, sigmaM: 400}});
+        if(cvC) pdf.addImage(cvC.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
+        // Encabezado: igual al de la portada
+        pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 50, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 50, ancho, 1.2, 'F');
+        pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
+        pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
+        if(logoP){ try{ pdf.addImage(logoP, 'PNG', ancho - margen - 2 - 56, (50 - 56 * 163 / 400) / 2, 56, 56 * 163 / 400); }catch(eL){ /* sin logo */ } }
+        {
+          const lin = ['Mapa de calor', 'de fallas de Alumbrado Público'];
+          let fs = 30; pdf.setFont('helvetica', 'bold'); pdf.setFontSize(fs);
+          const maxT = ancho - margen * 2 - 68;
+          while(fs > 16 && Math.max(...lin.map(l => pdf.getTextWidth(l))) > maxT){ fs -= 0.5; pdf.setFontSize(fs); }
+          pdf.text(lin[0], margen + 2, 24); pdf.text(lin[1], margen + 2, 34);
+        }
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...LIMA);
+        if(perEt.mes) pdf.text(`Mes de ${perEt.txt}`, margen + 2, 44);
+        else pdf.text(`Período: ${fmtLarga(ini)} al ${fmtLarga(fin)}`, margen + 2, 44);
+
+        // Panel inferior: leyenda con los valores y cómo leer el mapa
+        const phC = 80, pyC = alto - phC - 12, wP = ancho - (margen - 2) * 2, x0P = margen - 2;
+        conOpacidad(0.96, () => { pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x0P, pyC, wP, phC, 4, 4, 'FD'); });
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(...gris);
+        pdf.text('LEYENDA · CONCENTRACIÓN DE FALLAS (% DEL MÁXIMO DE LA COMUNA)', margen + 4, pyC + 7);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7);
+        pdf.text(`${num(ptsC.length)} ${modoC === 'puntos' ? 'puntos afectados' : 'fallas'} del período`, x0P + wP - 5, pyC + 7, {align: 'right'});
+        const NIVELES = [['10–22 %', 'Concentración baja'], ['22–36 %', 'Concentración media-baja'], ['36–52 %', 'Concentración media'], ['52–70 %', 'Concentración media-alta'], ['70–86 %', 'Concentración alta'], ['86–100 %', 'Concentración máxima']];
+        const cwL = (wP - 10) / 3;
+        NIVELES.forEach(([rg, tx], k) => {
+          const lx = margen + 4 + (k % 3) * cwL, ly = pyC + 12 + Math.floor(k / 3) * 11;
+          pdf.setFillColor(...hexAPdf(CALOR_COLORES[k])); pdf.setDrawColor(190, 198, 192); pdf.setLineWidth(0.2); pdf.rect(lx, ly, 7, 7, 'FD');
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text(rg, lx + 9.5, ly + 3);
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(tx, lx + 9.5, ly + 6.8);
+        });
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.8); pdf.setTextColor(...gris);
+        pdf.text('Sin color: menos del 10 % del máximo (sin concentración relevante). Las curvas negras-rojizas unen sectores de igual concentración.', margen + 4, pyC + 37);
+        pdf.setDrawColor(219, 226, 220); pdf.setLineWidth(0.2); pdf.line(margen + 4, pyC + 40.5, x0P + wP - 4, pyC + 40.5);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(...VERDE); pdf.text('Cómo leer este mapa', margen + 4, pyC + 47);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.2); pdf.setTextColor(30, 40, 35);
+        const notaC = 'Cada falla suma un peso en su ubicación (un circuito cuenta una vez, en su centro) y se suaviza en un radio de ≈ 400 m (estimación de núcleo gaussiano). Esa densidad se compara con el máximo de la comuna: los colores muestran la concentración relativa de fallas, no el número absoluto. Cada curva une zonas de igual concentración (10, 22, 36, 52, 70 y 86 % del máximo) y cada banda de color agrupa los sectores comprendidos entre dos curvas.';
+        pdf.text(pdf.splitTextToSize(notaC, wP - 10), margen + 4, pyC + 52, {lineHeightFactor: 1.35});
+        conOpacidad(0.85, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
+      }
+    }catch(e){ console.warn('No se pudo incluir el mapa de calor en el PDF:', e); }
+
     // ---------- HOJA 2: estadísticas ----------
     if(cid) pdf.deletePage(pdf.internal.getCurrentPageInfo().pageNumber);   // el contrato no lleva la hoja del mapa
     pdf.addPage();
@@ -9596,20 +9648,6 @@ async function generarPdfAnalisis(soloResumen, opciones){
       }
     }catch(e){ console.warn('No se pudo incluir el mapa de críticos en el PDF:', e); }
 
-    // 10) Mapa de calor con curvas de nivel (solo la concentración de fallas, sin marcas)
-    if(!cid) try{
-      const gf = await fallasGeojsonAnalisis(ini, fin, cid);
-      const modoC = ANA_CALOR.modo;
-      const pts = calorPuntos(gf, modoC);
-      if(pts.length){
-        const cvC = await renderMapaCanvas([], {w: 1400, h: 1500, padding: 60, zMax: 17, contorno: true, calorContorno: {pts, sigmaM: 400}});
-        if(cvC) hojaMapa('Mapa de calor de fallas', () => {
-          pdf.text('Concentración de fallas', margen, 33); pdf.text('baja', margen + 38, 33);
-          CALOR_COLORES.forEach((c, i) => { pdf.setFillColor(...hexAPdf(c)); pdf.rect(margen + 46 + i * 7, 30.2, 7, 3.6, 'F'); });
-          pdf.text('alta', margen + 46 + CALOR_COLORES.length * 7 + 2, 33);
-        }, cvC, 'Cómo leer este mapa', `Mapa de densidad de fallas por estimación de núcleo (kernel gaussiano, radio de suavizado ≈ 400 m). Cada falla aporta un peso (un circuito cuenta una vez, en su centro) y la densidad resultante se normaliza respecto del máximo de la comuna. Las curvas unen zonas de igual densidad, en los niveles 10, 22, 36, 52, 70 y 86 % del máximo; cada banda de color agrupa los sectores entre dos niveles. Los colores indican densidad relativa (concentración), no el número absoluto de fallas.`);
-      }
-    }catch(e){ console.warn('No se pudo incluir el mapa de calor en el PDF:', e); }
     // En cada contrato, las estadísticas van después del detalle de fallas y antes del detalle de reparaciones
     if(cid && pgRep && pgRep > pgHoja2) pdf.movePage(pgHoja2, pgRep - 1);
     // En el informe general, 'Inspecciones Nocturnas y Operativos' va justo después de los informes de operativo (antes del Análisis de Mantenimiento)
