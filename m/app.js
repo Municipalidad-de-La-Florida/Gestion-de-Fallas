@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.5';
+const VERSION_APP = '2.9.6';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -48,6 +48,7 @@ const CAT_PUNTO = [
   { c: 'OTRO', d: 'Otro (describe la falla)' },
 ];
 const CAT_MONOPOSTE = [
+  { c: 'F01', d: 'Proyector apagado' },
   { c: 'F02', d: 'Monoposte apagado' },
   { c: 'F03', d: 'Monoposte encendido de día' },
   { c: 'OTRO', d: 'Otro (describe la falla)' },
@@ -118,6 +119,23 @@ function catalogoActivo(cat, incluir) {
     if (d) lista.push({ c: incluir, d });
   }
   return lista;
+}
+// Categoría de código de una falla: circuito, monoposte o punto (un código como F01, F02 o F03 se llama distinto en cada una)
+function catFalla(f) {
+  if (f.cascada || f.tipo === 'linea' || f.tipo === 'circuito') return 'circuito';
+  return (String(f.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE' || ['F02', 'F03'].includes(f.tipo_falla)) ? 'monoposte' : 'punto';
+}
+// Nombre del código según el tipo de poste (monoposte / punto / circuito)
+function descFalla(f) {
+  const cat = catFalla(f), cod = f.tipo_falla;
+  for (const c of [cat, 'punto']) {
+    const d = LIBRERIA.desc[c] && LIBRERIA.desc[c][cod];
+    if (d) return d;
+    const it = (c === 'circuito' ? CAT_CIRCUITO : c === 'monoposte' ? CAT_MONOPOSTE : CAT_PUNTO).find((x) => x.c === cod);
+    if (it) return it.d;
+    if (cat === 'circuito') break;
+  }
+  return DESC_CODIGO[cod] || '';
 }
 // Con más de 6 códigos: los 6 más usados primero y luego el resto (OTRO / 999 al final)
 function htmlCodigosGrupo(cat, items, fila) {
@@ -1713,7 +1731,7 @@ async function abrirHistorial(tipo, gid, titulo, geom) {
     const colPunto = { rep: '#d98e2f', pen: '#17708f', ok: '#3a8a5c', asi: '#2563a8' };
     const claseEst = (e) => e === 'reparada' ? 'ok' : e === 'pendiente' ? 'pen' : e === 'reiterada' ? 'reit' : 'rep';
     const descCod = (f) => {
-      const cat = (f.cascada || tipo === 'linea') ? 'circuito' : (['F02', 'F03'].includes(f.tipo_falla) ? 'monoposte' : 'punto');
+      const cat = catFalla({ ...f, tipo });
       const it = catalogoActivo(cat, f.tipo_falla).find((x) => x.c === f.tipo_falla);
       return it ? it.d : '';
     };
@@ -2303,11 +2321,11 @@ async function ofrecerSegundaFalla(p, h) {
 // Se puede cambiar código, comentario, orden externa y masivo. La ubicación no: si está mal, se elimina y se vuelve a informar.
 async function editarFallaApp(p) {
   let fila;
-  try { const r = await select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,masivo`); fila = r && r[0]; }
+  try { const r = await select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,masivo,puntos_luminarios(simb_poste)`); fila = r && r[0]; }
   catch (e) { toast('No se pudo cargar la falla: ' + e.message, 'error'); return; }
   if (!fila) { toast('No se encontró la falla.', 'error'); return; }
   const esCircuito = fila.tipo === 'linea';
-  const nomCat = esCircuito ? 'circuito' : (['F02', 'F03'].includes(fila.tipo_falla) ? 'monoposte' : 'punto');
+  const nomCat = catFalla({ tipo: fila.tipo, tipo_falla: fila.tipo_falla, simb_poste: fila.puntos_luminarios && fila.puntos_luminarios.simb_poste });
   const cat = catalogoActivo(nomCat, fila.tipo_falla);
   let codigo = fila.tipo_falla;
   const h = abrirHoja(`
@@ -2376,7 +2394,7 @@ const ICO_ACC = {
 async function abrirFalla(p, geom) {
   detenerSeguir();   // al mirar una falla, el mapa deja de seguirte (tocas el botón de ubicación para volver)
   const c = centroGeom(geom);
-  const desc = DESC_CODIGO[p.tipo_falla];
+  const desc = descFalla(p);
   const kv = [
     ['OS', p.ot || '—'],
     p.orden_externa ? ['Orden externa', p.orden_externa] : null,
@@ -2525,7 +2543,7 @@ async function ofrecerEdicionReparacion(p, h) {
   $('#bEditRep', h).addEventListener('click', () => editarReparacionApp(p, est));
 }
 async function editarReparacionApp(p, est) {
-  const nomCat = est.tipo === 'linea' ? 'circuito' : (['F02', 'F03'].includes(est.tipo_falla) ? 'monoposte' : 'punto');
+  const nomCat = catFalla({ tipo: est.tipo, cascada: p.cascada, tipo_falla: est.tipo_falla, simb_poste: p.simb_poste });
   const cat = catalogoActivo(nomCat, est.tipo_falla);
   const bloq = !!est.bloqueada_por_otra_falla;
   let codigo = est.tipo_falla;
@@ -2789,7 +2807,7 @@ function renderLista() {
   if (q) {
     items = items.filter((f) => {
       const p = f.properties;
-      return [p.ot, p.orden_externa, p.tipo_falla, DESC_CODIGO[p.tipo_falla], p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q));
+      return [p.ot, p.orden_externa, p.tipo_falla, descFalla(p), p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q));
     });
   }
   // Al buscar (cualquier perfil), se suman las reparadas de los últimos 10 días que el perfil puede ver (sin búsqueda no aparecen)
@@ -2803,7 +2821,7 @@ function renderLista() {
       if (asigActiva() !== 'todas') return false;
       if (FO.sub === 'masivo' && !p.masivo) return false;
       if (FO.sub === 'normal' && p.masivo) return false;
-      return [p.ot, p.orden_externa, p.tipo_falla, DESC_CODIGO[p.tipo_falla], p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q));
+      return [p.ot, p.orden_externa, p.tipo_falla, descFalla(p), p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q));
     });
     nRep = rep.length;
     items = items.concat(rep);
@@ -2822,7 +2840,7 @@ function renderLista() {
   $('#listaItems').innerHTML = items.length ? items.map(({ f, d }, i) => {
     const p = f.properties;
     return `<button class="tarjeta est-${esc(claveColor(p))}" data-i="${i}">
-      <div class="tarjeta-top"><b>${esc(p.tipo_falla)} · ${esc(DESC_CODIGO[p.tipo_falla] || '')}</b>${d != null ? `<span class="dist">${esc(fmtDist(d))}</span>` : ''}</div>
+      <div class="tarjeta-top"><b>${esc(p.tipo_falla)} · ${esc(descFalla(p))}</b>${d != null ? `<span class="dist">${esc(fmtDist(d))}</span>` : ''}</div>
       <div class="sub">OS ${esc(p.ot || '—')} · ${p.tipo === 'punto' ? 'Llave ' + esc(p.llave ?? '—') : esc(p.puntos_afectados ?? '') + ' puntos (circuito)'} · <span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
       <div class="sub">${esc(p.nombre_creador || '—')} · ${esc(hace(p.fecha_falla))}${tagContrato(p.contrato_id)}${tagMantenedor(p.mantenedor_id)}${tagMasivo(p.masivo)}${tagDerivacion(p)}</div>
     </button>`;
@@ -2902,7 +2920,7 @@ async function detalleInspC3(id) {
     h.innerHTML = `<h2>${esc(det.inspeccion.ito_nombre)} · ${esc(fmtFechaCorta(det.inspeccion.fecha))}</h2>
       <div class="hint">${fs.length} falla${fs.length === 1 ? '' : 's'} en total. Las de otros contratos se ven en gris.</div>
       ${fs.map((f) => `<div class="tarjeta est-${esc(claveColor({ estado: f.estado, fecha_falla_real: f.fecha_ingreso }))}"${f.mi_contrato ? ` data-fid="${esc(f.id)}"` : ''} style="margin-top:8px;${f.mi_contrato ? ' cursor:pointer;' : ' opacity:.45; filter:grayscale(1);'}">
-        <div class="tarjeta-top"><b>${esc(f.tipo_falla)} · ${esc(DESC_CODIGO[f.tipo_falla] || '')}</b></div>
+        <div class="tarjeta-top"><b>${esc(f.tipo_falla)} · ${esc(descFalla(f))}</b></div>
         <div class="sub">OS ${esc(f.ot || '—')} · ${f.tipo === 'linea' ? 'Circuito ' + esc(f.circuito_id ?? '—') : 'Llave ' + esc(f.llave ?? '—')} · <span class="insignia ${esc(f.estado)}">${esc(ETIQUETA_ESTADO[f.estado] || f.estado)}</span></div>
         ${f.contrato_nombre ? `<div class="sub">${esc(f.contrato_nombre)}${f.asignado_camion ? ' · Asignada a ' + esc(f.asignado_camion) : ''}</div>` : ''}
         ${f.mi_contrato ? '<div class="sub" style="color:#1f7a52; font-weight:600;">Ver en el mapa ›</div>' : ''}
