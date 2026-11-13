@@ -8818,8 +8818,9 @@ async function generarPdfAnalisis(soloResumen, opciones){
       g.fillText(totN ? Math.round(nReit / totN * 100) + '%' : '-', cx, cy - 6);
       pdf.addImage(c.toDataURL('image/png'), 'PNG', xq + (mitad - 34) / 2, 56, 34, 34 * h / w);
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text('más de una vez', xq + mitad / 2, 77.3, {align: 'center'});
-      [['Atendidas una vez', nPrim, COL_PRIM], ['Atendidas más de una vez', nReit, COL_REIT]].forEach(([t, v, col], i) => {
-        const yy = 82 + i * 5.2;
+      pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.5); pdf.setTextColor(...gris); pdf.text('Atendidas:', xq + 5, 80.5);
+      [['una vez', nPrim, COL_PRIM], ['más de una vez', nReit, COL_REIT]].forEach(([t, v, col], i) => {
+        const yy = 85 + i * 4.6;
         pdf.setFillColor(...col); pdf.circle(xq + 6.3, yy - 1, 1.3, 'F');
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(30, 40, 35); pdf.text(t, xq + 9.5, yy);
         pdf.setFont('helvetica', 'bold'); pdf.text(`${num(v)}${pc(v)}`, xq + mitad - 5, yy, {align: 'right'});
