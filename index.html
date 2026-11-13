@@ -2675,7 +2675,7 @@ async function generarPdfSuministro(btn){
       x.strokeStyle = '#dfe7e1'; x.beginPath(); x.arc(pxl / 2, pxl / 2, r, 0, Math.PI * 2); x.stroke();
       const v = Math.min(100, Math.max(0, pct));
       if(v > 0){ x.strokeStyle = '#7BD300'; x.beginPath(); x.arc(pxl / 2, pxl / 2, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * v / 100); x.stroke(); }
-      x.fillStyle = '#003100'; x.font = `800 ${Math.round(pxl * 0.23)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillStyle = '#003100'; x.font = `800 ${Math.round(pxl * 0.19)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
       x.fillText(pctTxt + '%', pxl / 2, pxl / 2 + pxl * 0.02);
       return c.toDataURL('image/png');
     };
@@ -7587,7 +7587,7 @@ async function agregarHojasOperativo(pdf, det, primera, info){
     x.lineWidth = w; x.lineCap = 'round';
     x.strokeStyle = '#dfe7e1'; x.beginPath(); x.arc(px / 2, px / 2, r, 0, Math.PI * 2); x.stroke();
     if(pct > 0){ x.strokeStyle = '#7BD300'; x.beginPath(); x.arc(px / 2, px / 2, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, pct / 100)); x.stroke(); }
-    x.fillStyle = '#003100'; x.font = `800 ${Math.round(px * 0.27)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillStyle = '#003100'; x.font = `800 ${Math.round(px * 0.21)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.fillText(pct + '%', px / 2, px / 2 + px * 0.02);
     return cv.toDataURL('image/png');
   };
@@ -7890,7 +7890,7 @@ function htmlSeccionAnalisis(d, esGeneral){
   const pen = d.pendientes || {};
   const motivos = (pen.motivos || []).length ? `
     <table class="ana-tabla">
-      <thead><tr><th>Motivo</th><th class="n">Veces</th><th class="n">Aún pend.</th></tr></thead>
+      <thead><tr><th>Motivo por Estado Pendiente</th><th class="n">Veces</th><th class="n">Aún pend.</th></tr></thead>
       <tbody>${pen.motivos.map(m => `<tr><td>${escHtml(m.motivo)}</td><td class="n">${m.veces}</td><td class="n">${m.aun_pendientes}</td></tr>`).join('')}</tbody>
     </table>` : '<div class="hint">Ninguna falla del rango quedó pendiente con un motivo registrado.</div>';
 
@@ -8365,7 +8365,7 @@ async function generarPdfInspeccion(){
     const VERDE = [31, 77, 61], gris = [85, 102, 92], TINTA = [30, 40, 35];
     const insp = det.inspeccion, fallas = det.fallas || [];
     const COLOR_EST = {reparada: [58, 138, 92], pendiente: [47, 168, 216], reiterada: [142, 68, 173], reportada: [242, 183, 5]};
-    const ROTULO_EST = {reparada: 'Reparadas', pendiente: 'Pendientes', reiterada: 'Reiteradas', reportada: 'Reportadas'};
+    const ROTULO_EST = {reparada: 'Reparadas', pendiente: 'Pendientes', reiterada: 'Más de una vez', reportada: 'Reportadas'};
     const cuenta = {reparada: 0, pendiente: 0, reiterada: 0, reportada: 0};
     fallas.forEach(f => { if(cuenta[f.estado] !== undefined) cuenta[f.estado]++; });
     const puntos = fallas.reduce((s, f) => s + (f.puntos_afectados || 0), 0);
@@ -8409,7 +8409,7 @@ async function generarPdfInspeccion(){
         {v: String(puntos), l: 'Puntos afectados', s: 'incluye los de cada circuito'},
         {v: `${pctRep}%`, l: 'Reparadas', s: `${cuenta.reparada} de ${fallas.length}`},
         {v: String(cuenta.pendiente), l: 'Pendientes', s: cuenta.pendiente ? 'siguen sin resolver' : 'ninguna'},
-        {v: String(cuenta.reiterada), l: 'Reiteradas', s: 'mismo punto/circuito en 40 días'},
+        {v: String(cuenta.reiterada), l: 'Más de una vez', s: 'mismo punto/circuito en 40 días'},
         {v: fmtD(med), l: 'Mediana de reparación', s: repDias.length ? `máx. ${fmtD(Math.max(...repDias))} · ${repDias.length} reparada(s)` : 'aún sin reparaciones'}
       ];
       const gap = 4, wT = (ancho - margen * 2 - gap * 5) / 6;
@@ -8703,7 +8703,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       x.lineWidth = w; x.lineCap = 'round';
       x.strokeStyle = '#dfe7e1'; x.beginPath(); x.arc(px / 2, px / 2, r, 0, Math.PI * 2); x.stroke();
       if(pct > 0){ x.strokeStyle = '#7BD300'; x.beginPath(); x.arc(px / 2, px / 2, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, pct / 100)); x.stroke(); }
-      x.fillStyle = '#003100'; x.font = `800 ${Math.round(px * 0.27)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillStyle = '#003100'; x.font = `800 ${Math.round(px * 0.21)}px sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
       x.fillText(pct + '%', px / 2, px / 2 + px * 0.02);
       return c.toDataURL('image/png');
     };
@@ -8773,6 +8773,58 @@ async function generarPdfAnalisis(soloResumen, opciones){
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.8); pdf.setTextColor(...gris);
     pdf.text(pdf.splitTextToSize('Cifras de las fallas informadas dentro del período, sin filtros.', ancho - margen * 2 - 8), margen + 4, py + 52.5);
     conOpacidad(0.85, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
+
+    // ---------- HOJA 2 (informe general): mapa de calor, con el mismo formato que la portada ----------
+    if(!cid) try{
+      const gfC = await fallasGeojsonAnalisis(ini, fin, cid);
+      const modoC = ANA_CALOR.modo;
+      const ptsC = calorPuntos(gfC, modoC);
+      if(ptsC.length){
+        pdf.addPage();
+        pdf.setFillColor(238, 242, 238); pdf.rect(0, 0, ancho, alto, 'F');
+        const cvC = await renderMapaCanvas([], {w: 1588, h: 2246, padding: 150, padTop: 440, padBottom: 700, zMax: 17, contorno: true, calorContorno: {pts: ptsC, sigmaM: 400}});
+        if(cvC) pdf.addImage(cvC.toDataURL('image/jpeg', 0.85), 'JPEG', 0, 0, ancho, alto);
+        // Encabezado: igual al de la portada
+        pdf.setFillColor(...VERDE); pdf.rect(0, 0, ancho, 50, 'F'); pdf.setFillColor(123, 211, 0); pdf.rect(0, 50, ancho, 1.2, 'F');
+        pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5);
+        pdf.text('SISTEMA DE GESTIÓN DE FALLAS DE ALUMBRADO — LA FLORIDA', margen + 2, 11);
+        if(logoP){ try{ pdf.addImage(logoP, 'PNG', ancho - margen - 2 - 56, (50 - 56 * 163 / 400) / 2, 56, 56 * 163 / 400); }catch(eL){ /* sin logo */ } }
+        {
+          const lin = ['Mapa de calor', 'de fallas de Alumbrado Público'];
+          let fs = 30; pdf.setFont('helvetica', 'bold'); pdf.setFontSize(fs);
+          const maxT = ancho - margen * 2 - 68;
+          while(fs > 16 && Math.max(...lin.map(l => pdf.getTextWidth(l))) > maxT){ fs -= 0.5; pdf.setFontSize(fs); }
+          pdf.text(lin[0], margen + 2, 24); pdf.text(lin[1], margen + 2, 34);
+        }
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(14); pdf.setTextColor(...LIMA);
+        if(perEt.mes) pdf.text(`Mes de ${perEt.txt}`, margen + 2, 44);
+        else pdf.text(`Período: ${fmtLarga(ini)} al ${fmtLarga(fin)}`, margen + 2, 44);
+
+        // Panel inferior: leyenda con los valores y cómo leer el mapa
+        const phC = 80, pyC = alto - phC - 12, wP = ancho - (margen - 2) * 2, x0P = margen - 2;
+        conOpacidad(0.96, () => { pdf.setFillColor(255, 255, 255); pdf.setDrawColor(219, 226, 220); pdf.roundedRect(x0P, pyC, wP, phC, 4, 4, 'FD'); });
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(...gris);
+        pdf.text('LEYENDA · CONCENTRACIÓN DE FALLAS (% DEL MÁXIMO DE LA COMUNA)', margen + 4, pyC + 7);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7);
+        pdf.text(`${num(ptsC.length)} ${modoC === 'puntos' ? 'puntos afectados' : 'fallas'} del período`, x0P + wP - 5, pyC + 7, {align: 'right'});
+        const NIVELES = [['10–22 %', 'Concentración baja'], ['22–36 %', 'Concentración media-baja'], ['36–52 %', 'Concentración media'], ['52–70 %', 'Concentración media-alta'], ['70–86 %', 'Concentración alta'], ['86–100 %', 'Concentración máxima']];
+        const cwL = (wP - 10) / 3;
+        NIVELES.forEach(([rg, tx], k) => {
+          const lx = margen + 4 + (k % 3) * cwL, ly = pyC + 12 + Math.floor(k / 3) * 11;
+          pdf.setFillColor(...hexAPdf(CALOR_COLORES[k])); pdf.setDrawColor(190, 198, 192); pdf.setLineWidth(0.2); pdf.rect(lx, ly, 7, 7, 'FD');
+          pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(30, 40, 35); pdf.text(rg, lx + 9.5, ly + 3);
+          pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(...gris); pdf.text(tx, lx + 9.5, ly + 6.8);
+        });
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.8); pdf.setTextColor(...gris);
+        pdf.text('Sin color: menos del 10 % del máximo (sin concentración relevante). Las curvas negras-rojizas unen sectores de igual concentración.', margen + 4, pyC + 37);
+        pdf.setDrawColor(219, 226, 220); pdf.setLineWidth(0.2); pdf.line(margen + 4, pyC + 40.5, x0P + wP - 4, pyC + 40.5);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(...VERDE); pdf.text('Cómo leer este mapa', margen + 4, pyC + 47);
+        pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.2); pdf.setTextColor(30, 40, 35);
+        const notaC = 'Cada falla suma un peso en su ubicación (un circuito cuenta una vez, en su centro) y se suaviza en un radio de ≈ 400 m (estimación de núcleo gaussiano). Esa densidad se compara con el máximo de la comuna: los colores muestran la concentración relativa de fallas, no el número absoluto. Cada curva une zonas de igual concentración (10, 22, 36, 52, 70 y 86 % del máximo) y cada banda de color agrupa los sectores comprendidos entre dos curvas.';
+        pdf.text(pdf.splitTextToSize(notaC, wP - 10), margen + 4, pyC + 52, {lineHeightFactor: 1.35});
+        conOpacidad(0.85, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
+      }
+    }catch(e){ console.warn('No se pudo incluir el mapa de calor en el PDF:', e); }
 
     // ---------- HOJA 2: estadísticas ----------
     if(cid) pdf.deletePage(pdf.internal.getCurrentPageInfo().pageNumber);   // el contrato no lleva la hoja del mapa
@@ -9091,7 +9143,8 @@ async function generarPdfAnalisis(soloResumen, opciones){
         }
         pdf.setFillColor(...fondo); pdf.roundedRect(tx, yc + 12, wt, 28, 2.5, 2.5, 'F');
         if(palabra){ pdf.setFillColor(...col); pdf.rect(tx + 0.1, yc + 15, 0.9, 22, 'F'); }
-        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.2); pdf.setTextColor(30, 40, 35); pdf.text(f.l, tx + 4, yc + 18);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.2); pdf.setTextColor(30, 40, 35);
+        { const ls = pdf.splitTextToSize(f.l, wt - 6); if(ls.length > 1){ pdf.text(ls[0], tx + 4, yc + 16.6); pdf.text(ls.slice(1).join(' '), tx + 4, yc + 19.8); } else pdf.text(f.l, tx + 4, yc + 18); }
         const fmtV = (v) => v === null || v === undefined ? '-' : (f.t === 'pp' ? v + '%' : (f.t === 'h' ? fmtHoras(v) : fmtMiles(v)));
         pdf.setFontSize(15); pdf.setTextColor(...VERDE); pdf.text(fmtV(f.a), tx + 4, yc + 26);
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.5); pdf.setTextColor(...gris); pdf.text(`${esMesCompleto ? etiquetaAnt : 'período anterior'}: ${fmtV(f.b)}`, tx + 4, yc + 35.2);
@@ -9363,7 +9416,7 @@ async function generarPdfAnalisis(soloResumen, opciones){
       const offT = Math.max(0, (H_R - (pen.motivos.length + 1) * 7.5) / 2);
       y = yCardR + offT;
       tabla({
-        head: [['Motivo', 'Veces', 'Aún pendientes', 'Ya reparadas']],
+        head: [['Motivo por Estado Pendiente', 'Veces', 'Aún pendientes', 'Ya reparadas']],
         body: pen.motivos.map(m => [m.motivo, m.veces, m.aun_pendientes, m.ya_reparadas]),
         margin: {left: margen + W_R + 6, right: margen},
         columnStyles: {1: {halign: 'right', cellWidth: 14}, 2: {halign: 'right', cellWidth: 24}, 3: {halign: 'right', cellWidth: 22}}
@@ -9595,20 +9648,6 @@ async function generarPdfAnalisis(soloResumen, opciones){
       }
     }catch(e){ console.warn('No se pudo incluir el mapa de críticos en el PDF:', e); }
 
-    // 10) Mapa de calor con curvas de nivel (solo la concentración de fallas, sin marcas)
-    if(!cid) try{
-      const gf = await fallasGeojsonAnalisis(ini, fin, cid);
-      const modoC = ANA_CALOR.modo;
-      const pts = calorPuntos(gf, modoC);
-      if(pts.length){
-        const cvC = await renderMapaCanvas([], {w: 1400, h: 1500, padding: 60, zMax: 17, contorno: true, calorContorno: {pts, sigmaM: 400}});
-        if(cvC) hojaMapa('Mapa de calor de fallas', () => {
-          pdf.text('Concentración de fallas', margen, 33); pdf.text('baja', margen + 38, 33);
-          CALOR_COLORES.forEach((c, i) => { pdf.setFillColor(...hexAPdf(c)); pdf.rect(margen + 46 + i * 7, 30.2, 7, 3.6, 'F'); });
-          pdf.text('alta', margen + 46 + CALOR_COLORES.length * 7 + 2, 33);
-        }, cvC, 'Cómo leer este mapa', `Mapa de densidad de fallas por estimación de núcleo (kernel gaussiano, radio de suavizado ≈ 400 m). Cada falla aporta un peso (un circuito cuenta una vez, en su centro) y la densidad resultante se normaliza respecto del máximo de la comuna. Las curvas unen zonas de igual densidad, en los niveles 10, 22, 36, 52, 70 y 86 % del máximo; cada banda de color agrupa los sectores entre dos niveles. Los colores indican densidad relativa (concentración), no el número absoluto de fallas.`);
-      }
-    }catch(e){ console.warn('No se pudo incluir el mapa de calor en el PDF:', e); }
     // En cada contrato, las estadísticas van después del detalle de fallas y antes del detalle de reparaciones
     if(cid && pgRep && pgRep > pgHoja2) pdf.movePage(pgHoja2, pgRep - 1);
     // En el informe general, 'Inspecciones Nocturnas y Operativos' va justo después de los informes de operativo (antes del Análisis de Mantenimiento)
@@ -9842,7 +9881,7 @@ function htmlEstadisticas(d, sid){
       <h3>Estado actual (de lo reportado en el período)</h3>
       <div class="stat-row"><span>Reparadas</span><span>${d.reparadas||0} (${pct(d.reparadas)}%)</span></div>
       <div class="stat-row"><span>Pendientes</span><span>${d.pendientes||0} (${pct(d.pendientes)}%)</span></div>
-      <div class="stat-row"><span>Reiteradas</span><span>${d.reiteradas||0} (${pct(d.reiteradas)}%)</span></div>
+      <div class="stat-row"><span>Más de una vez</span><span>${d.reiteradas||0} (${pct(d.reiteradas)}%)</span></div>
       <div class="stat-row"><span>Reportadas (activas)</span><span>${d.reportadas_activas||0} (${pct(d.reportadas_activas)}%)</span></div>
       <h3>Puntos lumínicos afectados</h3>
       <div class="stat-row"><span>Por falla individual</span><span>${d.puntos_afectados_individual||0}</span></div>
@@ -9889,7 +9928,7 @@ async function cargarEstadisticas(fechaInicio, fechaFin){
       kpiHtml(total, 'Fallas', `${g.fallas_punto_individual || 0} individuales · ${g.fallas_circuito || 0} de circuito`),
       kpiHtml(g.puntos_afectados_total || 0, 'Puntos afectados', `${((g.puntos_afectados_total || 0) / TOTAL_PUNTOS_COMUNA * 100).toFixed(2).replace('.', ',')}% de la comuna`),
       kpiHtml(pctKpi(rep, total) + '%', 'Reparadas', `${rep} de ${total}`, true)
-    ) + `<div class="hint">Abiertas: <b>${abiertas}</b> (${g.pendientes || 0} pendientes · ${g.reiteradas || 0} reiteradas · ${g.reportadas_activas || 0} sin atender). El detalle completo está en el informe PDF.</div>` + htmlOperativos(datOp);
+    ) + `<div class="hint">Abiertas: <b>${abiertas}</b> (${g.pendientes || 0} pendientes · ${g.reiteradas || 0} más de una vez · ${g.reportadas_activas || 0} sin atender). El detalle completo está en el informe PDF.</div>` + htmlOperativos(datOp);
   }catch(e){
     content.innerHTML = `<div class="empty-state">Error cargando estadísticas: ${e.message}</div>`;
   }
@@ -10004,10 +10043,10 @@ async function generarPdfEstadoActual(){
     kpi(margen + 46, fmtMiles(puntos), 'Puntos afectados', `${fmtPctPuntos(puntos, TOTAL_PUNTOS_COMUNA)} del Parque lum.`);
     const nPend = feats.filter(f => f.properties.estado === 'pendiente').length;
     kpi(margen + 92, fmtMiles(nPend), 'Pendientes', 'dejadas pendientes', COLOR_EST_PDF.pendiente);
-    kpi(margen + 128, fmtMiles(total - nPend), 'Sin atender', 'reportadas y reiteradas', COLOR_EST_PDF.reportada);
+    kpi(margen + 128, fmtMiles(total - nPend), 'Sin atender', 'primera vez y más de una vez', COLOR_EST_PDF.reportada);
     kpi(margen + 164, fmtMiles(porColor.vencida), 'Con atraso', 'fuera de plazo', COLOR_EST_PDF.vencida);
     pdf.setDrawColor(219, 226, 220); pdf.line(margen + 4, py + 32, ancho - margen - 4, py + 32);
-    [['Reportadas', 'reportada'], ['Reiteradas', 'reiterada'], ['Pendientes', 'pendiente'], ['Atrasadas', 'vencida']].forEach(([t, k], i) => {
+    [['Reportadas', 'reportada'], ['Más de una vez', 'reiterada'], ['Pendientes', 'pendiente'], ['Atrasadas', 'vencida']].forEach(([t, k], i) => {
       const lx = margen + 8 + i * 42;
       pdf.setFillColor(...COLOR_EST_PDF[k]); pdf.circle(lx, py + 42.5, 1.6, 'F');
       pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8); pdf.setTextColor(30, 40, 35); pdf.text(`${t} (${porColor[k]})`, lx + 3.5, py + 43.5);
@@ -10015,9 +10054,9 @@ async function generarPdfEstadoActual(){
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7); pdf.setTextColor(...gris);
     pdf.text('ESTADO ACTUAL AL MOMENTO DE GENERAR ESTE INFORME', margen + 4, py + 36.5);
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(7.2); pdf.setTextColor(...VERDE);
-    pdf.text(`Fallas activas (${total}) = Reportadas (${porColor.reportada}) + Reiteradas (${porColor.reiterada}) + Pendientes (${porColor.pendiente}) + Atrasadas (${porColor.vencida})`, margen + 4, py + 48.5);
+    pdf.text(`Fallas activas (${total}) = Reportadas (${porColor.reportada}) + Más de una vez (${porColor.reiterada}) + Pendientes (${porColor.pendiente}) + Atrasadas (${porColor.vencida})`, margen + 4, py + 48.5);
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(6.8); pdf.setTextColor(...gris);
-    pdf.text('Solo fallas sin reparar. El rojo es una falla fuera de plazo (reportada, reiterada o pendiente). La hoja siguiente las resume por tipo de falla.', margen + 4, py + 52.5);
+    pdf.text('Solo fallas sin reparar. El rojo es una falla fuera de plazo (reportada, más de una vez o pendiente). La hoja siguiente las resume por tipo de falla.', margen + 4, py + 52.5);
     conOpacidad(0.85, () => { pdf.setFillColor(255, 255, 255); pdf.rect(0, alto - 8, ancho, 8, 'F'); });
 
     // ---------- HOJA 2: resumen por tipo de falla ----------
@@ -10051,7 +10090,7 @@ async function generarPdfEstadoActual(){
     tarjeta(margen, yG, anchoU, hG, 'Fallas activas por tipo');
     {
       let lx = margen + anchoU - 5;   // leyenda, alineada a la derecha
-      [['Atrasadas', 'vencida'], ['Pendientes', 'pendiente'], ['Reiteradas', 'reiterada'], ['Reportadas', 'reportada']].forEach(([t, k]) => {
+      [['Atrasadas', 'vencida'], ['Pendientes', 'pendiente'], ['Más de una vez', 'reiterada'], ['Reportadas', 'reportada']].forEach(([t, k]) => {
         pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); const w = pdf.getTextWidth(t);
         lx -= w; pdf.setTextColor(30, 40, 35); pdf.text(t, lx, yG + 7.6);
         lx -= 3.4; pdf.setFillColor(...COLOR_EST_PDF[k]); pdf.circle(lx + 1, yG + 6.6, 1.3, 'F'); lx -= 4.2;
@@ -10095,7 +10134,7 @@ async function generarPdfEstadoActual(){
       styles: {fontSize: 7.8, cellPadding: {top: 1.9, bottom: 1.9, left: 2, right: 2}, textColor: [30, 40, 35], lineColor: [226, 232, 227], lineWidth: 0.1, valign: 'middle'},
       headStyles: {fillColor: VERDE, textColor: LIMA, fontSize: 7.8, fontStyle: 'bold', lineWidth: 0},
       alternateRowStyles: {fillColor: [246, 249, 246]},
-      head: [['Código', 'Descripción', 'Fallas', 'Puntos', 'Rep.', 'Reit.', 'Pend.', 'Atras.', 'Más antigua']],
+      head: [['Código', 'Descripción', 'Fallas', 'Puntos', 'Rep.', '+1 vez', 'Pend.', 'Atras.', 'Más antigua']],
       body: filasT,
       columnStyles: {0: {fontStyle: 'bold', cellWidth: 15}, 2: {halign: 'right', fontStyle: 'bold', cellWidth: 13}, 3: {halign: 'right', cellWidth: 13}, 4: {halign: 'right', cellWidth: 13}, 5: {halign: 'right', cellWidth: 11}, 6: {halign: 'right', cellWidth: 13}, 7: {halign: 'right', cellWidth: 12}, 8: {cellWidth: 31}},
       didParseCell: (d) => { if(d.section === 'body' && d.row.index === filasT.length - 1){ d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [226, 238, 228]; } },
