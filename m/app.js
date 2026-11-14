@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.6';
+const VERSION_APP = '2.9.7';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2448,12 +2448,20 @@ async function abrirFalla(p, geom) {
   // Los comentarios que repiten el motivo del pendiente o el trabajo realizado ya salen en sus tarjetas: no se duplican
   const normCom = (t) => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
   const yaMostrados = new Set([p.motivo_pendiente, p.descripcion_reparacion].map(normCom).filter(Boolean));
-  comsFicha = comsFicha.filter((r) => r.tipo === 'asignacion' || !yaMostrados.has(normCom(r.comentario)));
-  comsFicha.forEach((r) => evFicha.push({ t: r.creado_en, html: `<div class="com-bloque t-${esc(r.tipo)}"><div class="quien">💬 ${r.tipo === 'asignacion' ? 'Comentario de asignación' : 'Comentario'} · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre></div>` }));
+  // Revisiones: la respuesta del camión se conserva y la corrección del administrador va a continuación
+  const hayRevision = comsFicha.some((r) => r.tipo === 'revision');
+  const repOriginal = comsFicha.find((r) => r.tipo === 'reparacion');
+  comsFicha = comsFicha.filter((r) => r.tipo === 'asignacion' || r.tipo === 'revision' || r.tipo === 'reparacion_anulada' || !yaMostrados.has(normCom(r.comentario)));
+  if (hayRevision) comsFicha = comsFicha.filter((r) => r.tipo !== 'reparacion');   // su texto sale en la tarjeta "Reparación"
+  comsFicha.forEach((r) => evFicha.push({ t: r.creado_en, html: r.tipo === 'revision'
+    ? `<div class="com-bloque t-revision"><div class="quien">🛠 <b>Revisión del administrador</b> · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre></div>`
+    : r.tipo === 'reparacion_anulada'
+    ? `<div class="com-bloque t-anulada"><div class="quien">↩ <b>Reparación anulada</b> · respuesta del camión: ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre><div class="fotos-anul"></div></div>`
+    : `<div class="com-bloque t-${esc(r.tipo)}"><div class="quien">💬 ${r.tipo === 'asignacion' ? 'Comentario de asignación' : 'Comentario'} · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre></div>` }));
   if (p.estado === 'reparada') {
     evFicha.push({ t: p.fecha_reparacion, html: `<div class="info-ok"><h3>Reparación</h3>
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-      ${p.descripcion_reparacion ? `<h4>Trabajo realizado</h4><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
+      ${hayRevision && repOriginal ? `<h4>Trabajo realizado (respuesta del camión)</h4><pre class="texto">${esc(repOriginal.comentario)}</pre>` : p.descripcion_reparacion ? `<h4>Trabajo realizado</h4><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
       <div id="fotosFalla"></div>
     </div>` });
   }
@@ -2507,13 +2515,23 @@ async function abrirFalla(p, geom) {
     $('.foto', box).addEventListener('click', () => abrirFotoGrande([u], 0));
   }).catch(() => {});
   if (p.estado === 'reparada') {
-    select('fallas_fotos', `falla_id=eq.${p.id}&select=ruta,archivada_en,respaldo&order=creado_en.asc`).then(async (fs) => {
+    select('fallas_fotos', `falla_id=eq.${p.id}&anulada_en=is.null&select=ruta,archivada_en,respaldo&order=creado_en.asc`).then(async (fs) => {
       const box = $('#fotosFalla'); if (!box || !document.body.contains(box) || !fs || !fs.length) return;
       const vivas = fs.filter((f) => !f.archivada_en), arch = fs.filter((f) => f.archivada_en);
       const urls = await Promise.all(vivas.map((f) => urlFoto(f.ruta).catch(() => null)));
       if (!document.body.contains(box)) return;
       const ok = urls.filter(Boolean);
       box.innerHTML = `<h3>Fotografías</h3>${ok.length ? `<div class="fotos">${ok.map((u, i) => `<button type="button" class="foto" data-i="${i}" aria-label="Ampliar foto ${i + 1}"><img src="${esc(u)}" alt="Foto ${i + 1}"></button>`).join('')}</div><div class="hint">Toca una foto para verla en grande.</div>` : ''}${arch.length ? `<div class="hint">${arch.length} foto(s) archivada(s) en el respaldo ${esc(arch[0].respaldo || '')}.</div>` : ''}`;
+      $$('.foto', box).forEach((b) => b.addEventListener('click', () => abrirFotoGrande(ok, +b.dataset.i)));
+    }).catch(() => {});
+  }
+  // Fotos de una reparación anulada (se conservan en el historial)
+  if (comsFicha.some((r) => r.tipo === 'reparacion_anulada')) {
+    select('fallas_fotos', `falla_id=eq.${p.id}&anulada_en=not.is.null&archivada_en=is.null&select=ruta&order=creado_en.asc`).then(async (fs) => {
+      const box = $('.fotos-anul', h); if (!box || !fs || !fs.length) return;
+      const ok = (await Promise.all(fs.map((f) => urlFoto(f.ruta).catch(() => null)))).filter(Boolean);
+      if (!ok.length || !document.body.contains(box)) return;
+      box.innerHTML = `<div class="fotos">${ok.map((u, i) => `<button type="button" class="foto" data-i="${i}" aria-label="Ampliar foto ${i + 1}"><img src="${esc(u)}" alt="Foto ${i + 1}"></button>`).join('')}</div>`;
       $$('.foto', box).forEach((b) => b.addEventListener('click', () => abrirFotoGrande(ok, +b.dataset.i)));
     }).catch(() => {});
   }
@@ -2565,10 +2583,12 @@ async function editarReparacionApp(p, est) {
     </div>
     <input id="rInCam" type="file" accept="image/*" capture="environment" hidden>
     <input id="rInGal" type="file" accept="image/*" multiple hidden>
+    <h3>Tu respuesta <small>(opcional, queda en el historial junto a la del camión)</small></h3>
+    <textarea id="rRevision" class="campo" placeholder="Ej.: no se aprueba, falta fotografía del luminario"></textarea>
     <div class="acciones"><button id="rGuardar" class="btn btn-primario">Guardar cambios</button></div>
     <h3>Me equivoqué al cerrar</h3>
     ${bloq ? '<div class="hint">Ya hay otra falla activa en este punto o circuito: no se puede quitar la reparación.</div>' : `
-    <div class="hint">Se borra la reparación (con su comentario y fotos) y la falla vuelve a su estado anterior.</div>
+    <div class="hint">Se quita la reparación y la falla vuelve a su estado anterior. La respuesta y las fotos del camión quedan en el historial.</div>
     <div class="acciones"><button id="rQuitar" class="btn btn-secundario" style="color:var(--rojo)">↩ Quitar reparación</button></div>
     <div class="hint">O déjala pendiente (motivo obligatorio):</div>
     <textarea id="rMotivo" class="campo" placeholder="Motivo por el que queda pendiente"></textarea>
@@ -2606,7 +2626,7 @@ async function editarReparacionApp(p, est) {
     $$('[data-n]', c).forEach((b) => b.addEventListener('click', () => { const f = nuevas.splice(+b.dataset.n, 1)[0]; URL.revokeObjectURL(f.url); pintar(); }));
     $('#rBtnCam', h).disabled = $('#rBtnGal', h).disabled = existentes.length + nuevas.length >= MAX_FOTOS;
   };
-  try { existentes = (await select('fallas_fotos', `falla_id=eq.${p.id}&archivada_en=is.null&select=id,ruta&order=creado_en.asc`)) || []; } catch (e) { existentes = []; }
+  try { existentes = (await select('fallas_fotos', `falla_id=eq.${p.id}&archivada_en=is.null&anulada_en=is.null&select=id,ruta&order=creado_en.asc`)) || []; } catch (e) { existentes = []; }
   pintar();
   const agregar = async (files) => {
     const libres = MAX_FOTOS - existentes.length - nuevas.length;
@@ -2633,13 +2653,15 @@ async function editarReparacionApp(p, est) {
     if (codigo === 'OTRO' && o !== (est.descripcion_otro || '')) cambios.descripcion_otro = o;
     if ((oe.valor || null) !== (est.orden_externa || null)) cambios.orden_externa = oe.valor || null;
     for (let i = 0; i < nuevas.length; i++) { gu.textContent = `Subiendo foto ${i + 1} de ${nuevas.length}…`; await subirFoto(p.id, nuevas[i].blob); }
+    const rv = $('#rRevision', h).value.trim();
+    if (rv) cambios.revision = rv;
     if (Object.keys(cambios).length) { gu.textContent = 'Guardando…'; await rpc('editar_reparacion', { p_falla_id: p.id, p_cambios: cambios }); }
     fin('Reparación actualizada');
   }));
   const q = $('#rQuitar', h);
   if (q) q.addEventListener('click', ocupar(q, async () => {
     if (!confirm('¿Quitar la reparación? La falla volverá a su estado anterior.')) return;
-    await rpc('anular_reparacion', { p_falla_id: p.id, p_motivo_pendiente: null });
+    await rpc('anular_reparacion', { p_falla_id: p.id, p_motivo_pendiente: null, p_nota: $('#rRevision', h).value.trim() || null });
     fin('Reparación quitada');
   }));
   const pe = $('#rPend', h);
