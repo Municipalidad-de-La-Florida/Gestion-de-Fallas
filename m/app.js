@@ -2456,7 +2456,7 @@ async function abrirFalla(p, geom) {
   comsFicha.forEach((r) => evFicha.push({ t: r.creado_en, html: r.tipo === 'revision'
     ? `<div class="com-bloque t-revision"><div class="quien">🛠 <b>Revisión del administrador</b> · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre></div>`
     : r.tipo === 'reparacion_anulada'
-    ? `<div class="com-bloque t-anulada"><div class="quien">↩ <b>Reparación anulada</b> · respuesta del camión: ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre><div class="fotos-anul"></div></div>`
+    ? `<div class="com-bloque t-anulada"><div class="quien">↩ <b>Reparación anulada</b><br>Respuesta del camión: ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre><div class="fotos-anul"></div></div>`
     : `<div class="com-bloque t-${esc(r.tipo)}"><div class="quien">💬 ${r.tipo === 'asignacion' ? 'Comentario de asignación' : 'Comentario'} · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre></div>` }));
   if (p.estado === 'reparada') {
     evFicha.push({ t: p.fecha_reparacion, html: `<div class="info-ok"><h3>Reparación</h3>

@@ -4085,7 +4085,7 @@ async function abrirPopupFalla(feat){
       <div class="hint" style="margin-bottom:2px;">🛠 <b>Revisión del administrador</b> — <b>${escHtml(c.autor_nombre || '—')}</b> · ${fmtFichaFecha(c.creado_en)}</div>
       <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${escHtml(c.comentario)}</div></div>` }));
   comentariosRev.filter(c => c.tipo === 'reparacion_anulada').forEach(c => lineaTiempo.push({ t: c.creado_en, html: `<div style="margin:8px 0; padding:6px 8px; background:#f3f3f3; border-left:3px solid #888; border-radius:4px;">
-      <div class="hint" style="margin-bottom:2px;">↩ <b>Reparación anulada</b> · respuesta del camión: <b>${escHtml(c.autor_nombre || '—')}</b> · ${fmtFichaFecha(c.creado_en)}</div>
+      <div class="hint" style="margin-bottom:2px;">↩ <b>Reparación anulada</b><br>Respuesta del camión: <b>${escHtml(c.autor_nombre || '—')}</b> · ${fmtFichaFecha(c.creado_en)}</div>
       <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${escHtml(c.comentario)}</div>
       <div class="fotos-falla" data-falla="${escHtml(p.id)}" data-anul="1"></div></div>` }));
   if(p.estado === 'reparada' && p.reparado_por_nombre){
