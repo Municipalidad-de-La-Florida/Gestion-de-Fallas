@@ -4074,7 +4074,7 @@ async function abrirPopupFalla(feat){
       <div class="hint">Responde: <b>${p.pendiente_por_nombre}</b></div>
       <div class="hint">Fecha: <b>${fmtFichaFecha(p.fecha_pendiente)}</b></div>
       <div class="hint" style="margin-top:2px;">Motivo:</div>
-      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.motivo_pendiente || '—'}</div></div>` });
+      <div style="display:flex; align-items:flex-start; gap:6px;"><div id="motPend" style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink); flex:1;">${p.motivo_pendiente || '—'}</div>${tieneReal('falla_editar_cualquiera') && p.estado === 'pendiente' && !p.cascada ? '<button type="button" id="bEditPend" title="Editar el motivo" style="width:22px; height:22px; padding:0; border:1px solid #c9d3df; border-radius:5px; background:#fff; cursor:pointer; font-size:11px;">✏️</button>' : ''}</div></div>` });
   }
   comentariosAsignacion.forEach(c => lineaTiempo.push({ t: c.creado_en, html: bloqueComentario(c, true) }));
   comentariosLibres.forEach(c => lineaTiempo.push({ t: c.creado_en, html: bloqueComentario(c, false) }));
@@ -4207,6 +4207,28 @@ async function abrirPopupFalla(feat){
   mostrarFotoReporte(p, panel);
   llenarFotos(panel);
   if(p.tipo === 'punto' && !p.cascada && p.estado !== 'reparada' && !p._vistaHistorica && p.ref_punto_gid != null) ofrecerSegundaFallaWeb(p, panel);
+  const bEP = panel.querySelector('#bEditPend');
+  if(bEP) bEP.onclick = () => {
+    const caja = panel.querySelector('#motPend'); if(!caja || panel.querySelector('#motEd')) return;
+    const ed = document.createElement('div');
+    ed.innerHTML = `<textarea id="motEd" class="popup-input" style="width:100%; min-height:60px; box-sizing:border-box;"></textarea>
+      <div style="display:flex; gap:6px;"><button class="popup-btn" id="motOk" style="margin:0; background:#1f8a4c;">Guardar motivo</button><button class="popup-btn" id="motNo" style="margin:0; background:#666;">Cancelar</button></div>
+      <div id="motErr" class="hint" style="color:#c0392b;"></div>`;
+    caja.parentNode.after(ed);
+    ed.querySelector('#motEd').value = p.motivo_pendiente || '';
+    ed.querySelector('#motNo').onclick = () => ed.remove();
+    ed.querySelector('#motOk').onclick = async (e) => {
+      const v = ed.querySelector('#motEd').value.trim();
+      if(!v){ ed.querySelector('#motErr').textContent = 'Escribe el motivo.'; return; }
+      e.target.disabled = true;
+      try{
+        await db.rpc('editar_motivo_pendiente', {p_falla_id: p.id, p_motivo: v});
+        invalidarCacheTodasFallas();
+        try{ cargarFallasDelArea(); renderFallasOnMap(); }catch(err){}
+        cerrarPanel();
+      }catch(err){ ed.querySelector('#motErr').textContent = err.message; e.target.disabled = false; }
+    };
+  };
   if(p.estado === 'reparada' && !p.cascada && !p._vistaHistorica && tiene('reparacion_editar_propia')){
     activarEdicionReparacion(panel, p);
   }

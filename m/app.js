@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.7';
+const VERSION_APP = '2.9.8';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2442,7 +2442,7 @@ async function abrirFalla(p, geom) {
   if ((p.estado === 'pendiente' || p.estado === 'reparada') && p.pendiente_por_nombre) {
     evFicha.push({ t: p.fecha_pendiente, html: `<div class="info-warn"><h3>Pendiente</h3>
       <dl class="kv"><dt>Responde</dt><dd>${esc(p.pendiente_por_nombre)}</dd><dt>Fecha respuesta</dt><dd>${esc(fmtFecha(p.fecha_pendiente))}</dd></dl>
-      <h4>Motivo</h4><pre class="texto">${esc(p.motivo_pendiente || '')}</pre>
+      <h4>Motivo ${tiene('falla_editar_cualquiera') && p.estado === 'pendiente' && !p.cascada ? '<button type="button" id="bEditPend" class="btn-link" title="Editar el motivo" aria-label="Editar el motivo" style="font-size:13px;padding:0 6px">✏️</button>' : ''}</h4><pre class="texto" id="motPend">${esc(p.motivo_pendiente || '')}</pre>
     </div>` });
   }
   // Los comentarios que repiten el motivo del pendiente o el trabajo realizado ya salen en sus tarjetas: no se duplican
@@ -2486,6 +2486,20 @@ async function abrirFalla(p, geom) {
     </div>
     `);
   ofrecerEdicionReparacion(p, h);
+  const bep = $('#bEditPend', h);
+  if (bep) bep.addEventListener('click', () => {
+    const pre = $('#motPend', h); if (!pre || $('#motEd', h)) return;
+    pre.insertAdjacentHTML('afterend', `<textarea id="motEd" class="campo">${esc(p.motivo_pendiente || '')}</textarea><div class="acciones"><button type="button" id="motOk" class="btn btn-primario">Guardar motivo</button><button type="button" id="motNo" class="btn btn-secundario">Cancelar</button></div>`);
+    pre.hidden = true;
+    $('#motNo', h).addEventListener('click', () => { $('#motEd', h).nextElementSibling.remove(); $('#motEd', h).remove(); pre.hidden = false; });
+    const ok = $('#motOk', h);
+    ok.addEventListener('click', ocupar(ok, async () => {
+      const v = $('#motEd', h).value.trim();
+      if (!v) { toast('Escribe el motivo.', 'error'); return; }
+      await rpc('editar_motivo_pendiente', { p_falla_id: p.id, p_motivo: v });
+      cerrarHoja(); toast('Motivo actualizado', 'ok'); cargarFallas();
+    }));
+  });
   if (p.tipo === 'punto' && !p.cascada && p.estado !== 'reparada' && p.ref_punto_gid != null) ofrecerSegundaFalla(p, h);
   const bc = $('#bCerrar', h);
   if (bc) bc.addEventListener('click', () => formCierre(p));
