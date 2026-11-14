@@ -4011,9 +4011,11 @@ async function abrirPopupFalla(feat){
   }
   // Comentarios agregados a la falla después de creada (sin cerrarla ni editarla)
   let comentariosLibres = [];
+  let comentariosRev = [];   // respuesta del camión conservada + revisiones del administrador
   if(p.id){
     try{
       comentariosLibres = await db.select('fallas_comentarios', `falla_id=eq.${p.id}&tipo=eq.comentario&select=comentario,autor_nombre,creado_en&order=creado_en.asc`) || [];
+      comentariosRev = await db.select('fallas_comentarios', `falla_id=eq.${p.id}&tipo=in.(revision,reparacion_anulada,reparacion)&select=tipo,comentario,autor_nombre,creado_en&order=creado_en.asc`) || [];
     }catch(e){ console.error('No se pudieron cargar los comentarios:', e); }
   }
   // Los comentarios que repiten el motivo del pendiente o el trabajo realizado ya salen en sus bloques: no se duplican
@@ -4076,13 +4078,23 @@ async function abrirPopupFalla(feat){
   }
   comentariosAsignacion.forEach(c => lineaTiempo.push({ t: c.creado_en, html: bloqueComentario(c, true) }));
   comentariosLibres.forEach(c => lineaTiempo.push({ t: c.creado_en, html: bloqueComentario(c, false) }));
+  // Historial de revisiones: la respuesta del camión se conserva y la corrección del administrador va a continuación
+  const hayRevision = comentariosRev.some(c => c.tipo === 'revision');
+  const repOriginal = comentariosRev.find(c => c.tipo === 'reparacion');
+  comentariosRev.filter(c => c.tipo === 'revision').forEach(c => lineaTiempo.push({ t: c.creado_en, html: `<div style="margin:8px 0; padding:6px 8px; background:#fff4e5; border-left:3px solid #e65100; border-radius:4px;">
+      <div class="hint" style="margin-bottom:2px;">🛠 <b>Revisión del administrador</b> — <b>${escHtml(c.autor_nombre || '—')}</b> · ${fmtFichaFecha(c.creado_en)}</div>
+      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${escHtml(c.comentario)}</div></div>` }));
+  comentariosRev.filter(c => c.tipo === 'reparacion_anulada').forEach(c => lineaTiempo.push({ t: c.creado_en, html: `<div style="margin:8px 0; padding:6px 8px; background:#f3f3f3; border-left:3px solid #888; border-radius:4px;">
+      <div class="hint" style="margin-bottom:2px;">↩ <b>Reparación anulada</b><br>Respuesta del camión: <b>${escHtml(c.autor_nombre || '—')}</b> · ${fmtFichaFecha(c.creado_en)}</div>
+      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${escHtml(c.comentario)}</div>
+      <div class="fotos-falla" data-falla="${escHtml(p.id)}" data-anul="1"></div></div>` }));
   if(p.estado === 'reparada' && p.reparado_por_nombre){
     lineaTiempo.push({ t: p.fecha_reparacion, html: `<div class="rp-ok">
       <b>Reparación</b>
       <div class="hint">Responde: <b>${p.reparado_por_nombre}</b></div>
       <div class="hint">Fecha: <b>${fmtFichaFecha(p.fecha_reparacion)}</b></div>
-      <div class="hint" style="margin-top:2px;">Trabajo realizado:</div>
-      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${p.descripcion_reparacion || '—'}</div>
+      <div class="hint" style="margin-top:2px;">${hayRevision && repOriginal ? 'Trabajo realizado (respuesta del camión):' : 'Trabajo realizado:'}</div>
+      <div style="white-space:pre-line; font-weight:600; font-size:11.5px; color:var(--ink);">${hayRevision && repOriginal ? escHtml(repOriginal.comentario) : (p.descripcion_reparacion || '—')}</div>
       <div class="fotos-falla" data-falla="${escHtml(p.id)}"></div></div>` });
   }
   // Cronología: todo en el orden en que ocurrió (pendiente, comentarios, reparación)
@@ -5038,11 +5050,13 @@ async function abrirEditarReparacion(p, est, modo){
     <button type="button" class="popup-btn" id="erAddFoto" style="width:auto; background:#555; margin:0 0 4px;">📷 Agregar foto</button>
     <input type="file" id="erFotoIn" accept="image/*" multiple hidden>
     <div id="erError" class="hint" style="color:#c0392b; display:none; margin-top:6px;"></div>
+    <div style="margin-top:10px;"><b>Tu respuesta</b> <span class="hint">(opcional, queda en el historial junto a la del camión)</span></div>
+    <textarea id="erRevision" class="popup-input" placeholder="Ej.: no se aprueba, falta fotografía del luminario" style="width:100%; min-height:50px; box-sizing:border-box;"></textarea>
     <button class="popup-btn" id="erGuardar" style="background:#1f8a4c; margin-top:12px;">Guardar cambios</button>
     <div style="border:1.5px solid #c9d3df; border-radius:8px; padding:10px; margin-top:12px;">
       <b>Me equivoqué al cerrar</b>
       ${bloq ? '<div class="hint">Ya hay otra falla activa de esa luminaria (o circuito): no se puede quitar la reparación.</div>' : `
-      <div class="hint">La reparación se borra (con su comentario y fotos) y la falla vuelve a su estado anterior.</div>
+      <div class="hint">La reparación se quita y la falla vuelve a su estado anterior. La respuesta y las fotos del camión quedan en el historial.</div>
       <button class="popup-btn" id="erQuitar" style="background:#c0392b; margin-top:6px;">↩ Quitar reparación</button>
       <div class="hint" style="margin-top:8px;">O déjala pendiente (motivo obligatorio):</div>
       <textarea id="erMotivo" class="popup-input" placeholder="Motivo por el que queda pendiente" style="width:100%; min-height:60px; box-sizing:border-box;"></textarea>
@@ -5078,7 +5092,7 @@ async function abrirEditarReparacion(p, est, modo){
     c.querySelectorAll('[data-n]').forEach(x => x.onclick = () => { const f = nuevas.splice(+x.dataset.n, 1)[0]; URL.revokeObjectURL(f.url); pintarFotos(); });
     $('erAddFoto').disabled = existentes.length + nuevas.length >= MAX_FOTOS_CIERRE;
   };
-  try{ existentes = await db.select('fallas_fotos', `falla_id=eq.${p.id}&archivada_en=is.null&select=id,ruta&order=creado_en.asc`); }catch(e){ existentes = []; }
+  try{ existentes = await db.select('fallas_fotos', `falla_id=eq.${p.id}&archivada_en=is.null&anulada_en=is.null&select=id,ruta&order=creado_en.asc`); }catch(e){ existentes = []; }
   pintarFotos();
   $('erAddFoto').onclick = () => $('erFotoIn').click();
   $('erFotoIn').onchange = async (e) => {
@@ -5110,11 +5124,13 @@ async function abrirEditarReparacion(p, est, modo){
     if(cod.value !== 'OTRO' && est.descripcion_otro && (cambios.tipo_falla)) cambios.descripcion_otro = null;
     if(oe !== (est.orden_externa || '')) cambios.orden_externa = oe || null;
     for(let i = 0; i < nuevas.length; i++){ g.textContent = `Subiendo foto ${i + 1} de ${nuevas.length}…`; await subirFotoReparacion(p.id, nuevas[i].blob); }
+    const rv = ($('erRevision').value || '').trim();
+    if(rv) cambios.revision = rv;
     if(Object.keys(cambios).length){ g.textContent = 'Guardando…'; await db.rpc('editar_reparacion', {p_falla_id: p.id, p_cambios: cambios}); }
     terminar();
   });
   const q = m.querySelector('#erQuitar');
-  if(q) q.onclick = ocupar(q, async () => { await db.rpc('anular_reparacion', {p_falla_id: p.id, p_motivo_pendiente: null}); terminar(); });
+  if(q) q.onclick = ocupar(q, async () => { await db.rpc('anular_reparacion', {p_falla_id: p.id, p_motivo_pendiente: null, p_nota: ($('erRevision').value || '').trim() || null}); terminar(); });
   const pe = m.querySelector('#erPendiente');
   if(pe) pe.onclick = ocupar(pe, async () => {
     const mot = m.querySelector('#erMotivo').value.trim();
@@ -6783,10 +6799,10 @@ async function llenarFotos(raiz){
   cajas.forEach(c => { c.dataset.ok = '1'; });
   const ids = [...new Set(cajas.map(c => c.dataset.falla))];
   let filas = [];
-  try{ filas = await db.select('fallas_fotos', `falla_id=in.(${ids.join(',')})&select=falla_id,ruta,archivada_en,respaldo&order=creado_en.asc`); }
+  try{ filas = await db.select('fallas_fotos', `falla_id=in.(${ids.join(',')})&select=falla_id,ruta,archivada_en,anulada_en,respaldo&order=creado_en.asc`); }
   catch(e){ console.error('No se pudieron cargar las fotos:', e); return; }
   for(const caja of cajas){
-    const propias = filas.filter(f => f.falla_id === caja.dataset.falla);
+    const propias = filas.filter(f => f.falla_id === caja.dataset.falla && (caja.dataset.anul ? !!f.anulada_en : !f.anulada_en));
     if(!propias.length) continue;
     const vivas = propias.filter(f => !f.archivada_en), arch = propias.filter(f => f.archivada_en);
     const urls = (await Promise.all(vivas.map(f => urlFotoFirmada(f.ruta).catch(() => null)))).filter(Boolean);
