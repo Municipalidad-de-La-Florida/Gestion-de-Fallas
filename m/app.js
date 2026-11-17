@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.11';
+const VERSION_APP = '2.9.12';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -507,8 +507,8 @@ function abrirFotoGrande(urls, i, base) {
   let k = i || 0;
   const lb = document.createElement('div');
   lb.id = 'lbFoto';
-  lb.innerHTML = `<button class="lb-x" aria-label="Cerrar">✕</button><img alt="Foto de la reparación">
-    <div class="lb-barra"><button id="lbAnt" aria-label="Anterior">‹</button><span id="lbPos"></span><button id="lbSig" aria-label="Siguiente">›</button><button id="lbDesc" aria-label="Descargar foto">⬇ Descargar</button></div>
+  lb.innerHTML = `<button class="lb-x" aria-label="Cerrar">✕</button><button class="lb-dl" id="lbDesc" aria-label="Descargar foto" title="Descargar"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></svg></button><img alt="Foto de la reparación">
+    <div class="lb-barra"><button id="lbAnt" aria-label="Anterior">‹</button><span id="lbPos"></span><button id="lbSig" aria-label="Siguiente">›</button></div>
     <button class="lb-cerrar" aria-label="Cerrar">Cerrar</button>`;
   document.body.appendChild(lb);
   // Zoom con los dedos (pellizcar), arrastrar al ampliar y doble toque para acercar/alejar

@@ -753,5 +753,5 @@ input, textarea, [contenteditable]{ -webkit-user-select:text; user-select:text; 
 .com-bloque.t-anulada{ background:#f3f3f3; border-color:#ddd; border-left:3px solid #888; }
 html[data-tema=oscuro] .com-bloque.t-revision{ background:#3a2a14; border-color:#5a3d1a; }
 html[data-tema=oscuro] .com-bloque.t-anulada{ background:#2a2a2a; border-color:#444; }
-#lbFoto .lb-barra #lbDesc{width:auto;padding:0 14px;font-size:15px}
+#lbFoto .lb-dl{position:absolute;top:calc(env(safe-area-inset-top,0px) + 10px);right:68px;width:48px;height:48px;border:0;border-radius:50%;background:rgba(255,255,255,.22);color:#fff;display:flex;align-items:center;justify-content:center;z-index:3;backdrop-filter:blur(6px)}#lbFoto .lb-dl:active{background:rgba(255,255,255,.4)}#lbFoto .lb-dl:disabled{opacity:.5}
 .info-card .foto-en-card{grid-column:1/-1;margin-top:8px;padding-top:8px;border-top:1px solid #f0e2a0}.info-card .foto-en-card h4{margin:0 0 2px}html[data-tema=oscuro] .info-card .foto-en-card{border-top-color:#524c2d}
