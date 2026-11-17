@@ -5015,7 +5015,7 @@ async function mostrarFotoReporte(p, panel){
     let dest = box;
     if(card){ box.remove(); dest = document.createElement('div'); dest.style.cssText = 'margin-top:8px; padding-top:8px; border-top:1px solid #f0e2a0;'; card.appendChild(dest); }
     dest.innerHTML = `<div class="rp-sec" style="margin-top:0;">Foto del reporte</div><img src="${escHtml(u)}" alt="Foto del reporte" title="Ampliar" style="width:84px; height:84px; object-fit:cover; border-radius:6px; border:1px solid var(--line); cursor:pointer;">`;
-    dest.querySelector('img').onclick = () => abrirFotoGrande([u], 0);
+    dest.querySelector('img').onclick = () => abrirFotoGrande([u], 0, p.ot ? 'OS' + p.ot + '_f' : null);
   }catch(e){ /* sin foto */ }
 }
 
@@ -5919,7 +5919,8 @@ async function verFotosDeFalla(id){
     }
     const urls = (await Promise.all(vivas.map(f => urlFotoFirmada(f.ruta).catch(() => null)))).filter(Boolean);
     if(!urls.length){ alert('No se pudieron cargar las fotos.'); return; }
-    abrirFotoGrande(urls, 0);
+    let ot = null; try{ const r = await db.select('fallas', `id=eq.${id}&select=ot`); ot = r && r[0] && r[0].ot; }catch(e){ /* sin OS: nombre genérico */ }
+    abrirFotoGrande(urls, 0, ot ? 'OS' + ot + '_r' : null);
   }catch(e){ alert('No se pudieron cargar las fotos: ' + e.message); }
 }
 window.verFotosDeFalla = verFotosDeFalla;
@@ -6796,7 +6797,8 @@ function teclaFotoGrande(e){
   else if(e.key === 'ArrowLeft') document.getElementById('lbAnt')?.click();
 }
 // Visor a pantalla completa de las fotos de una reparación
-function abrirFotoGrande(urls, i){
+// base: prefijo del nombre al descargar, p. ej. «OS26-1423_r» → OS26-1423_r_1.jpg (r = reparación, f = foto del reporte)
+function abrirFotoGrande(urls, i, base){
   cerrarFotoGrande();
   let k = i || 0;
   const lb = document.createElement('div');
@@ -6816,7 +6818,7 @@ function abrirFotoGrande(urls, i){
   lb.querySelector('#lbDesc').onclick = (e) => {
     e.stopPropagation();
     const a = document.createElement('a');
-    a.href = urls[k] + (urls[k].includes('?') ? '&' : '?') + 'download=' + encodeURIComponent('foto_' + (k + 1) + '.jpg');
+    a.href = urls[k] + (urls[k].includes('?') ? '&' : '?') + 'download=' + encodeURIComponent((base || 'foto') + '_' + (k + 1) + '.jpg');
     a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
   };
   lb.querySelector('.lb-x').onclick = cerrarFotoGrande;
@@ -6834,6 +6836,7 @@ async function llenarFotos(raiz){
   let filas = [];
   try{ filas = await db.select('fallas_fotos', `falla_id=in.(${ids.join(',')})&select=falla_id,ruta,archivada_en,anulada_en,respaldo&order=creado_en.asc`); }
   catch(e){ console.error('No se pudieron cargar las fotos:', e); return; }
+  const otDe = {}; try{ (await db.select('fallas', `id=in.(${ids.join(',')})&select=id,ot`)).forEach(r => { otDe[r.id] = r.ot; }); }catch(e){ /* sin OS: nombre genérico */ }
   for(const caja of cajas){
     const propias = filas.filter(f => f.falla_id === caja.dataset.falla && (caja.dataset.anul ? !!f.anulada_en : !f.anulada_en));
     if(!propias.length) continue;
@@ -6842,7 +6845,7 @@ async function llenarFotos(raiz){
     caja.innerHTML = (urls.length ? `<div class="fotos-fila">${urls.map((u, i) => `<img class="foto-mini" src="${escHtml(u)}" data-i="${i}" alt="Foto ${i + 1} de la reparación" title="Pincha para ampliar">`).join('')}</div>` : '')
       + (arch.length ? `<div class="hint">${arch.length} foto(s) archivada(s) en el respaldo ${escHtml(arch[0].respaldo || '')}</div>` : '');
     caja.querySelectorAll('.foto-mini').forEach(img => {
-      img.addEventListener('click', (e) => { e.stopPropagation(); abrirFotoGrande(urls, +img.dataset.i); });
+      img.addEventListener('click', (e) => { e.stopPropagation(); abrirFotoGrande(urls, +img.dataset.i, otDe[caja.dataset.falla] ? 'OS' + otDe[caja.dataset.falla] + (caja.dataset.anul ? '_ra' : '_r') : null); });
     });
   }
 }

@@ -497,10 +497,12 @@ async function abrirCamara() {
 // Descarga la foto que se está viendo: el enlace firmado lleva ?download= y el servidor la entrega como archivo (no se abre otra pestaña)
 function descargarFotoVisor(url, nombre) {
   const a = document.createElement('a');
-  a.href = url + (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(nombre);
+  a.href = /^(blob|data):/.test(url) ? url : url + (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(nombre);
+  if (/^(blob|data):/.test(url)) a.download = nombre;
   a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
 }
-function abrirFotoGrande(urls, i) {
+// base: prefijo del nombre del archivo al descargar, p. ej. «OS26-1423_r» → OS26-1423_r_1.jpg (r = reparación, f = foto del reporte)
+function abrirFotoGrande(urls, i, base) {
   cerrarFotoGrande();
   let k = i || 0;
   const lb = document.createElement('div');
@@ -566,7 +568,7 @@ function abrirFotoGrande(urls, i) {
   };
   lb.querySelector('#lbAnt').onclick = (e) => { e.stopPropagation(); k = (k - 1 + urls.length) % urls.length; pintar(); };
   lb.querySelector('#lbSig').onclick = (e) => { e.stopPropagation(); k = (k + 1) % urls.length; pintar(); };
-  lb.querySelector('#lbDesc').onclick = (e) => { e.stopPropagation(); descargarFotoVisor(urls[k], `foto_${k + 1}.jpg`); };
+  lb.querySelector('#lbDesc').onclick = (e) => { e.stopPropagation(); descargarFotoVisor(urls[k], `${base || 'foto'}_${k + 1}.jpg`); };
   lb.querySelector('.lb-x').onclick = cerrarFotoGrande;
   lb.querySelector('.lb-cerrar').onclick = cerrarFotoGrande;
   lb.onclick = (e) => { if (e.target === lb) cerrarFotoGrande(); };
@@ -2553,7 +2555,7 @@ async function abrirFalla(p, geom) {
     if (card) { box.remove(); card.insertAdjacentHTML('beforeend', '<div id="fotoReporte" class="foto-en-card"></div>'); }
     const dest = $('#fotoReporte') || box;
     dest.innerHTML = `<h4>Foto del reporte</h4><div class="fotos"><button type="button" class="foto" aria-label="Ampliar foto"><img src="${esc(u)}" alt="Foto del reporte"></button></div>`;
-    $('.foto', dest).addEventListener('click', () => abrirFotoGrande([u], 0));
+    $('.foto', dest).addEventListener('click', () => abrirFotoGrande([u], 0, p.ot ? `OS${p.ot}_f` : null));
   }).catch(() => {});
   if (p.estado === 'reparada') {
     select('fallas_fotos', `falla_id=eq.${p.id}&anulada_en=is.null&select=ruta,archivada_en,respaldo&order=creado_en.asc`).then(async (fs) => {
@@ -2563,7 +2565,7 @@ async function abrirFalla(p, geom) {
       if (!document.body.contains(box)) return;
       const ok = urls.filter(Boolean);
       box.innerHTML = `<h3>Fotografías</h3>${ok.length ? `<div class="fotos">${ok.map((u, i) => `<button type="button" class="foto" data-i="${i}" aria-label="Ampliar foto ${i + 1}"><img src="${esc(u)}" alt="Foto ${i + 1}"></button>`).join('')}</div><div class="hint">Toca una foto para verla en grande.</div>` : ''}${arch.length ? `<div class="hint">${arch.length} foto(s) archivada(s) en el respaldo ${esc(arch[0].respaldo || '')}.</div>` : ''}`;
-      $$('.foto', box).forEach((b) => b.addEventListener('click', () => abrirFotoGrande(ok, +b.dataset.i)));
+      $$('.foto', box).forEach((b) => b.addEventListener('click', () => abrirFotoGrande(ok, +b.dataset.i, p.ot ? `OS${p.ot}_r` : null)));
     }).catch(() => {});
   }
   // Fotos de una reparación anulada (se conservan en el historial)
@@ -2573,7 +2575,7 @@ async function abrirFalla(p, geom) {
       const ok = (await Promise.all(fs.map((f) => urlFoto(f.ruta).catch(() => null)))).filter(Boolean);
       if (!ok.length || !document.body.contains(box)) return;
       box.innerHTML = `<div class="fotos">${ok.map((u, i) => `<button type="button" class="foto" data-i="${i}" aria-label="Ampliar foto ${i + 1}"><img src="${esc(u)}" alt="Foto ${i + 1}"></button>`).join('')}</div>`;
-      $$('.foto', box).forEach((b) => b.addEventListener('click', () => abrirFotoGrande(ok, +b.dataset.i)));
+      $$('.foto', box).forEach((b) => b.addEventListener('click', () => abrirFotoGrande(ok, +b.dataset.i, p.ot ? `OS${p.ot}_ra` : null)));
     }).catch(() => {});
   }
   // Falla en cascada: ofrecer ir a la falla del circuito
