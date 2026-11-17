@@ -6798,7 +6798,7 @@ function abrirFotoGrande(urls, i){
   const lb = document.createElement('div');
   lb.id = 'lbFoto';
   lb.innerHTML = `<button class="lb-x" aria-label="Cerrar">✕</button><img alt="Foto de la reparación">
-    <div class="lb-barra"><button id="lbAnt">‹</button><span id="lbPos"></span><button id="lbSig">›</button><a id="lbAbrir" target="_blank" rel="noopener">Abrir en pestaña nueva</a></div>`;
+    <div class="lb-barra"><button id="lbAnt">‹</button><span id="lbPos"></span><button id="lbSig">›</button><a id="lbAbrir" target="_blank" rel="noopener">Abrir en pestaña nueva</a><button id="lbDesc" type="button">⬇ Descargar</button></div>`;
   document.body.appendChild(lb);
   const pintar = () => {
     lb.querySelector('img').src = urls[k];
@@ -6808,6 +6808,16 @@ function abrirFotoGrande(urls, i){
   };
   lb.querySelector('#lbAnt').onclick = (e) => { e.stopPropagation(); k = (k - 1 + urls.length) % urls.length; pintar(); };
   lb.querySelector('#lbSig').onclick = (e) => { e.stopPropagation(); k = (k + 1) % urls.length; pintar(); };
+  lb.querySelector('#lbDesc').onclick = async (e) => {
+    e.stopPropagation(); const b = e.currentTarget; b.disabled = true;
+    try{
+      const r = await fetch(urls[k]); if(!r.ok) throw new Error('HTTP ' + r.status);
+      const bl = await r.blob(), a = document.createElement('a'), u = URL.createObjectURL(bl);
+      a.href = u; a.download = 'foto_' + (k + 1) + '.jpg'; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(u), 4000);
+    }catch(err){ alert('No se pudo descargar la foto. Usa «Abrir en pestaña nueva» y guárdala desde ahí.'); }
+    b.disabled = false;
+  };
   lb.querySelector('.lb-x').onclick = cerrarFotoGrande;
   lb.onclick = (e) => { if(e.target === lb) cerrarFotoGrande(); };
   document.addEventListener('keydown', teclaFotoGrande);

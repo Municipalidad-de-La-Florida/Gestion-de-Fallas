@@ -753,3 +753,4 @@ input, textarea, [contenteditable]{ -webkit-user-select:text; user-select:text; 
 .com-bloque.t-anulada{ background:#f3f3f3; border-color:#ddd; border-left:3px solid #888; }
 html[data-tema=oscuro] .com-bloque.t-revision{ background:#3a2a14; border-color:#5a3d1a; }
 html[data-tema=oscuro] .com-bloque.t-anulada{ background:#2a2a2a; border-color:#444; }
+#lbFoto .lb-barra #lbDesc{width:auto;padding:0 14px;font-size:15px}
