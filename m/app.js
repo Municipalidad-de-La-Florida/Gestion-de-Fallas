@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.9';
+const VERSION_APP = '2.9.10';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -493,13 +493,24 @@ async function abrirCamara() {
 }
 
 // Visor a pantalla completa: se abre al tocar una miniatura
+
+// Descarga la foto que se está viendo (se baja como blob: el enlace firmado es de otro dominio y `download` no funciona directo)
+async function descargarFotoVisor(url, nombre) {
+  try {
+    const r = await fetch(url); if (!r.ok) throw new Error('HTTP ' + r.status);
+    const b = await r.blob(), a = document.createElement('a'), u = URL.createObjectURL(b);
+    a.href = u; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 4000);
+  } catch (e) { return false; }
+  return true;
+}
 function abrirFotoGrande(urls, i) {
   cerrarFotoGrande();
   let k = i || 0;
   const lb = document.createElement('div');
   lb.id = 'lbFoto';
   lb.innerHTML = `<button class="lb-x" aria-label="Cerrar">✕</button><img alt="Foto de la reparación">
-    <div class="lb-barra"><button id="lbAnt" aria-label="Anterior">‹</button><span id="lbPos"></span><button id="lbSig" aria-label="Siguiente">›</button></div>
+    <div class="lb-barra"><button id="lbAnt" aria-label="Anterior">‹</button><span id="lbPos"></span><button id="lbSig" aria-label="Siguiente">›</button><button id="lbDesc" aria-label="Descargar foto">⬇ Descargar</button></div>
     <button class="lb-cerrar" aria-label="Cerrar">Cerrar</button>`;
   document.body.appendChild(lb);
   // Zoom con los dedos (pellizcar), arrastrar al ampliar y doble toque para acercar/alejar
@@ -559,6 +570,7 @@ function abrirFotoGrande(urls, i) {
   };
   lb.querySelector('#lbAnt').onclick = (e) => { e.stopPropagation(); k = (k - 1 + urls.length) % urls.length; pintar(); };
   lb.querySelector('#lbSig').onclick = (e) => { e.stopPropagation(); k = (k + 1) % urls.length; pintar(); };
+  lb.querySelector('#lbDesc').onclick = async (e) => { e.stopPropagation(); const b = e.currentTarget; b.disabled = true; const ok = await descargarFotoVisor(urls[k], `foto_${k + 1}.jpg`); b.disabled = false; if (!ok) toast('No se pudo descargar la foto.', 'error'); };
   lb.querySelector('.lb-x').onclick = cerrarFotoGrande;
   lb.querySelector('.lb-cerrar').onclick = cerrarFotoGrande;
   lb.onclick = (e) => { if (e.target === lb) cerrarFotoGrande(); };
