@@ -387,6 +387,8 @@
   #lbFoto .lb-barra{color:#fff; font-size:13px; margin-top:10px; display:flex; gap:14px; align-items:center;}
   #lbFoto .lb-barra a, #lbFoto .lb-barra button{color:#fff; background:rgba(255,255,255,.15); border:0; border-radius:8px; padding:6px 12px; font-size:13px; cursor:pointer; text-decoration:none;}
   #lbFoto .lb-x{position:absolute; top:14px; right:18px; font-size:26px; background:none; border:0; color:#fff; cursor:pointer;}
+  #lbFoto .lb-dl{position:absolute; top:12px; right:64px; width:40px; height:40px; border:0; border-radius:50%; background:rgba(255,255,255,.18); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:.15s;}
+  #lbFoto .lb-dl:hover{background:rgba(255,255,255,.32);}
 
   .modal-card.modal-card-wide{width:min(920px, 92vw);}
   #todasFallasTabla tbody tr{border-bottom:1px solid var(--line); cursor:pointer;}
@@ -6819,8 +6821,8 @@ function abrirFotoGrande(urls, i, base){
   let k = i || 0;
   const lb = document.createElement('div');
   lb.id = 'lbFoto';
-  lb.innerHTML = `<button class="lb-x" aria-label="Cerrar">✕</button><img alt="Foto de la reparación">
-    <div class="lb-barra"><button id="lbAnt">‹</button><span id="lbPos"></span><button id="lbSig">›</button><a id="lbAbrir" target="_blank" rel="noopener">Abrir en pestaña nueva</a><button id="lbDesc" type="button">⬇ Descargar</button></div>`;
+  lb.innerHTML = `<button class="lb-x" aria-label="Cerrar">✕</button><button class="lb-dl" id="lbDesc" type="button" aria-label="Descargar foto" title="Descargar foto"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></svg></button><img alt="Foto de la reparación">
+    <div class="lb-barra"><button id="lbAnt">‹</button><span id="lbPos"></span><button id="lbSig">›</button><a id="lbAbrir" target="_blank" rel="noopener">Abrir en pestaña nueva</a></div>`;
   document.body.appendChild(lb);
   const pintar = () => {
     lb.querySelector('img').src = urls[k];
