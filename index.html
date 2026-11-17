@@ -3050,12 +3050,12 @@ const CATALOGO_FALLAS_PUNTO = [
   {c:'OTRO', d:'Otro (describe la falla)'},
 ];
 
-// ---------- ORDEN EXTERNA: empresa (Sinec / Elecnor / SAT ENEL) + número -> se guarda como S-XXXX, E-XXXX o T-XXXX ----------
+// ---------- ORDEN EXTERNA: empresa (Sinec / Elecnor / SAT) + número -> se guarda como S-XXXX, E-XXXX o T-XXXX ----------
 function htmlOrdenExterna(){
   return `
     <div style="display:flex; align-items:center; gap:8px; margin-top:6px;">
       <div class="oe-toggle" id="oeEmpresa">
-        <button type="button" data-e="S">Sinec</button><button type="button" data-e="E">Elecnor</button><button type="button" data-e="T">SAT ENEL</button>
+        <button type="button" data-e="S">Sinec</button><button type="button" data-e="E">Elecnor</button><button type="button" data-e="T">SAT</button>
       </div>
       <textarea class="popup-input" id="ordenExternaInput" rows="1" maxlength="38" autocomplete="off" spellcheck="false" placeholder="Orden Externa (opcional)" onkeydown="if(event.key==='Enter') event.preventDefault();" style="flex:1; min-width:0; margin:0; box-sizing:border-box; font-size:12px; padding:4px 8px; min-height:0; height:28px; resize:none; overflow:hidden;"></textarea>
     </div>
@@ -3084,7 +3084,7 @@ function leerOrdenExterna(panel){
   const sel = panel.querySelector('#oeEmpresa button.sel');
   const num = panel.querySelector('#ordenExternaInput').value.trim().replace(/\s+/g, '');
   if(!sel && !num) return {valor: null, error: null};
-  if(num && !sel) return {valor: null, error: 'Elige la empresa de la Orden Externa (Sinec, Elecnor o SAT ENEL).'};
+  if(num && !sel) return {valor: null, error: 'Elige la empresa de la Orden Externa (Sinec, Elecnor o SAT).'};
   if(sel && !num) return {valor: null, error: 'Escribe el número de la Orden Externa, o quita la empresa seleccionada.'};
   return {valor: sel.dataset.e + '-' + num, error: null};
 }
