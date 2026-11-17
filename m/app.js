@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.8';
+const VERSION_APP = '2.9.9';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1781,6 +1781,21 @@ async function formAporte(tipo, p) {
   try { contratos = await cargarMisContratos(); maestros = await select('maestros', 'activo=eq.true&select=id,nombre,contrato_id&order=nombre.asc'); }
   catch (e) { toast('No se pudo cargar tu contrato o los maestros.', 'error'); return; }
   if (!contratos.length) { toast('Tu usuario no tiene un contrato asignado. Avisa al administrador.', 'error'); return; }
+  // El contrato sale del catastro (la luminaria o el circuito), no lo elige la cuadrilla. Si el catastro no lo define con certeza, se elige entre los de la cuadrilla.
+  let contratoCat = false;
+  try {
+    let ids = [];
+    if (tipo === 'punto') { const ops = await rpc('opciones_punto', { p_gid: p.gid }); ids = [...new Set((ops || []).filter((o) => o.estado === 'ok' && o.contrato_id).map((o) => o.contrato_id))]; }
+    else { const cs = await select('circuitos', `gid=eq.${p.gid}&select=contrato_id`); ids = [...new Set((cs || []).map((c) => c.contrato_id).filter(Boolean))]; }
+    if (ids.length === 1) {
+      const mio = contratos.find((c) => c.id === ids[0]);
+      if (!mio) {
+        let nom = 'otro contrato'; try { const r = await select('contratos', `id=eq.${ids[0]}&select=nombre`); if (r && r[0]) nom = r[0].nombre; } catch (e) { /* sin nombre */ }
+        toast(`Este ${tipo === 'circuito' ? 'circuito' : 'punto'} es del contrato ${nom}, que tu cuadrilla no tiene asignado. Avisa al administrador.`, 'error'); return;
+      }
+      contratos = [mio]; contratoCat = true;
+    }
+  } catch (e) { /* sin datos del catastro: se elige entre los contratos de la cuadrilla */ }
   const mono = tipo === 'punto' && String(p.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
   const nomCat = tipo === 'circuito' ? 'circuito' : (mono ? 'monoposte' : 'punto');
   const cat = catalogoActivo(nomCat);
@@ -1791,6 +1806,7 @@ async function formAporte(tipo, p) {
     <h2>Registrar aporte</h2>
     <div class="hint">${tipo === 'punto' ? `Punto lumínico · llave ${esc(p.llave ?? '—')} · N.° municipal ${esc(p.nro_mun ?? '—')}` : `Circuito ${esc(p.id ?? '')} · ${esc(p.cantidad_luminarias_cliente ?? '—')} luminarias`}</div>
     <div class="aviso">Se registra la falla y su reparación juntas. Quedará como aporte de tu cuadrilla y del maestro que elijas.</div>
+    ${contratoCat ? `<div class="mant-box">Contrato: <b>${esc(contratos[0].nombre)}</b> · según el catastro</div>` : ''}
     ${contratos.length > 1 ? `<h3>Contrato</h3><select id="aContrato" class="campo">${contratos.map((c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')}</select>` : ''}
     <h3>Maestro</h3>
     <select id="aMaestro" class="campo"></select>
