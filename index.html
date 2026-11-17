@@ -12173,7 +12173,7 @@ async function pintarMaestrosAdmin(){
 
 // ---------- Relaciones CONTRATO ↔ MANTENEDOR (solo admin) ----------
 // Qué mantenedores atienden cada contrato (tabla mantenimiento_equivalencias). Las demás relaciones (usuario → contrato / mantenedor) se siguen configurando desde Usuarios.
-const REL = {sel: null};
+const REL = {sel: null, edit: false};
 async function pintarRelacionesAdmin(){
   const caja = document.getElementById('relacionesAdmin');
   if(!caja) return;
@@ -12208,9 +12208,13 @@ async function pintarRelacionesAdmin(){
     const viaMant = esC ? us.filter(u => !directos.includes(u) && um.some(r => r.usuario_id === u.id && tiene(s.id, r.mantenedor_id))) : [];
     const fila = (u, via) => `<div class="rel-usr"><b>${escHtml(u.nombre)}</b><span class="hint" style="margin:0;">${escHtml(u.rol)}</span>${via ? '<span class="rel-tag m">le llega por su mantenedor</span>' : `<span class="rel-tag ${esC ? 'c' : 'm'}">${esC ? 'Contrato' : 'Mantenedor'}: ${escHtml(nombre)}</span>`}</div>`;
     det = `<div class="rel-det"><div style="font-weight:700; margin-bottom:6px;">${esC ? 'Contrato' : 'Mantenedor'} «${escHtml(nombre)}»: ${esC ? 'mantenedores que lo atienden' : 'contratos que atiende'}</div>${ops || '<div class="hint">No hay opciones.</div>'}
-      <div style="font-weight:700; margin:12px 0 2px;">Usuarios que pertenecen (${directos.length}${viaMant.length ? ' + ' + viaMant.length + ' por mantenedor' : ''})</div>
-      ${directos.map(u => fila(u, false)).join('') + viaMant.map(u => fila(u, true)).join('') || '<div class="hint">Ningún usuario asignado directamente.</div>'}
-      <div class="hint" style="margin-top:8px;">Para asignar o quitar usuarios, hazlo desde la sección Usuarios.</div></div>`;
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin:12px 0 2px;"><div style="font-weight:700;">Usuarios que pertenecen (${directos.length}${viaMant.length ? ' + ' + viaMant.length + ' por mantenedor' : ''})</div>
+        <button type="button" class="popup-btn" id="relEditBtn" style="width:auto; margin:0; padding:5px 12px;">${REL.edit ? '✔ Listo' : '⚙ Configurar usuarios'}</button></div>
+      ${REL.edit
+        ? `<div class="hint" style="margin:2px 0 6px;">Marca los usuarios que pertenecen a ${esC ? 'este contrato' : 'este mantenedor'}. Cada cambio se guarda al tiro. (Solo los perfiles contratista y camión se asignan; los demás ven todo.)</div>`
+          + us.filter(u => ROLES_CON_CONTRATO.includes(u.rol)).map(u => `<label class="rel-usr" style="cursor:pointer;"><input type="checkbox" data-uid="${u.id}" ${directos.includes(u) ? 'checked' : ''}> <b>${escHtml(u.nombre)}</b><span class="hint" style="margin:0;">${escHtml(u.rol)}</span>${viaMant.includes(u) ? '<span class="rel-tag m">ya le llega por su mantenedor</span>' : ''}</label>`).join('')
+        : (directos.map(u => fila(u, false)).join('') + viaMant.map(u => fila(u, true)).join('') || '<div class="hint">Ningún usuario asignado directamente.</div>')}
+      <div class="hint" style="margin-top:8px;">${REL.edit ? '' : 'También puedes asignar usuarios desde la sección Usuarios.'}</div></div>`;
   }else{
     det = `<div class="rel-det"><div style="font-weight:700; margin-bottom:6px;">Usuarios y a qué pertenecen</div>` + us.map(u => {
       const cs = uc.filter(r => r.usuario_id === u.id).map(r => nomC[r.contrato_id]).filter(Boolean), ms = um.filter(r => r.usuario_id === u.id).map(r => nomM[r.mantenedor_id]).filter(Boolean);
@@ -12235,7 +12239,17 @@ async function pintarRelacionesAdmin(){
     svg.innerHTML = h;
   };
   dibujar(); requestAnimationFrame(dibujar); window.onresize = dibujar;
-  caja.querySelectorAll('.rel-nodo').forEach(n => n.onclick = () => { const t = n.dataset.t, id = n.dataset.id; REL.sel = (s && s.t === t && s.id === id) ? null : {t, id}; pintarRelacionesAdmin(); });
+  caja.querySelectorAll('.rel-nodo').forEach(n => n.onclick = () => { const t = n.dataset.t, id = n.dataset.id; REL.sel = (s && s.t === t && s.id === id) ? null : {t, id}; REL.edit = false; pintarRelacionesAdmin(); });
+  const bEdit = document.getElementById('relEditBtn'); if(bEdit) bEdit.onclick = () => { REL.edit = !REL.edit; pintarRelacionesAdmin(); };
+  caja.querySelectorAll('input[data-uid]').forEach(cb => cb.onchange = async () => {
+    const uid = cb.dataset.uid, esC = s.t === 'c'; cb.disabled = true;
+    const actual = (esC ? uc : um).filter(r => r.usuario_id === uid).map(r => r[esC ? 'contrato_id' : 'mantenedor_id']);
+    const nueva = cb.checked ? [...new Set([...actual, s.id])] : actual.filter(x => x !== s.id);
+    try{
+      await db.rpc(esC ? 'set_contratos_usuario' : 'set_mantenedores_usuario', esC ? {p_usuario: uid, p_contratos: nueva} : {p_usuario: uid, p_mantenedores: nueva});
+    }catch(e){ alert('No se pudo guardar: ' + (e.message || e)); }
+    pintarRelacionesAdmin();
+  });
   caja.querySelectorAll('.rel-op input').forEach(cb => cb.onchange = async () => {
     const cid = cb.dataset.cid, mid = cb.dataset.mid; cb.disabled = true;
     try{
