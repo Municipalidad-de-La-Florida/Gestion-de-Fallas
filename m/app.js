@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.10';
+const VERSION_APP = '2.9.11';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1780,15 +1780,20 @@ async function hayFallaActiva(campo, gid) {
 /* ------------------------------ aportes ------------------------------ */
 // El camión marca un punto o circuito, indica la falla y registra de inmediato la reparación (antes + después + maestro).
 async function cargarMisContratos() {
-  const uc = await select('usuario_contratos', `usuario_id=eq.${sesion.user_id}&select=contrato_id`);
-  const ids = (uc || []).map((x) => x.contrato_id);
+  let ids;
+  try { ids = ((await rpc('mis_contratos_efectivos', {})) || []).map((x) => (x && typeof x === 'object' ? Object.values(x)[0] : x)); }   // incluye los contratos que le llegan por su mantenedor
+  catch (e) { const uc = await select('usuario_contratos', `usuario_id=eq.${sesion.user_id}&select=contrato_id`); ids = (uc || []).map((x) => x.contrato_id); }
   if (!ids.length) return [];
   const cs = await select('contratos', `id=in.(${ids.join(',')})&activo=eq.true&select=id,nombre&order=nombre.asc`);
   return cs || [];
 }
 async function formAporte(tipo, p) {
-  let contratos = [], maestros = [];
-  try { contratos = await cargarMisContratos(); maestros = await select('maestros', 'activo=eq.true&select=id,nombre,contrato_id&order=nombre.asc'); }
+  let contratos = [], maestros = [], mants = [];
+  try {
+    contratos = await cargarMisContratos();
+    maestros = await select('maestros', 'activo=eq.true&select=id,nombre,contrato_id,mantenedor_id&order=nombre.asc');
+    try { mants = (await rpc('mis_mantenedores_lista', {})) || []; } catch (e) { mants = []; }   // sin el SQL nuevo: se filtra por contrato como antes
+  }
   catch (e) { toast('No se pudo cargar tu contrato o los maestros.', 'error'); return; }
   if (!contratos.length) { toast('Tu usuario no tiene un contrato asignado. Avisa al administrador.', 'error'); return; }
   // El contrato sale del catastro (la luminaria o el circuito), no lo elige la cuadrilla. Si el catastro no lo define con certeza, se elige entre los de la cuadrilla.
@@ -1818,9 +1823,10 @@ async function formAporte(tipo, p) {
     <div class="aviso">Se registra la falla y su reparación juntas. Quedará como aporte de tu cuadrilla y del maestro que elijas.</div>
     ${contratoCat ? `<div class="mant-box">Contrato: <b>${esc(contratos[0].nombre)}</b> · según el catastro</div>` : ''}
     ${contratos.length > 1 ? `<h3>Contrato</h3><select id="aContrato" class="campo">${contratos.map((c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`).join('')}</select>` : ''}
+    ${mants.length > 1 ? `<h3>Mantenedor</h3><select id="aMant" class="campo">${mants.map((m) => `<option value="${esc(m.id)}">${esc(m.nombre)}</option>`).join('')}</select>` : ''}
     <h3>Maestro</h3>
     <select id="aMaestro" class="campo"></select>
-    <div id="aSinMaestro" class="hint" hidden>No hay maestros en este contrato. Pide a tu contratista que los agregue desde el menú.</div>
+    <div id="aSinMaestro" class="hint" hidden>No hay maestros${mants.length ? ' de tu mantenedor' : ' en este contrato'}. Pide a tu contratista que los agregue desde el menú.</div>
     <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
     ${tipo === 'punto' ? `<h3>Cardinalidad (opcional)</h3>
     <div class="rosca" id="aCard"><button type="button" data-r="N">N</button><button type="button" data-r="S">S</button><button type="button" data-r="O">O</button><button type="button" data-r="P">P</button></div>` : ''}
@@ -1837,12 +1843,14 @@ async function formAporte(tipo, p) {
   const selM = $('#aMaestro', h);
   const pintarMaestros = () => {
     const cid = contratos.length > 1 ? $('#aContrato', h).value : contratos[0].id;
-    const ms = maestros.filter((m) => m.contrato_id === cid);
+    const mid = mants.length > 1 ? $('#aMant', h).value : (mants[0] && mants[0].id);
+    const ms = mants.length ? maestros.filter((m) => m.mantenedor_id === mid) : maestros.filter((m) => m.contrato_id === cid);   // los maestros son del mantenedor
     selM.innerHTML = ms.length ? `<option value="">Elige el maestro…</option>` + ms.map((m) => `<option value="${esc(m.id)}">${esc(m.nombre)}</option>`).join('') : '<option value="">—</option>';
     $('#aSinMaestro', h).hidden = !!ms.length;
   };
   pintarMaestros();
   if (contratos.length > 1) $('#aContrato', h).addEventListener('change', pintarMaestros);
+  if (mants.length > 1) $('#aMant', h).addEventListener('change', pintarMaestros);
   const codigosFalla = $$('.codigos', h)[0], codigosTrab = $$('.codigos', h)[1];
   $$('.codigo', codigosFalla).forEach((b) => b.addEventListener('click', () => {
     $$('.codigo', codigosFalla).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c;
@@ -1954,15 +1962,17 @@ async function abrirOperativos() {
 }
 async function abrirMaestros() {
   const h = abrirHoja('<h2>Maestros</h2><div class="hint">Cargando…</div>');
-  let contratos = [], ms = [];
+  let grupos = [], ms = [], porMant = true;
   try {
-    contratos = rol() === 'admin' ? await select('contratos', 'activo=eq.true&select=id,nombre&order=nombre.asc') : await cargarMisContratos();
-    ms = await select('maestros', 'select=id,nombre,contrato_id,activo&order=nombre.asc');
+    ms = await select('maestros', 'select=id,nombre,contrato_id,mantenedor_id,activo&order=nombre.asc');
+    try { grupos = (await rpc('mis_mantenedores_lista', {})) || []; } catch (e) { grupos = []; }
+    if (!grupos.length) { porMant = false; grupos = rol() === 'admin' ? await select('contratos', 'activo=eq.true&select=id,nombre&order=nombre.asc') : await cargarMisContratos(); }   // sin el SQL nuevo: por contrato, como antes
   } catch (e) { h.innerHTML = '<h2>Maestros</h2><div class="aviso peligro">No se pudo cargar. ¿Ya se ejecutó el SQL de aportes?</div>'; return; }
+  const de = (m, g) => (porMant ? m.mantenedor_id : m.contrato_id) === g.id;
   const pintar = () => {
-    h.innerHTML = `<h2>Maestros</h2><div class="hint">Personal que realiza las reparaciones. Los camiones eligen de esta lista al registrar un aporte.</div>
-      ${contratos.map((c) => `<h3>${esc(c.nombre)}</h3>
-        ${ms.filter((m) => m.contrato_id === c.id).map((m) => `<div class="tarjeta" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;${m.activo ? '' : 'opacity:.55'}"><b>${esc(m.nombre)}</b><button type="button" class="btn btn-secundario" data-t="${esc(m.id)}" style="width:auto;margin:0">${m.activo ? 'Desactivar' : 'Activar'}</button></div>`).join('') || '<div class="hint">Sin maestros.</div>'}
+    h.innerHTML = `<h2>Maestros</h2><div class="hint">Personal que realiza las reparaciones. Pertenecen a un mantenedor: los camiones de ese mantenedor eligen de esta lista al registrar un aporte.</div>
+      ${grupos.map((c) => `<h3>${esc(c.nombre)}</h3>
+        ${ms.filter((m) => de(m, c)).map((m) => `<div class="tarjeta" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;${m.activo ? '' : 'opacity:.55'}"><b>${esc(m.nombre)}</b><button type="button" class="btn btn-secundario" data-t="${esc(m.id)}" style="width:auto;margin:0">${m.activo ? 'Desactivar' : 'Activar'}</button></div>`).join('') || '<div class="hint">Sin maestros todavía.</div>'}
         <div class="fila" style="margin-top:8px"><input class="campo" data-n="${esc(c.id)}" placeholder="Nombre del maestro" maxlength="60"><button type="button" class="btn btn-primario" data-a="${esc(c.id)}" style="width:auto;margin:0">Agregar</button></div>`).join('')}`;
     $$('[data-t]', h).forEach((b) => b.addEventListener('click', ocupar(b, async () => {
       const m = ms.find((x) => x.id === b.dataset.t);
@@ -1970,10 +1980,10 @@ async function abrirMaestros() {
       m.activo = !m.activo; pintar();
     })));
     $$('[data-a]', h).forEach((b) => b.addEventListener('click', ocupar(b, async () => {
-      const cid = b.dataset.a, inp = $(`[data-n="${cid}"]`, h), nombre = inp.value.trim().replace(/\s+/g, ' ');
+      const gid = b.dataset.a, inp = $(`[data-n="${gid}"]`, h), nombre = inp.value.trim().replace(/\s+/g, ' ');
       if (nombre.length < 2) { toast('Escribe el nombre del maestro.', 'error'); return; }
       try {
-        const r = await api('/rest/v1/maestros', { method: 'POST', body: { contrato_id: cid, nombre }, prefer: 'return=representation' });
+        const r = await api('/rest/v1/maestros', { method: 'POST', body: porMant ? { mantenedor_id: gid, nombre } : { contrato_id: gid, nombre }, prefer: 'return=representation' });
         ms.push(r[0]); ms.sort((a, b2) => a.nombre.localeCompare(b2.nombre)); pintar();
       } catch (e) { toast(/duplicate|unique/i.test(e.message) ? 'Ese maestro ya está en la lista.' : e.message, 'error'); }
     })));
