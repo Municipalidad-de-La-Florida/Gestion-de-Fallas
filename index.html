@@ -425,6 +425,21 @@
   .cfg-side{display:flex; flex-direction:column; gap:2px; position:sticky; top:0;}
   .cfg-g{font-size:10.5px; letter-spacing:.6px; text-transform:uppercase; color:var(--ink-soft); font-weight:700; padding:10px 10px 3px;}
   .cfg-nav{display:flex; justify-content:space-between; align-items:center; gap:6px; border:0; background:none; text-align:left; border-radius:8px; padding:8px 10px; font-size:13px; font-weight:500; color:var(--ink); cursor:pointer;}
+
+  /* Relaciones contrato ↔ mantenedor */
+  .rel-wrap{position:relative; display:grid; grid-template-columns:1fr 1fr; column-gap:clamp(70px,16vw,200px); row-gap:12px; padding:6px 4px;}
+  .rel-col h4{margin:0 0 8px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted,#6b7a72);}
+  .rel-svg{position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:0; overflow:visible;}
+  .rel-nodo{position:relative; z-index:1; background:#fff; border:1.5px solid var(--line,#d8e0db); border-radius:12px; padding:10px 14px; margin-bottom:10px; cursor:pointer; transition:.15s;}
+  .rel-nodo b{display:block; font-size:14px;} .rel-nodo span{font-size:12px; color:#6b7a72;}
+  .rel-nodo:hover{border-color:var(--primary,#1f4d3d);} .rel-nodo.sel{border-color:var(--primary,#1f4d3d); background:#e3f1ea; box-shadow:0 0 0 3px #1f4d3d22;}
+  .rel-nodo.rel{border-color:var(--primary-light,#2f6b54);} .rel-nodo.dim{opacity:.45;}
+  .rel-nodo.m{border-left:5px solid #d98e2f;} .rel-nodo.c{border-left:5px solid #1f4d3d;}
+  .rel-det{margin-top:14px; border:1.5px solid var(--line,#d8e0db); border-radius:12px; padding:12px 14px;}
+  .rel-op{display:flex; align-items:center; gap:8px; padding:6px 0; font-size:14px;}
+  .rel-usr{display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:5px 0; border-top:1px solid #eef2ef; font-size:13px;}
+  .rel-tag{display:inline-block; border-radius:10px; padding:1px 8px; font-size:11px; font-weight:600;}
+  .rel-tag.c{background:#e3f1ea; color:#1f4d3d;} .rel-tag.m{background:#fbeed8; color:#8a5a12;} .rel-tag.n{background:#eee; color:#666;}
   .cfg-nav:hover{background:#f1f4f2;} .cfg-nav.on{background:#e3f1ea; color:#1f4d3d; font-weight:700;}
   @media (max-width:700px){ .cfg-layout{grid-template-columns:1fr;} .cfg-side{flex-direction:row; flex-wrap:wrap; position:static;} .cfg-g{display:none;} }
   .lib-tab, .lib-cat{padding:6px 14px; font-size:12.5px;}
@@ -1242,7 +1257,7 @@
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeNotificadoresBtn">×</button>
     <h2>⚙️ Configuración</h2>
-    <div class="cfg-layout"><nav class="cfg-side" id="cfgNav"><div class="cfg-g">Perfiles</div><button type="button" class="cfg-nav" data-sec="perfiles">Perfiles y permisos</button><div class="cfg-g">Contratos</div><button type="button" class="cfg-nav" data-sec="contratos">Contratos</button><div class="cfg-g">Inspecciones</div><button type="button" class="cfg-nav" data-sec="pauta">Pauta y operativos<span class="gu-dot" id="guDotPauta" style="display:none; color:#e08a00;">●</span></button><div class="cfg-g">Equipos</div><button type="button" class="cfg-nav" data-sec="equipos">Cuadrillas y camiones</button><button type="button" class="cfg-nav" data-sec="maestros">Maestros</button><div class="cfg-g">Catálogos</div><button type="button" class="cfg-nav" data-sec="notif">Notificadores</button><button type="button" class="cfg-nav" data-sec="falla">Códigos de falla</button><button type="button" class="cfg-nav" data-sec="cierre">Códigos de cierre</button><div class="cfg-g">Integraciones</div><button type="button" class="cfg-nav" data-sec="enel">Enel / suministro</button></nav><div class="cfg-main">
+    <div class="cfg-layout"><nav class="cfg-side" id="cfgNav"><div class="cfg-g">Perfiles</div><button type="button" class="cfg-nav" data-sec="perfiles">Perfiles y permisos</button><div class="cfg-g">Contratos</div><button type="button" class="cfg-nav" data-sec="contratos">Contratos</button><button type="button" class="cfg-nav" data-sec="relaciones">Contratos y mantenedores</button><div class="cfg-g">Inspecciones</div><button type="button" class="cfg-nav" data-sec="pauta">Pauta y operativos<span class="gu-dot" id="guDotPauta" style="display:none; color:#e08a00;">●</span></button><div class="cfg-g">Equipos</div><button type="button" class="cfg-nav" data-sec="equipos">Cuadrillas y camiones</button><button type="button" class="cfg-nav" data-sec="maestros">Maestros</button><div class="cfg-g">Catálogos</div><button type="button" class="cfg-nav" data-sec="notif">Notificadores</button><button type="button" class="cfg-nav" data-sec="falla">Códigos de falla</button><button type="button" class="cfg-nav" data-sec="cierre">Códigos de cierre</button><div class="cfg-g">Integraciones</div><button type="button" class="cfg-nav" data-sec="enel">Enel / suministro</button></nav><div class="cfg-main">
     <div class="cfg-pane" data-cpane="perfiles" style="display:none;">
     <div id="perfilesAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     </div>
@@ -1257,6 +1272,7 @@
     <div class="cfg-pane" data-cpane="equipos" style="display:none;">
     <div id="cuadrillasAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     </div>
+    <div class="cfg-pane" data-cpane="relaciones" style="display:none;"><div id="relacionesAdmin"></div></div>
     <div class="cfg-pane" data-cpane="maestros" style="display:none;">
     <div id="maestrosAdmin" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div>
     </div>
@@ -11990,6 +12006,7 @@ function cfgMostrar(sec){
   if(esLib){ libMostrarTab(sec); }
   else{ document.getElementById('libPaneNotif').style.display = 'none'; document.getElementById('libPaneCodigos').style.display = 'none'; }
   if(sec === 'maestros') pintarMaestrosAdmin();
+  if(sec === 'relaciones') pintarRelacionesAdmin();
   if(sec === 'perfiles') pintarPerfilesAdmin();
 }
 let CFG_SEC = 'contratos';
@@ -12151,6 +12168,100 @@ async function pintarMaestrosAdmin(){
     });
   };
   pintar();
+}
+
+
+// ---------- Relaciones CONTRATO ↔ MANTENEDOR (solo admin) ----------
+// Qué mantenedores atienden cada contrato (tabla mantenimiento_equivalencias). Las demás relaciones (usuario → contrato / mantenedor) se siguen configurando desde Usuarios.
+const REL = {sel: null, edit: false};
+async function pintarRelacionesAdmin(){
+  const caja = document.getElementById('relacionesAdmin');
+  if(!caja) return;
+  if(!caja.dataset.listo) caja.innerHTML = '<div class="hint">Cargando…</div>';
+  let cts, mts, eq, us, uc, um;
+  try{
+    [cts, mts, eq, us, uc, um] = await Promise.all([
+      db.select('contratos', 'activo=eq.true&select=id,nombre&order=nombre.asc'),
+      db.select('mantenedores', 'activo=eq.true&select=id,nombre&order=nombre.asc'),
+      db.select('mantenimiento_equivalencias', 'contrato_id=not.is.null&mantenedor_id=not.is.null&select=texto,contrato_id,mantenedor_id'),
+      db.select('usuarios', 'select=id,nombre,rol&order=nombre.asc'),
+      db.select('usuario_contratos', 'select=usuario_id,contrato_id'),
+      db.select('usuario_mantenedores', 'select=usuario_id,mantenedor_id')]);
+  }catch(e){ caja.innerHTML = '<div class="hint">No se pudieron cargar las relaciones: ' + escHtml(e.message || '') + '</div>'; return; }
+  caja.dataset.listo = '1';
+  const nomC = Object.fromEntries(cts.map(c => [c.id, c.nombre])), nomM = Object.fromEntries(mts.map(m => [m.id, m.nombre]));
+  const tiene = (cid, mid) => eq.find(e => e.contrato_id === cid && e.mantenedor_id === mid);
+  const nUsr = (t, id) => (t === 'c' ? uc : um).filter(r => r[t === 'c' ? 'contrato_id' : 'mantenedor_id'] === id).length;
+  const s = REL.sel;
+  const relacionado = (t, id) => !s || (s.t === t && s.id === id) || (s.t === 'c' ? (t === 'm' && !!tiene(s.id, id)) : (t === 'c' && !!tiene(id, s.id)));
+  const nodo = (t, o) => {
+    const sel = s && s.t === t && s.id === o.id, rel = s && !sel && relacionado(t, o.id);
+    const n = t === 'c' ? eq.filter(e => e.contrato_id === o.id).length : eq.filter(e => e.mantenedor_id === o.id).length;
+    return `<div class="rel-nodo ${t}${sel ? ' sel' : ''}${rel ? ' rel' : ''}${s && !sel && !rel ? ' dim' : ''}" data-t="${t}" data-id="${o.id}"><b>${escHtml(o.nombre)}</b><span>${n} ${t === 'c' ? (n === 1 ? 'mantenedor' : 'mantenedores') : (n === 1 ? 'contrato' : 'contratos')} · ${nUsr(t, o.id)} usuario${nUsr(t, o.id) === 1 ? '' : 's'}</span></div>`;
+  };
+  // Detalle del actor elegido
+  let det = '';
+  if(s){
+    const esC = s.t === 'c', nombre = esC ? nomC[s.id] : nomM[s.id], otros = esC ? mts : cts;
+    const ops = otros.map(o => { const cid = esC ? s.id : o.id, mid = esC ? o.id : s.id; return `<label class="rel-op"><input type="checkbox" data-cid="${cid}" data-mid="${mid}" ${tiene(cid, mid) ? 'checked' : ''}> ${escHtml(o.nombre)}</label>`; }).join('');
+    const directos = us.filter(u => (esC ? uc : um).some(r => r.usuario_id === u.id && r[esC ? 'contrato_id' : 'mantenedor_id'] === s.id));
+    const viaMant = esC ? us.filter(u => !directos.includes(u) && um.some(r => r.usuario_id === u.id && tiene(s.id, r.mantenedor_id))) : [];
+    const fila = (u, via) => `<div class="rel-usr"><b>${escHtml(u.nombre)}</b><span class="hint" style="margin:0;">${escHtml(u.rol)}</span>${via ? '<span class="rel-tag m">le llega por su mantenedor</span>' : `<span class="rel-tag ${esC ? 'c' : 'm'}">${esC ? 'Contrato' : 'Mantenedor'}: ${escHtml(nombre)}</span>`}</div>`;
+    det = `<div class="rel-det"><div style="font-weight:700; margin-bottom:6px;">${esC ? 'Contrato' : 'Mantenedor'} «${escHtml(nombre)}»: ${esC ? 'mantenedores que lo atienden' : 'contratos que atiende'}</div>${ops || '<div class="hint">No hay opciones.</div>'}
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin:12px 0 2px;"><div style="font-weight:700;">Usuarios que pertenecen (${directos.length}${viaMant.length ? ' + ' + viaMant.length + ' por mantenedor' : ''})</div>
+        <button type="button" class="popup-btn" id="relEditBtn" style="width:auto; margin:0; padding:5px 12px;">${REL.edit ? '✔ Listo' : '⚙ Configurar usuarios'}</button></div>
+      ${REL.edit
+        ? `<div class="hint" style="margin:2px 0 6px;">Marca los usuarios que pertenecen a ${esC ? 'este contrato' : 'este mantenedor'}. Cada cambio se guarda al tiro. (Solo los perfiles contratista y camión se asignan; los demás ven todo.)</div>`
+          + us.filter(u => ROLES_CON_CONTRATO.includes(u.rol)).map(u => `<label class="rel-usr" style="cursor:pointer;"><input type="checkbox" data-uid="${u.id}" ${directos.includes(u) ? 'checked' : ''}> <b>${escHtml(u.nombre)}</b><span class="hint" style="margin:0;">${escHtml(u.rol)}</span>${viaMant.includes(u) ? '<span class="rel-tag m">ya le llega por su mantenedor</span>' : ''}</label>`).join('')
+        : (directos.map(u => fila(u, false)).join('') + viaMant.map(u => fila(u, true)).join('') || '<div class="hint">Ningún usuario asignado directamente.</div>')}
+      <div class="hint" style="margin-top:8px;">${REL.edit ? '' : 'También puedes asignar usuarios desde la sección Usuarios.'}</div></div>`;
+  }else{
+    det = `<div class="rel-det"><div style="font-weight:700; margin-bottom:6px;">Usuarios y a qué pertenecen</div>` + us.map(u => {
+      const cs = uc.filter(r => r.usuario_id === u.id).map(r => nomC[r.contrato_id]).filter(Boolean), ms = um.filter(r => r.usuario_id === u.id).map(r => nomM[r.mantenedor_id]).filter(Boolean);
+      return `<div class="rel-usr"><b>${escHtml(u.nombre)}</b><span class="hint" style="margin:0;">${escHtml(u.rol)}</span>` + ms.map(n => `<span class="rel-tag m">Mantenedor: ${escHtml(n)}</span>`).join('') + cs.map(n => `<span class="rel-tag c">Contrato: ${escHtml(n)}</span>`).join('') + (!cs.length && !ms.length ? '<span class="rel-tag n">Sin asignar</span>' : '') + '</div>';
+    }).join('') + '</div>';
+  }
+  caja.innerHTML = `<div style="font-weight:700; font-size:15px;">Contratos y mantenedores</div>
+    <div class="hint" style="margin:2px 0 10px;">Toca un contrato o un mantenedor para ver y cambiar con quién se relaciona. Las líneas muestran qué mantenedor atiende cada contrato.</div>
+    <div class="rel-wrap" id="relWrap"><svg class="rel-svg" id="relSvg"></svg>
+      <div class="rel-col"><h4>Contratos</h4>${cts.map(c => nodo('c', c)).join('')}</div>
+      <div class="rel-col"><h4>Mantenedores</h4>${mts.map(m => nodo('m', m)).join('')}</div></div>${det}`;
+  const dibujar = () => {
+    const wrap = document.getElementById('relWrap'), svg = document.getElementById('relSvg'); if(!wrap || !svg) return;
+    const r0 = wrap.getBoundingClientRect(); let h = '';
+    eq.forEach(e => {
+      const a = wrap.querySelector(`.rel-nodo[data-t="c"][data-id="${e.contrato_id}"]`), b = wrap.querySelector(`.rel-nodo[data-t="m"][data-id="${e.mantenedor_id}"]`); if(!a || !b) return;
+      const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+      const x1 = ra.right - r0.left, y1 = ra.top + ra.height / 2 - r0.top, x2 = rb.left - r0.left, y2 = rb.top + rb.height / 2 - r0.top, mx = (x1 + x2) / 2;
+      const activa = s && ((s.t === 'c' && s.id === e.contrato_id) || (s.t === 'm' && s.id === e.mantenedor_id));
+      h += `<path d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" fill="none" stroke="${activa ? '#1f4d3d' : '#9bb5a8'}" stroke-width="${activa ? 3 : 1.6}" opacity="${!s || activa ? 1 : .35}"/><circle cx="${x1}" cy="${y1}" r="4" fill="#1f4d3d"/><circle cx="${x2}" cy="${y2}" r="4" fill="#d98e2f"/>`;
+    });
+    svg.innerHTML = h;
+  };
+  dibujar(); requestAnimationFrame(dibujar); window.onresize = dibujar;
+  caja.querySelectorAll('.rel-nodo').forEach(n => n.onclick = () => { const t = n.dataset.t, id = n.dataset.id; REL.sel = (s && s.t === t && s.id === id) ? null : {t, id}; REL.edit = false; pintarRelacionesAdmin(); });
+  const bEdit = document.getElementById('relEditBtn'); if(bEdit) bEdit.onclick = () => { REL.edit = !REL.edit; pintarRelacionesAdmin(); };
+  caja.querySelectorAll('input[data-uid]').forEach(cb => cb.onchange = async () => {
+    const uid = cb.dataset.uid, esC = s.t === 'c'; cb.disabled = true;
+    const actual = (esC ? uc : um).filter(r => r.usuario_id === uid).map(r => r[esC ? 'contrato_id' : 'mantenedor_id']);
+    const nueva = cb.checked ? [...new Set([...actual, s.id])] : actual.filter(x => x !== s.id);
+    try{
+      await db.rpc(esC ? 'set_contratos_usuario' : 'set_mantenedores_usuario', esC ? {p_usuario: uid, p_contratos: nueva} : {p_usuario: uid, p_mantenedores: nueva});
+    }catch(e){ alert('No se pudo guardar: ' + (e.message || e)); }
+    pintarRelacionesAdmin();
+  });
+  caja.querySelectorAll('.rel-op input').forEach(cb => cb.onchange = async () => {
+    const cid = cb.dataset.cid, mid = cb.dataset.mid; cb.disabled = true;
+    try{
+      if(cb.checked){
+        await db.insert('mantenimiento_equivalencias', {texto: (nomC[cid] + ' ' + nomM[mid]).toUpperCase(), contrato_id: cid, mantenedor_id: mid, sin_mantencion: false, nota: 'Creada desde Contratos y mantenedores'});
+      }else{
+        if(!confirm('Quitar la relación «' + nomC[cid] + ' ↔ ' + nomM[mid] + '»?\n\nLas luminarias del catastro que dicen «' + tiene(cid, mid).texto + '» dejarán de tener contrato y mantenedor, y se recalculan las fallas. ¿Continuar?')){ cb.checked = true; cb.disabled = false; return; }
+        await db.delete('mantenimiento_equivalencias', `texto=eq.${encodeURIComponent(tiene(cid, mid).texto)}`);
+      }
+    }catch(e){ alert('No se pudo guardar: ' + (e.message || e)); }
+    pintarRelacionesAdmin();
+  });
 }
 
 // ---------- LIBRERÍA: notificadores + códigos de falla y de cierre (solo admin) ----------
