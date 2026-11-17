@@ -2377,7 +2377,7 @@ async function editarFallaApp(p) {
     b.addEventListener('click', () => { $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c; });
   });
   $('#fDesc', h).value = fila.descripcion_otro || '';
-  const m = /^([SE])-(.*)$/.exec(fila.orden_externa || '');
+  const m = /^([SET])-(.*)$/.exec(fila.orden_externa || '');
   if (m) { $('#fOeNum', h).dataset.p = m[1]; $('#fOeNum', h).value = m[2]; }
   const gu = $('#fGuardar', h);
   gu.addEventListener('click', ocupar(gu, async () => {
@@ -2648,7 +2648,7 @@ async function editarReparacionApp(p, est) {
     <div class="acciones"><button id="rPend" class="btn btn-secundario">Dejar pendiente</button></div>`}`);
   $('#rDesc', h).value = est.descripcion || '';
   $('#rOtro', h).value = est.descripcion_otro || '';
-  const m = /^([SE])-(.*)$/.exec(est.orden_externa || '');
+  const m = /^([SET])-(.*)$/.exec(est.orden_externa || '');
   if (m) { $('#fOeNum', h).dataset.p = m[1]; $('#fOeNum', h).value = m[2]; }
   // Los códigos de trabajo se marcan/desmarcan (como al registrar) y reflejan lo escrito en el cuadro
   const lineasRep = () => $('#rDesc', h).value.split('\n').map((x) => x.trim());
