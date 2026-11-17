@@ -15,3 +15,13 @@ begin
   execute d;
 end $$;
 select position('reparadas_horas' in pg_get_functiondef('public.fallas_geojson(uuid)'::regprocedure)) > 0 as aplicado;
+
+-- Solo los perfiles contratista (contratista, contratista2, contratista3) y camión ven el plazo del notificador (72 h para SAT ENEL); el resto ve 24 horas.
+do $$
+declare d text; v text := $q$coalesce(nt.reparadas_horas, 24)$q$;
+begin
+  d := pg_get_functiondef('public.fallas_geojson(uuid)'::regprocedure);
+  if position('mi_rol()' in d) > 0 then raise notice 'Ya está aplicado.'; return; end if;
+  if (length(d) - length(replace(d, v, ''))) <> 2 * length(v) then raise exception 'No se encontró la condición esperada'; end if;
+  execute replace(d, v, $q$case when public.mi_rol() in ('contratista','contratista2','contratista3','camion') then coalesce(nt.reparadas_horas, 24) else 24 end$q$);
+end $$;
