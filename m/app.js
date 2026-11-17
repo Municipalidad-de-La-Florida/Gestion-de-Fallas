@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.12';
+const VERSION_APP = '2.9.13';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2056,13 +2056,14 @@ async function leerNotificadorApp(h) {
 
 function htmlOrdenExterna() {
   return `<div class="fila">
-    <input id="fOeNum" class="campo" data-p="S" inputmode="numeric" placeholder="N.° de orden" autocomplete="off">
+    <input id="fOeNum" class="campo" data-p="S" inputmode="numeric" placeholder="N.° (mín. 4 dígitos)" autocomplete="off" oninput="this.value=this.value.replace(/\D/g,'')">
   </div>`;
 }
 // Solo se escribe el número: la empresa es siempre Sinec (se guarda como S-123). Las órdenes antiguas conservan su letra.
 function leerOrdenExterna(h) {
   const el = $('#fOeNum', h);
-  const num = el.value.trim().replace(/\s+/g, '');
+  const d = el.value.replace(/\D/g, '');
+  const num = d ? d.padStart(4, '0') : '';   // 13 → 0013; con más de 4 dígitos se respeta (124531)
   if (!num) return { valor: null };
   if (num.length > 38) return { error: 'El número de la orden externa es demasiado largo.' };
   return { valor: `${el.dataset.p || 'S'}-${num}` };
