@@ -754,3 +754,4 @@ input, textarea, [contenteditable]{ -webkit-user-select:text; user-select:text; 
 html[data-tema=oscuro] .com-bloque.t-revision{ background:#3a2a14; border-color:#5a3d1a; }
 html[data-tema=oscuro] .com-bloque.t-anulada{ background:#2a2a2a; border-color:#444; }
 #lbFoto .lb-barra #lbDesc{width:auto;padding:0 14px;font-size:15px}
+.info-card .foto-en-card{grid-column:1/-1;margin-top:8px;padding-top:8px;border-top:1px solid #f0e2a0}.info-card .foto-en-card h4{margin:0 0 2px}html[data-tema=oscuro] .info-card .foto-en-card{border-top-color:#524c2d}

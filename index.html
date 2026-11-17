@@ -5010,8 +5010,12 @@ async function mostrarFotoReporte(p, panel){
     const fs = await db.select('fallas_foto_reporte', `falla_id=eq.${p.id}&select=ruta`);
     if(!fs || !fs.length) return;
     const u = await urlFotoFirmada(fs[0].ruta);
-    box.innerHTML = `<div class="rp-sec" style="margin-top:6px;">Foto del reporte</div><img src="${escHtml(u)}" alt="Foto del reporte" title="Ampliar" style="width:84px; height:84px; object-fit:cover; border-radius:6px; border:1px solid var(--line); cursor:pointer;">`;
-    box.querySelector('img').onclick = () => abrirFotoGrande([u], 0);
+    // la foto va dentro del cuadro amarillo de los datos (si no hay cuadro, queda en el encabezado)
+    const card = panel.querySelector('.rp-card') || panel.querySelector('.rp-falla');
+    let dest = box;
+    if(card){ box.remove(); dest = document.createElement('div'); dest.style.cssText = 'margin-top:8px; padding-top:8px; border-top:1px solid #f0e2a0;'; card.appendChild(dest); }
+    dest.innerHTML = `<div class="rp-sec" style="margin-top:0;">Foto del reporte</div><img src="${escHtml(u)}" alt="Foto del reporte" title="Ampliar" style="width:84px; height:84px; object-fit:cover; border-radius:6px; border:1px solid var(--line); cursor:pointer;">`;
+    dest.querySelector('img').onclick = () => abrirFotoGrande([u], 0);
   }catch(e){ /* sin foto */ }
 }
 
@@ -6808,15 +6812,12 @@ function abrirFotoGrande(urls, i){
   };
   lb.querySelector('#lbAnt').onclick = (e) => { e.stopPropagation(); k = (k - 1 + urls.length) % urls.length; pintar(); };
   lb.querySelector('#lbSig').onclick = (e) => { e.stopPropagation(); k = (k + 1) % urls.length; pintar(); };
-  lb.querySelector('#lbDesc').onclick = async (e) => {
-    e.stopPropagation(); const b = e.currentTarget; b.disabled = true;
-    try{
-      const r = await fetch(urls[k]); if(!r.ok) throw new Error('HTTP ' + r.status);
-      const bl = await r.blob(), a = document.createElement('a'), u = URL.createObjectURL(bl);
-      a.href = u; a.download = 'foto_' + (k + 1) + '.jpg'; document.body.appendChild(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(u), 4000);
-    }catch(err){ alert('No se pudo descargar la foto. Usa «Abrir en pestaña nueva» y guárdala desde ahí.'); }
-    b.disabled = false;
+  // el enlace firmado lleva ?download= y el servidor lo entrega como archivo (no abre otra pestaña)
+  lb.querySelector('#lbDesc').onclick = (e) => {
+    e.stopPropagation();
+    const a = document.createElement('a');
+    a.href = urls[k] + (urls[k].includes('?') ? '&' : '?') + 'download=' + encodeURIComponent('foto_' + (k + 1) + '.jpg');
+    a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
   };
   lb.querySelector('.lb-x').onclick = cerrarFotoGrande;
   lb.onclick = (e) => { if(e.target === lb) cerrarFotoGrande(); };

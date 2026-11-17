@@ -494,15 +494,11 @@ async function abrirCamara() {
 
 // Visor a pantalla completa: se abre al tocar una miniatura
 
-// Descarga la foto que se está viendo (se baja como blob: el enlace firmado es de otro dominio y `download` no funciona directo)
-async function descargarFotoVisor(url, nombre) {
-  try {
-    const r = await fetch(url); if (!r.ok) throw new Error('HTTP ' + r.status);
-    const b = await r.blob(), a = document.createElement('a'), u = URL.createObjectURL(b);
-    a.href = u; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(u), 4000);
-  } catch (e) { return false; }
-  return true;
+// Descarga la foto que se está viendo: el enlace firmado lleva ?download= y el servidor la entrega como archivo (no se abre otra pestaña)
+function descargarFotoVisor(url, nombre) {
+  const a = document.createElement('a');
+  a.href = url + (url.includes('?') ? '&' : '?') + 'download=' + encodeURIComponent(nombre);
+  a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove();
 }
 function abrirFotoGrande(urls, i) {
   cerrarFotoGrande();
@@ -570,7 +566,7 @@ function abrirFotoGrande(urls, i) {
   };
   lb.querySelector('#lbAnt').onclick = (e) => { e.stopPropagation(); k = (k - 1 + urls.length) % urls.length; pintar(); };
   lb.querySelector('#lbSig').onclick = (e) => { e.stopPropagation(); k = (k + 1) % urls.length; pintar(); };
-  lb.querySelector('#lbDesc').onclick = async (e) => { e.stopPropagation(); const b = e.currentTarget; b.disabled = true; const ok = await descargarFotoVisor(urls[k], `foto_${k + 1}.jpg`); b.disabled = false; if (!ok) toast('No se pudo descargar la foto.', 'error'); };
+  lb.querySelector('#lbDesc').onclick = (e) => { e.stopPropagation(); descargarFotoVisor(urls[k], `foto_${k + 1}.jpg`); };
   lb.querySelector('.lb-x').onclick = cerrarFotoGrande;
   lb.querySelector('.lb-cerrar').onclick = cerrarFotoGrande;
   lb.onclick = (e) => { if (e.target === lb) cerrarFotoGrande(); };
@@ -2553,8 +2549,11 @@ async function abrirFalla(p, geom) {
     const box = $('#fotoReporte'); if (!box || !document.body.contains(box) || !fs || !fs.length) return;
     const u = await urlFoto(fs[0].ruta).catch(() => null);
     if (!u || !document.body.contains(box)) return;
-    box.innerHTML = `<h3>Foto del reporte</h3><div class="fotos"><button type="button" class="foto" aria-label="Ampliar foto"><img src="${esc(u)}" alt="Foto del reporte"></button></div>`;
-    $('.foto', box).addEventListener('click', () => abrirFotoGrande([u], 0));
+    const card = $('.info-card', h);   // la foto va dentro del cuadro amarillo de los datos
+    if (card) { box.remove(); card.insertAdjacentHTML('beforeend', '<div id="fotoReporte" class="foto-en-card"></div>'); }
+    const dest = $('#fotoReporte') || box;
+    dest.innerHTML = `<h4>Foto del reporte</h4><div class="fotos"><button type="button" class="foto" aria-label="Ampliar foto"><img src="${esc(u)}" alt="Foto del reporte"></button></div>`;
+    $('.foto', dest).addEventListener('click', () => abrirFotoGrande([u], 0));
   }).catch(() => {});
   if (p.estado === 'reparada') {
     select('fallas_fotos', `falla_id=eq.${p.id}&anulada_en=is.null&select=ruta,archivada_en,respaldo&order=creado_en.asc`).then(async (fs) => {
