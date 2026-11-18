@@ -4336,7 +4336,7 @@ function rqPintarDetalle() {
     <div class="rq-h5">Historial</div><div class="rq-tl">${tl}</div>
     ${acc.includes('comentar') ? `<div class="rq-form" style="margin-top:12px;"><textarea id="rqCom" rows="2" placeholder="Escribe un comentario…"></textarea><div style="margin-top:6px;"><button type="button" class="rq-btn rq-p" id="rqComBtn">Comentar</button> <span class="rq-err" id="rqComErr"></span></div></div>` : ''}</div>`;
   const ma = $('#rqMapa', h);
-  if (ma) ma.addEventListener('click', (e) => { e.preventDefault(); cerrarHoja(); cambiarVista('mapa'); if (map) setTimeout(() => { map.invalidateSize(); map.setView([r.lat, r.lng], 19); }, 80); });
+  if (ma) ma.addEventListener('click', async (e) => { e.preventDefault(); cerrarHoja(); detenerSeguir(); S.sinAutoSeguir = true; if (!S.reqMapa) await rqEntrarMapa(true); else cambiarVista('mapa'); if (map) setTimeout(() => { map.invalidateSize(); detenerSeguir(); map.setView([r.lat, r.lng], 19); }, 250); });
   $$('.rq-th img', h).forEach((im) => im.addEventListener('click', () => { if (im.dataset.u) rqVisor(im.dataset.u); }));
   $$('.rq-q', h).forEach((q) => q.addEventListener('click', async () => {
     if (!confirm('¿Quitar esta foto?')) return;
