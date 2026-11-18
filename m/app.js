@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.3';
+const VERSION_APP = '2.12.4';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4263,7 +4263,7 @@ function rqPintarLista() {
   $$('.rq-card', z).forEach((el) => el.addEventListener('click', () => rqAbrirDetalle(el.dataset.id)));
 }
 $('#rqVerMapa').addEventListener('click', () => rqEntrarMapa());
-$('#rqNuevo').addEventListener('click', () => rqEntrarMapa());
+$('#rqNuevo').addEventListener('click', () => rqEntrarMapa(true));
 $('#chipReq').addEventListener('click', () => rqSalirMapa());
 $('#rqBuscar').addEventListener('input', (e) => { RQ.texto = e.target.value; clearTimeout(RQ.busq); RQ.busq = setTimeout(rqCargar, 280); });
 
@@ -4563,11 +4563,11 @@ function pintarChipReq() {
   c.hidden = !S.reqMapa;
   c.textContent = S.reqMapa ? `📋 ${RQM.n} activo${RQM.n === 1 ? '' : 's'}${rqCrea() ? ' · toca un punto para ingresar' : ''} · ✕ salir` : '';
 }
-async function rqEntrarMapa() {
+async function rqEntrarMapa(sinCentrar) {
   S.reqMapa = true; RQ.filtro = 'abiertos'; RQ.texto = ''; $('#rqBuscar').value = '';
   cambiarVista('mapa'); pintarChipReq();
   try { const l = await rpc('req_listar', { p_filtro: 'abiertos', p_texto: null, p_limite: 300 }); RQ.lista = l || []; } catch (e) { toast('No se pudieron cargar los requerimientos: ' + e.message, 'error'); }
-  setTimeout(() => { map.invalidateSize(); rqDibujarMapa(true); if (!RQM.n) toast('No hay requerimientos activos con ubicación.', 'ok'); }, 120);
+  setTimeout(() => { map.invalidateSize(); rqDibujarMapa(!sinCentrar); if (!sinCentrar && !RQM.n) toast('No hay requerimientos activos con ubicación.', 'ok'); }, 120);
 }
 function rqSalirMapa() {
   S.reqMapa = false; if (RQM.capa && map) { map.removeLayer(RQM.capa); RQM.capa = null; }

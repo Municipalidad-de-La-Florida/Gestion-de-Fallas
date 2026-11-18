@@ -11661,7 +11661,7 @@ async function rqVistaLista(){
     <div class="rq-seg" id="rqSeg"></div><button type="button" class="rq-ch" id="rqOrden" style="margin:0 0 10px 8px;vertical-align:top;height:34px;"></button><div class="rq-chips" id="rqChips"></div><div id="rqLista"><div class="rq-vacio">Cargando…</div></div>`;
   rqEl('rqX').onclick = rqCerrar;
   rqEl('rqMapaBtn').onclick = () => rqModoMapa();
-  const nb = rqEl('rqNuevoBtn'); if(nb) nb.onclick = () => rqModoMapa();
+  const nb = rqEl('rqNuevoBtn'); if(nb) nb.onclick = () => rqModoMapa(null, null, true);
   const q = rqEl('rqQ');
   q.oninput = () => { RQ.texto = q.value; rqEl('rqClr').hidden = !q.value; clearTimeout(RQ.busq); RQ.busq = setTimeout(rqCargar, 280); };
   rqEl('rqClr').onclick = () => { RQ.texto = ''; q.value = ''; rqEl('rqClr').hidden = true; rqCargar(); q.focus(); };
@@ -11861,7 +11861,7 @@ async function rqRefrescarMapa(centrar, foco){
   try{ RQ.mapaLista = await db.rpc('req_listar', {p_filtro: 'abiertos', p_texto: null, p_limite: 300}) || []; }catch(e){ return; }
   rqDibujarMapa(centrar, foco);
 }
-async function rqModoMapa(lat, lng){
+async function rqModoMapa(lat, lng, sinCentrar){
   rqCerrar();
   RQ.mapa = true;
   if(!rqEl('rqMapaBar')){
@@ -11872,7 +11872,7 @@ async function rqModoMapa(lat, lng){
     rqEl('rqMapaLista').onclick = () => abrirRequerimientos();
     b.title = rqCrea() ? 'Haz clic en un punto del catastro o en un lugar vacío para ingresar un requerimiento' : 'Requerimientos activos en el mapa';
   }
-  await rqRefrescarMapa(lat == null, lat != null ? [lat, lng] : null);
+  await rqRefrescarMapa(lat == null && !sinCentrar, lat != null ? [lat, lng] : null);
 }
 function rqSalirMapa(){
   RQ.mapa = false; if(RQ.capa){ map.removeLayer(RQ.capa); RQ.capa = null; }
