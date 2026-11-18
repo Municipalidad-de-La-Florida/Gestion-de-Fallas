@@ -850,7 +850,13 @@
 .rqs-menu{position:absolute;z-index:20;background:#fff;border:1.5px solid #cdbdf2;border-radius:10px;box-shadow:0 6px 18px #0003;padding:4px;display:flex;flex-direction:column;min-width:190px;}
 .rqs-menu button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:7px;font-size:14px;color:#2a2340;cursor:pointer;}
 .rqs-menu button.on{background:#f3eefc;font-weight:700;color:#6d3fc8;}
-@media (prefers-color-scheme:dark){.rqs-ed{background:#1f1a2e;color:#eee;border-color:#463d63;}.rqs-menu{background:#2a2340;border-color:#463d63;}.rqs-menu button{color:#eee;}.rqs-menu button.on{background:#3a2f5c;color:#d9ccf5;}.rqsb.lum{background:#3a2f5c;color:#e7defa;border-color:#5a4b8c;}.rqs-chip{background:#2a2340;color:#e7defa;border-color:#5a4b8c;}.rqs-h{color:#b9b0d0;}}
+.rqs-chip.fr{background:#fff;font-weight:600;}
+.rqs-rei{border:0;background:none;color:#6a607f;font-size:12px;cursor:pointer;text-decoration:underline;margin-left:auto;}
+.rqs-hint{font-size:12px;color:#8a82a0;margin-top:4px;}
+.rq-req{color:#e23b33;}
+.rq-urgt{display:inline-flex;gap:6px;align-items:center;font-weight:700;color:#c1443c;font-size:13px;cursor:pointer;border:1.5px solid #f0c9c6;border-radius:14px;padding:3px 10px;background:#fff;white-space:nowrap;}
+.rq-urgt:has(input:checked){background:#e23b33;color:#fff;border-color:#e23b33;}
+.rqs-ed{min-height:84px;}
 </style>
 </head>
 <body>
@@ -11897,14 +11903,22 @@ function rqSolTexto(ed){
   let t = ''; ed.childNodes.forEach(c => { t += c.nodeType === 3 ? c.textContent : (c.dataset && c.dataset.t != null ? c.dataset.t : (c.tagName === 'BR' ? ' ' : c.textContent)); });
   return t.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
 }
+function rqSolCaret(ed){
+  let r = ed._r;
+  if(!r || !ed.contains(r.startContainer)){ r = document.createRange(); r.selectNodeContents(ed); r.collapse(false); }
+  return r;
+}
 function rqSolInsertar(ed, txt){
-  const sel = window.getSelection(); let r = null;
-  if(sel && sel.rangeCount && ed.contains(sel.anchorNode)) r = sel.getRangeAt(0);
+  const sel = window.getSelection(); const r = rqSolCaret(ed);
   const frag = document.createDocumentFragment();
   frag.appendChild(rqSolBurbuja('lum', txt)); frag.appendChild(document.createTextNode('\u00a0'));
   const last = frag.lastChild;
-  if(r){ r.deleteContents(); r.insertNode(frag); } else ed.appendChild(frag);
-  const r2 = document.createRange(); r2.setStart(last, last.length); r2.collapse(true); sel.removeAllRanges(); sel.addRange(r2); ed.focus();
+  r.deleteContents(); r.insertNode(frag);
+  const r2 = document.createRange(); r2.setStart(last, last.length); r2.collapse(true); ed.focus(); sel.removeAllRanges(); sel.addRange(r2); ed._r = r2.cloneRange();
+}
+function rqSolInsertarTexto(ed, txt){
+  const sel = window.getSelection(); ed.focus(); sel.removeAllRanges(); sel.addRange(rqSolCaret(ed));
+  const prev = rqSolTexto(ed); document.execCommand('insertText', false, (/\s$|^$/.test(prev) || ed.lastChild && ed.lastChild.nodeType === 3 && /[\s\u00a0]$/.test(ed.lastChild.textContent) ? '' : ' ') + txt + ' ');
 }
 function rqSolCambiarTipo(ed, tipo){
   const b = ed.querySelector('.rqsb.tipo'); if(!b) return;
@@ -11919,25 +11933,32 @@ function rqSolMenu(ed, b, alElegir){
   setTimeout(() => document.addEventListener('click', function f(){ m.remove(); document.removeEventListener('click', f); }), 0);
 }
 /* ed = div editable; chips = contenedor de atajos; n = estado; rpcFn = función rpc; onTipo(k) = avisa cambio de tipo */
-function rqSolMontar(ed, chips, n, rpcFn, onTipo){
+const RQ_FRASES = ['por encontrarse en el área de influencia de un monoposte', 'por interferir con el arbolado', 'por daño tras un choque', 'a solicitud de los vecinos'];
+function rqSolMontar(ed, chips, n, rpcFn, onTipo, frases){
   if(n.descHtml){ ed.innerHTML = n.descHtml; } else rqSolBase(ed, n.tipo);
+  ['keyup', 'mouseup', 'input', 'blur', 'touchend'].forEach(ev => ed.addEventListener(ev, () => { const s = window.getSelection(); if(s.rangeCount && ed.contains(s.anchorNode)) ed._r = s.getRangeAt(0).cloneRange(); }));
   ed.addEventListener('keydown', e => { if(e.key === 'Enter') e.preventDefault(); });
   ed.addEventListener('paste', e => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, ' '); document.execCommand('insertText', false, t); });
   ed.addEventListener('click', e => {
     const x = e.target.closest('.rqsx'); if(x){ const b = x.parentNode; if(b.nextSibling && b.nextSibling.nodeType === 3) b.nextSibling.nodeValue = b.nextSibling.nodeValue.replace(/^ /, ''); b.remove(); return; }
     const t = e.target.closest('.rqsb.tipo'); if(t){ e.stopPropagation(); rqSolMenu(ed, t, k => { onTipo(k); }); }
   });
+  if(frases){
+    frases.innerHTML = '<span class="rqs-h">Frases rápidas</span>';
+    RQ_FRASES.forEach(f => { const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip fr'; b.textContent = f; b.onmousedown = e => e.preventDefault(); b.onclick = () => rqSolInsertarTexto(ed, f); frases.appendChild(b); });
+    const r = document.createElement('button'); r.type = 'button'; r.className = 'rqs-rei'; r.textContent = '↺ Reiniciar texto'; r.onclick = () => { const k = (ed.querySelector('.rqsb.tipo') || {dataset: {}}).dataset.k || n.tipo; rqSolBase(ed, k); ed.focus(); }; frases.appendChild(r);
+  }
   chips.innerHTML = '';
   if(n.modo !== 'catastro' || !n.gid){ chips.style.display = 'none'; return; }
   chips.style.display = 'none';
   rpcFn('luminarias_punto', {p_gid: n.gid}).then(rows => {
     if(!Array.isArray(rows) || !rows.length || RQ.nuevo !== n) return;
     chips.style.display = '';
-    chips.innerHTML = '<span class="rqs-h">Luminarias del punto · toca para añadir</span>';
+    chips.innerHTML = '<span class="rqs-h">Luminarias del punto · toca para añadir a la solicitud</span>';
     rows.forEach(r => {
       const p = r.potencia == null || r.potencia === '' ? '' : (/^\d+(\.\d+)?$/.test(String(r.potencia)) ? ' ' + r.potencia + 'W' : ' ' + r.potencia);
       const txt = [r.modelo, p.trim(), r.uso].filter(Boolean).join(' ');
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip'; b.textContent = '＋ ' + txt;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip'; b.textContent = '＋ ' + txt; b.onmousedown = e => e.preventDefault();
       b.onclick = () => rqSolInsertar(ed, txt); chips.appendChild(b);
     });
   }).catch(() => {});
@@ -11948,21 +11969,19 @@ function rqNuevoVacio(){
 }
 function rqVistaNuevo(){
   RQ.vista = 'nuevo'; const n = RQ.nuevo = RQ.nuevo || rqNuevoVacio(); const gs = (RQ.destinos && RQ.destinos.gestores) || [];
-  rqEl('rqHd').innerHTML = `<button type="button" class="rq-back" id="rqVolver">‹ Lista</button><b>Nuevo requerimiento</b><span class="rq-grow"></span><button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
+  rqEl('rqHd').innerHTML = `<button type="button" class="rq-back" id="rqVolver">‹ Lista</button><b>Nuevo requerimiento</b><span class="rq-grow"></span><label class="rq-urgt"><input type="checkbox" id="rqUrg" ${n.urgente ? 'checked' : ''}> 🔴 Urgente</label><button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
   rqEl('rqX').onclick = rqCerrar; rqEl('rqVolver').onclick = () => { RQ.nuevo = null; if(RQ.mapa) rqCerrar(); else rqVistaLista(); };
   rqEl('rqBody').innerHTML = `<div class="rq-f">
-    <label class="rq-lbl" style="margin-top:0;">Tipo</label><div class="rq-opc" id="rqTipos">${RQ_TIPOS.map(([k, t]) => `<label class="${n.tipo === k ? 'on' : ''}"><input type="radio" name="rqT" value="${k}" ${n.tipo === k ? 'checked' : ''} hidden>${t}</label>`).join('')}</div>
-    <label class="rq-lbl">Solicitud</label><div class="rqs-wrap"><div id="rqDesc" class="rqs-ed" contenteditable="true" role="textbox" aria-multiline="true"></div></div><div id="rqSChips" class="rqs-chips" style="display:none;"></div>
-    <label class="rq-lbl">Punto</label>
-    <div id="rqPunto" style="margin-top:8px;"></div>
-    <label class="rq-lbl">Derivar a</label><select id="rqDer"><option value="">— Elige el contratista —</option>${gs.map(g => `<option value="${g.id}" ${n.derivar === g.id ? 'selected' : ''}>${escHtml(g.nombre)}</option>`).join('')}</select>
+    <label class="rq-lbl" style="margin-top:0;">Solicitud</label><div class="rqs-wrap"><div id="rqDesc" class="rqs-ed" contenteditable="true" role="textbox" aria-multiline="true"></div></div><div class="rqs-hint">Toca la burbuja morada para cambiar el tipo y sigue escribiendo.</div><div id="rqSFrases" class="rqs-chips"></div>
+    <label class="rq-lbl">Punto <span class="rq-req">*</span></label>
+    <div id="rqPunto" style="margin-top:8px;"></div><div id="rqSChips" class="rqs-chips" style="display:none;"></div>
+    <label class="rq-lbl">Derivar a <span class="rq-req">*</span></label><select id="rqDer"><option value="">— Elige el contratista —</option>${gs.map(g => `<option value="${g.id}" ${n.derivar === g.id ? 'selected' : ''}>${escHtml(g.nombre)}</option>`).join('')}</select>
     <label class="rq-lbl">Fotos (opcional, máximo 2)</label><div id="rqFotosN"></div>
-    <label style="display:flex;gap:8px;align-items:center;margin-top:14px;font-weight:700;color:#c1443c;cursor:pointer;"><input type="checkbox" id="rqUrg" ${n.urgente ? 'checked' : ''}> 🔴 Marcar como urgente</label>
     <div style="margin-top:16px;display:flex;gap:8px;align-items:center;"><button type="button" class="rq-btn rq-p" id="rqCrear">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rqCancelar">Cancelar</button><span class="rq-err" id="rqErr"></span></div></div>`;
-  const leer = () => { n.desc = rqSolTexto(rqEl('rqDesc')); n.descHtml = rqEl('rqDesc').innerHTML; n.derivar = rqEl('rqDer').value; n.urgente = rqEl('rqUrg').checked; const q = rqEl('rqQ2'); if(q) n.q = q.value; const u = rqEl('rqUbic'); if(u) n.ubic = u.value; };
-  const cambiaTipo = k => { rqSolCambiarTipo(rqEl('rqDesc'), k); leer(); n.tipo = k; rqVistaNuevo(); };
-  rqSolMontar(rqEl('rqDesc'), rqEl('rqSChips'), n, (f, a) => db.rpc(f, a), cambiaTipo);
-  rqEl('rqTipos').querySelectorAll('input').forEach(i => i.onchange = () => cambiaTipo(i.value));
+  const leer = () => { const tb = rqEl('rqDesc').querySelector('.rqsb.tipo'); if(tb) n.tipo = tb.dataset.k; n.desc = rqSolTexto(rqEl('rqDesc')); n.descHtml = rqEl('rqDesc').innerHTML; n.derivar = rqEl('rqDer').value; n.urgente = rqEl('rqUrg').checked; const q = rqEl('rqQ2'); if(q) n.q = q.value; const u = rqEl('rqUbic'); if(u) n.ubic = u.value; };
+  const cambiaTipo = k => { rqSolCambiarTipo(rqEl('rqDesc'), k); n.tipo = k; leer(); };
+  rqSolMontar(rqEl('rqDesc'), rqEl('rqSChips'), n, (f, a) => db.rpc(f, a), cambiaTipo, rqEl('rqSFrases'));
+  const okBtn = () => { rqEl('rqCrear').disabled = !rqEl('rqDer').value; }; rqEl('rqDer').addEventListener('change', okBtn); okBtn();
   rqEl('rqCancelar').onclick = () => { RQ.nuevo = null; if(RQ.mapa) rqCerrar(); else rqVistaLista(); };
   rqPintarPunto(leer); rqPintarFotosN();
   rqEl('rqCrear').onclick = async () => {
@@ -11985,8 +12004,12 @@ function rqVistaNuevo(){
 }
 function rqPintarPunto(leer){
   const n = RQ.nuevo, z = rqEl('rqPunto');
-  z.innerHTML = `<div class="rq-toca" style="display:block;">${n.modo === 'catastro' ? '✔ ' + escHtml(n.gidTxt) : `✔ Punto libre · ${n.lat.toFixed(5)}, ${n.lng.toFixed(5)}`}</div>
+  z.innerHTML = `${n.modo === 'catastro' ? `<div class="rq-toca" style="display:block;">✔ ${escHtml(n.gidTxt)}</div>` : `<a class="rq-toca" style="display:block;text-decoration:none;" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${n.lat},${n.lng}" title="Abrir en Google Maps">📍 Punto libre · ${n.lat.toFixed(5)}, ${n.lng.toFixed(5)} · abrir en el mapa ↗</a>`}
     ${n.modo === 'libre' ? `<label class="rq-lbl">Dirección o referencia (opcional)</label><input type="text" id="rqUbic" maxlength="200" placeholder="Ej.: frente a la plaza Los Aromos" value="${escAttr(n.ubic)}">` : ''}`;
+  if(n.modo === 'libre' && !n.ubic && !n.ubicAuto){
+    n.ubicAuto = true;
+    db.rpc('req_direccion_cercana', {p_lat: n.lat, p_lng: n.lng}).then(r => { const u = rqEl('rqUbic'); if(r && r.direccion && u && !u.value){ u.value = n.ubic = 'Cerca de ' + r.direccion; } }).catch(() => {});
+  }
 }
 function rqPintarFotosN(){
   const n = RQ.nuevo, z = rqEl('rqFotosN');

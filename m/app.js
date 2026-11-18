@@ -4412,14 +4412,22 @@ function rqSolTexto(ed){
   let t = ''; ed.childNodes.forEach(c => { t += c.nodeType === 3 ? c.textContent : (c.dataset && c.dataset.t != null ? c.dataset.t : (c.tagName === 'BR' ? ' ' : c.textContent)); });
   return t.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
 }
+function rqSolCaret(ed){
+  let r = ed._r;
+  if(!r || !ed.contains(r.startContainer)){ r = document.createRange(); r.selectNodeContents(ed); r.collapse(false); }
+  return r;
+}
 function rqSolInsertar(ed, txt){
-  const sel = window.getSelection(); let r = null;
-  if(sel && sel.rangeCount && ed.contains(sel.anchorNode)) r = sel.getRangeAt(0);
+  const sel = window.getSelection(); const r = rqSolCaret(ed);
   const frag = document.createDocumentFragment();
   frag.appendChild(rqSolBurbuja('lum', txt)); frag.appendChild(document.createTextNode('\u00a0'));
   const last = frag.lastChild;
-  if(r){ r.deleteContents(); r.insertNode(frag); } else ed.appendChild(frag);
-  const r2 = document.createRange(); r2.setStart(last, last.length); r2.collapse(true); sel.removeAllRanges(); sel.addRange(r2); ed.focus();
+  r.deleteContents(); r.insertNode(frag);
+  const r2 = document.createRange(); r2.setStart(last, last.length); r2.collapse(true); ed.focus(); sel.removeAllRanges(); sel.addRange(r2); ed._r = r2.cloneRange();
+}
+function rqSolInsertarTexto(ed, txt){
+  const sel = window.getSelection(); ed.focus(); sel.removeAllRanges(); sel.addRange(rqSolCaret(ed));
+  const prev = rqSolTexto(ed); document.execCommand('insertText', false, (/\s$|^$/.test(prev) || ed.lastChild && ed.lastChild.nodeType === 3 && /[\s\u00a0]$/.test(ed.lastChild.textContent) ? '' : ' ') + txt + ' ');
 }
 function rqSolCambiarTipo(ed, tipo){
   const b = ed.querySelector('.rqsb.tipo'); if(!b) return;
@@ -4434,25 +4442,32 @@ function rqSolMenu(ed, b, alElegir){
   setTimeout(() => document.addEventListener('click', function f(){ m.remove(); document.removeEventListener('click', f); }), 0);
 }
 /* ed = div editable; chips = contenedor de atajos; n = estado; rpcFn = función rpc; onTipo(k) = avisa cambio de tipo */
-function rqSolMontar(ed, chips, n, rpcFn, onTipo){
+const RQ_FRASES = ['por encontrarse en el área de influencia de un monoposte', 'por interferir con el arbolado', 'por daño tras un choque', 'a solicitud de los vecinos'];
+function rqSolMontar(ed, chips, n, rpcFn, onTipo, frases){
   if(n.descHtml){ ed.innerHTML = n.descHtml; } else rqSolBase(ed, n.tipo);
+  ['keyup', 'mouseup', 'input', 'blur', 'touchend'].forEach(ev => ed.addEventListener(ev, () => { const s = window.getSelection(); if(s.rangeCount && ed.contains(s.anchorNode)) ed._r = s.getRangeAt(0).cloneRange(); }));
   ed.addEventListener('keydown', e => { if(e.key === 'Enter') e.preventDefault(); });
   ed.addEventListener('paste', e => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, ' '); document.execCommand('insertText', false, t); });
   ed.addEventListener('click', e => {
     const x = e.target.closest('.rqsx'); if(x){ const b = x.parentNode; if(b.nextSibling && b.nextSibling.nodeType === 3) b.nextSibling.nodeValue = b.nextSibling.nodeValue.replace(/^ /, ''); b.remove(); return; }
     const t = e.target.closest('.rqsb.tipo'); if(t){ e.stopPropagation(); rqSolMenu(ed, t, k => { onTipo(k); }); }
   });
+  if(frases){
+    frases.innerHTML = '<span class="rqs-h">Frases rápidas</span>';
+    RQ_FRASES.forEach(f => { const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip fr'; b.textContent = f; b.onmousedown = e => e.preventDefault(); b.onclick = () => rqSolInsertarTexto(ed, f); frases.appendChild(b); });
+    const r = document.createElement('button'); r.type = 'button'; r.className = 'rqs-rei'; r.textContent = '↺ Reiniciar texto'; r.onclick = () => { const k = (ed.querySelector('.rqsb.tipo') || {dataset: {}}).dataset.k || n.tipo; rqSolBase(ed, k); ed.focus(); }; frases.appendChild(r);
+  }
   chips.innerHTML = '';
   if(n.modo !== 'catastro' || !n.gid){ chips.style.display = 'none'; return; }
   chips.style.display = 'none';
   rpcFn('luminarias_punto', {p_gid: n.gid}).then(rows => {
     if(!Array.isArray(rows) || !rows.length || RQ.nuevo !== n) return;
     chips.style.display = '';
-    chips.innerHTML = '<span class="rqs-h">Luminarias del punto · toca para añadir</span>';
+    chips.innerHTML = '<span class="rqs-h">Luminarias del punto · toca para añadir a la solicitud</span>';
     rows.forEach(r => {
       const p = r.potencia == null || r.potencia === '' ? '' : (/^\d+(\.\d+)?$/.test(String(r.potencia)) ? ' ' + r.potencia + 'W' : ' ' + r.potencia);
       const txt = [r.modelo, p.trim(), r.uso].filter(Boolean).join(' ');
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip'; b.textContent = '＋ ' + txt;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip'; b.textContent = '＋ ' + txt; b.onmousedown = e => e.preventDefault();
       b.onclick = () => rqSolInsertar(ed, txt); chips.appendChild(b);
     });
   }).catch(() => {});
@@ -4461,19 +4476,18 @@ function rqAbrirNuevo(conservar) {
   const n = RQ.nuevo = conservar && RQ.nuevo ? RQ.nuevo : rqNuevoVacio();
   const gs = (RQ.destinos && RQ.destinos.gestores) || [];
   const h = abrirHoja(`<div class="rq-wrap" style="--pri:#6d3fc8;--lil:#f3eefc;--lilb:#d9ccf5;--rojo:#e23b33;--rline:#e2dcee;--rsoft:#6a607f;">
-    <h2 style="color:var(--pri);margin:0 0 8px;">Nuevo requerimiento</h2>
-    <div class="rq-form"><label>Tipo</label><select id="rnTipo">${RQ_TIPOS.map(([k, t]) => `<option value="${k}" ${n.tipo === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
-    <label>Solicitud</label><div class="rqs-wrap"><div id="rnDesc" class="rqs-ed" contenteditable="true" role="textbox" aria-multiline="true"></div></div><div id="rnSChips" class="rqs-chips" style="display:none;"></div>
-    <label>Punto</label>
-    <div id="rnPunto" style="margin-top:8px;"></div>
-    <label>Derivar a</label><select id="rnDer"><option value="">— Elige el contratista —</option>${gs.map((g) => `<option value="${esc(g.id)}" ${n.derivar === g.id ? 'selected' : ''}>${esc(g.nombre)}</option>`).join('')}</select>
+    <div style="display:flex;align-items:center;gap:8px;margin:0 0 8px;"><h2 style="color:var(--pri);margin:0;flex:1;">Nuevo requerimiento</h2><label class="rq-urgt"><input type="checkbox" id="rnUrg" ${n.urgente ? 'checked' : ''}> 🔴 Urgente</label></div>
+    <div class="rq-form">
+    <label style="margin-top:0;">Solicitud</label><div class="rqs-wrap"><div id="rnDesc" class="rqs-ed" contenteditable="true" role="textbox" aria-multiline="true"></div></div><div class="rqs-hint">Toca la burbuja morada para cambiar el tipo y sigue escribiendo.</div><div id="rnSFrases" class="rqs-chips"></div>
+    <label>Punto <span class="rq-req">*</span></label>
+    <div id="rnPunto" style="margin-top:8px;"></div><div id="rnSChips" class="rqs-chips" style="display:none;"></div>
+    <label>Derivar a <span class="rq-req">*</span></label><select id="rnDer"><option value="">— Elige el contratista —</option>${gs.map((g) => `<option value="${esc(g.id)}" ${n.derivar === g.id ? 'selected' : ''}>${esc(g.nombre)}</option>`).join('')}</select>
     <label>Fotos (opcional, máximo 2)</label><div id="rnFotos"></div>
-    <label style="display:flex;gap:8px;align-items:center;margin-top:14px;color:#c1443c;"><input type="checkbox" id="rnUrg" ${n.urgente ? 'checked' : ''}> 🔴 Marcar como urgente</label>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="rq-btn rq-p" id="rnOk">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rnNo">Cancelar</button></div><div class="rq-err" id="rnErr"></div></div></div>`);
-  const leer = () => { n.tipo = $('#rnTipo', h).value; n.desc = rqSolTexto($('#rnDesc', h)); n.descHtml = $('#rnDesc', h).innerHTML; n.derivar = $('#rnDer', h).value; n.urgente = $('#rnUrg', h).checked; const q = $('#rnQ', h); if (q) n.q = q.value; const u = $('#rnUbic', h); if (u) n.ubic = u.value; };
-  const cambiaTipo = (k) => { rqSolCambiarTipo($('#rnDesc', h), k); $('#rnTipo', h).value = k; leer(); };
-  rqSolMontar($('#rnDesc', h), $('#rnSChips', h), n, rpc, cambiaTipo);
-  $('#rnTipo', h).addEventListener('change', () => cambiaTipo($('#rnTipo', h).value));
+  const leer = () => { const tb = $('#rnDesc', h).querySelector('.rqsb.tipo'); if (tb) n.tipo = tb.dataset.k; n.desc = rqSolTexto($('#rnDesc', h)); n.descHtml = $('#rnDesc', h).innerHTML; n.derivar = $('#rnDer', h).value; n.urgente = $('#rnUrg', h).checked; const q = $('#rnQ', h); if (q) n.q = q.value; const u = $('#rnUbic', h); if (u) n.ubic = u.value; };
+  const cambiaTipo = (k) => { rqSolCambiarTipo($('#rnDesc', h), k); n.tipo = k; leer(); };
+  rqSolMontar($('#rnDesc', h), $('#rnSChips', h), n, rpc, cambiaTipo, $('#rnSFrases', h));
+  const okBtn = () => { $('#rnOk', h).disabled = !$('#rnDer', h).value; }; $('#rnDer', h).addEventListener('change', okBtn); okBtn();
   $('#rnNo', h).addEventListener('click', () => { RQ.nuevo = null; cerrarHoja(); });
   rqPintarPuntoN(h, leer); rqPintarFotosN(h);
   $('#rnOk', h).addEventListener('click', async () => {
@@ -4498,8 +4512,12 @@ function rqAbrirNuevo(conservar) {
 }
 function rqPintarPuntoN(h, leer) {
   const n = RQ.nuevo, z = $('#rnPunto', h);
-  z.innerHTML = `<div class="rq-toca" style="display:block;">${n.modo === 'catastro' ? '✔ ' + esc(n.gidTxt) : `✔ Punto libre · ${n.lat.toFixed(5)}, ${n.lng.toFixed(5)}`}</div>
+  z.innerHTML = `${n.modo === 'catastro' ? `<div class="rq-toca" style="display:block;">✔ ${esc(n.gidTxt)}</div>` : `<a class="rq-toca" style="display:block;text-decoration:none;" target="_blank" rel="noopener" href="https://www.google.com/maps?q=${n.lat},${n.lng}">📍 Punto libre · ${n.lat.toFixed(5)}, ${n.lng.toFixed(5)} · abrir en el mapa ↗</a>`}
     ${n.modo === 'libre' ? `<label>Dirección o referencia (opcional)</label><input type="text" id="rnUbic" maxlength="200" placeholder="Ej.: frente a la plaza Los Aromos" value="${esc(n.ubic)}" style="width:100%;box-sizing:border-box;border:1.5px solid var(--rline);border-radius:8px;padding:9px;">` : ''}`;
+  if (n.modo === 'libre' && !n.ubic && !n.ubicAuto) {
+    n.ubicAuto = true;
+    rpc('req_direccion_cercana', { p_lat: n.lat, p_lng: n.lng }).then((r) => { const u = $('#rnUbic', h); if (r && r.direccion && u && !u.value) { u.value = n.ubic = 'Cerca de ' + r.direccion; } }).catch(() => {});
+  }
 }
 function rqPintarFotosN(h) {
   const n = RQ.nuevo, z = $('#rnFotos', h);
