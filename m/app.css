@@ -829,3 +829,7 @@ html[data-tema=oscuro] .chip-modo.reqm{ color:#fff; }
 .rq-mk.toca .rq-cd::after{ content:" 👉"; }
 @media (prefers-reduced-motion: reduce){ .rq-mk.urg::before{ animation:none; opacity:.6; } }
 .rq-ir{ display:inline-block; text-decoration:none; }
+
+/* El botón de cerrar de la ventana inferior quedaba tapado por la tarjeta del requerimiento */
+.hoja-x{ z-index:6; }
+.rq-wrap>.rq-det:first-child{ margin-top:46px; }
