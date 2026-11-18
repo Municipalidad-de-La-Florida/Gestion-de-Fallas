@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.10.3';
+const VERSION_APP = '2.10.4';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -855,7 +855,7 @@ function iniciarMapa() {
   map.on('moveend', () => { clearTimeout(_areaTimer); _areaTimer = setTimeout(cargarArea, 300); });
   map.on('dragstart', () => { if (S.seguir) { detenerSeguir(); } });
   map.on('zoomend', () => { ajustarRadios(); dibujarFallas(); quitarEmpalmesLejos(); });
-  map.on('click', () => { /* un toque en el vacío no hace nada */ });
+  map.on('click', (e) => { if (S.reqElegir) rqFinElegir({ lat: e.latlng.lat, lng: e.latlng.lng }); /* fuera de ese modo, un toque en el vacío no hace nada */ });
   // Atenuar lo que queda fuera de la comuna (botón en el mapa, se recuerda la elección). No bloquea toques.
   // El círculo de precisión del GPS va BAJO las fallas: encima teñía de azul los puntos morados/rojos
   map.createPane('precisionPane');
@@ -1009,7 +1009,7 @@ async function cargarArea(forzar) {
       L.geoJSON(circ, {
         renderer: rend,
         style: { color: '#2563a8', weight: 4, opacity: 0.75 },
-        onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirCircuito(f.properties, f.geometry); }),
+        onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); if (S.reqElegir) return rqFinElegir({ lat: e.latlng.lat, lng: e.latlng.lng }); abrirCircuito(f.properties, f.geometry); }),
       }).eachLayer((l) => capaCircuitos.addLayer(l));
     }
     if (pts) {
@@ -1288,6 +1288,7 @@ function dibujarFallas() {
     }
     capa.on('click', (e) => {
       L.DomEvent.stopPropagation(e);
+      if (S.reqElegir) { const ab = elementoBajoFalla(p, e.latlng); return ab && ab.tipo === 'punto' ? abrirPunto(ab.f.properties, ab.f.geometry) : rqFinElegir({ lat: e.latlng.lat, lng: e.latlng.lng }); }
       if (S.modoHist && p.ref_punto_gid != null) return abrirHistorial('punto', p.ref_punto_gid, 'Punto lumínico', f.geometry);
       if (S.modoHist && p.ref_circuito_gid != null) return abrirHistorial('linea', p.ref_circuito_gid, 'Circuito', f.geometry);
       const abajo = elementoBajoFalla(p, e.latlng);
@@ -1652,6 +1653,7 @@ function botonVerReparada(h, tipo, gid) {
   if (b) b.addEventListener('click', () => abrirFalla(f.properties, f.geometry));
 }
 function abrirPunto(p, geom) {
+  if (S.reqElegir) return rqFinElegir(p);
   if (S.modoHist) return abrirHistorial('punto', p.gid, 'Punto lumínico ' + (p.llave ?? ''), geom);
   // Si ya tiene una falla activa, se muestra esa en vez de ofrecer reportar otra
   const act = fallaActivaCargada('punto', p.gid); if (act) return abrirFalla(act.properties, act.geometry);
@@ -4256,7 +4258,7 @@ function rqPintarLista() {
   }).join('') : `<div class="rq-vacio">${RQ.texto ? 'Ningún requerimiento coincide con la búsqueda.' : (RQ.filtro === 'abiertos' ? 'No hay requerimientos activos.' : 'No hay requerimientos en esta lista.')}</div>`;
   $$('.rq-card', z).forEach((el) => el.addEventListener('click', () => rqAbrirDetalle(el.dataset.id)));
 }
-$('#rqNuevo').addEventListener('click', () => rqAbrirNuevo(false));
+$('#rqNuevo').addEventListener('click', () => rqIniciarNuevo());
 $('#rqBuscar').addEventListener('input', (e) => { RQ.texto = e.target.value; clearTimeout(RQ.busq); RQ.busq = setTimeout(rqCargar, 280); });
 
 async function rqUrlFoto(ruta) {
@@ -4399,14 +4401,13 @@ function rqAbrirNuevo(conservar) {
     <h2 style="color:var(--pri);margin:0 0 8px;">Nuevo requerimiento</h2>
     <div class="rq-form"><label>Tipo</label><select id="rnTipo">${RQ_TIPOS.map(([k, t]) => `<option value="${k}" ${n.tipo === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
     <label>Solicitud</label><textarea id="rnDesc" rows="3" placeholder="Describe lo que se necesita">${esc(n.desc)}</textarea>
-    <label>Punto</label><select id="rnModo"><option value="catastro" ${n.modo === 'catastro' ? 'selected' : ''}>Punto del catastro</option><option value="libre" ${n.modo === 'libre' ? 'selected' : ''}>Punto libre (no catastrado)</option></select>
+    <label>Punto</label>
     <div id="rnPunto" style="margin-top:8px;"></div>
     <label>Derivar a</label><select id="rnDer"><option value="">— Elige el contratista —</option>${gs.map((g) => `<option value="${esc(g.id)}" ${n.derivar === g.id ? 'selected' : ''}>${esc(g.nombre)}</option>`).join('')}</select>
     <label>Fotos (opcional, máximo 2)</label><div id="rnFotos"></div>
     <label style="display:flex;gap:8px;align-items:center;margin-top:14px;color:#c1443c;"><input type="checkbox" id="rnUrg" ${n.urgente ? 'checked' : ''}> 🔴 Marcar como urgente</label>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="rq-btn rq-p" id="rnOk">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rnNo">Cancelar</button></div><div class="rq-err" id="rnErr"></div></div></div>`);
   const leer = () => { n.tipo = $('#rnTipo', h).value; n.desc = $('#rnDesc', h).value; n.derivar = $('#rnDer', h).value; n.urgente = $('#rnUrg', h).checked; const q = $('#rnQ', h); if (q) n.q = q.value; const u = $('#rnUbic', h); if (u) n.ubic = u.value; };
-  $('#rnModo', h).addEventListener('change', () => { leer(); n.modo = $('#rnModo', h).value; rqAbrirNuevo(true); });
   $('#rnNo', h).addEventListener('click', () => { RQ.nuevo = null; cerrarHoja(); });
   rqPintarPuntoN(h, leer); rqPintarFotosN(h);
   $('#rnOk', h).addEventListener('click', async () => {
@@ -4431,34 +4432,10 @@ function rqAbrirNuevo(conservar) {
 }
 function rqPintarPuntoN(h, leer) {
   const n = RQ.nuevo, z = $('#rnPunto', h);
-  if (n.modo === 'catastro') {
-    z.innerHTML = `<div style="display:flex;gap:8px;"><input type="search" id="rnQ" placeholder="N.° de llave o N.° municipal" inputmode="numeric" value="${esc(n.q)}" style="flex:1;min-width:0;border:1.5px solid var(--rline);border-radius:8px;padding:9px;"><button type="button" class="rq-btn" id="rnBus">Buscar</button></div><div id="rnRes" style="margin-top:6px;"></div>`;
-    const txt = (p) => `Llave ${p.llave ?? '—'} · ${[p.calle_1, p.frente_1].filter(Boolean).join(' ')}`;
-    const pinta = () => {
-      $('#rnRes', h).innerHTML = n.gid && !n.res.some((p) => p.gid === n.gid) ? `<div class="rq-toca">✔ ${esc(n.gidTxt)}</div>`
-        : n.res.map((p) => `<label style="display:flex;gap:8px;align-items:center;padding:8px;border:1.5px solid ${n.gid === p.gid ? 'var(--pri)' : 'var(--rline)'};border-radius:8px;margin-bottom:5px;background:${n.gid === p.gid ? 'var(--lil)' : '#fff'};"><input type="radio" name="rnP" value="${esc(p.gid)}" ${n.gid === p.gid ? 'checked' : ''}><span>Llave <b>${esc(p.llave ?? '—')}</b> · ${esc([p.calle_1, p.frente_1].filter(Boolean).join(' ') || 'sin dirección')}${p.nro_mun ? ' · N.° mun. ' + esc(p.nro_mun) : ''}</span></label>`).join('');
-      $$('input[name=rnP]', h).forEach((i) => i.addEventListener('change', () => { const p = n.res.find((x) => String(x.gid) === i.value); n.gid = p.gid; n.gidTxt = txt(p); pinta(); }));
-    };
-    const buscar = async () => {
-      const q = $('#rnQ', h).value.trim(); n.q = q;
-      if (!/^\d+$/.test(q)) { $('#rnRes', h).innerHTML = '<div class="rq-sub">Escribe solo el número.</div>'; return; }
-      $('#rnRes', h).innerHTML = '<div class="rq-sub">Buscando…</div>';
-      try { n.res = await select('puntos_luminarios', `or=(llave.eq.${q},nro_mun.eq.${q})&select=gid,llave,calle_1,frente_1,nro_mun&limit=8`) || []; } catch (e) { n.res = []; }
-      if (n.res.length === 1) { n.gid = n.res[0].gid; n.gidTxt = txt(n.res[0]); }
-      pinta(); if (!n.res.length) $('#rnRes', h).innerHTML = '<div class="rq-sub">No se encontró ese punto en el catastro.</div>';
-    };
-    $('#rnBus', h).addEventListener('click', buscar);
-    $('#rnQ', h).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); buscar(); } });
-    pinta();
-  } else {
-    z.innerHTML = `<div class="rq-acc" style="margin-top:0;"><button type="button" class="rq-btn" id="rnMapa">📍 ${n.lat != null ? 'Cambiar en el mapa' : 'Marcar en el mapa'}</button><button type="button" class="rq-btn" id="rnGps">Usar mi ubicación</button></div>${n.lat != null ? `<div class="rq-toca">✔ ${n.lat.toFixed(5)}, ${n.lng.toFixed(5)}</div>` : ''}
-      <label>Dirección o referencia (opcional)</label><input type="text" id="rnUbic" maxlength="200" placeholder="Ej.: frente a la plaza Los Aromos" value="${esc(n.ubic)}" style="width:100%;box-sizing:border-box;border:1.5px solid var(--rline);border-radius:8px;padding:9px;">`;
-    $('#rnMapa', h).addEventListener('click', () => { leer(); rqElegirEnMapa(); });
-    $('#rnGps', h).addEventListener('click', () => {
-      if (!S.pos) { toast('Aún no hay ubicación del teléfono. Marca el punto en el mapa.', 'error'); return; }
-      leer(); n.lat = S.pos.lat; n.lng = S.pos.lng; rqAbrirNuevo(true);
-    });
-  }
+  z.innerHTML = `<div class="rq-toca" style="display:block;">${n.modo === 'catastro' ? '✔ ' + esc(n.gidTxt) : `✔ Punto libre · ${n.lat.toFixed(5)}, ${n.lng.toFixed(5)}`}</div>
+    ${n.modo === 'libre' ? `<label>Dirección o referencia (opcional)</label><input type="text" id="rnUbic" maxlength="200" placeholder="Ej.: frente a la plaza Los Aromos" value="${esc(n.ubic)}" style="width:100%;box-sizing:border-box;border:1.5px solid var(--rline);border-radius:8px;padding:9px;">` : ''}
+    <div class="rq-acc" style="margin-top:8px;"><button type="button" class="rq-btn" id="rnMapa">📍 Cambiar punto en el mapa</button></div>`;
+  $('#rnMapa', h).addEventListener('click', () => { leer(); rqElegirEnMapa(); });
 }
 function rqPintarFotosN(h) {
   const n = RQ.nuevo, z = $('#rnFotos', h);
@@ -4471,17 +4448,26 @@ function rqPintarFotosN(h) {
     inp.click();
   });
 }
-// Marcar el punto libre tocando el mapa: la ventana se guarda y vuelve con el punto elegido
+// «＋ Nuevo» abre el mapa: se toca un punto del catastro o un lugar vacío y de ahí se llena el formulario
 function rqElegirEnMapa() {
-  cerrarHoja(); cambiarVista('mapa');
-  const b = document.createElement('div'); b.id = 'rqPick'; b.style.cssText = 'position:fixed;top:70px;left:12px;right:12px;z-index:1200;background:#6d3fc8;color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;display:flex;gap:10px;align-items:center;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,.35);';
-  b.innerHTML = '<span>📍 Toca el mapa para marcar el punto</span><button type="button" style="border:0;border-radius:8px;padding:6px 10px;font-weight:700;">Cancelar</button>';
+  cerrarHoja(); cambiarVista('mapa'); S.reqElegir = true;
+  let b = $('#rqPick'); if (b) b.remove();
+  b = document.createElement('div'); b.id = 'rqPick'; b.style.cssText = 'position:fixed;top:70px;left:12px;right:12px;z-index:1200;background:#6d3fc8;color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;display:flex;gap:10px;align-items:center;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,.35);';
+  b.innerHTML = '<span>📍 Nuevo requerimiento: toca un punto del catastro o un lugar vacío del mapa</span><button type="button" style="border:0;border-radius:8px;padding:6px 10px;font-weight:700;">Cancelar</button>';
   document.body.appendChild(b);
-  const fin = (ll) => { map.off('click', h); b.remove(); if (ll) { RQ.nuevo.lat = ll.lat; RQ.nuevo.lng = ll.lng; } cambiarVista('req'); rqAbrirNuevo(true); };
-  const h = (e) => fin(e.latlng);
-  setTimeout(() => map.on('click', h), 300);
-  b.querySelector('button').addEventListener('click', () => fin(null));
+  b.querySelector('button').addEventListener('click', () => rqFinElegir(null));
 }
+function rqFinElegir(sel) {
+  S.reqElegir = false; const b = $('#rqPick'); if (b) b.remove();
+  const n = RQ.nuevo;
+  if (sel && n) {
+    if (sel.gid != null) { n.modo = 'catastro'; n.gid = sel.gid; n.gidTxt = `Llave ${sel.llave ?? '—'} · ${[sel.calle_1, sel.direccion].filter((x) => x != null && x !== '').join(' ') || 'sin dirección'}`; }
+    else { n.modo = 'libre'; n.lat = sel.lat; n.lng = sel.lng; }
+  }
+  if (!n || (n.modo === 'catastro' ? !n.gid : n.lat == null)) { RQ.nuevo = null; cambiarVista('req'); return; }   // canceló sin haber elegido nada
+  cambiarVista('req'); rqAbrirNuevo(true);
+}
+function rqIniciarNuevo() { RQ.nuevo = rqNuevoVacio(); RQ.nuevo.modo = null; rqElegirEnMapa(); }
 // Avisos (push) con ?req=<id>: abren el requerimiento
 function rqIdDeUrl() {
   try {
