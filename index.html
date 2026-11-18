@@ -11895,7 +11895,7 @@ function rqVistaNuevo(){
     const fallas = [];
     for(const f of n.fotos){ try{ await rqSubirFoto(r.id, 'solicitud', f.blob); }catch(e){ fallas.push(e.message); } }
     RQ.nuevo = null; RQ.filtro = 'abiertos'; RQ.chip = ''; RQ.texto = '';
-    await rqVistaDetalle(r.id); rqBadge();
+    await rqVistaDetalle(r.id); rqBadge(); rqRefrescarMapa(false);
     if(fallas.length) alert(`El requerimiento ${r.codigo} quedó ingresado, pero ${fallas.length === 1 ? 'una foto no se pudo subir' : 'algunas fotos no se pudieron subir'}: ${fallas[0]}\nPuedes agregarlas desde el detalle.`);
   };
 }
