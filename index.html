@@ -11902,7 +11902,7 @@ function rqElegirEnMapa(){
 // ===== Insignia del botón (cuántos esperan una acción mía) =====
 async function rqBadge(){
   const b = rqEl('reqBadge'); if(!b || !rqVe()) return;
-  try{ const n = await db.rpc('req_contar', {}); b.textContent = n > 99 ? '99+' : n; b.hidden = !n; }catch(e){ b.hidden = true; }
+  try{ const c = await db.rpc('req_conteos', {}); const n = (c && c.abiertos) || 0; b.textContent = n > 99 ? '99+' : n; b.hidden = !n; }catch(e){ b.hidden = true; }
 }
 function rqIniciar(){
   clearInterval(RQ.badgeTimer);
