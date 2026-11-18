@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.0';
+const VERSION_APP = '2.12.1';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4494,7 +4494,7 @@ function rqDibujarMapa(centrar) {
 function pintarChipReq() {
   const c = $('#chipReq'); if (!c) return;
   c.hidden = !S.reqMapa;
-  c.textContent = S.reqMapa ? `📋 Requerimientos en el mapa · ${RQM.n} activo${RQM.n === 1 ? '' : 's'}${rqCrea() ? ' · toca un punto para ingresar uno' : ''} · toca aquí para salir` : '';
+  c.textContent = S.reqMapa ? `📋 ${RQM.n} activo${RQM.n === 1 ? '' : 's'}${rqCrea() ? ' · toca un punto para ingresar' : ''} · ✕ salir` : '';
 }
 async function rqEntrarMapa() {
   S.reqMapa = true; RQ.filtro = 'abiertos'; RQ.texto = ''; $('#rqBuscar').value = '';

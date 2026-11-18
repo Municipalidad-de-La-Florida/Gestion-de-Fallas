@@ -818,6 +818,9 @@
   .rq-mk.urg .rq-ring{ display:block; position:absolute; left:2px; top:1px; width:28px; height:28px; box-sizing:border-box; border-radius:50%; border:3px solid #e23b33; pointer-events:none; transform-origin:50% 50%; animation:rqPulso 1.6s ease-out infinite; }
   @keyframes rqPulso{ 0%{ transform:scale(.7); opacity:.95; } 100%{ transform:scale(2.3); opacity:0; } }
   @media (prefers-reduced-motion: reduce){ .rq-mk.urg .rq-ring{ animation:none; opacity:.6; } }
+  .rq-mapbar{ position:fixed; bottom:22px; left:50%; transform:translateX(-50%); z-index:5100; background:#6d3fc8; color:#fff; padding:4px 5px 4px 12px; border-radius:99px; font:700 12px/1 system-ui,sans-serif; box-shadow:0 3px 12px rgba(0,0,0,.35); display:flex; gap:6px; align-items:center; white-space:nowrap; }
+  .rq-mapbar button{ border:0; border-radius:99px; padding:5px 9px; font:700 11.5px/1 system-ui,sans-serif; cursor:pointer; background:rgba(255,255,255,.92); color:#4a2a99; }
+  .rq-mapbar button#rqMapaSalir{ background:#fff; color:#c1443c; }
   .rq-pickbar button{ border:0; border-radius:8px; padding:5px 10px; font-weight:700; cursor:pointer; }
   /* Baliza de las urgentes: un haz de luz roja recorre la tarjeta y descansa */
   .rq-luz{ position:absolute; top:0; bottom:0; left:-214px; width:214px; pointer-events:none; z-index:3; opacity:0; animation:rqBarrido 2.6s cubic-bezier(.45,0,.55,1) infinite;
@@ -2425,7 +2428,7 @@ function initMap(){
   L.control.layers({'Fondo suave': fondoSuave, 'Fondo a color': fondoColor}, null, {position:'bottomright', collapsed:true}).addTo(map);
   map.on('baselayerchange', (e) => { try{ localStorage.setItem('fondoMapa', e.layer === fondoColor ? 'color' : 'suave'); }catch(err){} });
 
-  map.on('click', e => { if(rqIngresando()){ rqPreguntarIngreso(e.latlng, null); return; } cerrarPanel(); }); // clic en mapa vacío cierra el panel
+  map.on('click', e => { if(rqIngresando()){ if(Date.now() - (RQ.ultPunto || 0) < 150) return; rqPreguntarIngreso(e.latlng, null); return; } cerrarPanel(); }); // clic en mapa vacío cierra el panel
   L.DomEvent.disableClickPropagation(document.getElementById('reportPanel')); // clics dentro del panel no llegan al mapa
   L.DomEvent.disableScrollPropagation(document.getElementById('reportPanel')); // scroll dentro del panel no hace zoom en el mapa
 
@@ -2988,7 +2991,7 @@ function puedeReportar(){
 let modoHistorial = false;
 
 function handlePuntoClick(feature, layer){
-  if(rqIngresando()){ const [lo, la] = feature.geometry.coordinates; rqPreguntarIngreso(L.latLng(la, lo), feature.properties); return; }
+  if(rqIngresando()){ RQ.ultPunto = Date.now(); const [lo, la] = feature.geometry.coordinates; rqPreguntarIngreso(L.latLng(la, lo), feature.properties); return; }
   if(modoHistorial && tieneReal('modo_historial')){
     resaltarPuntoConsulta(feature.geometry.coordinates[1], feature.geometry.coordinates[0]);
     mostrarHistorial('punto', feature.properties.gid, `Punto lumínico ${feature.properties.llave ?? ''}`);
@@ -11828,7 +11831,7 @@ function rqDibujarMapa(centrar, foco){
     pts.push([r.lat, r.lng]);
   });
   g.addTo(map); RQ.capa = g;
-  const b = rqEl('rqMapaBar'); if(b) b.querySelector('span').textContent = `📋 Requerimientos en el mapa · ${pts.length} activo${pts.length === 1 ? '' : 's'}${rqCrea() ? ' · haz clic en un punto para ingresar uno' : ''}`;
+  const b = rqEl('rqMapaBar'); if(b) b.querySelector('span').textContent = `📋 ${pts.length} activo${pts.length === 1 ? '' : 's'}${rqCrea() ? ' · clic en el mapa = ingresar' : ''}`;
   if(foco) map.setView(foco, 19);
   else if(centrar && pts.length) map.fitBounds(pts, {padding: [80, 80], maxZoom: 18});
 }
@@ -11841,12 +11844,12 @@ async function rqModoMapa(lat, lng){
   rqCerrar();
   RQ.mapa = true;
   if(!rqEl('rqMapaBar')){
-    const b = document.createElement('div'); b.id = 'rqMapaBar'; b.className = 'rq-pickbar';
-    b.style.top = '70px';
-    b.innerHTML = '<span>📋 Requerimientos en el mapa</span> <button type="button" id="rqMapaSalir">Salir de requerimientos</button> <button type="button" id="rqMapaLista">Ver lista</button>';
+    const b = document.createElement('div'); b.id = 'rqMapaBar'; b.className = 'rq-mapbar';
+    b.innerHTML = '<span></span><button type="button" id="rqMapaLista" title="Ver la lista de requerimientos">Lista</button><button type="button" id="rqMapaSalir" title="Salir de requerimientos">✕ Salir</button>';
     document.body.appendChild(b);
     rqEl('rqMapaSalir').onclick = rqSalirMapa;
     rqEl('rqMapaLista').onclick = () => abrirRequerimientos();
+    b.title = rqCrea() ? 'Haz clic en un punto del catastro o en un lugar vacío para ingresar un requerimiento' : 'Requerimientos activos en el mapa';
   }
   await rqRefrescarMapa(lat == null, lat != null ? [lat, lng] : null);
 }
@@ -11916,9 +11919,12 @@ function rqPintarFotosN(){
 const rqIngresando = () => !!RQ.mapa && rqCrea();
 function rqPreguntarIngreso(ll, pp){
   const esPunto = !!pp, txt = esPunto ? `<b>Punto lumínico · Llave ${escHtml(pp.llave ?? '—')}</b><br><span style="color:#6a607f">${escHtml([pp.calle_1, pp.direccion].filter(Boolean).join(' ') || 'sin dirección')}</span>` : `<b>Lugar sin catastro</b><br><span style="color:#6a607f">${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}</span>`;
-  const pop = L.popup({closeButton: true, offset: [0, -4]}).setLatLng(ll).setContent(`<div style="min-width:190px">${txt}<div style="margin-top:8px"><button type="button" class="popup-btn" id="rqAqui" style="background:#6d3fc8;color:#fff;border:0;">📋 Ingresar requerimiento aquí</button></div></div>`).openOn(map);
-  const b = document.getElementById('rqAqui');
-  if(b) b.onclick = async () => {
+  // El contenido se arma como elemento propio (sin id): si el clic llega dos veces (punto y mapa) y un globo anterior sigue
+  // desvaneciéndose, el botón visible igual tiene su acción.
+  const box = document.createElement('div'); box.style.minWidth = '190px';
+  box.innerHTML = `${txt}<div style="margin-top:8px"><button type="button" class="popup-btn" style="background:#6d3fc8;color:#fff;border:0;">📋 Ingresar requerimiento aquí</button></div>`;
+  const pop = L.popup({closeButton: true, offset: [0, -4]}).setLatLng(ll).setContent(box).openOn(map);
+  box.querySelector('button').addEventListener('click', async () => {
     map.closePopup(pop);
     rqOverlay(); document.removeEventListener('keydown', rqTecla); document.addEventListener('keydown', rqTecla);
     try{ RQ.destinos = await db.rpc('req_destinos', {}); }catch(e){ RQ.destinos = RQ.destinos || {gestores: [], cuadrillas: []}; }
@@ -11926,7 +11932,7 @@ function rqPreguntarIngreso(ll, pp){
     if(esPunto){ n.modo = 'catastro'; n.gid = pp.gid; n.gidTxt = `Llave ${pp.llave ?? '—'} · ${[pp.calle_1, pp.direccion].filter(Boolean).join(' ') || 'sin dirección'}`; }
     else{ n.modo = 'libre'; n.lat = ll.lat; n.lng = ll.lng; }
     rqVistaNuevo();
-  };
+  });
 }
 
 // ===== Insignia del botón (cuántos esperan una acción mía) =====
