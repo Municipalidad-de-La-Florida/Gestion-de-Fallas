@@ -808,3 +808,11 @@ html[data-tema=oscuro] .com-bloque.t-anulada{ background:#2a2a2a; border-color:#
 @media (prefers-reduced-motion: reduce){ .rq-luz{ display:none; } .rq-card.urg,.rq-det.urg,.rq-u{ animation:none; } }
 
 .rq-nuevo{ border:0; border-radius:10px; padding:9px 14px; font-weight:700; background:#6d3fc8; color:#fff; font-family:inherit; font-size:14px; } .rq-nuevo[hidden]{ display:none; }
+
+/* Modo oscuro: las tarjetas de Requerimientos son claras, así que el texto va oscuro y fijo */
+.rq-card,.rq-det,.rq-form,.rq-wrap .rq-ev .rq-cm{ color:#241a38; }
+.rq-box .rq-txt,.rq-tipo{ color:#241a38; }
+.rq-form textarea,.rq-form select,.rq-form input,.rq-wrap input[type=text],.rq-wrap input[type=search]{ color:#241a38; background:#fff; color-scheme:light; }
+.rq-form textarea::placeholder,.rq-wrap input::placeholder{ color:#8a80a3; }
+.rq-wrap{ color:var(--ink,inherit); }
+.rq-ev,.rq-ev b{ color:inherit; }
