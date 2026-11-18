@@ -193,19 +193,39 @@ begin
   return jsonb_build_object('id', r.id, 'codigo', public._req_codigo(r.numero));
 end $$;
 
-create or replace function public.req_listar(p_filtro text default 'abiertos', p_limite integer default 200) returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare u uuid := auth.uid(); v jsonb;
+-- Lista con buscador: busca por código (R-14 o 14), solicitud, ubicación, tipo y nombres; todas las palabras deben coincidir (sin tildes ni mayúsculas)
+drop function if exists public.req_listar(text, integer);
+create or replace function public.req_listar(p_filtro text default 'abiertos', p_texto text default null, p_limite integer default 200, p_desde integer default 0)
+returns jsonb language plpgsql stable security definer set search_path = public, extensions as $$
+declare u uuid := auth.uid(); v jsonb; pal text[];
 begin
   if u is null then raise exception 'Sin sesión'; end if;
+  pal := case when nullif(btrim(coalesce(p_texto, '')), '') is null then '{}'::text[] else regexp_split_to_array(lower(unaccent(btrim(p_texto))), '\s+') end;
   select coalesce(jsonb_agg(q.j order by q.urg desc, q.t desc), '[]') into v from (
     select public._req_json(r, u) j, (r.urgente and r.estado not in ('cerrado', 'anulado')) urg, r.creado_en t
       from public.requerimientos r
+      cross join lateral (select lower(unaccent(concat_ws(' ', public._req_codigo(r.numero), r.descripcion, public._req_ubic(r), public._req_tipo_label(r.tipo),
+                          public._req_nombre(r.creado_por), public._req_nombre(r.derivado_a), public._req_nombre(r.asignado_a)))) h) x
      where public._req_ve(r, u)
        and case coalesce(p_filtro, 'abiertos') when 'abiertos' then r.estado not in ('cerrado', 'anulado') when 'cerrados' then r.estado = 'cerrado'
                  when 'anulados' then r.estado = 'anulado' else true end
+       and not exists (select 1 from unnest(pal) w where not (position(w in x.h) > 0 or (w ~ '^r?-?[0-9]+$' and r.numero = substring(w from '[0-9]+')::integer)))
      order by (r.urgente and r.estado not in ('cerrado', 'anulado')) desc, r.creado_en desc
-     limit least(greatest(coalesce(p_limite, 200), 1), 500)) q;
+     limit least(greatest(coalesce(p_limite, 200), 1), 500) offset greatest(coalesce(p_desde, 0), 0)) q;
   return v;
+end $$;
+
+-- Cantidades para las pestañas (Activos / Cerrados / Anulados y urgentes)
+create or replace function public.req_conteos() returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare u uuid := auth.uid();
+begin
+  if u is null then raise exception 'Sin sesión'; end if;
+  return (select jsonb_build_object(
+    'abiertos', count(*) filter (where r.estado not in ('cerrado', 'anulado')),
+    'cerrados', count(*) filter (where r.estado = 'cerrado'),
+    'anulados', count(*) filter (where r.estado = 'anulado'),
+    'urgentes', count(*) filter (where r.urgente and r.estado not in ('cerrado', 'anulado')))
+    from public.requerimientos r where public._req_ve(r, u));
 end $$;
 
 -- Cuántos esperan una acción mía (para la insignia de la pestaña)
