@@ -835,6 +835,22 @@
   @keyframes rqLatido{ 0%,62%,100%{ box-shadow:0 0 7px rgba(226,59,51,.12); } 31%{ box-shadow:0 0 22px rgba(226,59,51,.36); } }
   @keyframes rqChipLatido{ 0%,62%,100%{ box-shadow:0 0 0 rgba(226,59,51,0); } 31%{ box-shadow:0 0 12px rgba(226,59,51,.9); } }
   @media (prefers-reduced-motion: reduce){ .rq-luz{ display:none; } .rq-card.urg,.rq-det.urg,.rq-u{ animation:none; } }
+
+.rqs-wrap{position:relative;}
+.rqs-ed{min-height:64px;border:1.5px solid #e2dcee;border-radius:8px;padding:9px;line-height:1.9;font-size:15px;outline:none;background:#fff;color:#2a2340;word-break:break-word;}
+.rqs-ed:focus{border-color:#6d3fc8;}
+.rqsb{display:inline-block;border-radius:12px;padding:1px 9px;margin:0 1px;font-weight:700;font-size:.92em;line-height:1.5;user-select:none;}
+.rqsb.tipo{background:#6d3fc8;color:#fff;cursor:pointer;}
+.rqsb.tipo::after{content:' ▾';font-size:.8em;}
+.rqsb.lum{background:#e7defa;color:#4a2a99;border:1px solid #cdbdf2;}
+.rqsx{font-style:normal;margin-left:6px;cursor:pointer;opacity:.7;font-size:.85em;}
+.rqs-chips{margin-top:8px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.rqs-h{flex-basis:100%;font-size:12px;color:#6a607f;}
+.rqs-chip{border:1.5px solid #cdbdf2;background:#f3eefc;color:#4a2a99;border-radius:14px;padding:5px 11px;font-weight:700;font-size:13px;cursor:pointer;}
+.rqs-menu{position:absolute;z-index:20;background:#fff;border:1.5px solid #cdbdf2;border-radius:10px;box-shadow:0 6px 18px #0003;padding:4px;display:flex;flex-direction:column;min-width:190px;}
+.rqs-menu button{border:0;background:none;text-align:left;padding:8px 10px;border-radius:7px;font-size:14px;color:#2a2340;cursor:pointer;}
+.rqs-menu button.on{background:#f3eefc;font-weight:700;color:#6d3fc8;}
+@media (prefers-color-scheme:dark){.rqs-ed{background:#1f1a2e;color:#eee;border-color:#463d63;}.rqs-menu{background:#2a2340;border-color:#463d63;}.rqs-menu button{color:#eee;}.rqs-menu button.on{background:#3a2f5c;color:#d9ccf5;}.rqsb.lum{background:#3a2f5c;color:#e7defa;border-color:#5a4b8c;}.rqs-chip{background:#2a2340;color:#e7defa;border-color:#5a4b8c;}.rqs-h{color:#b9b0d0;}}
 </style>
 </head>
 <body>
@@ -11865,9 +11881,70 @@ function rqSalirMapa(){
 function rqVerMapa(lat, lng){ rqModoMapa(lat, lng); }
 
 // ===== Nuevo requerimiento =====
+/* ---- Editor de "Solicitud" con burbujas (solo ayuda a escribir; se guarda texto plano) ---- */
+const RQ_TIPO_TXT = {despeje: 'el despeje de la luminaria', retiro: 'el retiro de la luminaria', instalacion: 'la instalación de una luminaria', otro: 'lo siguiente'};
+function rqSolBurbuja(cls, txt, k){
+  const s = document.createElement('span'); s.className = 'rqsb ' + cls; s.contentEditable = 'false'; s.dataset.t = txt; if(k) s.dataset.k = k;
+  s.appendChild(document.createTextNode(txt));
+  if(cls === 'lum'){ const x = document.createElement('i'); x.className = 'rqsx'; x.textContent = '✕'; x.setAttribute('aria-label', 'Quitar'); s.appendChild(x); }
+  return s;
+}
+function rqSolBase(ed, tipo){
+  ed.innerHTML = ''; ed.appendChild(document.createTextNode('Se solicita '));
+  ed.appendChild(rqSolBurbuja('tipo', RQ_TIPO_TXT[tipo] || tipo, tipo)); ed.appendChild(document.createTextNode('\u00a0'));
+}
+function rqSolTexto(ed){
+  let t = ''; ed.childNodes.forEach(c => { t += c.nodeType === 3 ? c.textContent : (c.dataset && c.dataset.t != null ? c.dataset.t : (c.tagName === 'BR' ? ' ' : c.textContent)); });
+  return t.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+}
+function rqSolInsertar(ed, txt){
+  const sel = window.getSelection(); let r = null;
+  if(sel && sel.rangeCount && ed.contains(sel.anchorNode)) r = sel.getRangeAt(0);
+  const frag = document.createDocumentFragment();
+  frag.appendChild(rqSolBurbuja('lum', txt)); frag.appendChild(document.createTextNode('\u00a0'));
+  const last = frag.lastChild;
+  if(r){ r.deleteContents(); r.insertNode(frag); } else ed.appendChild(frag);
+  const r2 = document.createRange(); r2.setStart(last, last.length); r2.collapse(true); sel.removeAllRanges(); sel.addRange(r2); ed.focus();
+}
+function rqSolCambiarTipo(ed, tipo){
+  const b = ed.querySelector('.rqsb.tipo'); if(!b) return;
+  b.dataset.t = RQ_TIPO_TXT[tipo] || tipo; b.dataset.k = tipo; b.firstChild.nodeValue = b.dataset.t;
+}
+function rqSolMenu(ed, b, alElegir){
+  document.querySelectorAll('.rqs-menu').forEach(m => m.remove());
+  const m = document.createElement('div'); m.className = 'rqs-menu';
+  RQ_TIPOS.forEach(([k, t]) => { const o = document.createElement('button'); o.type = 'button'; o.textContent = t; if(b.dataset.k === k) o.className = 'on'; o.onclick = e => { e.stopPropagation(); m.remove(); alElegir(k); }; m.appendChild(o); });
+  const rb = b.getBoundingClientRect(), pr = ed.parentNode.getBoundingClientRect();
+  m.style.left = Math.max(0, rb.left - pr.left) + 'px'; m.style.top = (rb.bottom - pr.top + 4) + 'px'; ed.parentNode.appendChild(m);
+  setTimeout(() => document.addEventListener('click', function f(){ m.remove(); document.removeEventListener('click', f); }), 0);
+}
+/* ed = div editable; chips = contenedor de atajos; n = estado; rpcFn = función rpc; onTipo(k) = avisa cambio de tipo */
+function rqSolMontar(ed, chips, n, rpcFn, onTipo){
+  if(n.descHtml){ ed.innerHTML = n.descHtml; } else rqSolBase(ed, n.tipo);
+  ed.addEventListener('keydown', e => { if(e.key === 'Enter') e.preventDefault(); });
+  ed.addEventListener('paste', e => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, ' '); document.execCommand('insertText', false, t); });
+  ed.addEventListener('click', e => {
+    const x = e.target.closest('.rqsx'); if(x){ const b = x.parentNode; if(b.nextSibling && b.nextSibling.nodeType === 3) b.nextSibling.nodeValue = b.nextSibling.nodeValue.replace(/^ /, ''); b.remove(); return; }
+    const t = e.target.closest('.rqsb.tipo'); if(t){ e.stopPropagation(); rqSolMenu(ed, t, k => { onTipo(k); }); }
+  });
+  chips.innerHTML = '';
+  if(n.modo !== 'catastro' || !n.gid){ chips.style.display = 'none'; return; }
+  chips.style.display = 'none';
+  rpcFn('luminarias_punto', {p_gid: n.gid}).then(rows => {
+    if(!Array.isArray(rows) || !rows.length || RQ.nuevo !== n) return;
+    chips.style.display = '';
+    chips.innerHTML = '<span class="rqs-h">Luminarias del punto · toca para añadir</span>';
+    rows.forEach(r => {
+      const p = r.potencia == null || r.potencia === '' ? '' : (/^\d+(\.\d+)?$/.test(String(r.potencia)) ? ' ' + r.potencia + 'W' : ' ' + r.potencia);
+      const txt = [r.modelo, p.trim(), r.uso].filter(Boolean).join(' ');
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip'; b.textContent = '＋ ' + txt;
+      b.onclick = () => rqSolInsertar(ed, txt); chips.appendChild(b);
+    });
+  }).catch(() => {});
+}
 function rqNuevoVacio(){
   const g = (RQ.destinos && RQ.destinos.gestores) || [];
-  return {pendiente: true, tipo: 'retiro', desc: '', modo: 'catastro', q: '', res: [], gid: null, gidTxt: '', lat: null, lng: null, ubic: '', urgente: false, derivar: g.length === 1 ? g[0].id : '', fotos: []};
+  return {pendiente: true, tipo: 'retiro', desc: '', descHtml: '', modo: 'catastro', q: '', res: [], gid: null, gidTxt: '', lat: null, lng: null, ubic: '', urgente: false, derivar: g.length === 1 ? g[0].id : '', fotos: []};
 }
 function rqVistaNuevo(){
   RQ.vista = 'nuevo'; const n = RQ.nuevo = RQ.nuevo || rqNuevoVacio(); const gs = (RQ.destinos && RQ.destinos.gestores) || [];
@@ -11875,15 +11952,17 @@ function rqVistaNuevo(){
   rqEl('rqX').onclick = rqCerrar; rqEl('rqVolver').onclick = () => { RQ.nuevo = null; if(RQ.mapa) rqCerrar(); else rqVistaLista(); };
   rqEl('rqBody').innerHTML = `<div class="rq-f">
     <label class="rq-lbl" style="margin-top:0;">Tipo</label><div class="rq-opc" id="rqTipos">${RQ_TIPOS.map(([k, t]) => `<label class="${n.tipo === k ? 'on' : ''}"><input type="radio" name="rqT" value="${k}" ${n.tipo === k ? 'checked' : ''} hidden>${t}</label>`).join('')}</div>
-    <label class="rq-lbl">Solicitud</label><textarea id="rqDesc" rows="3" placeholder="Describe lo que se necesita">${escHtml(n.desc)}</textarea>
+    <label class="rq-lbl">Solicitud</label><div class="rqs-wrap"><div id="rqDesc" class="rqs-ed" contenteditable="true" role="textbox" aria-multiline="true"></div></div><div id="rqSChips" class="rqs-chips" style="display:none;"></div>
     <label class="rq-lbl">Punto</label>
     <div id="rqPunto" style="margin-top:8px;"></div>
     <label class="rq-lbl">Derivar a</label><select id="rqDer"><option value="">— Elige el contratista —</option>${gs.map(g => `<option value="${g.id}" ${n.derivar === g.id ? 'selected' : ''}>${escHtml(g.nombre)}</option>`).join('')}</select>
     <label class="rq-lbl">Fotos (opcional, máximo 2)</label><div id="rqFotosN"></div>
     <label style="display:flex;gap:8px;align-items:center;margin-top:14px;font-weight:700;color:#c1443c;cursor:pointer;"><input type="checkbox" id="rqUrg" ${n.urgente ? 'checked' : ''}> 🔴 Marcar como urgente</label>
     <div style="margin-top:16px;display:flex;gap:8px;align-items:center;"><button type="button" class="rq-btn rq-p" id="rqCrear">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rqCancelar">Cancelar</button><span class="rq-err" id="rqErr"></span></div></div>`;
-  const leer = () => { n.desc = rqEl('rqDesc').value; n.derivar = rqEl('rqDer').value; n.urgente = rqEl('rqUrg').checked; const q = rqEl('rqQ2'); if(q) n.q = q.value; const u = rqEl('rqUbic'); if(u) n.ubic = u.value; };
-  rqEl('rqTipos').querySelectorAll('input').forEach(i => i.onchange = () => { leer(); n.tipo = i.value; rqVistaNuevo(); });
+  const leer = () => { n.desc = rqSolTexto(rqEl('rqDesc')); n.descHtml = rqEl('rqDesc').innerHTML; n.derivar = rqEl('rqDer').value; n.urgente = rqEl('rqUrg').checked; const q = rqEl('rqQ2'); if(q) n.q = q.value; const u = rqEl('rqUbic'); if(u) n.ubic = u.value; };
+  const cambiaTipo = k => { rqSolCambiarTipo(rqEl('rqDesc'), k); leer(); n.tipo = k; rqVistaNuevo(); };
+  rqSolMontar(rqEl('rqDesc'), rqEl('rqSChips'), n, (f, a) => db.rpc(f, a), cambiaTipo);
+  rqEl('rqTipos').querySelectorAll('input').forEach(i => i.onchange = () => cambiaTipo(i.value));
   rqEl('rqCancelar').onclick = () => { RQ.nuevo = null; if(RQ.mapa) rqCerrar(); else rqVistaLista(); };
   rqPintarPunto(leer); rqPintarFotosN();
   rqEl('rqCrear').onclick = async () => {

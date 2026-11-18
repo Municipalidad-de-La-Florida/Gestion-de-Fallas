@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.2';
+const VERSION_APP = '2.12.3';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4394,7 +4394,68 @@ const RQ_TIPOS = [['despeje', 'Despeje de luminaria'], ['retiro', 'Retiro de lum
 const rqCrea = () => !!S.perfil && (rol() === 'admin' || tiene('req_crear'));
 function rqNuevoVacio() {
   const g = (RQ.destinos && RQ.destinos.gestores) || [];
-  return { tipo: 'retiro', desc: '', modo: 'catastro', q: '', res: [], gid: null, gidTxt: '', lat: null, lng: null, ubic: '', urgente: false, derivar: g.length === 1 ? g[0].id : '', fotos: [] };
+  return { tipo: 'retiro', desc: '', descHtml: '', modo: 'catastro', q: '', res: [], gid: null, gidTxt: '', lat: null, lng: null, ubic: '', urgente: false, derivar: g.length === 1 ? g[0].id : '', fotos: [] };
+}
+/* ---- Editor de "Solicitud" con burbujas (solo ayuda a escribir; se guarda texto plano) ---- */
+const RQ_TIPO_TXT = {despeje: 'el despeje de la luminaria', retiro: 'el retiro de la luminaria', instalacion: 'la instalación de una luminaria', otro: 'lo siguiente'};
+function rqSolBurbuja(cls, txt, k){
+  const s = document.createElement('span'); s.className = 'rqsb ' + cls; s.contentEditable = 'false'; s.dataset.t = txt; if(k) s.dataset.k = k;
+  s.appendChild(document.createTextNode(txt));
+  if(cls === 'lum'){ const x = document.createElement('i'); x.className = 'rqsx'; x.textContent = '✕'; x.setAttribute('aria-label', 'Quitar'); s.appendChild(x); }
+  return s;
+}
+function rqSolBase(ed, tipo){
+  ed.innerHTML = ''; ed.appendChild(document.createTextNode('Se solicita '));
+  ed.appendChild(rqSolBurbuja('tipo', RQ_TIPO_TXT[tipo] || tipo, tipo)); ed.appendChild(document.createTextNode('\u00a0'));
+}
+function rqSolTexto(ed){
+  let t = ''; ed.childNodes.forEach(c => { t += c.nodeType === 3 ? c.textContent : (c.dataset && c.dataset.t != null ? c.dataset.t : (c.tagName === 'BR' ? ' ' : c.textContent)); });
+  return t.replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+}
+function rqSolInsertar(ed, txt){
+  const sel = window.getSelection(); let r = null;
+  if(sel && sel.rangeCount && ed.contains(sel.anchorNode)) r = sel.getRangeAt(0);
+  const frag = document.createDocumentFragment();
+  frag.appendChild(rqSolBurbuja('lum', txt)); frag.appendChild(document.createTextNode('\u00a0'));
+  const last = frag.lastChild;
+  if(r){ r.deleteContents(); r.insertNode(frag); } else ed.appendChild(frag);
+  const r2 = document.createRange(); r2.setStart(last, last.length); r2.collapse(true); sel.removeAllRanges(); sel.addRange(r2); ed.focus();
+}
+function rqSolCambiarTipo(ed, tipo){
+  const b = ed.querySelector('.rqsb.tipo'); if(!b) return;
+  b.dataset.t = RQ_TIPO_TXT[tipo] || tipo; b.dataset.k = tipo; b.firstChild.nodeValue = b.dataset.t;
+}
+function rqSolMenu(ed, b, alElegir){
+  document.querySelectorAll('.rqs-menu').forEach(m => m.remove());
+  const m = document.createElement('div'); m.className = 'rqs-menu';
+  RQ_TIPOS.forEach(([k, t]) => { const o = document.createElement('button'); o.type = 'button'; o.textContent = t; if(b.dataset.k === k) o.className = 'on'; o.onclick = e => { e.stopPropagation(); m.remove(); alElegir(k); }; m.appendChild(o); });
+  const rb = b.getBoundingClientRect(), pr = ed.parentNode.getBoundingClientRect();
+  m.style.left = Math.max(0, rb.left - pr.left) + 'px'; m.style.top = (rb.bottom - pr.top + 4) + 'px'; ed.parentNode.appendChild(m);
+  setTimeout(() => document.addEventListener('click', function f(){ m.remove(); document.removeEventListener('click', f); }), 0);
+}
+/* ed = div editable; chips = contenedor de atajos; n = estado; rpcFn = función rpc; onTipo(k) = avisa cambio de tipo */
+function rqSolMontar(ed, chips, n, rpcFn, onTipo){
+  if(n.descHtml){ ed.innerHTML = n.descHtml; } else rqSolBase(ed, n.tipo);
+  ed.addEventListener('keydown', e => { if(e.key === 'Enter') e.preventDefault(); });
+  ed.addEventListener('paste', e => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, ' '); document.execCommand('insertText', false, t); });
+  ed.addEventListener('click', e => {
+    const x = e.target.closest('.rqsx'); if(x){ const b = x.parentNode; if(b.nextSibling && b.nextSibling.nodeType === 3) b.nextSibling.nodeValue = b.nextSibling.nodeValue.replace(/^ /, ''); b.remove(); return; }
+    const t = e.target.closest('.rqsb.tipo'); if(t){ e.stopPropagation(); rqSolMenu(ed, t, k => { onTipo(k); }); }
+  });
+  chips.innerHTML = '';
+  if(n.modo !== 'catastro' || !n.gid){ chips.style.display = 'none'; return; }
+  chips.style.display = 'none';
+  rpcFn('luminarias_punto', {p_gid: n.gid}).then(rows => {
+    if(!Array.isArray(rows) || !rows.length || RQ.nuevo !== n) return;
+    chips.style.display = '';
+    chips.innerHTML = '<span class="rqs-h">Luminarias del punto · toca para añadir</span>';
+    rows.forEach(r => {
+      const p = r.potencia == null || r.potencia === '' ? '' : (/^\d+(\.\d+)?$/.test(String(r.potencia)) ? ' ' + r.potencia + 'W' : ' ' + r.potencia);
+      const txt = [r.modelo, p.trim(), r.uso].filter(Boolean).join(' ');
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip'; b.textContent = '＋ ' + txt;
+      b.onclick = () => rqSolInsertar(ed, txt); chips.appendChild(b);
+    });
+  }).catch(() => {});
 }
 function rqAbrirNuevo(conservar) {
   const n = RQ.nuevo = conservar && RQ.nuevo ? RQ.nuevo : rqNuevoVacio();
@@ -4402,14 +4463,17 @@ function rqAbrirNuevo(conservar) {
   const h = abrirHoja(`<div class="rq-wrap" style="--pri:#6d3fc8;--lil:#f3eefc;--lilb:#d9ccf5;--rojo:#e23b33;--rline:#e2dcee;--rsoft:#6a607f;">
     <h2 style="color:var(--pri);margin:0 0 8px;">Nuevo requerimiento</h2>
     <div class="rq-form"><label>Tipo</label><select id="rnTipo">${RQ_TIPOS.map(([k, t]) => `<option value="${k}" ${n.tipo === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
-    <label>Solicitud</label><textarea id="rnDesc" rows="3" placeholder="Describe lo que se necesita">${esc(n.desc)}</textarea>
+    <label>Solicitud</label><div class="rqs-wrap"><div id="rnDesc" class="rqs-ed" contenteditable="true" role="textbox" aria-multiline="true"></div></div><div id="rnSChips" class="rqs-chips" style="display:none;"></div>
     <label>Punto</label>
     <div id="rnPunto" style="margin-top:8px;"></div>
     <label>Derivar a</label><select id="rnDer"><option value="">— Elige el contratista —</option>${gs.map((g) => `<option value="${esc(g.id)}" ${n.derivar === g.id ? 'selected' : ''}>${esc(g.nombre)}</option>`).join('')}</select>
     <label>Fotos (opcional, máximo 2)</label><div id="rnFotos"></div>
     <label style="display:flex;gap:8px;align-items:center;margin-top:14px;color:#c1443c;"><input type="checkbox" id="rnUrg" ${n.urgente ? 'checked' : ''}> 🔴 Marcar como urgente</label>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="rq-btn rq-p" id="rnOk">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rnNo">Cancelar</button></div><div class="rq-err" id="rnErr"></div></div></div>`);
-  const leer = () => { n.tipo = $('#rnTipo', h).value; n.desc = $('#rnDesc', h).value; n.derivar = $('#rnDer', h).value; n.urgente = $('#rnUrg', h).checked; const q = $('#rnQ', h); if (q) n.q = q.value; const u = $('#rnUbic', h); if (u) n.ubic = u.value; };
+  const leer = () => { n.tipo = $('#rnTipo', h).value; n.desc = rqSolTexto($('#rnDesc', h)); n.descHtml = $('#rnDesc', h).innerHTML; n.derivar = $('#rnDer', h).value; n.urgente = $('#rnUrg', h).checked; const q = $('#rnQ', h); if (q) n.q = q.value; const u = $('#rnUbic', h); if (u) n.ubic = u.value; };
+  const cambiaTipo = (k) => { rqSolCambiarTipo($('#rnDesc', h), k); $('#rnTipo', h).value = k; leer(); };
+  rqSolMontar($('#rnDesc', h), $('#rnSChips', h), n, rpc, cambiaTipo);
+  $('#rnTipo', h).addEventListener('change', () => cambiaTipo($('#rnTipo', h).value));
   $('#rnNo', h).addEventListener('click', () => { RQ.nuevo = null; cerrarHoja(); });
   rqPintarPuntoN(h, leer); rqPintarFotosN(h);
   $('#rnOk', h).addEventListener('click', async () => {
