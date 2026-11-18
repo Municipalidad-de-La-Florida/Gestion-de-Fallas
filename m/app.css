@@ -834,3 +834,5 @@ html[data-tema=oscuro] .chip-modo.reqm{ color:#fff; }
 /* El botón de cerrar de la ventana inferior quedaba tapado por la tarjeta del requerimiento */
 .hoja-x{ z-index:6; }
 .rq-wrap>.rq-det:first-child{ margin-top:46px; }
+
+.chip-modo.reqm{ padding:5px 12px; font-size:12.5px; line-height:1.2; }
