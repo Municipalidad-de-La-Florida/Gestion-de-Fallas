@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.10.1';
+const VERSION_APP = '2.10.2';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -3853,11 +3853,11 @@ function cerrarPorTiempo() {
 setInterval(() => { if (S.perfil && vencioModo()) cerrarPorTiempo(); }, 30000);
 /* Botones de la barra inferior que el admin puede ocultar (solo en este teléfono) */
 const LS_NAV_OCULTOS = 'fm_nav_ocultos_v1';
-const NAV_OPCIONES = [['navLista', 'Activas'], ['navInspC3', 'Inspecciones'], ['navInsp', 'Inspección'], ['navCuad', 'Cuadrillas'], ['navCuaderno', 'Cuaderno'], ['navHist', 'Historial']];
+const NAV_OPCIONES = [['navLista', 'Activas'], ['navInspC3', 'Inspecciones'], ['navInsp', 'Inspección'], ['navCuad', 'Cuadrillas'], ['navCuaderno', 'Cuaderno'], ['navReq', 'Requerimientos'], ['navHist', 'Historial']];
 function navOcultos() { try { const v = JSON.parse(localStorage.getItem(LS_NAV_OCULTOS) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
 // Qué botones opcionales tiene esta persona según sus funciones (antes de ocultar los que ella elija)
 function navDisponibles() {
-  const ok = { navLista: true, navInspC3: tiene('inspeccion_asignar_lote'), navInsp: tiene('informar_inspeccion'), navCuad: puedeCuadrillas(), navCuaderno: puedeCuaderno(), navHist: tiene('modo_historial') };
+  const ok = { navLista: true, navInspC3: tiene('inspeccion_asignar_lote'), navInsp: tiene('informar_inspeccion'), navCuad: puedeCuadrillas(), navCuaderno: puedeCuaderno(), navReq: rqVe(), navHist: tiene('modo_historial') };
   return NAV_OPCIONES.filter(([id]) => ok[id]);
 }
 // «Botones de la barra» lo tienen los perfiles con 4 o más de esos botones
@@ -4215,7 +4215,7 @@ function rqQueToca(r) {
 }
 function pintarReqNav() {
   const n = $('#navReq'); if (!n) return;
-  n.hidden = !rqVe();
+  n.hidden = !rqVe() || navOcultos().includes('navReq');
   if (n.hidden && S.vista === 'req') cambiarVista('mapa');
   $('#navInferior').classList.toggle('apretado', $$('#navInferior .nav-btn:not([hidden])').length >= 4);
 }
