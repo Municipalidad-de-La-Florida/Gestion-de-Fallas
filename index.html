@@ -696,7 +696,7 @@
   body:not(.modo-movil).stats-full #sidebarStats .section > div[id^="selector"] > div[style*="display:flex"]{ display:inline-flex !important; margin:4px 12px 0 0 !important; max-width:360px; }
   body:not(.modo-movil).stats-full #sidebarStats .section select{ width:auto !important; margin-top:4px; }
   /* ===== Rendimiento de cuadrillas (solo web) ===== */
-  body.modo-movil #cuadBtn, body.modo-movil #fiscBtn, body.modo-movil #infRepBtn{ display:none !important; }
+  body.modo-movil #cuadBtn, body.modo-movil #fiscBtn, body.modo-movil #infRepBtn, body.modo-movil #reqBtn{ display:none !important; }
   #sidebarCuad .cu-head, #sidebarFisc .cu-head{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; padding:10px 18px; border-bottom:1px solid var(--line); }
   #sidebarCuad .cu-head select, #sidebarFisc .cu-head select, #sidebarCuad .cu-head input, #sidebarFisc .cu-head input{ font-size:12.5px; padding:6px 8px; border:1.5px solid var(--line); border-radius:6px; }
   .fi-m{ display:grid; background:#fff; border-radius:14px; box-shadow:0 1px 4px #0001; overflow:hidden; }
@@ -750,6 +750,76 @@
   .hx-quien{ color:var(--ink-soft); flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .hx-fh{ color:var(--ink-soft); font-size:12px; white-space:nowrap; }
   .hx-det{ margin-top:2px; white-space:pre-wrap; word-break:break-word; }
+  /* ===== Requerimientos (módulo aparte, color morado) ===== */
+  #reqBtn{ position:relative; }
+  .rq-badge{ position:absolute; top:-5px; right:-5px; background:#e23b33; color:#fff; border:2px solid #24604b; border-radius:99px; line-height:14px; font-size:10.5px; font-weight:700; padding:0 4px; min-width:18px; box-sizing:border-box; text-align:center; }
+  body.modo-movil #reqBtn{ display:none !important; }
+  .rq-ov{ --pri:#6d3fc8; --lil:#f3eefc; --lilb:#d9ccf5; --rojo:#e23b33; --rline:#e2dcee; --rsoft:#6a607f; position:fixed; inset:0; background:rgba(28,18,48,.5); z-index:5000; display:flex; align-items:center; justify-content:center; padding:16px; }
+  .rq-win{ background:#f8f6fc; border-radius:16px; width:100%; max-width:880px; max-height:94vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 16px 50px rgba(0,0,0,.35); font-size:13px; color:#241a38; }
+  .rq-hd{ display:flex; align-items:center; gap:10px; padding:12px 18px; background:#fff; border-bottom:1px solid var(--rline); }
+  .rq-hd b{ font-size:16px; color:var(--pri); } .rq-hd .rq-grow{ flex:1; }
+  .rq-x{ border:0; background:none; font-size:24px; cursor:pointer; color:#6a607f; line-height:1; }
+  .rq-back{ border:0; background:var(--lil); color:var(--pri); font-weight:700; border-radius:8px; padding:6px 10px; cursor:pointer; }
+  .rq-body{ overflow:auto; padding:14px 18px 18px; flex:1; }
+  .rq-btn{ border:0; border-radius:9px; padding:8px 13px; font-weight:700; font-size:13px; cursor:pointer; background:#efeaf8; color:#241a38; font-family:inherit; }
+  .rq-btn.rq-p{ background:var(--pri); color:#fff; } .rq-btn.rq-d{ background:#fdeceb; color:#c1443c; } .rq-btn[disabled]{ opacity:.55; cursor:default; }
+  .rq-in{ display:flex; align-items:center; gap:8px; background:#fff; border:1.5px solid var(--lilb); border-radius:12px; padding:8px 12px; margin-bottom:10px; }
+  .rq-in input{ flex:1; border:0; outline:0; font:inherit; background:transparent; min-width:0; } .rq-clr{ cursor:pointer; color:#a99cc4; }
+  .rq-seg{ display:inline-flex; background:#ebe5f7; border-radius:12px; padding:3px; margin-bottom:10px; flex-wrap:wrap; }
+  .rq-seg button{ border:0; background:none; padding:6px 12px; border-radius:9px; font-weight:700; font-size:12.5px; color:#6a5a92; cursor:pointer; font-family:inherit; }
+  .rq-seg button.on{ background:var(--pri); color:#fff; box-shadow:0 2px 6px rgba(109,63,200,.35); } .rq-seg i{ font-style:normal; opacity:.75; margin-left:3px; }
+  .rq-chips{ display:flex; gap:7px; flex-wrap:wrap; margin-bottom:12px; }
+  .rq-ch{ font-size:12px; font-weight:700; border-radius:99px; padding:4px 11px; border:1px solid var(--lilb); background:#fff; color:#5b3aa3; cursor:pointer; font-family:inherit; }
+  .rq-ch.on{ background:var(--lil); border-color:var(--pri); } .rq-ch.r{ color:var(--rojo); border-color:#f2b9b5; }
+  .rq-vacio{ text-align:center; color:var(--rsoft); padding:30px 10px; }
+  .rq-card{ background:#fff; border:1px solid var(--rline); border-radius:14px; padding:12px 14px; margin-bottom:12px; position:relative; overflow:hidden; cursor:pointer; }
+  .rq-card:hover{ border-color:var(--lilb); box-shadow:0 2px 10px rgba(109,63,200,.12); }
+  .rq-card.urg, .rq-det.urg{ border-color:rgba(226,59,51,.5); animation:rqLatido 2.6s linear infinite; }
+  .rq-card.urg>*:not(.rq-luz), .rq-det.urg>*:not(.rq-luz){ position:relative; z-index:2; }
+  .rq-det{ background:#fff; border:1px solid var(--rline); border-radius:14px; padding:14px 16px; position:relative; overflow:hidden; }
+  .rq-top{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .rq-cod{ font-weight:800; font-size:16px; color:var(--pri); }
+  .rq-chip{ font-size:11px; font-weight:700; border-radius:99px; padding:2px 9px; border:1px solid; white-space:nowrap; }
+  .rq-u{ background:var(--rojo); color:#fff; border-color:var(--rojo); animation:rqChipLatido 2.6s linear infinite; }
+  .rq-e-derivado{ color:#6d3fc8; border-color:var(--lilb); background:var(--lil); } .rq-e-asignado{ color:#fff; border-color:var(--pri); background:var(--pri); }
+  .rq-e-ejecutado{ color:#7a4fc9; border-color:#c3aef0; background:#ebe3fb; } .rq-e-revisado{ color:#4a3a8c; border-color:#b9b2e6; background:#e9e7f8; }
+  .rq-e-devuelto{ color:#9a4a8a; border-color:#e5c4de; background:#fbeef8; } .rq-e-cerrado{ color:#555a66; border-color:#d3d6dd; background:#f0f1f4; } .rq-e-anulado{ color:#8b8b93; border-color:#dcdce2; background:#f6f6f8; text-decoration:line-through; }
+  .rq-tipo{ margin:6px 0 2px; font-weight:700; font-size:14px; } .rq-sub{ color:var(--rsoft); font-size:12px; } .rq-sub a{ color:var(--pri); font-weight:700; cursor:pointer; text-decoration:underline; }
+  .rq-toca{ margin-top:7px; display:inline-block; background:var(--lil); color:var(--pri); border:1px solid var(--lilb); border-radius:8px; padding:3px 9px; font-size:12px; font-weight:700; }
+  .rq-box{ background:var(--lil); border:1px solid var(--lilb); border-radius:8px; padding:8px 11px; margin:10px 0; }
+  .rq-box>b{ display:block; font-size:11px; color:var(--pri); text-transform:uppercase; letter-spacing:.05em; } .rq-txt{ white-space:pre-wrap; margin-top:2px; }
+  .rq-fotos{ display:flex; gap:7px; margin-top:7px; flex-wrap:wrap; align-items:center; }
+  .rq-th{ position:relative; width:60px; height:60px; } .rq-th img{ width:60px; height:60px; object-fit:cover; border-radius:8px; border:1px solid var(--lilb); cursor:zoom-in; background:#d7d0e6; }
+  .rq-th .rq-q{ position:absolute; top:-6px; right:-6px; width:18px; height:18px; border-radius:50%; background:#c1443c; color:#fff; border:2px solid #fff; font-size:11px; line-height:14px; text-align:center; cursor:pointer; }
+  .rq-add{ width:60px; height:60px; border-radius:8px; border:1.5px dashed var(--lilb); background:#fff; color:var(--pri); font-weight:700; cursor:pointer; font-size:12px; font-family:inherit; }
+  .rq-acc{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 6px; }
+  .rq-form{ background:#fbfaff; border:1px solid var(--lilb); border-radius:10px; padding:10px 12px; margin:6px 0 10px; }
+  .rq-form label{ display:block; font-weight:700; font-size:12px; margin:8px 0 3px; color:#4a3a8c; }
+  .rq-form select, .rq-form textarea, .rq-form input[type=text], .rq-f select, .rq-f textarea, .rq-f input[type=text], .rq-f input[type=search]{ width:100%; box-sizing:border-box; border:1.5px solid var(--rline); border-radius:8px; padding:7px 9px; font:inherit; background:#fff; }
+  .rq-err{ color:#c1443c; font-weight:700; margin-top:6px; min-height:16px; }
+  .rq-h5{ margin:16px 0 8px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--rsoft); }
+  .rq-tl{ border-left:2px solid var(--rline); padding-left:14px; margin-left:4px; }
+  .rq-ev{ position:relative; margin-bottom:10px; font-size:12.5px; } .rq-ev:before{ content:""; position:absolute; left:-20px; top:5px; width:9px; height:9px; border-radius:50%; background:var(--c,#6d3fc8); }
+  .rq-ev small{ display:block; color:var(--rsoft); } .rq-ev .rq-cm{ background:#f6f2fd; border-radius:8px; padding:5px 9px; margin-top:3px; white-space:pre-wrap; }
+  .rq-f label.rq-lbl{ display:block; font-weight:700; font-size:12px; margin:12px 0 4px; color:#4a3a8c; }
+  .rq-opc{ display:flex; gap:8px; flex-wrap:wrap; } .rq-opc label{ display:flex; align-items:center; gap:6px; background:#fff; border:1.5px solid var(--rline); border-radius:9px; padding:7px 11px; cursor:pointer; font-weight:600; margin:0; }
+  .rq-opc label.on{ border-color:var(--pri); background:var(--lil); color:var(--pri); }
+  .rq-res{ margin-top:6px; } .rq-res label{ display:flex; gap:8px; align-items:center; padding:6px 9px; border:1px solid var(--rline); border-radius:8px; margin-bottom:5px; cursor:pointer; background:#fff; font-weight:500; }
+  .rq-res label.on{ border-color:var(--pri); background:var(--lil); }
+  .rq-pin{ width:30px; height:30px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); background:#6d3fc8; border:2px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,.4); display:grid; place-items:center; }
+  .rq-pin span{ transform:rotate(45deg); color:#fff; font-weight:800; font-size:13px; }
+  .rq-pickbar{ position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:5100; background:#6d3fc8; color:#fff; padding:10px 16px; border-radius:12px; font-weight:700; box-shadow:0 6px 20px rgba(0,0,0,.35); display:flex; gap:12px; align-items:center; }
+  .rq-pickbar button{ border:0; border-radius:8px; padding:5px 10px; font-weight:700; cursor:pointer; }
+  /* Baliza de las urgentes: un haz de luz roja recorre la tarjeta y descansa */
+  .rq-luz{ position:absolute; top:0; bottom:0; left:-214px; width:214px; pointer-events:none; z-index:3; opacity:0; animation:rqBarrido 2.6s cubic-bezier(.45,0,.55,1) infinite;
+    -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 22%,#000 78%,transparent 100%); mask-image:linear-gradient(to bottom,transparent 0,#000 22%,#000 78%,transparent 100%); }
+  .rq-estela{ position:absolute; inset:0 14px 0 0; background:linear-gradient(90deg,rgba(226,59,51,0) 0%,rgba(226,59,51,.05) 35%,rgba(226,59,51,.16) 70%,rgba(255,110,100,.42) 100%); }
+  .rq-halo{ position:absolute; top:0; bottom:0; right:6px; width:14px; background:rgba(255,95,85,.75); filter:blur(7px); }
+  .rq-nucleo{ position:absolute; top:0; bottom:0; right:12px; width:2px; background:linear-gradient(to bottom,rgba(255,255,255,0),#ff6a60 25%,#fff 50%,#ff6a60 75%,rgba(255,255,255,0)); }
+  @keyframes rqBarrido{ 0%{ left:-214px; opacity:0; } 5%{ opacity:1; } 57%{ opacity:1; } 62%{ left:100%; opacity:0; } 100%{ left:100%; opacity:0; } }
+  @keyframes rqLatido{ 0%,62%,100%{ box-shadow:0 0 7px rgba(226,59,51,.12); } 31%{ box-shadow:0 0 22px rgba(226,59,51,.36); } }
+  @keyframes rqChipLatido{ 0%,62%,100%{ box-shadow:0 0 0 rgba(226,59,51,0); } 31%{ box-shadow:0 0 12px rgba(226,59,51,.9); } }
+  @media (prefers-reduced-motion: reduce){ .rq-luz{ display:none; } .rq-card.urg,.rq-det.urg,.rq-u{ animation:none; } }
 </style>
 </head>
 <body>
@@ -779,6 +849,7 @@
       <button type="button" class="hb" id="todasBtn" style="display:none;"><span class="hb-chip" style="background:#e6eefb;color:#2a5db0;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg></span><span class="bt">Todas las fallas</span></button>
       <button type="button" class="hb" id="inspC3Btn" style="display:none;"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="bt">Inspecciones</span></button>
       <button type="button" class="hb" id="cuadBtn" title="Rendimiento de las cuadrillas" style="display:none;"><span class="hb-chip" style="background:#e3f1ea;color:#1f7a52;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 6h13v10H1zM14 10h4l3 3v3h-7"/><circle cx="6" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg></span><span class="bt">Rendimiento</span></button>
+      <button type="button" class="hb" id="reqBtn" title="Requerimientos (solicitudes que no son fallas)" style="display:none;"><span class="hb-chip" style="background:#efe7fb;color:#6d3fc8;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4h6v3H9zM9 12h6M9 16h4"/></svg></span><span class="bt">Requerimientos</span><span class="rq-badge" id="reqBadge" hidden>0</span></button>
       <span id="atrBox" style="position:relative; display:none;">
         <button type="button" class="hb" id="atrBtn" title="Fallas con atraso" aria-haspopup="true" aria-expanded="false"><span class="hb-chip" style="background:#fff1d9;color:#8a5200;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="7.5"/><path d="M10 5.8V10l2.8 1.8"/><circle cx="18" cy="18" r="5" fill="#d33a2c" stroke="#fff" stroke-width="1.4"/><path d="M18 15.6v2.9M18 20.4h.01" stroke="#fff" stroke-width="1.7"/></svg></span><span class="bt">Atrasos</span><span id="atrBadge" class="notif-badge" hidden>0</span></button>
         <div id="atrPanel" class="um-panel notif-panel" hidden></div>
@@ -10978,12 +11049,15 @@ async function pintarCuadrillasAdmin(){
   let tieneCuad = true;
   try{ const ex = await db.select('usuarios', 'select=id,ver_cuaderno'); const mp = Object.fromEntries((ex || []).map(x => [x.id, x.ver_cuaderno])); us.forEach(u => u.ver_cuaderno = !!mp[u.id]); }
   catch(e){ tieneCuad = false; }
+  let tieneReq = true;
+  try{ const ex = await db.select('usuarios', 'select=id,req_crear,req_gestionar'); const mp = Object.fromEntries((ex || []).map(x => [x.id, x])); us.forEach(u => { u.req_crear = !!(mp[u.id] && mp[u.id].req_crear); u.req_gestionar = !!(mp[u.id] && mp[u.id].req_gestionar); }); }
+  catch(e){ tieneReq = false; }
   us = us.filter(u => u.rol !== 'camion');
   const chk = (u, k) => `<input type="checkbox" class="cu-perm" data-id="${u.id}" data-k="${k}" ${u[k] ? 'checked' : ''}>`;
   caja.innerHTML = `<b>🧰 Herramientas de la barra superior (solo versión web)</b>
-    <div class="hint" style="margin:4px 0 10px;"><b>🚚 Cuadrillas:</b> trabajo de cada cuadrilla por turno (con cuántas fallas empezó, asignadas, reparadas, pendientes, sin atender, % de cumplimiento y mapa). <b>📍 Ubicación camiones:</b> ver dónde están los camiones que comparten su ubicación (permiso aparte; el botón está dentro de Cuadrillas). <b>📄 Informe reparaciones:</b> informe en PDF y Excel de las reparaciones por contrato y mantenedor (cada uno solo ve lo que su perfil le permite). <b>📓 Cuaderno:</b> anotar fallas sin informarlas en un cuaderno compartido; solo funciona en la app del teléfono (hace falta sql/2026-10-cuaderno.sql). <b>🔎 Fiscalización:</b> fallas abiertas sin asignar, asignadas sin atender, pendientes y más antiguas, con su edad (solo consulta; solo para admin e ITO). Marca quién puede usar cada una; también puedes apagártelas a ti. Los cambios se guardan al marcar y se aplican la próxima vez que esa persona abra la aplicación.${tieneFisc ? '' : '<br><b style="color:var(--red);">Falta ejecutar sql/2026-10-fiscalizacion.sql para habilitar la Fiscalización.</b>'}</div>
-    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:left; border-bottom:2px solid var(--line);"><th style="padding:8px 10px;">🚚 Cuadrillas</th><th style="padding:8px 10px;">🔎 Fiscalización</th><th style="padding:8px 10px;">📍 Ubicación camiones</th><th style="padding:8px 10px;">📄 Informe reparaciones</th><th style="padding:8px 10px;">📓 Cuaderno (app)</th><th style="padding:8px 10px;">Nombre</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Rol</th></tr></thead><tbody>` +
-    us.map(u => `<tr style="border-bottom:1px solid var(--line);"><td style="padding:6px 10px;">${chk(u, 'ver_cuadrillas')}</td><td style="padding:6px 10px;">${tieneFisc ? (['admin','ito','ito2'].includes(u.rol) ? chk(u, 'ver_fiscalizacion') : '—') : '—'}</td><td style="padding:6px 10px;">${tieneUbic ? chk(u, 'ver_ubicacion') : '—'}</td><td style="padding:6px 10px;">${tieneInf ? chk(u, 'ver_informe_rep') : '—'}</td><td style="padding:6px 10px;">${tieneCuad ? chk(u, 'ver_cuaderno') : '—'}</td><td style="padding:6px 10px;">${escHtml(u.nombre || '')}</td><td style="padding:6px 10px;">${escHtml(u.email || '—')}</td><td style="padding:6px 10px;">${escHtml(u.rol)}</td></tr>`).join('') +
+    <div class="hint" style="margin:4px 0 10px;"><b>🚚 Cuadrillas:</b> trabajo de cada cuadrilla por turno (con cuántas fallas empezó, asignadas, reparadas, pendientes, sin atender, % de cumplimiento y mapa). <b>📍 Ubicación camiones:</b> ver dónde están los camiones que comparten su ubicación (permiso aparte; el botón está dentro de Cuadrillas). <b>📄 Informe reparaciones:</b> informe en PDF y Excel de las reparaciones por contrato y mantenedor (cada uno solo ve lo que su perfil le permite). <b>📓 Cuaderno:</b> anotar fallas sin informarlas en un cuaderno compartido; solo funciona en la app del teléfono (hace falta sql/2026-10-cuaderno.sql). <b>📋 Requerimientos:</b> solicitudes que no son fallas (despeje, retiro o instalación de luminaria). <i>Ingresar</i>: crea requerimientos y los deriva a un contratista. <i>Gestionar</i>: recibe los que le derivan, los asigna a una cuadrilla y los revisa (hace falta sql/2026-11-requerimientos.sql). Las cuadrillas ven solo lo que se les asigna. <b>🔎 Fiscalización:</b> fallas abiertas sin asignar, asignadas sin atender, pendientes y más antiguas, con su edad (solo consulta; solo para admin e ITO). Marca quién puede usar cada una; también puedes apagártelas a ti. Los cambios se guardan al marcar y se aplican la próxima vez que esa persona abra la aplicación.${tieneFisc ? '' : '<br><b style="color:var(--red);">Falta ejecutar sql/2026-10-fiscalizacion.sql para habilitar la Fiscalización.</b>'}</div>
+    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:left; border-bottom:2px solid var(--line);"><th style="padding:8px 10px;">🚚 Cuadrillas</th><th style="padding:8px 10px;">🔎 Fiscalización</th><th style="padding:8px 10px;">📍 Ubicación camiones</th><th style="padding:8px 10px;">📄 Informe reparaciones</th><th style="padding:8px 10px;">📓 Cuaderno (app)</th><th style="padding:8px 10px;">📋 Ingresar requerimientos</th><th style="padding:8px 10px;">📋 Gestionar requerimientos</th><th style="padding:8px 10px;">Nombre</th><th style="padding:8px 10px;">Email</th><th style="padding:8px 10px;">Rol</th></tr></thead><tbody>` +
+    us.map(u => `<tr style="border-bottom:1px solid var(--line);"><td style="padding:6px 10px;">${chk(u, 'ver_cuadrillas')}</td><td style="padding:6px 10px;">${tieneFisc ? (['admin','ito','ito2'].includes(u.rol) ? chk(u, 'ver_fiscalizacion') : '—') : '—'}</td><td style="padding:6px 10px;">${tieneUbic ? chk(u, 'ver_ubicacion') : '—'}</td><td style="padding:6px 10px;">${tieneInf ? chk(u, 'ver_informe_rep') : '—'}</td><td style="padding:6px 10px;">${tieneCuad ? chk(u, 'ver_cuaderno') : '—'}</td><td style="padding:6px 10px;">${tieneReq ? chk(u, 'req_crear') : '—'}</td><td style="padding:6px 10px;">${tieneReq ? chk(u, 'req_gestionar') : '—'}</td><td style="padding:6px 10px;">${escHtml(u.nombre || '')}</td><td style="padding:6px 10px;">${escHtml(u.email || '—')}</td><td style="padding:6px 10px;">${escHtml(u.rol)}</td></tr>`).join('') +
     '</tbody></table></div><div class="hint" id="cuadPermEstado" style="margin-top:8px;"></div>';
   caja.querySelectorAll('.cu-perm').forEach(c => c.onchange = async () => {
     const est = document.getElementById('cuadPermEstado'); c.disabled = true; est.textContent = 'Guardando…';
@@ -11028,11 +11102,11 @@ function pintarNotifs(){
   badge.hidden = !nuevas; badge.textContent = nuevas;
   if(panel.hidden) return;
   panel.innerHTML = `<div class="notif-head"><span>Notificaciones</span><span><button type="button" data-a="leer">Marcar leídos</button></span></div>` +
-    (NOTIFS.length ? NOTIFS.map(n => `<div class="notif-it${n.leida ? '' : ' nueva'}" data-id="${n.id}" data-f="${n.falla_id || ''}"><div class="nt"><b>${escHtml(n.titulo)}</b>${n.cuerpo ? `<div>${escHtml(n.cuerpo)}</div>` : ''}<div class="nh">${tiempoHace(n.creado_en)}${n.falla_id ? ' · clic: ver en el mapa' : ''}</div></div></div>`).join('') : '<div class="notif-vacio">No hay notificaciones en las últimas 24 horas.</div>');
+    (NOTIFS.length ? NOTIFS.map(n => `<div class="notif-it${n.leida ? '' : ' nueva'}" data-id="${n.id}" data-f="${n.falla_id || ''}" data-r="${rqIdDeUrl(n.url)}"><div class="nt"><b>${escHtml(n.titulo)}</b>${n.cuerpo ? `<div>${escHtml(n.cuerpo)}</div>` : ''}<div class="nh">${tiempoHace(n.creado_en)}${n.falla_id ? ' · clic: ver en el mapa' : ''}${rqIdDeUrl(n.url) ? ' · clic: ver requerimiento' : ''}</div></div></div>`).join('') : '<div class="notif-vacio">No hay notificaciones en las últimas 24 horas.</div>');
 }
 async function cargarNotifs(){
   if(!veCampana() || !accessToken) return;
-  try{ NOTIFS = await db.select('notificaciones', 'select=id,falla_id,titulo,cuerpo,creado_en,leida&creado_en=gte.' + encodeURIComponent(new Date(Date.now() - 864e5).toISOString()) + '&order=creado_en.desc&limit=200') || []; }
+  try{ NOTIFS = await db.select('notificaciones', 'select=id,falla_id,url,titulo,cuerpo,creado_en,leida&creado_en=gte.' + encodeURIComponent(new Date(Date.now() - 864e5).toISOString()) + '&order=creado_en.desc&limit=200') || []; }
   catch(_){ NOTIFS = []; }   // sin el SQL de avisos: la campana queda vacía
   pintarNotifs();
 }
@@ -11065,7 +11139,8 @@ function iniciarNotifs(){
         const n = NOTIFS.find(x => x.id === it.dataset.id);
         if(n && !n.leida){ n.leida = true; db.update('notificaciones', `id=eq.${n.id}`, {leida: true}).catch(() => {}); }
         cerrar(); pintarNotifs();
-        if(it.dataset.f) enfocarFalla(it.dataset.f, true);   // acerca el mapa a la falla y abre su ficha, igual que el aviso del celular
+        if(it.dataset.r) abrirRequerimientos(it.dataset.r);
+        else if(it.dataset.f) enfocarFalla(it.dataset.f, true);   // acerca el mapa a la falla y abre su ficha, igual que el aviso del celular
       }
     }catch(err){ alert('No se pudo actualizar los avisos: ' + err.message); }
   });
@@ -11491,7 +11566,353 @@ function aplicarBotonesHerramientas(){
   const ubic = FUNCIONES ? tieneReal('ubicacion_camiones') : (currentUser.ubic_col ? (currentUser.ver_ubicacion || currentUser.rol === 'admin') : cuad);
   document.getElementById('cuadUbicBtn').style.display = ubic ? '' : 'none';
   document.getElementById('infRepBtn').style.display = (tieneReal('informe_reparaciones') && !modoVista) ? '' : 'none';
+  rqIniciar();
 }
+
+// ---------- REQUERIMIENTOS (solicitudes que no son fallas: despeje, retiro, instalación de luminaria u otro) ----------
+// Flujo: el solicitante ingresa y deriva a un contratista → el contratista asigna a una cuadrilla → la cuadrilla ejecuta
+// → el contratista revisa → el solicitante da el visto bueno (o rechaza). Las reglas viven en la base (req_*): aquí solo se muestran.
+const RQ_BUCKET = 'fotos-requerimientos';
+const RQ_ESTADOS = {derivado:'Derivado', asignado:'Asignado', ejecutado:'Ejecutado · por revisar', revisado:'Falta visto bueno', devuelto:'Devuelto', cerrado:'Cerrado', anulado:'Anulado'};
+const RQ_TIPOS = [['despeje','Despeje de luminaria'], ['retiro','Retiro de luminaria'], ['instalacion','Instalación de luminaria'], ['otro','Otro']];
+const RQ = {filtro:'abiertos', texto:'', chip:'', lista:[], conteos:{}, destinos:null, nuevo:null, vista:'lista', id:null, det:null, urls:{}, badgeTimer:null, marcador:null, busq:null};
+const rqEsAdmin = () => !!currentUser && currentUser.rol === 'admin';
+const rqVe = () => !!currentUser && !modoVista && (rqEsAdmin() || tieneReal('req_crear') || tieneReal('req_gestionar'));
+const rqCrea = () => !!currentUser && (rqEsAdmin() || tieneReal('req_crear'));
+const rqEl = id => document.getElementById(id);
+function rqFecha(iso){
+  const d = new Date(iso), h = new Date(), p = n => String(n).padStart(2, '0'), hm = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  if(d.toDateString() === h.toDateString()) return 'Hoy ' + hm;
+  const ay = new Date(h); ay.setDate(h.getDate() - 1);
+  if(d.toDateString() === ay.toDateString()) return 'Ayer ' + hm;
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${hm}`;
+}
+// ¿Espera una acción mía? (mismo criterio que la insignia de la base)
+function rqTeToca(r){
+  const yo = currentUser && currentUser.id;
+  return (r.estado === 'derivado' && r.derivado_a.id === yo) || (r.estado === 'asignado' && r.asignado_a.id === yo) ||
+         (r.estado === 'ejecutado' && r.derivado_a.id === yo) || ((r.estado === 'revisado' || r.estado === 'devuelto') && r.creado_por.id === yo);
+}
+function rqQueToca(r){
+  const a = r.acciones || [];
+  if(r.estado === 'derivado' && a.includes('asignar')) return 'Asignar a una cuadrilla';
+  if(r.estado === 'asignado' && a.includes('ejecutar')) return 'Ejecutar el trabajo';
+  if(r.estado === 'ejecutado' && a.includes('revisar')) return 'Revisar la ejecución';
+  if(r.estado === 'revisado' && a.includes('cerrar')) return 'Dar el visto bueno o rechazar';
+  if(r.estado === 'devuelto' && a.includes('derivar')) return 'Volver a derivar o anular';
+  return '';
+}
+function rqOverlay(){
+  let ov = rqEl('rqOv');
+  if(!ov){
+    ov = document.createElement('div'); ov.id = 'rqOv'; ov.className = 'rq-ov';
+    ov.innerHTML = '<div class="rq-win"><div class="rq-hd" id="rqHd"></div><div class="rq-body" id="rqBody"></div></div>';
+    document.body.appendChild(ov);
+    ov.addEventListener('mousedown', e => { if(e.target === ov) rqCerrar(); });
+  }
+  return ov;
+}
+function rqCerrar(){ const ov = rqEl('rqOv'); if(ov) ov.remove(); document.removeEventListener('keydown', rqTecla); }
+function rqTecla(e){ if(e.key === 'Escape' && rqEl('rqOv') && !rqEl('rqPick')) { if(RQ.vista !== 'lista') rqVistaLista(); else rqCerrar(); } }
+async function abrirRequerimientos(abrirId){
+  rqOverlay(); document.removeEventListener('keydown', rqTecla); document.addEventListener('keydown', rqTecla);
+  try{ RQ.destinos = await db.rpc('req_destinos', {}); }catch(e){ RQ.destinos = RQ.destinos || {gestores: [], cuadrillas: []}; }
+  if(abrirId) await rqVistaDetalle(abrirId); else await rqVistaLista();
+}
+
+// ===== Lista =====
+async function rqVistaLista(){
+  RQ.vista = 'lista'; RQ.nuevo = RQ.nuevo && RQ.nuevo.pendiente ? RQ.nuevo : null;
+  rqEl('rqHd').innerHTML = `<b>📋 Requerimientos</b><span class="rq-grow"></span>${rqCrea() ? '<button type="button" class="rq-btn rq-p" id="rqNuevoBtn">＋ Nuevo</button>' : ''}<button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
+  rqEl('rqBody').innerHTML = `<div class="rq-in">🔍<input id="rqQ" type="search" autocomplete="off" placeholder="Buscar por código, solicitud, dirección, llave o persona…" value="${escAttr(RQ.texto)}"><span class="rq-clr" id="rqClr" ${RQ.texto ? '' : 'hidden'}>✕</span></div>
+    <div class="rq-seg" id="rqSeg"></div><div class="rq-chips" id="rqChips"></div><div id="rqLista"><div class="rq-vacio">Cargando…</div></div>`;
+  rqEl('rqX').onclick = rqCerrar;
+  const nb = rqEl('rqNuevoBtn'); if(nb) nb.onclick = () => rqVistaNuevo();
+  const q = rqEl('rqQ');
+  q.oninput = () => { RQ.texto = q.value; rqEl('rqClr').hidden = !q.value; clearTimeout(RQ.busq); RQ.busq = setTimeout(rqCargar, 280); };
+  rqEl('rqClr').onclick = () => { RQ.texto = ''; q.value = ''; rqEl('rqClr').hidden = true; rqCargar(); q.focus(); };
+  await rqCargar();
+}
+async function rqCargar(){
+  try{
+    const [l, c] = await Promise.all([db.rpc('req_listar', {p_filtro: RQ.filtro, p_texto: RQ.texto.trim() || null, p_limite: 300}), db.rpc('req_conteos', {})]);
+    RQ.lista = l || []; RQ.conteos = c || {};
+  }catch(e){ const z = rqEl('rqLista'); if(z) z.innerHTML = `<div class="rq-vacio">No se pudo cargar: ${escHtml(e.message)}</div>`; return; }
+  rqPintarLista(); rqBadge();
+}
+function rqCardHtml(r){
+  const urg = r.urgente && !['cerrado', 'anulado'].includes(r.estado), toca = rqQueToca(r) && rqTeToca(r);
+  return `<div class="rq-card${urg ? ' urg' : ''}" data-id="${r.id}">${urg ? '<div class="rq-luz"><div class="rq-estela"></div><div class="rq-halo"></div><div class="rq-nucleo"></div></div>' : ''}
+    <div class="rq-top"><span class="rq-cod">${r.codigo}</span>${urg ? '<span class="rq-chip rq-u">🔴 URGENTE</span>' : ''}<span class="rq-chip rq-e-${r.estado}" style="margin-left:auto;">${RQ_ESTADOS[r.estado] || r.estado}</span></div>
+    <div class="rq-tipo">${escHtml(r.tipo_label)}</div><div class="rq-sub">${escHtml(r.ubicacion)}</div>
+    <div class="rq-sub" style="margin-top:3px;">Solicitó ${escHtml(r.creado_por.nombre || '—')} · ${tiempoHace(r.creado_en)}${r.derivado_a.nombre ? ' · Contratista: ' + escHtml(r.derivado_a.nombre) : ''}${r.asignado_a.nombre ? ' · ' + escHtml(r.asignado_a.nombre) : ''}</div>
+    ${toca ? `<div class="rq-toca">👉 Te toca: ${rqQueToca(r)}</div>` : ''}</div>`;
+}
+function rqPintarLista(){
+  const seg = rqEl('rqSeg'), ch = rqEl('rqChips'), z = rqEl('rqLista'); if(!seg || !z) return;
+  const c = RQ.conteos || {};
+  seg.innerHTML = [['abiertos', 'Activos', c.abiertos], ['cerrados', 'Cerrados', c.cerrados], ['anulados', 'Anulados', c.anulados], ['todos', 'Todos', null]]
+    .map(([k, t, n]) => `<button type="button" data-f="${k}" class="${RQ.filtro === k ? 'on' : ''}">${t}${n != null ? `<i>${n}</i>` : ''}</button>`).join('');
+  seg.querySelectorAll('button').forEach(b => b.onclick = () => { RQ.filtro = b.dataset.f; RQ.chip = ''; rqCargar(); });
+  const nUrg = RQ.lista.filter(r => r.urgente && !['cerrado', 'anulado'].includes(r.estado)).length, nMios = RQ.lista.filter(rqTeToca).length;
+  ch.innerHTML = RQ.filtro === 'abiertos' || RQ.filtro === 'todos'
+    ? `<button type="button" class="rq-ch r${RQ.chip === 'urg' ? ' on' : ''}" data-c="urg">🔴 Urgentes ${nUrg}</button><button type="button" class="rq-ch${RQ.chip === 'mios' ? ' on' : ''}" data-c="mios">Mis pendientes ${nMios}</button>` +
+      ['derivado', 'asignado', 'ejecutado', 'revisado', 'devuelto'].map(e => `<button type="button" class="rq-ch${RQ.chip === e ? ' on' : ''}" data-c="${e}">${RQ_ESTADOS[e]}</button>`).join('') : '';
+  ch.querySelectorAll('button').forEach(b => b.onclick = () => { RQ.chip = RQ.chip === b.dataset.c ? '' : b.dataset.c; rqPintarLista(); });
+  let ls = RQ.lista;
+  if(RQ.chip === 'urg') ls = ls.filter(r => r.urgente && !['cerrado', 'anulado'].includes(r.estado));
+  else if(RQ.chip === 'mios') ls = ls.filter(rqTeToca);
+  else if(RQ.chip) ls = ls.filter(r => r.estado === RQ.chip);
+  z.innerHTML = ls.length ? ls.map(rqCardHtml).join('') : `<div class="rq-vacio">${RQ.texto || RQ.chip ? 'Ningún requerimiento coincide con la búsqueda.' : (RQ.filtro === 'abiertos' ? 'No hay requerimientos activos.' : 'No hay requerimientos en esta lista.')}</div>`;
+  z.querySelectorAll('.rq-card').forEach(el => el.onclick = () => rqVistaDetalle(el.dataset.id));
+}
+
+// ===== Fotos =====
+async function rqUrlFoto(ruta){
+  if(RQ.urls[ruta] && RQ.urls[ruta].t > Date.now()) return RQ.urls[ruta].u;
+  try{
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/${RQ_BUCKET}/${ruta}`, {method: 'POST', headers: db.headers(), body: JSON.stringify({expiresIn: 3600})});
+    const d = await res.json().catch(() => null);
+    if(res.ok && d && d.signedURL){ const u = SUPABASE_URL + '/storage/v1' + d.signedURL; RQ.urls[ruta] = {u, t: Date.now() + 3000000}; return u; }
+  }catch(e){}
+  return null;
+}
+async function rqSubirFoto(reqId, momento, blob){
+  const ruta = `${reqId}/${momento}_${crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2)}.jpg`;
+  let res;
+  try{ res = await fetch(`${SUPABASE_URL}/storage/v1/object/${RQ_BUCKET}/${ruta}`, {method: 'POST', headers: {...db.headers(), 'Content-Type': 'image/jpeg', 'x-upsert': 'false'}, body: blob}); }
+  catch(e){ throw new Error('Sin conexión al subir la foto.'); }
+  if(!res.ok) throw new Error('No se pudo subir la foto (' + res.status + ').');
+  try{ await db.rpc('req_registrar_foto', {p_id: reqId, p_momento: momento, p_ruta: ruta, p_bytes: blob.size}); }
+  catch(e){ fetch(`${SUPABASE_URL}/storage/v1/object/${RQ_BUCKET}/${ruta}`, {method: 'DELETE', headers: db.headers()}).catch(() => {}); throw e; }
+}
+
+// ===== Detalle =====
+const RQ_TXT = {crear: 'ingresó y derivó a {d}', derivar: 'derivó a {d}', asignar: 'asignó a {d}', reasignar: 'reasignó a {d}', ejecutar: 'marcó como ejecutado', no_puede: 'indicó que la cuadrilla no puede hacerlo',
+  revisar: 'revisó la ejecución', devolver_a_cuadrilla: 'devolvió a la cuadrilla', cerrar: 'dio el visto bueno y cerró', rechazar: 'rechazó la ejecución', devolver_ito: 'devolvió al solicitante',
+  anular: 'anuló el requerimiento', urgente_on: 'marcó como urgente', urgente_off: 'quitó la marca de urgente', comentar: 'comentó', foto_solicitud: 'agregó una foto a la solicitud',
+  foto_ejecucion: 'agregó una foto de la ejecución', foto_quitada: 'quitó una foto'};
+const RQ_COLOR = {urgente_on: '#e23b33', anular: '#e23b33', rechazar: '#e23b33', no_puede: '#e23b33', devolver_ito: '#9a4a8a', devolver_a_cuadrilla: '#9a4a8a', cerrar: '#3a8a5c', comentar: '#8a8aa0', foto_solicitud: '#b9aed3', foto_ejecucion: '#b9aed3', foto_quitada: '#b9aed3'};
+const RQ_ACC = {
+  asignar: {t: 'Asignar a cuadrilla', sel: 'cuadrillas', com: 'op', cta: 'Asignar', p: 1},
+  ejecutar: {t: 'Marcar como ejecutado', com: 'op', cta: 'Marcar ejecutado', p: 1, ph: 'Qué se hizo'},
+  no_puede: {t: 'La cuadrilla no puede', com: 'req', cta: 'Devolver al contratista', d: 1, ph: 'Por qué no se puede hacer'},
+  revisar: {t: 'Revisado: pasar a visto bueno', com: 'op', cta: 'Enviar a visto bueno', p: 1},
+  devolver_a_cuadrilla: {t: 'Devolver a la cuadrilla', com: 'req', cta: 'Devolver', ph: 'Qué falta'},
+  cerrar: {t: 'Dar visto bueno y cerrar', com: 'op', cta: 'Cerrar requerimiento', p: 1},
+  rechazar: {t: 'Rechazar', com: 'req', cta: 'Rechazar y devolver', d: 1, ph: 'Por qué lo rechazas'},
+  derivar: {t: 'Volver a derivar', sel: 'gestores', com: 'op', cta: 'Derivar', p: 1},
+  devolver_ito: {t: 'Devolver al solicitante', com: 'req', cta: 'Devolver', ph: 'Motivo de la devolución'},
+  urgente: {t: 'Marcar urgente', directo: 1},
+  anular: {t: 'Anular', com: 'req', cta: 'Anular requerimiento', d: 1, ph: 'Motivo de la anulación'}
+};
+const RQ_ORDEN = ['asignar', 'ejecutar', 'no_puede', 'revisar', 'devolver_a_cuadrilla', 'cerrar', 'rechazar', 'derivar', 'devolver_ito', 'urgente', 'anular'];
+async function rqVistaDetalle(id){
+  RQ.vista = 'detalle'; RQ.id = id;
+  rqEl('rqHd').innerHTML = `<button type="button" class="rq-back" id="rqVolver">‹ Lista</button><span class="rq-grow"></span><button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
+  rqEl('rqX').onclick = rqCerrar; rqEl('rqVolver').onclick = () => rqVistaLista();
+  rqEl('rqBody').innerHTML = '<div class="rq-vacio">Cargando…</div>';
+  let d;
+  try{ d = await db.rpc('req_detalle', {p_id: id}); }
+  catch(e){ if(rqEl('rqBody')) rqEl('rqBody').innerHTML = `<div class="rq-vacio">No se pudo abrir el requerimiento: ${escHtml(e.message)}</div>`; return; }
+  RQ.det = d;
+  await Promise.all(d.fotos.map(async f => { f.url = await rqUrlFoto(f.ruta); }));
+  if(RQ.id !== id || !rqEl('rqBody')) return;
+  rqPintarDetalle();
+}
+function rqFotosHtml(fs, momento, puedeAgregar, puedeQuitar){
+  return `<div class="rq-fotos">${fs.map((f, i) => `<div class="rq-th"><img src="${f.url || ''}" alt="Foto" data-m="${momento}" data-r="${f.ronda}">${puedeQuitar && f.mia ? `<span class="rq-q" data-f="${f.id}" title="Quitar foto">×</span>` : ''}</div>`).join('')}${puedeAgregar && fs.length < 2 ? `<button type="button" class="rq-add" data-m="${momento}">＋ foto</button>` : ''}</div>`;
+}
+function rqPintarDetalle(){
+  const d = RQ.det, r = d.req, acc = r.acciones || [], abierto = !['cerrado', 'anulado'].includes(r.estado), urg = r.urgente && abierto;
+  const fSol = d.fotos.filter(f => f.momento === 'solicitud'), fEje = d.fotos.filter(f => f.momento === 'ejecucion');
+  const rondas = [...new Set(fEje.map(f => f.ronda))].sort((a, b) => a - b);
+  if(acc.includes('subir_foto_ejecucion') && !rondas.includes(r.ronda)) rondas.push(r.ronda);
+  const ejecBox = rondas.map(n => {
+    const fs = fEje.filter(f => f.ronda === n), actual = n === r.ronda;
+    return `<div class="rq-box"><b>Ejecución${rondas.length > 1 || n > 1 ? ' · intento ' + n : ''}</b>${fs.length || (actual && acc.includes('subir_foto_ejecucion')) ? rqFotosHtml(fs, 'ejecucion', actual && acc.includes('subir_foto_ejecucion'), actual && acc.includes('subir_foto_ejecucion')) : '<div class="rq-sub">Sin fotos</div>'}</div>`;
+  }).join('');
+  const botones = RQ_ORDEN.filter(k => acc.includes(k)).map(k => {
+    const c = RQ_ACC[k], t = k === 'urgente' ? (r.urgente ? 'Quitar urgente' : '🔴 Marcar urgente') : c.t;
+    return `<button type="button" class="rq-btn${c.p ? ' rq-p' : ''}${c.d ? ' rq-d' : ''}" data-a="${k}">${t}</button>`;
+  }).join('');
+  const tl = d.historial.map(h => {
+    const txt = (RQ_TXT[h.accion] || h.accion).replace('{d}', `<b>${escHtml(h.destino || '—')}</b>`);
+    const mostrarCom = h.comentario && h.accion !== 'crear';
+    return `<div class="rq-ev" style="--c:${RQ_COLOR[h.accion] || '#6d3fc8'}"><b>${escHtml(h.usuario || '—')}</b> ${txt}<small>${rqFecha(h.fecha)}</small>${mostrarCom ? `<div class="rq-cm">${escHtml(h.comentario)}</div>` : ''}</div>`;
+  }).join('');
+  rqEl('rqHd').innerHTML = `<button type="button" class="rq-back" id="rqVolver">‹ Lista</button><span class="rq-cod">${r.codigo}</span>${urg ? '<span class="rq-chip rq-u">🔴 URGENTE</span>' : ''}<span class="rq-chip rq-e-${r.estado}">${RQ_ESTADOS[r.estado] || r.estado}</span><span class="rq-grow"></span><button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
+  rqEl('rqX').onclick = rqCerrar; rqEl('rqVolver').onclick = () => rqVistaLista();
+  const quien = [`Solicitó <b>${escHtml(r.creado_por.nombre || '—')}</b>`, r.derivado_a.nombre ? `Contratista: <b>${escHtml(r.derivado_a.nombre)}</b>` : '', r.asignado_a.nombre ? `Cuadrilla: <b>${escHtml(r.asignado_a.nombre)}</b>` : ''].filter(Boolean).join(' · ');
+  rqEl('rqBody').innerHTML = `<div class="rq-det${urg ? ' urg' : ''}">${urg ? '<div class="rq-luz"><div class="rq-estela"></div><div class="rq-halo"></div><div class="rq-nucleo"></div></div>' : ''}
+    <div class="rq-tipo" style="font-size:15px;">${escHtml(r.tipo_label)}</div>
+    <div class="rq-sub">${escHtml(r.ubicacion)}${r.lat != null ? ' · <a id="rqMapa">Ver en el mapa</a>' : ''}</div>
+    <div class="rq-box"><b>Solicitud</b><div class="rq-txt">${escHtml(r.descripcion)}</div>${fSol.length || acc.includes('subir_foto_solicitud') ? rqFotosHtml(fSol, 'solicitud', acc.includes('subir_foto_solicitud'), acc.includes('subir_foto_solicitud')) : ''}</div>
+    <div class="rq-sub">${quien}</div>${ejecBox}
+    ${botones ? `<div class="rq-acc" id="rqAcc">${botones}</div><div id="rqForm"></div>` : ''}
+    <div class="rq-h5">Historial</div><div class="rq-tl">${tl}</div>
+    ${acc.includes('comentar') ? `<div class="rq-form" style="margin-top:12px;"><textarea id="rqCom" rows="2" placeholder="Escribe un comentario…"></textarea><div style="margin-top:6px;"><button type="button" class="rq-btn rq-p" id="rqComBtn">Comentar</button> <span class="rq-err" id="rqComErr"></span></div></div>` : ''}</div>`;
+  const ma = rqEl('rqMapa'); if(ma) ma.onclick = () => rqVerMapa(r.lat, r.lng, r.codigo);
+  const body = rqEl('rqBody');
+  body.querySelectorAll('.rq-th img').forEach(im => im.onclick = () => {
+    const m = im.dataset.m, fs = d.fotos.filter(f => f.url && f.momento === m && (m === 'solicitud' || String(f.ronda) === im.dataset.r));
+    abrirFotoGrande(fs.map(f => f.url), Math.max(0, fs.findIndex(f => f.url === im.src)), `${r.codigo}_${m === 'solicitud' ? 's' : 'e'}`);
+  });
+  body.querySelectorAll('.rq-q').forEach(q => q.onclick = async () => {
+    if(!confirm('¿Quitar esta foto?')) return;
+    try{ const ruta = await db.rpc('req_quitar_foto', {p_foto: q.dataset.f}); if(ruta) fetch(`${SUPABASE_URL}/storage/v1/object/${RQ_BUCKET}/${ruta}`, {method: 'DELETE', headers: db.headers()}).catch(() => {}); await rqVistaDetalle(r.id); }
+    catch(e){ alert('No se pudo quitar: ' + e.message); }
+  });
+  body.querySelectorAll('.rq-add').forEach(b => b.onclick = () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = async () => {
+      const f = inp.files && inp.files[0]; if(!f) return; b.disabled = true; b.textContent = '…';
+      try{ await rqSubirFoto(r.id, b.dataset.m, await comprimirFotoWeb(f)); await rqVistaDetalle(r.id); }
+      catch(e){ alert(e.message); b.disabled = false; b.textContent = '＋ foto'; }
+    };
+    inp.click();
+  });
+  body.querySelectorAll('#rqAcc button').forEach(b => b.onclick = () => rqAbrirForm(b.dataset.a));
+  const cb = rqEl('rqComBtn');
+  if(cb) cb.onclick = async () => {
+    const t = rqEl('rqCom').value.trim(); if(!t){ rqEl('rqComErr').textContent = 'Escribe un comentario.'; return; }
+    cb.disabled = true;
+    try{ await db.rpc('req_accion', {p_id: r.id, p_accion: 'comentar', p_comentario: t}); await rqVistaDetalle(r.id); }
+    catch(e){ rqEl('rqComErr').textContent = e.message; cb.disabled = false; }
+  };
+}
+function rqAbrirForm(k){
+  const c = RQ_ACC[k], r = RQ.det.req, z = rqEl('rqForm');
+  if(k === 'urgente'){ rqEjecutarAccion(k, null, null); return; }
+  const opts = c.sel ? ((RQ.destinos && RQ.destinos[c.sel]) || []) : null;
+  z.innerHTML = `<div class="rq-form"><b>${c.t}</b>
+    ${opts ? `<label>${c.sel === 'cuadrillas' ? 'Cuadrilla' : 'Contratista'}</label><select id="rqSel"><option value="">— Elige —</option>${opts.map(o => `<option value="${o.id}" ${o.id === (c.sel === 'cuadrillas' ? r.asignado_a.id : '') ? 'selected' : ''}>${escHtml(o.nombre)}</option>`).join('')}</select>` : ''}
+    ${c.com ? `<label>${c.com === 'req' ? 'Motivo (obligatorio)' : 'Comentario (opcional)'}</label><textarea id="rqTx" rows="2" placeholder="${escAttr(c.ph || '')}"></textarea>` : ''}
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;"><button type="button" class="rq-btn${c.d ? ' rq-d' : ' rq-p'}" id="rqOk">${c.cta}</button><button type="button" class="rq-btn" id="rqNo">Cancelar</button><span class="rq-err" id="rqErr"></span></div></div>`;
+  rqEl('rqNo').onclick = () => { z.innerHTML = ''; };
+  rqEl('rqOk').onclick = async () => {
+    const sel = rqEl('rqSel'), tx = rqEl('rqTx'), err = rqEl('rqErr');
+    if(sel && !sel.value){ err.textContent = 'Elige a quién.'; return; }
+    if(c.com === 'req' && !tx.value.trim()){ err.textContent = 'Escribe el motivo.'; return; }
+    rqEl('rqOk').disabled = true;
+    await rqEjecutarAccion(k, tx ? tx.value.trim() : null, sel ? sel.value : null, err, rqEl('rqOk'));
+  };
+}
+async function rqEjecutarAccion(k, com, dest, err, btn){
+  try{ await db.rpc('req_accion', {p_id: RQ.det.req.id, p_accion: k, p_comentario: com || null, p_destino: dest || null}); await rqVistaDetalle(RQ.det.req.id); rqBadge(); }
+  catch(e){ if(err) err.textContent = e.message; else alert(e.message); if(btn) btn.disabled = false; }
+}
+function rqVerMapa(lat, lng, cod){
+  rqCerrar();
+  if(RQ.marcador){ map.removeLayer(RQ.marcador); RQ.marcador = null; }
+  RQ.marcador = L.marker([lat, lng], {icon: L.divIcon({className: '', html: '<div class="rq-pin"><span>R</span></div>', iconSize: [30, 30], iconAnchor: [15, 30]})}).addTo(map).bindTooltip(cod, {permanent: true, direction: 'right', offset: [12, -14]});
+  RQ.marcador.on('click', () => { map.removeLayer(RQ.marcador); RQ.marcador = null; });
+  map.setView([lat, lng], 19);
+}
+
+// ===== Nuevo requerimiento =====
+function rqNuevoVacio(){
+  const g = (RQ.destinos && RQ.destinos.gestores) || [];
+  return {pendiente: true, tipo: 'retiro', desc: '', modo: 'catastro', q: '', res: [], gid: null, gidTxt: '', lat: null, lng: null, ubic: '', urgente: false, derivar: g.length === 1 ? g[0].id : '', fotos: []};
+}
+function rqVistaNuevo(){
+  RQ.vista = 'nuevo'; const n = RQ.nuevo = RQ.nuevo || rqNuevoVacio(); const gs = (RQ.destinos && RQ.destinos.gestores) || [];
+  rqEl('rqHd').innerHTML = `<button type="button" class="rq-back" id="rqVolver">‹ Lista</button><b>Nuevo requerimiento</b><span class="rq-grow"></span><button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
+  rqEl('rqX').onclick = rqCerrar; rqEl('rqVolver').onclick = () => { RQ.nuevo = null; rqVistaLista(); };
+  rqEl('rqBody').innerHTML = `<div class="rq-f">
+    <label class="rq-lbl" style="margin-top:0;">Tipo</label><div class="rq-opc" id="rqTipos">${RQ_TIPOS.map(([k, t]) => `<label class="${n.tipo === k ? 'on' : ''}"><input type="radio" name="rqT" value="${k}" ${n.tipo === k ? 'checked' : ''} hidden>${t}</label>`).join('')}</div>
+    <label class="rq-lbl">Solicitud</label><textarea id="rqDesc" rows="3" placeholder="Describe lo que se necesita">${escHtml(n.desc)}</textarea>
+    <label class="rq-lbl">Punto</label><div class="rq-opc" id="rqModo"><label class="${n.modo === 'catastro' ? 'on' : ''}"><input type="radio" name="rqM" value="catastro" hidden>Punto del catastro</label><label class="${n.modo === 'libre' ? 'on' : ''}"><input type="radio" name="rqM" value="libre" hidden>Punto libre (no catastrado)</label></div>
+    <div id="rqPunto" style="margin-top:8px;"></div>
+    <label class="rq-lbl">Derivar a</label><select id="rqDer"><option value="">— Elige el contratista —</option>${gs.map(g => `<option value="${g.id}" ${n.derivar === g.id ? 'selected' : ''}>${escHtml(g.nombre)}</option>`).join('')}</select>
+    <label class="rq-lbl">Fotos (opcional, máximo 2)</label><div id="rqFotosN"></div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:14px;font-weight:700;color:#c1443c;cursor:pointer;"><input type="checkbox" id="rqUrg" ${n.urgente ? 'checked' : ''}> 🔴 Marcar como urgente</label>
+    <div style="margin-top:16px;display:flex;gap:8px;align-items:center;"><button type="button" class="rq-btn rq-p" id="rqCrear">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rqCancelar">Cancelar</button><span class="rq-err" id="rqErr"></span></div></div>`;
+  const leer = () => { n.desc = rqEl('rqDesc').value; n.derivar = rqEl('rqDer').value; n.urgente = rqEl('rqUrg').checked; const q = rqEl('rqQ2'); if(q) n.q = q.value; const u = rqEl('rqUbic'); if(u) n.ubic = u.value; };
+  rqEl('rqTipos').querySelectorAll('input').forEach(i => i.onchange = () => { leer(); n.tipo = i.value; rqVistaNuevo(); });
+  rqEl('rqModo').querySelectorAll('input').forEach(i => i.onchange = () => { leer(); n.modo = i.value; rqVistaNuevo(); });
+  rqEl('rqCancelar').onclick = () => { RQ.nuevo = null; rqVistaLista(); };
+  rqPintarPunto(leer); rqPintarFotosN();
+  rqEl('rqCrear').onclick = async () => {
+    leer(); const err = rqEl('rqErr'); err.textContent = '';
+    if(!n.desc.trim()){ err.textContent = 'Escribe la solicitud.'; return; }
+    if(n.modo === 'catastro' && !n.gid){ err.textContent = 'Busca y elige el punto del catastro.'; return; }
+    if(n.modo === 'libre' && (n.lat == null || n.lng == null)){ err.textContent = 'Marca el punto en el mapa.'; return; }
+    if(!n.derivar){ err.textContent = 'Elige a qué contratista se deriva.'; return; }
+    const b = rqEl('rqCrear'); b.disabled = true; b.textContent = 'Ingresando…';
+    let r;
+    try{ r = await db.rpc('req_crear', {p_tipo: n.tipo, p_descripcion: n.desc.trim(), p_punto_gid: n.modo === 'catastro' ? n.gid : null, p_lat: n.modo === 'libre' ? n.lat : null, p_lng: n.modo === 'libre' ? n.lng : null,
+      p_ubicacion_texto: n.modo === 'libre' ? (n.ubic.trim() || null) : null, p_urgente: n.urgente, p_derivar_a: n.derivar}); }
+    catch(e){ err.textContent = e.message; b.disabled = false; b.textContent = 'Ingresar requerimiento'; return; }
+    const fallas = [];
+    for(const f of n.fotos){ try{ await rqSubirFoto(r.id, 'solicitud', f.blob); }catch(e){ fallas.push(e.message); } }
+    RQ.nuevo = null; RQ.filtro = 'abiertos'; RQ.chip = ''; RQ.texto = '';
+    await rqVistaDetalle(r.id); rqBadge();
+    if(fallas.length) alert(`El requerimiento ${r.codigo} quedó ingresado, pero ${fallas.length === 1 ? 'una foto no se pudo subir' : 'algunas fotos no se pudieron subir'}: ${fallas[0]}\nPuedes agregarlas desde el detalle.`);
+  };
+}
+function rqPintarPunto(leer){
+  const n = RQ.nuevo, z = rqEl('rqPunto');
+  if(n.modo === 'catastro'){
+    z.innerHTML = `<div style="display:flex;gap:8px;"><input type="search" id="rqQ2" placeholder="N.° de llave o N.° municipal" inputmode="numeric" value="${escAttr(n.q)}" style="flex:1;"><button type="button" class="rq-btn" id="rqBus">Buscar</button></div><div class="rq-res" id="rqRes"></div>`;
+    const pintaRes = () => {
+      rqEl('rqRes').innerHTML = n.gid && !n.res.some(p => p.gid === n.gid) ? `<label class="on"><input type="radio" checked hidden><span>${escHtml(n.gidTxt)}</span></label>`
+        : (n.res.length ? n.res.map(p => `<label class="${n.gid === p.gid ? 'on' : ''}"><input type="radio" name="rqP" value="${p.gid}" hidden><span>Llave <b>${p.llave ?? '—'}</b> · ${escHtml([p.calle_1, p.frente_1].filter(Boolean).join(' ') || 'sin dirección')}${p.nro_mun ? ' · N.° mun. ' + p.nro_mun : ''}</span></label>`).join('') : '');
+      rqEl('rqRes').querySelectorAll('input[name=rqP]').forEach(i => i.onchange = () => { const p = n.res.find(x => String(x.gid) === i.value); n.gid = p.gid; n.gidTxt = `Llave ${p.llave ?? '—'} · ${[p.calle_1, p.frente_1].filter(Boolean).join(' ')}`; pintaRes(); });
+    };
+    const buscar = async () => {
+      const q = rqEl('rqQ2').value.trim(); if(!/^\d+$/.test(q)){ rqEl('rqRes').innerHTML = '<div class="rq-sub">Escribe solo el número.</div>'; return; }
+      rqEl('rqRes').innerHTML = '<div class="rq-sub">Buscando…</div>';
+      try{ n.res = await db.select('puntos_luminarios', `or=(llave.eq.${q},nro_mun.eq.${q})&select=gid,llave,calle_1,frente_1,nro_mun&limit=8`) || []; }catch(e){ n.res = []; }
+      if(n.res.length === 1){ const p = n.res[0]; n.gid = p.gid; n.gidTxt = `Llave ${p.llave ?? '—'} · ${[p.calle_1, p.frente_1].filter(Boolean).join(' ')}`; }
+      pintaRes(); if(!n.res.length) rqEl('rqRes').innerHTML = '<div class="rq-sub">No se encontró ese punto en el catastro.</div>';
+    };
+    rqEl('rqBus').onclick = buscar; rqEl('rqQ2').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); buscar(); } };
+    pintaRes();
+  }else{
+    z.innerHTML = `<button type="button" class="rq-btn" id="rqMarcar">📍 ${n.lat != null ? 'Cambiar punto en el mapa' : 'Marcar punto en el mapa'}</button>${n.lat != null ? `<span class="rq-sub" style="margin-left:8px;">✔ ${n.lat.toFixed(5)}, ${n.lng.toFixed(5)}</span>` : ''}
+      <label class="rq-lbl">Dirección o referencia (opcional)</label><input type="text" id="rqUbic" maxlength="200" placeholder="Ej.: frente a la plaza Los Aromos" value="${escAttr(n.ubic)}">`;
+    rqEl('rqMarcar').onclick = () => { leer(); rqElegirEnMapa(); };
+  }
+}
+function rqPintarFotosN(){
+  const n = RQ.nuevo, z = rqEl('rqFotosN');
+  z.innerHTML = `<div class="rq-fotos">${n.fotos.map((f, i) => `<div class="rq-th"><img src="${f.url}" alt="Foto"><span class="rq-q" data-i="${i}">×</span></div>`).join('')}${n.fotos.length < 2 ? '<button type="button" class="rq-add" id="rqAddN">＋ foto</button>' : ''}</div>`;
+  z.querySelectorAll('.rq-q').forEach(q => q.onclick = () => { URL.revokeObjectURL(n.fotos[+q.dataset.i].url); n.fotos.splice(+q.dataset.i, 1); rqPintarFotosN(); });
+  const a = rqEl('rqAddN');
+  if(a) a.onclick = () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    inp.onchange = async () => { const f = inp.files && inp.files[0]; if(!f) return; try{ const blob = await comprimirFotoWeb(f); n.fotos.push({blob, url: URL.createObjectURL(blob)}); rqPintarFotosN(); }catch(e){ alert(e.message); } };
+    inp.click();
+  };
+}
+function rqElegirEnMapa(){
+  const ov = rqEl('rqOv'); ov.style.display = 'none';
+  const b = document.createElement('div'); b.id = 'rqPick'; b.className = 'rq-pickbar'; b.innerHTML = '📍 Haz clic en el mapa para marcar el punto <button type="button" id="rqPickX">Cancelar</button>';
+  document.body.appendChild(b); map.getContainer().style.cursor = 'crosshair';
+  const fin = ll => {
+    map.off('click', h); document.removeEventListener('keydown', esc); b.remove(); map.getContainer().style.cursor = ''; ov.style.display = '';
+    if(ll){ RQ.nuevo.lat = ll.lat; RQ.nuevo.lng = ll.lng; }
+    rqVistaNuevo();
+  };
+  const h = e => fin(e.latlng), esc = e => { if(e.key === 'Escape') fin(null); };
+  map.on('click', h); document.addEventListener('keydown', esc); b.querySelector('#rqPickX').onclick = () => fin(null);
+}
+
+// ===== Insignia del botón (cuántos esperan una acción mía) =====
+async function rqBadge(){
+  const b = rqEl('reqBadge'); if(!b || !rqVe()) return;
+  try{ const n = await db.rpc('req_contar', {}); b.textContent = n > 99 ? '99+' : n; b.hidden = !n; }catch(e){ b.hidden = true; }
+}
+function rqIniciar(){
+  clearInterval(RQ.badgeTimer);
+  const btn = rqEl('reqBtn'); if(!btn) return;
+  btn.style.display = rqVe() ? '' : 'none';
+  if(!rqVe()) return;
+  rqBadge(); RQ.badgeTimer = setInterval(() => { if(!document.hidden) rqBadge(); }, 90000);
+}
+const rqIdDeUrl = u => { const m = /[?&]req=([0-9a-fA-F-]{36})/.exec(u || ''); return m ? m[1] : ''; };
+(function(){ const b = rqEl('reqBtn'); if(b) b.onclick = () => abrirRequerimientos(); })();
 
 // ---------- GESTIÓN DE USUARIOS (admin) ----------
 document.getElementById('usuariosBtn').onclick = () => mostrarModalUsuarios();
