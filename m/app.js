@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.11.1';
+const VERSION_APP = '2.11.2';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4482,7 +4482,7 @@ const RQM = { capa: null, n: 0 };
 function rqIcono(r) {
   const urg = r.urgente && rqAbierto(r), toca = rqTeToca(r);
   const col = urg ? '#e23b33' : '#6d3fc8';
-  return L.divIcon({ className: '', iconSize: [32, 40], iconAnchor: [16, 40], html: `<div class="rq-mk${urg ? ' urg' : ''}${toca ? ' toca' : ''}"><svg width="32" height="40" viewBox="0 0 32 40" aria-hidden="true"><path d="M16 1.5C8.5 1.5 2.5 7.4 2.5 14.8 2.5 24.6 16 38.5 16 38.5S29.5 24.6 29.5 14.8C29.5 7.4 23.5 1.5 16 1.5z" fill="${col}" stroke="#fff" stroke-width="2"/><rect x="9.5" y="8" width="13" height="14" rx="2" fill="#fff"/><rect x="12.5" y="6.5" width="7" height="3.5" rx="1.3" fill="${col}" stroke="#fff" stroke-width="1"/><path d="M12 13h8M12 16h8M12 19h5" stroke="${col}" stroke-width="1.6" stroke-linecap="round"/></svg><span class="rq-cd">${esc(r.codigo)}</span></div>` });
+  return L.divIcon({ className: '', iconSize: [32, 40], iconAnchor: [16, 40], html: `<div class="rq-mk${urg ? ' urg' : ''}${toca ? ' toca' : ''}"><i class="rq-ring"></i><svg width="32" height="40" viewBox="0 0 32 40" aria-hidden="true"><path d="M16 1.5C8.5 1.5 2.5 7.4 2.5 14.8 2.5 24.6 16 38.5 16 38.5S29.5 24.6 29.5 14.8C29.5 7.4 23.5 1.5 16 1.5z" fill="${col}" stroke="#fff" stroke-width="2"/><rect x="9.5" y="8" width="13" height="14" rx="2" fill="#fff"/><rect x="12.5" y="6.5" width="7" height="3.5" rx="1.3" fill="${col}" stroke="#fff" stroke-width="1"/><path d="M12 13h8M12 16h8M12 19h5" stroke="${col}" stroke-width="1.6" stroke-linecap="round"/></svg><span class="rq-cd">${esc(r.codigo)}</span></div>` });
 }
 function rqDibujarMapa(centrar) {
   if (!S.reqMapa || !map) return;
