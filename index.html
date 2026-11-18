@@ -3002,7 +3002,8 @@ function handlePuntoClick(feature, layer){
       <div class="rp-card" style="margin-top:6px"><div class="hint">N.° de llave: <b>${pp.llave ?? '—'}</b></div><div class="hint">N.° municipal: <b>${pp.nro_mun ?? '—'}</b></div></div>
       <div class="hint" style="margin-top:8px"><b>Luminarias del punto</b></div><div id="infLums" class="hint">Cargando…</div>
       <div class="hint" style="margin-top:8px"><b>Estado</b></div><div id="infEstado" class="rp-ok">Cargando…</div>
-      ${tieneReal('modo_historial') ? '<button class="popup-btn" id="infHistBtn" style="margin-top:8px">Ver historial del punto</button>' : ''}`);
+      ${tieneReal('modo_historial') ? '<button class="popup-btn" id="infHistBtn" style="margin-top:8px">Ver historial del punto</button>' : ''}
+      ${rqCrea() ? '<button class="popup-btn" id="infReqBtn" style="margin-top:8px;background:#f3eefc;color:#6d3fc8;border:1.5px solid #6d3fc8;">📋 Ingresar requerimiento</button>' : ''}`);
     db.rpc('luminarias_punto', {p_gid: pp.gid}).then(ls => {
       const b = document.getElementById('infLums'); if(!b) return;
       b.className = '';
@@ -3015,6 +3016,8 @@ function handlePuntoClick(feature, layer){
     }).catch(() => { const b = document.getElementById('infEstado'); if(b) b.textContent = '—'; });
     const hb = document.getElementById('infHistBtn');
     if(hb) hb.addEventListener('click', () => mostrarHistorial('punto', pp.gid, `Punto lumínico ${pp.llave ?? ''}`));
+    const rb = document.getElementById('infReqBtn');
+    if(rb) rb.addEventListener('click', () => rqNuevoEnPunto(pp));
     return;
   }
   verificarDuplicadoYAbrir('ref_punto_gid', feature.properties.gid,
@@ -11858,6 +11861,14 @@ function rqVerMapa(lat, lng){ rqModoMapa(lat, lng); }
 function rqNuevoVacio(){
   const g = (RQ.destinos && RQ.destinos.gestores) || [];
   return {pendiente: true, tipo: 'retiro', desc: '', modo: 'catastro', q: '', res: [], gid: null, gidTxt: '', lat: null, lng: null, ubic: '', urgente: false, derivar: g.length === 1 ? g[0].id : '', fotos: []};
+}
+// Desde la ficha de un punto del catastro: abre el formulario con ese punto ya elegido
+async function rqNuevoEnPunto(pp){
+  rqOverlay(); document.removeEventListener('keydown', rqTecla); document.addEventListener('keydown', rqTecla);
+  try{ RQ.destinos = await db.rpc('req_destinos', {}); }catch(e){ RQ.destinos = RQ.destinos || {gestores: [], cuadrillas: []}; }
+  const n = RQ.nuevo = rqNuevoVacio();
+  n.modo = 'catastro'; n.gid = pp.gid; n.gidTxt = `Llave ${pp.llave ?? '—'} · ${[pp.calle_1, pp.direccion].filter(Boolean).join(' ') || 'sin dirección'}`;
+  rqVistaNuevo();
 }
 function rqVistaNuevo(){
   RQ.vista = 'nuevo'; const n = RQ.nuevo = RQ.nuevo || rqNuevoVacio(); const gs = (RQ.destinos && RQ.destinos.gestores) || [];

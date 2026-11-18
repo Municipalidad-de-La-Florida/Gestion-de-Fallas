@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.11.2';
+const VERSION_APP = '2.12.0';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1669,8 +1669,11 @@ function abrirPunto(p, geom) {
     <h3>Luminarias del punto</h3><div id="lumsPunto" class="hint">Cargando…</div>
     <h3>Estado</h3><div id="estPunto" class="hint">Cargando…</div>
     ${infoSoloLectura()}
-    ${accionesReporte('Reportar falla', geom)}`);
+    ${accionesReporte('Reportar falla', geom)}
+    ${rqCrea() ? '<div class="acciones"><button id="bReq" class="btn btn-secundario" style="border:1.5px solid #6d3fc8;color:#6d3fc8;background:#f3eefc;">📋 Ingresar requerimiento</button></div>' : ''}`);
   botonVerReparada(h, 'punto', p.gid);
+  const bq = $('#bReq', h);
+  if (bq) bq.addEventListener('click', ocupar(bq, async () => { await rqNuevoEnPunto(p); }));
   rpc('luminarias_punto', { p_gid: p.gid }).then((ls) => {
     const b = $('#lumsPunto', h); if (!b || !document.body.contains(b)) return;
     b.className = '';
@@ -4474,6 +4477,13 @@ function rqFinElegir(sel) {
   }
   if (!n || (n.modo === 'catastro' ? !n.gid : n.lat == null)) { RQ.nuevo = null; cambiarVista('req'); return; }   // canceló sin haber elegido nada
   cambiarVista('req'); rqAbrirNuevo(true);
+}
+// Desde un punto del catastro (ficha del punto): abre el formulario con ese punto ya elegido
+async function rqNuevoEnPunto(p) {
+  if (!RQ.destinos) { try { RQ.destinos = await rpc('req_destinos'); } catch (e) { RQ.destinos = { gestores: [], cuadrillas: [] }; } }
+  const n = RQ.nuevo = rqNuevoVacio();
+  n.modo = 'catastro'; n.gid = p.gid; n.gidTxt = `Llave ${p.llave ?? '—'} · ${[p.calle_1, p.direccion].filter((x) => x != null && x !== '').join(' ') || 'sin dirección'}`;
+  rqAbrirNuevo(true);
 }
 function rqIniciarNuevo() { RQ.nuevo = rqNuevoVacio(); RQ.nuevo.modo = null; rqElegirEnMapa(); }
 
