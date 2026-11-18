@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.10.7';
+const VERSION_APP = '2.10.8';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4170,7 +4170,7 @@ function editarCuaderno(it) {
    Flujo: solicitante → contratista (asigna) → cuadrilla (ejecuta) → contratista (revisa) → solicitante (visto bueno).
    Las reglas viven en la base (req_*); aquí solo se muestran las acciones que la base permite. */
 const RQ_BUCKET = 'fotos-requerimientos';
-const RQ_ESTADOS = { derivado: 'Derivado', asignado: 'Asignado', ejecutado: 'Ejecutado · por revisar', revisado: 'Falta visto bueno', devuelto: 'Devuelto', cerrado: 'Cerrado', anulado: 'Anulado' };
+const RQ_ESTADOS = {derivado:'Solicitado', asignado:'Derivado', ejecutado:'Ejecutado', revisado:'Revisado', devuelto:'Devuelto', cerrado:'Todo ok', anulado:'Anulado'};
 const RQ_TXT = { crear: 'ingresó y derivó a {d}', derivar: 'derivó a {d}', asignar: 'asignó a {d}', reasignar: 'reasignó a {d}', ejecutar: 'marcó como ejecutado', no_puede: 'indicó que la cuadrilla no puede hacerlo',
   revisar: 'revisó la ejecución', devolver_a_cuadrilla: 'devolvió a la cuadrilla', cerrar: 'dio el visto bueno y cerró', rechazar: 'rechazó la ejecución', devolver_ito: 'devolvió al solicitante',
   anular: 'anuló el requerimiento', urgente_on: 'marcó como urgente', urgente_off: 'quitó la marca de urgente', comentar: 'comentó', foto_solicitud: 'agregó una foto a la solicitud',

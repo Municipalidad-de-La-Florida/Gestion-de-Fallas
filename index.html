@@ -11573,7 +11573,7 @@ function aplicarBotonesHerramientas(){
 // Flujo: el solicitante ingresa y deriva a un contratista → el contratista asigna a una cuadrilla → la cuadrilla ejecuta
 // → el contratista revisa → el solicitante da el visto bueno (o rechaza). Las reglas viven en la base (req_*): aquí solo se muestran.
 const RQ_BUCKET = 'fotos-requerimientos';
-const RQ_ESTADOS = {derivado:'Derivado', asignado:'Asignado', ejecutado:'Ejecutado · por revisar', revisado:'Falta visto bueno', devuelto:'Devuelto', cerrado:'Cerrado', anulado:'Anulado'};
+const RQ_ESTADOS = {derivado:'Solicitado', asignado:'Derivado', ejecutado:'Ejecutado', revisado:'Revisado', devuelto:'Devuelto', cerrado:'Todo ok', anulado:'Anulado'};
 const RQ_TIPOS = [['despeje','Despeje de luminaria'], ['retiro','Retiro de luminaria'], ['instalacion','Instalación de luminaria'], ['otro','Otro']];
 const RQ = {filtro:'abiertos', texto:'', chip:'', lista:[], conteos:{}, destinos:null, nuevo:null, vista:'lista', id:null, det:null, urls:{}, badgeTimer:null, marcador:null, busq:null};
 const rqEsAdmin = () => !!currentUser && currentUser.rol === 'admin';
