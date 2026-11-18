@@ -806,3 +806,5 @@ html[data-tema=oscuro] .com-bloque.t-anulada{ background:#2a2a2a; border-color:#
 @keyframes rqLatido{ 0%,62%,100%{ box-shadow:0 0 7px rgba(226,59,51,.12); } 31%{ box-shadow:0 0 22px rgba(226,59,51,.36); } }
 @keyframes rqChipLatido{ 0%,62%,100%{ box-shadow:0 0 0 rgba(226,59,51,0); } 31%{ box-shadow:0 0 12px rgba(226,59,51,.9); } }
 @media (prefers-reduced-motion: reduce){ .rq-luz{ display:none; } .rq-card.urg,.rq-det.urg,.rq-u{ animation:none; } }
+
+.rq-nuevo{ border:0; border-radius:10px; padding:9px 14px; font-weight:700; background:#6d3fc8; color:#fff; font-family:inherit; font-size:14px; } .rq-nuevo[hidden]{ display:none; }

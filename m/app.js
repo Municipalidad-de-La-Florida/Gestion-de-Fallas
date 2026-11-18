@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.10.1';
+const VERSION_APP = '2.10.3';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -3853,11 +3853,11 @@ function cerrarPorTiempo() {
 setInterval(() => { if (S.perfil && vencioModo()) cerrarPorTiempo(); }, 30000);
 /* Botones de la barra inferior que el admin puede ocultar (solo en este teléfono) */
 const LS_NAV_OCULTOS = 'fm_nav_ocultos_v1';
-const NAV_OPCIONES = [['navLista', 'Activas'], ['navInspC3', 'Inspecciones'], ['navInsp', 'Inspección'], ['navCuad', 'Cuadrillas'], ['navCuaderno', 'Cuaderno'], ['navHist', 'Historial']];
+const NAV_OPCIONES = [['navLista', 'Activas'], ['navInspC3', 'Inspecciones'], ['navInsp', 'Inspección'], ['navCuad', 'Cuadrillas'], ['navCuaderno', 'Cuaderno'], ['navReq', 'Requerimientos'], ['navHist', 'Historial']];
 function navOcultos() { try { const v = JSON.parse(localStorage.getItem(LS_NAV_OCULTOS) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
 // Qué botones opcionales tiene esta persona según sus funciones (antes de ocultar los que ella elija)
 function navDisponibles() {
-  const ok = { navLista: true, navInspC3: tiene('inspeccion_asignar_lote'), navInsp: tiene('informar_inspeccion'), navCuad: puedeCuadrillas(), navCuaderno: puedeCuaderno(), navHist: tiene('modo_historial') };
+  const ok = { navLista: true, navInspC3: tiene('inspeccion_asignar_lote'), navInsp: tiene('informar_inspeccion'), navCuad: puedeCuadrillas(), navCuaderno: puedeCuaderno(), navReq: rqVe(), navHist: tiene('modo_historial') };
   return NAV_OPCIONES.filter(([id]) => ok[id]);
 }
 // «Botones de la barra» lo tienen los perfiles con 4 o más de esos botones
@@ -4215,7 +4215,7 @@ function rqQueToca(r) {
 }
 function pintarReqNav() {
   const n = $('#navReq'); if (!n) return;
-  n.hidden = !rqVe();
+  n.hidden = !rqVe() || navOcultos().includes('navReq');
   if (n.hidden && S.vista === 'req') cambiarVista('mapa');
   $('#navInferior').classList.toggle('apretado', $$('#navInferior .nav-btn:not([hidden])').length >= 4);
 }
@@ -4227,6 +4227,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) rqCo
 setInterval(() => { if (!document.hidden) rqContar(); }, 120000);
 
 async function abrirReq() {
+  const nb = $('#rqNuevo'); if (nb) nb.hidden = !rqCrea();
   if (!RQ.destinos) { try { RQ.destinos = await rpc('req_destinos'); } catch (e) { RQ.destinos = { gestores: [], cuadrillas: [] }; } }
   rqCargar();
 }
@@ -4255,6 +4256,7 @@ function rqPintarLista() {
   }).join('') : `<div class="rq-vacio">${RQ.texto ? 'Ningún requerimiento coincide con la búsqueda.' : (RQ.filtro === 'abiertos' ? 'No hay requerimientos activos.' : 'No hay requerimientos en esta lista.')}</div>`;
   $$('.rq-card', z).forEach((el) => el.addEventListener('click', () => rqAbrirDetalle(el.dataset.id)));
 }
+$('#rqNuevo').addEventListener('click', () => rqAbrirNuevo(false));
 $('#rqBuscar').addEventListener('input', (e) => { RQ.texto = e.target.value; clearTimeout(RQ.busq); RQ.busq = setTimeout(rqCargar, 280); });
 
 async function rqUrlFoto(ruta) {
@@ -4381,6 +4383,104 @@ function rqAbrirForm(k) {
 async function rqEjecutarAccion(k, com, dest, err, btn) {
   try { await rpc('req_accion', { p_id: RQ.det.req.id, p_accion: k, p_comentario: com || null, p_destino: dest || null }); await rqRecargarDetalle(); }
   catch (e) { if (err) err.textContent = e.message; else toast(e.message, 'error'); if (btn) btn.disabled = false; }
+}
+
+/* ---- Nuevo requerimiento (desde la app) ---- */
+const RQ_TIPOS = [['despeje', 'Despeje de luminaria'], ['retiro', 'Retiro de luminaria'], ['instalacion', 'Instalación de luminaria'], ['otro', 'Otro']];
+const rqCrea = () => !!S.perfil && (rol() === 'admin' || tiene('req_crear'));
+function rqNuevoVacio() {
+  const g = (RQ.destinos && RQ.destinos.gestores) || [];
+  return { tipo: 'retiro', desc: '', modo: 'catastro', q: '', res: [], gid: null, gidTxt: '', lat: null, lng: null, ubic: '', urgente: false, derivar: g.length === 1 ? g[0].id : '', fotos: [] };
+}
+function rqAbrirNuevo(conservar) {
+  const n = RQ.nuevo = conservar && RQ.nuevo ? RQ.nuevo : rqNuevoVacio();
+  const gs = (RQ.destinos && RQ.destinos.gestores) || [];
+  const h = abrirHoja(`<div class="rq-wrap" style="--pri:#6d3fc8;--lil:#f3eefc;--lilb:#d9ccf5;--rojo:#e23b33;--rline:#e2dcee;--rsoft:#6a607f;">
+    <h2 style="color:var(--pri);margin:0 0 8px;">Nuevo requerimiento</h2>
+    <div class="rq-form"><label>Tipo</label><select id="rnTipo">${RQ_TIPOS.map(([k, t]) => `<option value="${k}" ${n.tipo === k ? 'selected' : ''}>${t}</option>`).join('')}</select>
+    <label>Solicitud</label><textarea id="rnDesc" rows="3" placeholder="Describe lo que se necesita">${esc(n.desc)}</textarea>
+    <label>Punto</label><select id="rnModo"><option value="catastro" ${n.modo === 'catastro' ? 'selected' : ''}>Punto del catastro</option><option value="libre" ${n.modo === 'libre' ? 'selected' : ''}>Punto libre (no catastrado)</option></select>
+    <div id="rnPunto" style="margin-top:8px;"></div>
+    <label>Derivar a</label><select id="rnDer"><option value="">— Elige el contratista —</option>${gs.map((g) => `<option value="${esc(g.id)}" ${n.derivar === g.id ? 'selected' : ''}>${esc(g.nombre)}</option>`).join('')}</select>
+    <label>Fotos (opcional, máximo 2)</label><div id="rnFotos"></div>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:14px;color:#c1443c;"><input type="checkbox" id="rnUrg" ${n.urgente ? 'checked' : ''}> 🔴 Marcar como urgente</label>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="rq-btn rq-p" id="rnOk">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rnNo">Cancelar</button></div><div class="rq-err" id="rnErr"></div></div></div>`);
+  const leer = () => { n.tipo = $('#rnTipo', h).value; n.desc = $('#rnDesc', h).value; n.derivar = $('#rnDer', h).value; n.urgente = $('#rnUrg', h).checked; const q = $('#rnQ', h); if (q) n.q = q.value; const u = $('#rnUbic', h); if (u) n.ubic = u.value; };
+  $('#rnModo', h).addEventListener('change', () => { leer(); n.modo = $('#rnModo', h).value; rqAbrirNuevo(true); });
+  $('#rnNo', h).addEventListener('click', () => { RQ.nuevo = null; cerrarHoja(); });
+  rqPintarPuntoN(h, leer); rqPintarFotosN(h);
+  $('#rnOk', h).addEventListener('click', async () => {
+    leer(); const err = $('#rnErr', h); err.textContent = '';
+    if (!n.desc.trim()) { err.textContent = 'Escribe la solicitud.'; return; }
+    if (n.modo === 'catastro' && !n.gid) { err.textContent = 'Busca y elige el punto del catastro.'; return; }
+    if (n.modo === 'libre' && (n.lat == null || n.lng == null)) { err.textContent = 'Marca el punto en el mapa o usa tu ubicación.'; return; }
+    if (!n.derivar) { err.textContent = 'Elige a qué contratista se deriva.'; return; }
+    const b = $('#rnOk', h); b.disabled = true; b.textContent = 'Ingresando…';
+    let r;
+    try {
+      r = await rpc('req_crear', { p_tipo: n.tipo, p_descripcion: n.desc.trim(), p_punto_gid: n.modo === 'catastro' ? n.gid : null, p_lat: n.modo === 'libre' ? n.lat : null, p_lng: n.modo === 'libre' ? n.lng : null,
+        p_ubicacion_texto: n.modo === 'libre' ? (n.ubic.trim() || null) : null, p_urgente: n.urgente, p_derivar_a: n.derivar });
+    } catch (e) { err.textContent = e.message; b.disabled = false; b.textContent = 'Ingresar requerimiento'; return; }
+    const fallas = [];
+    for (const f of n.fotos) { try { await rqSubirFoto(r.id, 'solicitud', f.blob); } catch (e) { fallas.push(e.message); } }
+    RQ.nuevo = null; RQ.filtro = 'abiertos'; RQ.texto = ''; $('#rqBuscar').value = '';
+    toast(`Requerimiento ${r.codigo} ingresado`, 'ok');
+    if (fallas.length) toast(`Quedó ingresado, pero ${fallas.length === 1 ? 'una foto no se pudo subir' : 'algunas fotos no se pudieron subir'}: ${fallas[0]}. Agrégalas desde el detalle.`, 'error');
+    await rqAbrirDetalle(r.id); rqCargar();
+  });
+}
+function rqPintarPuntoN(h, leer) {
+  const n = RQ.nuevo, z = $('#rnPunto', h);
+  if (n.modo === 'catastro') {
+    z.innerHTML = `<div style="display:flex;gap:8px;"><input type="search" id="rnQ" placeholder="N.° de llave o N.° municipal" inputmode="numeric" value="${esc(n.q)}" style="flex:1;min-width:0;border:1.5px solid var(--rline);border-radius:8px;padding:9px;"><button type="button" class="rq-btn" id="rnBus">Buscar</button></div><div id="rnRes" style="margin-top:6px;"></div>`;
+    const txt = (p) => `Llave ${p.llave ?? '—'} · ${[p.calle_1, p.frente_1].filter(Boolean).join(' ')}`;
+    const pinta = () => {
+      $('#rnRes', h).innerHTML = n.gid && !n.res.some((p) => p.gid === n.gid) ? `<div class="rq-toca">✔ ${esc(n.gidTxt)}</div>`
+        : n.res.map((p) => `<label style="display:flex;gap:8px;align-items:center;padding:8px;border:1.5px solid ${n.gid === p.gid ? 'var(--pri)' : 'var(--rline)'};border-radius:8px;margin-bottom:5px;background:${n.gid === p.gid ? 'var(--lil)' : '#fff'};"><input type="radio" name="rnP" value="${esc(p.gid)}" ${n.gid === p.gid ? 'checked' : ''}><span>Llave <b>${esc(p.llave ?? '—')}</b> · ${esc([p.calle_1, p.frente_1].filter(Boolean).join(' ') || 'sin dirección')}${p.nro_mun ? ' · N.° mun. ' + esc(p.nro_mun) : ''}</span></label>`).join('');
+      $$('input[name=rnP]', h).forEach((i) => i.addEventListener('change', () => { const p = n.res.find((x) => String(x.gid) === i.value); n.gid = p.gid; n.gidTxt = txt(p); pinta(); }));
+    };
+    const buscar = async () => {
+      const q = $('#rnQ', h).value.trim(); n.q = q;
+      if (!/^\d+$/.test(q)) { $('#rnRes', h).innerHTML = '<div class="rq-sub">Escribe solo el número.</div>'; return; }
+      $('#rnRes', h).innerHTML = '<div class="rq-sub">Buscando…</div>';
+      try { n.res = await select('puntos_luminarios', `or=(llave.eq.${q},nro_mun.eq.${q})&select=gid,llave,calle_1,frente_1,nro_mun&limit=8`) || []; } catch (e) { n.res = []; }
+      if (n.res.length === 1) { n.gid = n.res[0].gid; n.gidTxt = txt(n.res[0]); }
+      pinta(); if (!n.res.length) $('#rnRes', h).innerHTML = '<div class="rq-sub">No se encontró ese punto en el catastro.</div>';
+    };
+    $('#rnBus', h).addEventListener('click', buscar);
+    $('#rnQ', h).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); buscar(); } });
+    pinta();
+  } else {
+    z.innerHTML = `<div class="rq-acc" style="margin-top:0;"><button type="button" class="rq-btn" id="rnMapa">📍 ${n.lat != null ? 'Cambiar en el mapa' : 'Marcar en el mapa'}</button><button type="button" class="rq-btn" id="rnGps">Usar mi ubicación</button></div>${n.lat != null ? `<div class="rq-toca">✔ ${n.lat.toFixed(5)}, ${n.lng.toFixed(5)}</div>` : ''}
+      <label>Dirección o referencia (opcional)</label><input type="text" id="rnUbic" maxlength="200" placeholder="Ej.: frente a la plaza Los Aromos" value="${esc(n.ubic)}" style="width:100%;box-sizing:border-box;border:1.5px solid var(--rline);border-radius:8px;padding:9px;">`;
+    $('#rnMapa', h).addEventListener('click', () => { leer(); rqElegirEnMapa(); });
+    $('#rnGps', h).addEventListener('click', () => {
+      if (!S.pos) { toast('Aún no hay ubicación del teléfono. Marca el punto en el mapa.', 'error'); return; }
+      leer(); n.lat = S.pos.lat; n.lng = S.pos.lng; rqAbrirNuevo(true);
+    });
+  }
+}
+function rqPintarFotosN(h) {
+  const n = RQ.nuevo, z = $('#rnFotos', h);
+  z.innerHTML = `<div class="rq-fotos">${n.fotos.map((f, i) => `<div class="rq-th"><img src="${esc(f.url)}" alt="Foto"><span class="rq-q" data-i="${i}" role="button" aria-label="Quitar foto">×</span></div>`).join('')}${n.fotos.length < 2 ? '<button type="button" class="rq-add" id="rnAdd">📷 foto</button>' : ''}</div>`;
+  $$('.rq-q', z).forEach((q) => q.addEventListener('click', () => { URL.revokeObjectURL(n.fotos[+q.dataset.i].url); n.fotos.splice(+q.dataset.i, 1); rqPintarFotosN(h); }));
+  const a = $('#rnAdd', z);
+  if (a) a.addEventListener('click', () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    inp.addEventListener('change', async () => { const f = inp.files && inp.files[0]; if (!f) return; try { const blob = await comprimirFoto(f); n.fotos.push({ blob, url: URL.createObjectURL(blob) }); rqPintarFotosN(h); } catch (e) { toast(e.message, 'error'); } });
+    inp.click();
+  });
+}
+// Marcar el punto libre tocando el mapa: la ventana se guarda y vuelve con el punto elegido
+function rqElegirEnMapa() {
+  cerrarHoja(); cambiarVista('mapa');
+  const b = document.createElement('div'); b.id = 'rqPick'; b.style.cssText = 'position:fixed;top:70px;left:12px;right:12px;z-index:1200;background:#6d3fc8;color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;display:flex;gap:10px;align-items:center;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,.35);';
+  b.innerHTML = '<span>📍 Toca el mapa para marcar el punto</span><button type="button" style="border:0;border-radius:8px;padding:6px 10px;font-weight:700;">Cancelar</button>';
+  document.body.appendChild(b);
+  const fin = (ll) => { map.off('click', h); b.remove(); if (ll) { RQ.nuevo.lat = ll.lat; RQ.nuevo.lng = ll.lng; } cambiarVista('req'); rqAbrirNuevo(true); };
+  const h = (e) => fin(e.latlng);
+  setTimeout(() => map.on('click', h), 300);
+  b.querySelector('button').addEventListener('click', () => fin(null));
 }
 // Avisos (push) con ?req=<id>: abren el requerimiento
 function rqIdDeUrl() {
