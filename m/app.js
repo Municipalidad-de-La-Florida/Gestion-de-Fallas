@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.10.6';
+const VERSION_APP = '2.10.7';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4223,7 +4223,7 @@ function pintarReqNav() {
 }
 async function rqContar() {
   if (!S.perfil || !rqVe()) return;
-  try { const n = await rpc('req_contar'); const b = $('#rqBadge'); b.textContent = n > 99 ? '99+' : n; b.hidden = !n; } catch (e) { /* sin red o sin el SQL */ }
+  try { const c = await rpc('req_conteos'); const n = (c && c.abiertos) || 0; const b = $('#rqBadge'); b.textContent = n > 99 ? '99+' : n; b.hidden = !n; } catch (e) { /* sin red o sin el SQL */ }
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) rqContar(); });
 setInterval(() => { if (!document.hidden) rqContar(); }, 120000);
