@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.10.4';
+const VERSION_APP = '2.10.5';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4284,7 +4284,7 @@ function rqVisor(url) {
   v.addEventListener('click', () => v.remove()); document.body.appendChild(v);
 }
 function rqFotosHtml(fs, momento, agregar) {
-  return `<div class="rq-fotos">${fs.map((f) => `<div class="rq-th"><img src="${esc(f.url || '')}" alt="Foto" data-u="${esc(f.url || '')}">${agregar && f.mia ? `<span class="rq-q" data-f="${esc(f.id)}" role="button" aria-label="Quitar foto">×</span>` : ''}</div>`).join('')}${agregar && fs.length < 2 ? `<button type="button" class="rq-add" data-m="${momento}">📷 foto</button>` : ''}</div>`;
+  return `<div class="rq-fotos">${fs.map((f) => `<div class="rq-th"><img src="${esc(f.url || '')}" alt="Foto" data-u="${esc(f.url || '')}">${agregar && f.mia ? `<span class="rq-q" data-f="${esc(f.id)}" role="button" aria-label="Quitar foto">×</span>` : ''}</div>`).join('')}${agregar && fs.length < 2 ? `<button type="button" class="rq-add" data-m="${momento}" data-src="cam" aria-label="Tomar foto">📷</button><button type="button" class="rq-add" data-m="${momento}" data-src="gal" aria-label="Elegir de la galería">🖼</button>` : ''}</div>`;
 }
 async function rqAbrirDetalle(id) {
   RQ.id = id;
@@ -4339,16 +4339,11 @@ function rqPintarDetalle() {
       await rqRecargarDetalle();
     } catch (e) { toast('No se pudo quitar: ' + e.message, 'error'); }
   }));
-  $$('.rq-add', h).forEach((b) => b.addEventListener('click', () => {
-    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
-    inp.addEventListener('change', async () => {
-      const f = inp.files && inp.files[0]; if (!f) return;
-      b.disabled = true; b.textContent = '…';
-      try { await rqSubirFoto(r.id, b.dataset.m, await comprimirFoto(f)); await rqRecargarDetalle(); }
-      catch (e) { toast(e.message, 'error'); b.disabled = false; b.textContent = '📷 foto'; }
-    });
-    inp.click();
-  }));
+  $$('.rq-add', h).forEach((b) => b.addEventListener('click', () => rqPedirFoto(b.dataset.src, async (f) => {
+    b.disabled = true;
+    try { await rqSubirFoto(r.id, b.dataset.m, await comprimirFoto(f)); await rqRecargarDetalle(); }
+    catch (e) { toast(e.message, 'error'); if (document.body.contains(b)) b.disabled = false; }
+  })));
   $$('#rqAcc button', h).forEach((b) => b.addEventListener('click', () => rqAbrirForm(b.dataset.a)));
   const cb = $('#rqComBtn', h);
   if (cb) cb.addEventListener('click', async () => {
@@ -4439,15 +4434,24 @@ function rqPintarPuntoN(h, leer) {
 }
 function rqPintarFotosN(h) {
   const n = RQ.nuevo, z = $('#rnFotos', h);
-  z.innerHTML = `<div class="rq-fotos">${n.fotos.map((f, i) => `<div class="rq-th"><img src="${esc(f.url)}" alt="Foto"><span class="rq-q" data-i="${i}" role="button" aria-label="Quitar foto">×</span></div>`).join('')}${n.fotos.length < 2 ? '<button type="button" class="rq-add" id="rnAdd">📷 foto</button>' : ''}</div>`;
+  z.innerHTML = `<div class="rq-fotos">${n.fotos.map((f, i) => `<div class="rq-th"><img src="${esc(f.url)}" alt="Foto"><span class="rq-q" data-i="${i}" role="button" aria-label="Quitar foto">×</span></div>`).join('')}${n.fotos.length < 2 ? '<button type="button" class="rq-add" data-m="solicitud" data-src="cam" aria-label="Tomar foto">📷</button><button type="button" class="rq-add" data-m="solicitud" data-src="gal" aria-label="Elegir de la galería">🖼</button>' : ''}</div>`;
   $$('.rq-q', z).forEach((q) => q.addEventListener('click', () => { URL.revokeObjectURL(n.fotos[+q.dataset.i].url); n.fotos.splice(+q.dataset.i, 1); rqPintarFotosN(h); }));
-  const a = $('#rnAdd', z);
-  if (a) a.addEventListener('click', () => {
-    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
-    inp.addEventListener('change', async () => { const f = inp.files && inp.files[0]; if (!f) return; try { const blob = await comprimirFoto(f); n.fotos.push({ blob, url: URL.createObjectURL(blob) }); rqPintarFotosN(h); } catch (e) { toast(e.message, 'error'); } });
-    inp.click();
+  $$('.rq-add', z).forEach((a) => a.addEventListener('click', () => rqPedirFoto(a.dataset.src, async (f) => {
+    try { const blob = await comprimirFoto(f); n.fotos.push({ blob, url: URL.createObjectURL(blob) }); if (RQ.nuevo === n && hojaAbierta && $('#rnFotos')) rqPintarFotosN($('#hojaContenido')); } catch (e) { toast(e.message, 'error'); }
+  })));
+}
+// Las fotos se piden con campos de archivo que viven en la página (no creados al vuelo): en Android, un campo suelto
+// puede perderse mientras se usa la cámara y la foto elegida no llega nunca.
+const RQ_FOTO = { cb: null };
+function rqCamposFoto() {
+  if ($('#rqInCam')) return;
+  [['rqInCam', true], ['rqInGal', false]].forEach(([id, cap]) => {
+    const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.id = id; i.hidden = true; if (cap) i.setAttribute('capture', 'environment');
+    i.addEventListener('change', () => { const f = i.files && i.files[0]; i.value = ''; const cb = RQ_FOTO.cb; if (f && cb) cb(f); });
+    document.body.appendChild(i);
   });
 }
+function rqPedirFoto(src, cb) { rqCamposFoto(); RQ_FOTO.cb = cb; $(src === 'cam' ? '#rqInCam' : '#rqInGal').click(); }
 // «＋ Nuevo» abre el mapa: se toca un punto del catastro o un lugar vacío y de ahí se llena el formulario
 function rqElegirEnMapa() {
   cerrarHoja(); cambiarVista('mapa'); S.reqElegir = true;

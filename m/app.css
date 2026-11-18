@@ -784,7 +784,7 @@ html[data-tema=oscuro] .com-bloque.t-anulada{ background:#2a2a2a; border-color:#
 .rq-fotos{ display:flex; gap:8px; margin-top:7px; flex-wrap:wrap; align-items:center; }
 .rq-th{ position:relative; width:72px; height:72px; } .rq-th img{ width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid var(--lilb); background:#d7d0e6; }
 .rq-th .rq-q{ position:absolute; top:-7px; right:-7px; width:22px; height:22px; border-radius:50%; background:#c1443c; color:#fff; border:2px solid #fff; font-size:13px; line-height:18px; text-align:center; }
-.rq-add{ width:72px; height:72px; border-radius:8px; border:1.5px dashed var(--lilb); background:#fff; color:var(--pri); font-weight:700; font-size:12px; font-family:inherit; }
+.rq-add{ font-size:24px; width:72px; height:72px; border-radius:8px; border:1.5px dashed var(--lilb); background:#fff; color:var(--pri); font-weight:700; font-size:12px; font-family:inherit; }
 .rq-acc{ display:flex; gap:8px; flex-wrap:wrap; margin:12px 0 6px; }
 .rq-btn{ border:0; border-radius:10px; padding:10px 14px; font-weight:700; font-size:14px; background:#efeaf8; color:#241a38; font-family:inherit; }
 .rq-btn.rq-p{ background:var(--pri); color:#fff; } .rq-btn.rq-d{ background:#fdeceb; color:#c1443c; } .rq-btn[disabled]{ opacity:.55; }
