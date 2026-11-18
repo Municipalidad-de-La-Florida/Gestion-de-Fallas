@@ -11592,7 +11592,7 @@ function aplicarBotonesHerramientas(){
 const RQ_BUCKET = 'fotos-requerimientos';
 const RQ_ESTADOS = {derivado:'Solicitado', asignado:'Derivado', ejecutado:'Ejecutado', revisado:'Revisado', devuelto:'Devuelto', cerrado:'Todo ok', anulado:'Anulado'};
 const RQ_TIPOS = [['despeje','Despeje de luminaria'], ['retiro','Retiro de luminaria'], ['instalacion','Instalación de luminaria'], ['otro','Otro']];
-const RQ = {filtro:'abiertos', texto:'', chip:'', lista:[], conteos:{}, destinos:null, nuevo:null, vista:'lista', id:null, det:null, urls:{}, badgeTimer:null, marcador:null, busq:null};
+const RQ = {orden:'desc', filtro:'abiertos', texto:'', chip:'', lista:[], conteos:{}, destinos:null, nuevo:null, vista:'lista', id:null, det:null, urls:{}, badgeTimer:null, marcador:null, busq:null};
 const rqEsAdmin = () => !!currentUser && currentUser.rol === 'admin';
 const rqVe = () => !!currentUser && !modoVista && (rqEsAdmin() || tieneReal('req_crear') || tieneReal('req_gestionar'));
 const rqCrea = () => !!currentUser && (rqEsAdmin() || tieneReal('req_crear'));
@@ -11642,7 +11642,7 @@ async function rqVistaLista(){
   RQ.vista = 'lista'; RQ.nuevo = RQ.nuevo && RQ.nuevo.pendiente ? RQ.nuevo : null;
   rqEl('rqHd').innerHTML = `<b>📋 Requerimientos</b><span class="rq-grow"></span><button type="button" class="rq-btn" id="rqMapaBtn">🗺 Ver en el mapa</button>${rqCrea() ? '<button type="button" class="rq-btn rq-p" id="rqNuevoBtn">＋ Nuevo</button>' : ''}<button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
   rqEl('rqBody').innerHTML = `<div class="rq-in">🔍<input id="rqQ" type="search" autocomplete="off" placeholder="Buscar por código, solicitud, dirección, llave o persona…" value="${escAttr(RQ.texto)}"><span class="rq-clr" id="rqClr" ${RQ.texto ? '' : 'hidden'}>✕</span></div>
-    <div class="rq-seg" id="rqSeg"></div><div class="rq-chips" id="rqChips"></div><div id="rqLista"><div class="rq-vacio">Cargando…</div></div>`;
+    <div class="rq-seg" id="rqSeg"></div><button type="button" class="rq-ch" id="rqOrden" style="margin:0 0 10px 8px;vertical-align:top;height:34px;"></button><div class="rq-chips" id="rqChips"></div><div id="rqLista"><div class="rq-vacio">Cargando…</div></div>`;
   rqEl('rqX').onclick = rqCerrar;
   rqEl('rqMapaBtn').onclick = () => rqModoMapa();
   const nb = rqEl('rqNuevoBtn'); if(nb) nb.onclick = () => rqModoMapa();
@@ -11677,7 +11677,9 @@ function rqPintarLista(){
     ? `<button type="button" class="rq-ch r${RQ.chip === 'urg' ? ' on' : ''}" data-c="urg">🔴 Urgentes ${nUrg}</button><button type="button" class="rq-ch${RQ.chip === 'mios' ? ' on' : ''}" data-c="mios">Mis pendientes ${nMios}</button>` +
       ['derivado', 'asignado', 'ejecutado', 'revisado', 'devuelto'].map(e => `<button type="button" class="rq-ch${RQ.chip === e ? ' on' : ''}" data-c="${e}">${RQ_ESTADOS[e]}</button>`).join('') : '';
   ch.querySelectorAll('button').forEach(b => b.onclick = () => { RQ.chip = RQ.chip === b.dataset.c ? '' : b.dataset.c; rqPintarLista(); });
-  let ls = RQ.lista;
+  const ob = rqEl('rqOrden');
+  if(ob){ ob.textContent = RQ.orden === 'asc' ? '⇅ Más antiguas primero' : '⇅ Más recientes primero'; ob.title = 'Cambiar el orden de la lista'; ob.onclick = () => { RQ.orden = RQ.orden === 'asc' ? 'desc' : 'asc'; rqPintarLista(); }; }
+  let ls = [...RQ.lista].sort((a, b) => (RQ.orden === 'asc' ? 1 : -1) * (new Date(a.creado_en) - new Date(b.creado_en)));
   if(RQ.chip === 'urg') ls = ls.filter(r => r.urgente && !['cerrado', 'anulado'].includes(r.estado));
   else if(RQ.chip === 'mios') ls = ls.filter(rqTeToca);
   else if(RQ.chip) ls = ls.filter(r => r.estado === RQ.chip);

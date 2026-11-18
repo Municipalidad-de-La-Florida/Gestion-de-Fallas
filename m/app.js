@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.1';
+const VERSION_APP = '2.12.2';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4190,7 +4190,7 @@ const RQ_ACC = {
   anular: { t: 'Anular', com: 'req', cta: 'Anular requerimiento', d: 1, ph: 'Motivo de la anulación' },
 };
 const RQ_ORDEN = ['asignar', 'ejecutar', 'no_puede', 'revisar', 'devolver_a_cuadrilla', 'cerrar', 'rechazar', 'derivar', 'devolver_ito', 'urgente', 'anular'];
-const RQ = { filtro: 'abiertos', texto: '', lista: [], conteos: {}, destinos: null, det: null, urls: {}, timer: null, busq: null };
+const RQ = { orden: 'desc', filtro: 'abiertos', texto: '', lista: [], conteos: {}, destinos: null, det: null, urls: {}, timer: null, busq: null };
 const rqVe = () => !!S.perfil && (rol() === 'admin' || rol() === 'camion' || tiene('req_crear') || tiene('req_gestionar'));
 const rqLuzHtml = '<div class="rq-luz"><div class="rq-estela"></div><div class="rq-halo"></div><div class="rq-nucleo"></div></div>';
 const rqAbierto = (r) => !['cerrado', 'anulado'].includes(r.estado);
@@ -4248,8 +4248,11 @@ function rqPintarLista() {
   $('#rqSeg').innerHTML = [['abiertos', 'Activos', c.abiertos], ['cerrados', 'Cerrados', c.cerrados], ['anulados', 'Anulados', c.anulados]]
     .map(([k, t, n]) => `<button type="button" data-f="${k}" class="${RQ.filtro === k ? 'on' : ''}">${t}${n != null ? `<i>${n}</i>` : ''}</button>`).join('');
   $$('#rqSeg button').forEach((b) => b.addEventListener('click', () => { RQ.filtro = b.dataset.f; RQ.lista = []; rqCargar(); }));
+  const ob = $('#rqOrden'); ob.textContent = RQ.orden === 'asc' ? '⇅ Más antiguas primero' : '⇅ Más recientes primero';
+  ob.onclick = () => { RQ.orden = RQ.orden === 'asc' ? 'desc' : 'asc'; rqPintarLista(); };
+  const lista = [...RQ.lista].sort((a, b) => (RQ.orden === 'asc' ? 1 : -1) * (new Date(a.creado_en) - new Date(b.creado_en)));
   const z = $('#rqItems');
-  z.innerHTML = RQ.lista.length ? RQ.lista.map((r) => {
+  z.innerHTML = lista.length ? lista.map((r) => {
     const urg = r.urgente && rqAbierto(r), toca = rqQueToca(r) && rqTeToca(r);
     return `<div class="rq-card${urg ? ' urg' : ''}" data-id="${esc(r.id)}">${urg ? rqLuzHtml : ''}
       <div class="rq-top"><span class="rq-cod">${esc(r.codigo)}</span>${urg ? '<span class="rq-chip rq-u">🔴 URGENTE</span>' : ''}<span class="rq-chip rq-e-${esc(r.estado)}" style="margin-left:auto;">${esc(RQ_ESTADOS[r.estado] || r.estado)}</span></div>
