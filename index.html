@@ -772,7 +772,10 @@
   .rq-ch{ font-size:12px; font-weight:700; border-radius:99px; padding:4px 11px; border:1px solid var(--lilb); background:#fff; color:#5b3aa3; cursor:pointer; font-family:inherit; }
   .rq-ch.on{ background:var(--lil); border-color:var(--pri); } .rq-ch.r{ color:var(--rojo); border-color:#f2b9b5; }
   .rq-vacio{ text-align:center; color:var(--rsoft); padding:30px 10px; }
-  .rq-card{ background:#fff; border:1px solid var(--rline); border-radius:14px; padding:12px 14px; margin-bottom:12px; position:relative; overflow:hidden; cursor:pointer; }
+  .rq-card{ background:#fff; border:1px solid var(--rline); border-radius:12px; padding:8px 11px; margin-bottom:0; position:relative; overflow:hidden; cursor:pointer; min-width:0; }
+  #rqLista{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:9px; align-items:start; }
+  #rqLista .rq-vacio{ grid-column:1/-1; }
+  .rq-card .rq-cod{ font-size:14px; } .rq-card .rq-tipo{ margin:3px 0 1px; font-size:13px; } .rq-card .rq-sub{ font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .rq-card:hover{ border-color:var(--lilb); box-shadow:0 2px 10px rgba(109,63,200,.12); }
   .rq-card.urg, .rq-det.urg{ border-color:rgba(226,59,51,.5); animation:rqLatido 2.6s linear infinite; }
   .rq-card.urg>*:not(.rq-luz), .rq-det.urg>*:not(.rq-luz){ position:relative; z-index:2; }
@@ -785,7 +788,7 @@
   .rq-e-ejecutado{ color:#7a4fc9; border-color:#c3aef0; background:#ebe3fb; } .rq-e-revisado{ color:#4a3a8c; border-color:#b9b2e6; background:#e9e7f8; }
   .rq-e-devuelto{ color:#9a4a8a; border-color:#e5c4de; background:#fbeef8; } .rq-e-cerrado{ color:#555a66; border-color:#d3d6dd; background:#f0f1f4; } .rq-e-anulado{ color:#8b8b93; border-color:#dcdce2; background:#f6f6f8; text-decoration:line-through; }
   .rq-tipo{ margin:6px 0 2px; font-weight:700; font-size:14px; } .rq-sub{ color:var(--rsoft); font-size:12px; } .rq-sub a{ color:var(--pri); font-weight:700; cursor:pointer; text-decoration:underline; }
-  .rq-toca{ margin-top:7px; display:inline-block; background:var(--lil); color:var(--pri); border:1px solid var(--lilb); border-radius:8px; padding:3px 9px; font-size:12px; font-weight:700; }
+  .rq-toca{ margin-top:5px; display:inline-block; background:var(--lil); color:var(--pri); border:1px solid var(--lilb); border-radius:8px; padding:3px 9px; font-size:12px; font-weight:700; }
   .rq-box{ background:var(--lil); border:1px solid var(--lilb); border-radius:8px; padding:8px 11px; margin:10px 0; }
   .rq-box>b{ display:block; font-size:11px; color:var(--pri); text-transform:uppercase; letter-spacing:.05em; } .rq-txt{ white-space:pre-wrap; margin-top:2px; }
   .rq-fotos{ display:flex; gap:7px; margin-top:7px; flex-wrap:wrap; align-items:center; }
@@ -11660,7 +11663,7 @@ function rqCardHtml(r){
   return `<div class="rq-card${urg ? ' urg' : ''}" data-id="${r.id}">${urg ? '<div class="rq-luz"><div class="rq-estela"></div><div class="rq-halo"></div><div class="rq-nucleo"></div></div>' : ''}
     <div class="rq-top"><span class="rq-cod">${r.codigo}</span>${urg ? '<span class="rq-chip rq-u">🔴 URGENTE</span>' : ''}<span class="rq-chip rq-e-${r.estado}" style="margin-left:auto;">${RQ_ESTADOS[r.estado] || r.estado}</span></div>
     <div class="rq-tipo">${escHtml(r.tipo_label)}</div><div class="rq-sub">${escHtml(r.ubicacion)}</div>
-    <div class="rq-sub" style="margin-top:3px;">Solicitó ${escHtml(r.creado_por.nombre || '—')} · ${tiempoHace(r.creado_en)}${r.derivado_a.nombre ? ' · Contratista: ' + escHtml(r.derivado_a.nombre) : ''}${r.asignado_a.nombre ? ' · ' + escHtml(r.asignado_a.nombre) : ''}</div>
+    <div class="rq-sub" style="margin-top:2px;" title="Solicitó ${escAttr(r.creado_por.nombre || '—')}${r.derivado_a.nombre ? ' · Contratista: ' + escAttr(r.derivado_a.nombre) : ''}${r.asignado_a.nombre ? ' · Cuadrilla: ' + escAttr(r.asignado_a.nombre) : ''}">${escHtml(r.creado_por.nombre || '—')} · ${tiempoHace(r.creado_en)}${r.asignado_a.nombre ? ' · ' + escHtml(r.asignado_a.nombre) : (r.derivado_a.nombre ? ' → ' + escHtml(r.derivado_a.nombre) : '')}</div>
     ${toca ? `<div class="rq-toca">👉 Te toca: ${rqQueToca(r)}</div>` : ''}</div>`;
 }
 function rqPintarLista(){
