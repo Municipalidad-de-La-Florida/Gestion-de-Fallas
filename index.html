@@ -2425,7 +2425,7 @@ function initMap(){
   L.control.layers({'Fondo suave': fondoSuave, 'Fondo a color': fondoColor}, null, {position:'bottomright', collapsed:true}).addTo(map);
   map.on('baselayerchange', (e) => { try{ localStorage.setItem('fondoMapa', e.layer === fondoColor ? 'color' : 'suave'); }catch(err){} });
 
-  map.on('click', () => cerrarPanel()); // clic en mapa vacío cierra el panel
+  map.on('click', e => { if(rqIngresando()){ rqPreguntarIngreso(e.latlng, null); return; } cerrarPanel(); }); // clic en mapa vacío cierra el panel
   L.DomEvent.disableClickPropagation(document.getElementById('reportPanel')); // clics dentro del panel no llegan al mapa
   L.DomEvent.disableScrollPropagation(document.getElementById('reportPanel')); // scroll dentro del panel no hace zoom en el mapa
 
@@ -2487,7 +2487,7 @@ function initMap(){
   layerCalles = L.geoJSON(null, {style:{color:'#9aa79e',weight:1.4,opacity:0.9}});
   layerCircuitos = L.geoJSON(null, {
     style:{color:'#8a9a90',weight:2.5,opacity:0.85},
-    onEachFeature:(f,l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); handleCircuitoClick(f,l); })
+    onEachFeature:(f,l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); if(rqIngresando()){ rqPreguntarIngreso(e.latlng, null); return; } handleCircuitoClick(f,l); })
   });
   layerPuntos = L.geoJSON(null, {
     pointToLayer:(f,latlng) => L.marker(latlng, {icon: iconoParaPunto(f.properties.simb_poste, '#5b7a68', '#3d5548')}),
@@ -2988,6 +2988,7 @@ function puedeReportar(){
 let modoHistorial = false;
 
 function handlePuntoClick(feature, layer){
+  if(rqIngresando()){ const [lo, la] = feature.geometry.coordinates; rqPreguntarIngreso(L.latLng(la, lo), feature.properties); return; }
   if(modoHistorial && tieneReal('modo_historial')){
     resaltarPuntoConsulta(feature.geometry.coordinates[1], feature.geometry.coordinates[0]);
     mostrarHistorial('punto', feature.properties.gid, `Punto lumínico ${feature.properties.llave ?? ''}`);
@@ -3024,6 +3025,7 @@ function handlePuntoClick(feature, layer){
     });
 }
 function handleCircuitoClick(feature, layer){
+  if(rqIngresando()){ return; }
   map.fitBounds(layer.getBounds(), {padding:[50,50]});
   if(modoHistorial && tieneReal('modo_historial')){
     resaltarCircuitoConsulta(feature);
@@ -11636,8 +11638,8 @@ async function rqVistaLista(){
   rqEl('rqBody').innerHTML = `<div class="rq-in">🔍<input id="rqQ" type="search" autocomplete="off" placeholder="Buscar por código, solicitud, dirección, llave o persona…" value="${escAttr(RQ.texto)}"><span class="rq-clr" id="rqClr" ${RQ.texto ? '' : 'hidden'}>✕</span></div>
     <div class="rq-seg" id="rqSeg"></div><div class="rq-chips" id="rqChips"></div><div id="rqLista"><div class="rq-vacio">Cargando…</div></div>`;
   rqEl('rqX').onclick = rqCerrar;
-  const nb = rqEl('rqNuevoBtn'); if(nb) nb.onclick = () => rqVistaNuevo();
   rqEl('rqMapaBtn').onclick = () => rqModoMapa();
+  const nb = rqEl('rqNuevoBtn'); if(nb) nb.onclick = () => rqModoMapa();
   const q = rqEl('rqQ');
   q.oninput = () => { RQ.texto = q.value; rqEl('rqClr').hidden = !q.value; clearTimeout(RQ.busq); RQ.busq = setTimeout(rqCargar, 280); };
   rqEl('rqClr').onclick = () => { RQ.texto = ''; q.value = ''; rqEl('rqClr').hidden = true; rqCargar(); q.focus(); };
@@ -11826,7 +11828,7 @@ function rqDibujarMapa(centrar, foco){
     pts.push([r.lat, r.lng]);
   });
   g.addTo(map); RQ.capa = g;
-  const b = rqEl('rqMapaBar'); if(b) b.querySelector('span').textContent = `📋 Requerimientos en el mapa · ${pts.length} activo${pts.length === 1 ? '' : 's'}`;
+  const b = rqEl('rqMapaBar'); if(b) b.querySelector('span').textContent = `📋 Requerimientos en el mapa · ${pts.length} activo${pts.length === 1 ? '' : 's'}${rqCrea() ? ' · haz clic en un punto para ingresar uno' : ''}`;
   if(foco) map.setView(foco, 19);
   else if(centrar && pts.length) map.fitBounds(pts, {padding: [80, 80], maxZoom: 18});
 }
@@ -11862,11 +11864,11 @@ function rqNuevoVacio(){
 function rqVistaNuevo(){
   RQ.vista = 'nuevo'; const n = RQ.nuevo = RQ.nuevo || rqNuevoVacio(); const gs = (RQ.destinos && RQ.destinos.gestores) || [];
   rqEl('rqHd').innerHTML = `<button type="button" class="rq-back" id="rqVolver">‹ Lista</button><b>Nuevo requerimiento</b><span class="rq-grow"></span><button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
-  rqEl('rqX').onclick = rqCerrar; rqEl('rqVolver').onclick = () => { RQ.nuevo = null; rqVistaLista(); };
+  rqEl('rqX').onclick = rqCerrar; rqEl('rqVolver').onclick = () => { RQ.nuevo = null; if(RQ.mapa) rqCerrar(); else rqVistaLista(); };
   rqEl('rqBody').innerHTML = `<div class="rq-f">
     <label class="rq-lbl" style="margin-top:0;">Tipo</label><div class="rq-opc" id="rqTipos">${RQ_TIPOS.map(([k, t]) => `<label class="${n.tipo === k ? 'on' : ''}"><input type="radio" name="rqT" value="${k}" ${n.tipo === k ? 'checked' : ''} hidden>${t}</label>`).join('')}</div>
     <label class="rq-lbl">Solicitud</label><textarea id="rqDesc" rows="3" placeholder="Describe lo que se necesita">${escHtml(n.desc)}</textarea>
-    <label class="rq-lbl">Punto</label><div class="rq-opc" id="rqModo"><label class="${n.modo === 'catastro' ? 'on' : ''}"><input type="radio" name="rqM" value="catastro" hidden>Punto del catastro</label><label class="${n.modo === 'libre' ? 'on' : ''}"><input type="radio" name="rqM" value="libre" hidden>Punto libre (no catastrado)</label></div>
+    <label class="rq-lbl">Punto</label>
     <div id="rqPunto" style="margin-top:8px;"></div>
     <label class="rq-lbl">Derivar a</label><select id="rqDer"><option value="">— Elige el contratista —</option>${gs.map(g => `<option value="${g.id}" ${n.derivar === g.id ? 'selected' : ''}>${escHtml(g.nombre)}</option>`).join('')}</select>
     <label class="rq-lbl">Fotos (opcional, máximo 2)</label><div id="rqFotosN"></div>
@@ -11874,8 +11876,7 @@ function rqVistaNuevo(){
     <div style="margin-top:16px;display:flex;gap:8px;align-items:center;"><button type="button" class="rq-btn rq-p" id="rqCrear">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rqCancelar">Cancelar</button><span class="rq-err" id="rqErr"></span></div></div>`;
   const leer = () => { n.desc = rqEl('rqDesc').value; n.derivar = rqEl('rqDer').value; n.urgente = rqEl('rqUrg').checked; const q = rqEl('rqQ2'); if(q) n.q = q.value; const u = rqEl('rqUbic'); if(u) n.ubic = u.value; };
   rqEl('rqTipos').querySelectorAll('input').forEach(i => i.onchange = () => { leer(); n.tipo = i.value; rqVistaNuevo(); });
-  rqEl('rqModo').querySelectorAll('input').forEach(i => i.onchange = () => { leer(); n.modo = i.value; rqVistaNuevo(); });
-  rqEl('rqCancelar').onclick = () => { RQ.nuevo = null; rqVistaLista(); };
+  rqEl('rqCancelar').onclick = () => { RQ.nuevo = null; if(RQ.mapa) rqCerrar(); else rqVistaLista(); };
   rqPintarPunto(leer); rqPintarFotosN();
   rqEl('rqCrear').onclick = async () => {
     leer(); const err = rqEl('rqErr'); err.textContent = '';
@@ -11897,27 +11898,8 @@ function rqVistaNuevo(){
 }
 function rqPintarPunto(leer){
   const n = RQ.nuevo, z = rqEl('rqPunto');
-  if(n.modo === 'catastro'){
-    z.innerHTML = `<div style="display:flex;gap:8px;"><input type="search" id="rqQ2" placeholder="N.° de llave o N.° municipal" inputmode="numeric" value="${escAttr(n.q)}" style="flex:1;"><button type="button" class="rq-btn" id="rqBus">Buscar</button></div><div class="rq-res" id="rqRes"></div>`;
-    const pintaRes = () => {
-      rqEl('rqRes').innerHTML = n.gid && !n.res.some(p => p.gid === n.gid) ? `<label class="on"><input type="radio" checked hidden><span>${escHtml(n.gidTxt)}</span></label>`
-        : (n.res.length ? n.res.map(p => `<label class="${n.gid === p.gid ? 'on' : ''}"><input type="radio" name="rqP" value="${p.gid}" hidden><span>Llave <b>${p.llave ?? '—'}</b> · ${escHtml([p.calle_1, p.frente_1].filter(Boolean).join(' ') || 'sin dirección')}${p.nro_mun ? ' · N.° mun. ' + p.nro_mun : ''}</span></label>`).join('') : '');
-      rqEl('rqRes').querySelectorAll('input[name=rqP]').forEach(i => i.onchange = () => { const p = n.res.find(x => String(x.gid) === i.value); n.gid = p.gid; n.gidTxt = `Llave ${p.llave ?? '—'} · ${[p.calle_1, p.frente_1].filter(Boolean).join(' ')}`; pintaRes(); });
-    };
-    const buscar = async () => {
-      const q = rqEl('rqQ2').value.trim(); if(!/^\d+$/.test(q)){ rqEl('rqRes').innerHTML = '<div class="rq-sub">Escribe solo el número.</div>'; return; }
-      rqEl('rqRes').innerHTML = '<div class="rq-sub">Buscando…</div>';
-      try{ n.res = await db.select('puntos_luminarios', `or=(llave.eq.${q},nro_mun.eq.${q})&select=gid,llave,calle_1,frente_1,nro_mun&limit=8`) || []; }catch(e){ n.res = []; }
-      if(n.res.length === 1){ const p = n.res[0]; n.gid = p.gid; n.gidTxt = `Llave ${p.llave ?? '—'} · ${[p.calle_1, p.frente_1].filter(Boolean).join(' ')}`; }
-      pintaRes(); if(!n.res.length) rqEl('rqRes').innerHTML = '<div class="rq-sub">No se encontró ese punto en el catastro.</div>';
-    };
-    rqEl('rqBus').onclick = buscar; rqEl('rqQ2').onkeydown = e => { if(e.key === 'Enter'){ e.preventDefault(); buscar(); } };
-    pintaRes();
-  }else{
-    z.innerHTML = `<button type="button" class="rq-btn" id="rqMarcar">📍 ${n.lat != null ? 'Cambiar punto en el mapa' : 'Marcar punto en el mapa'}</button>${n.lat != null ? `<span class="rq-sub" style="margin-left:8px;">✔ ${n.lat.toFixed(5)}, ${n.lng.toFixed(5)}</span>` : ''}
-      <label class="rq-lbl">Dirección o referencia (opcional)</label><input type="text" id="rqUbic" maxlength="200" placeholder="Ej.: frente a la plaza Los Aromos" value="${escAttr(n.ubic)}">`;
-    rqEl('rqMarcar').onclick = () => { leer(); rqElegirEnMapa(); };
-  }
+  z.innerHTML = `<div class="rq-toca" style="display:block;">${n.modo === 'catastro' ? '✔ ' + escHtml(n.gidTxt) : `✔ Punto libre · ${n.lat.toFixed(5)}, ${n.lng.toFixed(5)}`}</div>
+    ${n.modo === 'libre' ? `<label class="rq-lbl">Dirección o referencia (opcional)</label><input type="text" id="rqUbic" maxlength="200" placeholder="Ej.: frente a la plaza Los Aromos" value="${escAttr(n.ubic)}">` : ''}`;
 }
 function rqPintarFotosN(){
   const n = RQ.nuevo, z = rqEl('rqFotosN');
@@ -11930,17 +11912,21 @@ function rqPintarFotosN(){
     inp.click();
   };
 }
-function rqElegirEnMapa(){
-  const ov = rqEl('rqOv'); ov.style.display = 'none';
-  const b = document.createElement('div'); b.id = 'rqPick'; b.className = 'rq-pickbar'; b.innerHTML = '📍 Haz clic en el mapa para marcar el punto <button type="button" id="rqPickX">Cancelar</button>';
-  document.body.appendChild(b); map.getContainer().style.cursor = 'crosshair';
-  const fin = ll => {
-    map.off('click', h); document.removeEventListener('keydown', esc); b.remove(); map.getContainer().style.cursor = ''; ov.style.display = '';
-    if(ll){ RQ.nuevo.lat = ll.lat; RQ.nuevo.lng = ll.lng; }
+// Los requerimientos solo se ingresan desde «Requerimientos en el mapa»: se hace clic en un punto del catastro o en un lugar vacío
+const rqIngresando = () => !!RQ.mapa && rqCrea();
+function rqPreguntarIngreso(ll, pp){
+  const esPunto = !!pp, txt = esPunto ? `<b>Punto lumínico · Llave ${escHtml(pp.llave ?? '—')}</b><br><span style="color:#6a607f">${escHtml([pp.calle_1, pp.direccion].filter(Boolean).join(' ') || 'sin dirección')}</span>` : `<b>Lugar sin catastro</b><br><span style="color:#6a607f">${ll.lat.toFixed(5)}, ${ll.lng.toFixed(5)}</span>`;
+  const pop = L.popup({closeButton: true, offset: [0, -4]}).setLatLng(ll).setContent(`<div style="min-width:190px">${txt}<div style="margin-top:8px"><button type="button" class="popup-btn" id="rqAqui" style="background:#6d3fc8;color:#fff;border:0;">📋 Ingresar requerimiento aquí</button></div></div>`).openOn(map);
+  const b = document.getElementById('rqAqui');
+  if(b) b.onclick = async () => {
+    map.closePopup(pop);
+    rqOverlay(); document.removeEventListener('keydown', rqTecla); document.addEventListener('keydown', rqTecla);
+    try{ RQ.destinos = await db.rpc('req_destinos', {}); }catch(e){ RQ.destinos = RQ.destinos || {gestores: [], cuadrillas: []}; }
+    const n = RQ.nuevo = rqNuevoVacio();
+    if(esPunto){ n.modo = 'catastro'; n.gid = pp.gid; n.gidTxt = `Llave ${pp.llave ?? '—'} · ${[pp.calle_1, pp.direccion].filter(Boolean).join(' ') || 'sin dirección'}`; }
+    else{ n.modo = 'libre'; n.lat = ll.lat; n.lng = ll.lng; }
     rqVistaNuevo();
   };
-  const h = e => fin(e.latlng), esc = e => { if(e.key === 'Escape') fin(null); };
-  map.on('click', h); document.addEventListener('keydown', esc); b.querySelector('#rqPickX').onclick = () => fin(null);
 }
 
 // ===== Insignia del botón (cuántos esperan una acción mía) =====
