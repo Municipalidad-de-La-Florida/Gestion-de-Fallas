@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.10.8';
+const VERSION_APP = '2.11.0';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4226,7 +4226,7 @@ async function rqContar() {
   try { const c = await rpc('req_conteos'); const n = (c && c.abiertos) || 0; const b = $('#rqBadge'); b.textContent = n > 99 ? '99+' : n; b.hidden = !n; } catch (e) { /* sin red o sin el SQL */ }
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden) rqContar(); });
-setInterval(() => { if (!document.hidden) rqContar(); }, 120000);
+setInterval(() => { if (!document.hidden) { rqContar(); if (S.reqMapa && !hojaAbierta) rpc('req_listar', { p_filtro: 'abiertos', p_texto: null, p_limite: 300 }).then((l) => { RQ.lista = l || []; rqDibujarMapa(false); }).catch(() => {}); } }, 120000);
 
 async function abrirReq() {
   const nb = $('#rqNuevo'); if (nb) nb.hidden = !rqCrea();
@@ -4241,6 +4241,7 @@ async function rqCargar() {
     RQ.lista = l || []; RQ.conteos = c || {};
   } catch (e) { z.innerHTML = `<div class="rq-vacio">No se pudo cargar: ${esc(e.message)}</div>`; return; }
   rqPintarLista(); rqContar();
+  if (S.reqMapa && RQ.filtro === 'abiertos' && !RQ.texto.trim()) rqDibujarMapa(false);
 }
 function rqPintarLista() {
   const c = RQ.conteos || {};
@@ -4259,6 +4260,8 @@ function rqPintarLista() {
   $$('.rq-card', z).forEach((el) => el.addEventListener('click', () => rqAbrirDetalle(el.dataset.id)));
 }
 $('#rqNuevo').addEventListener('click', () => rqIniciarNuevo());
+$('#rqVerMapa').addEventListener('click', () => rqEntrarMapa());
+$('#chipReq').addEventListener('click', () => rqSalirMapa());
 $('#rqBuscar').addEventListener('input', (e) => { RQ.texto = e.target.value; clearTimeout(RQ.busq); RQ.busq = setTimeout(rqCargar, 280); });
 
 async function rqUrlFoto(ruta) {
@@ -4322,6 +4325,7 @@ function rqPintarDetalle() {
       <div class="rq-top"><span class="rq-cod">${esc(r.codigo)}</span>${urg ? '<span class="rq-chip rq-u">🔴 URGENTE</span>' : ''}<span class="rq-chip rq-e-${esc(r.estado)}" style="margin-left:auto;">${esc(RQ_ESTADOS[r.estado] || r.estado)}</span></div>
       <div class="rq-tipo" style="font-size:15px;">${esc(r.tipo_label)}</div>
       <div class="rq-sub">${esc(r.ubicacion)}${r.lat != null ? ` · <a href="#" id="rqMapa" style="color:var(--pri);font-weight:700;">Ver en el mapa</a>` : ''}</div>
+      ${r.lat != null ? `<div class="rq-acc" style="margin:8px 0 0;"><a class="rq-btn rq-ir" id="rqIr" href="${esc(urlComoLlegar([r.lat, r.lng]))}" target="_blank" rel="noopener">🧭 Cómo llegar</a></div>` : ''}
       <div class="rq-box"><b>Solicitud</b><div class="rq-txt">${esc(r.descripcion)}</div>${fSol.length ? rqFotosHtml(fSol, 'solicitud', false) : ''}</div>
       <div class="rq-sub">${quien}</div>${ejecBox}
       ${botones ? `<div class="rq-acc" id="rqAcc">${botones}</div><div id="rqForm"></div>` : ''}
@@ -4472,6 +4476,41 @@ function rqFinElegir(sel) {
   cambiarVista('req'); rqAbrirNuevo(true);
 }
 function rqIniciarNuevo() { RQ.nuevo = rqNuevoVacio(); RQ.nuevo.modo = null; rqElegirEnMapa(); }
+
+/* ---- Requerimientos en el mapa: se ven los activos, se tocan para abrirlos y se sale con «Salir de requerimientos» ---- */
+const RQM = { capa: null, n: 0 };
+function rqIcono(r) {
+  const urg = r.urgente && rqAbierto(r), toca = rqTeToca(r);
+  const col = urg ? '#e23b33' : '#6d3fc8';
+  return L.divIcon({ className: '', iconSize: [32, 40], iconAnchor: [16, 40], html: `<div class="rq-mk${urg ? ' urg' : ''}${toca ? ' toca' : ''}"><svg width="32" height="40" viewBox="0 0 32 40" aria-hidden="true"><path d="M16 1.5C8.5 1.5 2.5 7.4 2.5 14.8 2.5 24.6 16 38.5 16 38.5S29.5 24.6 29.5 14.8C29.5 7.4 23.5 1.5 16 1.5z" fill="${col}" stroke="#fff" stroke-width="2"/><rect x="9.5" y="8" width="13" height="14" rx="2" fill="#fff"/><rect x="12.5" y="6.5" width="7" height="3.5" rx="1.3" fill="${col}" stroke="#fff" stroke-width="1"/><path d="M12 13h8M12 16h8M12 19h5" stroke="${col}" stroke-width="1.6" stroke-linecap="round"/></svg><span class="rq-cd">${esc(r.codigo)}</span></div>` });
+}
+function rqDibujarMapa(centrar) {
+  if (!S.reqMapa || !map) return;
+  if (RQM.capa) { map.removeLayer(RQM.capa); RQM.capa = null; }
+  const g = L.layerGroup(); const pts = [];
+  RQ.lista.filter((r) => r.lat != null && r.lng != null && rqAbierto(r)).forEach((r) => {
+    L.marker([r.lat, r.lng], { icon: rqIcono(r), zIndexOffset: r.urgente ? 3000 : 2000, keyboard: false }).on('click', (e) => { L.DomEvent.stopPropagation(e); if (!S.reqElegir) rqAbrirDetalle(r.id); }).addTo(g);
+    pts.push([r.lat, r.lng]);
+  });
+  g.addTo(map); RQM.capa = g; RQM.n = pts.length;
+  pintarChipReq();
+  if (centrar && pts.length) map.fitBounds(pts, { padding: [60, 60], maxZoom: 18 });
+}
+function pintarChipReq() {
+  const c = $('#chipReq'); if (!c) return;
+  c.hidden = !S.reqMapa;
+  c.textContent = S.reqMapa ? `📋 Requerimientos en el mapa · ${RQM.n} activo${RQM.n === 1 ? '' : 's'} · toca para salir` : '';
+}
+async function rqEntrarMapa() {
+  S.reqMapa = true; RQ.filtro = 'abiertos'; RQ.texto = ''; $('#rqBuscar').value = '';
+  cambiarVista('mapa'); pintarChipReq();
+  try { const l = await rpc('req_listar', { p_filtro: 'abiertos', p_texto: null, p_limite: 300 }); RQ.lista = l || []; } catch (e) { toast('No se pudieron cargar los requerimientos: ' + e.message, 'error'); }
+  setTimeout(() => { map.invalidateSize(); rqDibujarMapa(true); if (!RQM.n) toast('No hay requerimientos activos con ubicación.', 'ok'); }, 120);
+}
+function rqSalirMapa() {
+  S.reqMapa = false; if (RQM.capa && map) { map.removeLayer(RQM.capa); RQM.capa = null; }
+  RQM.n = 0; pintarChipReq();
+}
 // Avisos (push) con ?req=<id>: abren el requerimiento
 function rqIdDeUrl() {
   try {
