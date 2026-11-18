@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.11.2';
+const VERSION_APP = '2.12.0';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -855,7 +855,7 @@ function iniciarMapa() {
   map.on('moveend', () => { clearTimeout(_areaTimer); _areaTimer = setTimeout(cargarArea, 300); });
   map.on('dragstart', () => { if (S.seguir) { detenerSeguir(); } });
   map.on('zoomend', () => { ajustarRadios(); dibujarFallas(); quitarEmpalmesLejos(); });
-  map.on('click', (e) => { if (S.reqElegir) rqFinElegir({ lat: e.latlng.lat, lng: e.latlng.lng }); /* fuera de ese modo, un toque en el vacío no hace nada */ });
+  map.on('click', (e) => { if (rqIngresando()) rqPreguntarIngreso({ lat: e.latlng.lat, lng: e.latlng.lng }); /* fuera de ese modo, un toque en el vacío no hace nada */ });
   // Atenuar lo que queda fuera de la comuna (botón en el mapa, se recuerda la elección). No bloquea toques.
   // El círculo de precisión del GPS va BAJO las fallas: encima teñía de azul los puntos morados/rojos
   map.createPane('precisionPane');
@@ -1009,7 +1009,7 @@ async function cargarArea(forzar) {
       L.geoJSON(circ, {
         renderer: rend,
         style: { color: '#2563a8', weight: 4, opacity: 0.75 },
-        onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); if (S.reqElegir) return rqFinElegir({ lat: e.latlng.lat, lng: e.latlng.lng }); abrirCircuito(f.properties, f.geometry); }),
+        onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); if (rqIngresando()) return rqPreguntarIngreso({ lat: e.latlng.lat, lng: e.latlng.lng }); abrirCircuito(f.properties, f.geometry); }),
       }).eachLayer((l) => capaCircuitos.addLayer(l));
     }
     if (pts) {
@@ -1288,7 +1288,7 @@ function dibujarFallas() {
     }
     capa.on('click', (e) => {
       L.DomEvent.stopPropagation(e);
-      if (S.reqElegir) { const ab = elementoBajoFalla(p, e.latlng); return ab && ab.tipo === 'punto' ? abrirPunto(ab.f.properties, ab.f.geometry) : rqFinElegir({ lat: e.latlng.lat, lng: e.latlng.lng }); }
+      if (rqIngresando()) { const ab = elementoBajoFalla(p, e.latlng); return ab && ab.tipo === 'punto' ? abrirPunto(ab.f.properties, ab.f.geometry) : rqPreguntarIngreso({ lat: e.latlng.lat, lng: e.latlng.lng }); }
       if (S.modoHist && p.ref_punto_gid != null) return abrirHistorial('punto', p.ref_punto_gid, 'Punto lumínico', f.geometry);
       if (S.modoHist && p.ref_circuito_gid != null) return abrirHistorial('linea', p.ref_circuito_gid, 'Circuito', f.geometry);
       const abajo = elementoBajoFalla(p, e.latlng);
@@ -1653,7 +1653,7 @@ function botonVerReparada(h, tipo, gid) {
   if (b) b.addEventListener('click', () => abrirFalla(f.properties, f.geometry));
 }
 function abrirPunto(p, geom) {
-  if (S.reqElegir) return rqFinElegir(p);
+  if (rqIngresando()) return rqPreguntarIngreso(p);
   if (S.modoHist) return abrirHistorial('punto', p.gid, 'Punto lumínico ' + (p.llave ?? ''), geom);
   // Si ya tiene una falla activa, se muestra esa en vez de ofrecer reportar otra
   const act = fallaActivaCargada('punto', p.gid); if (act) return abrirFalla(act.properties, act.geometry);
@@ -4259,8 +4259,8 @@ function rqPintarLista() {
   }).join('') : `<div class="rq-vacio">${RQ.texto ? 'Ningún requerimiento coincide con la búsqueda.' : (RQ.filtro === 'abiertos' ? 'No hay requerimientos activos.' : 'No hay requerimientos en esta lista.')}</div>`;
   $$('.rq-card', z).forEach((el) => el.addEventListener('click', () => rqAbrirDetalle(el.dataset.id)));
 }
-$('#rqNuevo').addEventListener('click', () => rqIniciarNuevo());
 $('#rqVerMapa').addEventListener('click', () => rqEntrarMapa());
+$('#rqNuevo').addEventListener('click', () => rqEntrarMapa());
 $('#chipReq').addEventListener('click', () => rqSalirMapa());
 $('#rqBuscar').addEventListener('input', (e) => { RQ.texto = e.target.value; clearTimeout(RQ.busq); RQ.busq = setTimeout(rqCargar, 280); });
 
@@ -4432,9 +4432,7 @@ function rqAbrirNuevo(conservar) {
 function rqPintarPuntoN(h, leer) {
   const n = RQ.nuevo, z = $('#rnPunto', h);
   z.innerHTML = `<div class="rq-toca" style="display:block;">${n.modo === 'catastro' ? '✔ ' + esc(n.gidTxt) : `✔ Punto libre · ${n.lat.toFixed(5)}, ${n.lng.toFixed(5)}`}</div>
-    ${n.modo === 'libre' ? `<label>Dirección o referencia (opcional)</label><input type="text" id="rnUbic" maxlength="200" placeholder="Ej.: frente a la plaza Los Aromos" value="${esc(n.ubic)}" style="width:100%;box-sizing:border-box;border:1.5px solid var(--rline);border-radius:8px;padding:9px;">` : ''}
-    <div class="rq-acc" style="margin-top:8px;"><button type="button" class="rq-btn" id="rnMapa">📍 Cambiar punto en el mapa</button></div>`;
-  $('#rnMapa', h).addEventListener('click', () => { leer(); rqElegirEnMapa(); });
+    ${n.modo === 'libre' ? `<label>Dirección o referencia (opcional)</label><input type="text" id="rnUbic" maxlength="200" placeholder="Ej.: frente a la plaza Los Aromos" value="${esc(n.ubic)}" style="width:100%;box-sizing:border-box;border:1.5px solid var(--rline);border-radius:8px;padding:9px;">` : ''}`;
 }
 function rqPintarFotosN(h) {
   const n = RQ.nuevo, z = $('#rnFotos', h);
@@ -4456,26 +4454,23 @@ function rqCamposFoto() {
   });
 }
 function rqPedirFoto(src, cb) { rqCamposFoto(); RQ_FOTO.cb = cb; $(src === 'cam' ? '#rqInCam' : '#rqInGal').click(); }
-// «＋ Nuevo» abre el mapa: se toca un punto del catastro o un lugar vacío y de ahí se llena el formulario
-function rqElegirEnMapa() {
-  cerrarHoja(); cambiarVista('mapa'); S.reqElegir = true;
-  let b = $('#rqPick'); if (b) b.remove();
-  b = document.createElement('div'); b.id = 'rqPick'; b.style.cssText = 'position:fixed;top:70px;left:12px;right:12px;z-index:1200;background:#6d3fc8;color:#fff;padding:10px 14px;border-radius:12px;font-weight:700;display:flex;gap:10px;align-items:center;justify-content:space-between;box-shadow:0 6px 20px rgba(0,0,0,.35);';
-  b.innerHTML = '<span>📍 Nuevo requerimiento: toca un punto del catastro o un lugar vacío del mapa</span><button type="button" style="border:0;border-radius:8px;padding:6px 10px;font-weight:700;">Cancelar</button>';
-  document.body.appendChild(b);
-  b.querySelector('button').addEventListener('click', () => rqFinElegir(null));
-}
-function rqFinElegir(sel) {
-  S.reqElegir = false; const b = $('#rqPick'); if (b) b.remove();
-  const n = RQ.nuevo;
-  if (sel && n) {
-    if (sel.gid != null) { n.modo = 'catastro'; n.gid = sel.gid; n.gidTxt = `Llave ${sel.llave ?? '—'} · ${[sel.calle_1, sel.direccion].filter((x) => x != null && x !== '').join(' ') || 'sin dirección'}`; }
+// Los requerimientos solo se ingresan desde «Requerimientos en el mapa»: se toca un punto del catastro o un lugar vacío
+const rqIngresando = () => !!S.reqMapa && rqCrea();
+function rqPreguntarIngreso(sel) {
+  const esPunto = sel.gid != null;
+  const txt = esPunto ? `Punto lumínico · Llave ${sel.llave ?? '—'}<br><span class="hint">${esc([sel.calle_1, sel.direccion].filter((x) => x != null && x !== '').join(' ') || 'sin dirección')}</span>` : `Lugar sin catastro<br><span class="hint">${sel.lat.toFixed(5)}, ${sel.lng.toFixed(5)}</span>`;
+  const h = abrirHoja(`<div class="rq-wrap" style="--pri:#6d3fc8;--lil:#f3eefc;--lilb:#d9ccf5;--rojo:#e23b33;--rline:#e2dcee;--rsoft:#6a607f;"><h2 style="color:var(--pri);margin:0 0 6px;">Nuevo requerimiento</h2><p style="margin:0 0 12px;font-size:15px;">${txt}</p>
+    <div class="rq-acc" style="margin:0;"><button type="button" class="rq-btn rq-p" id="rqSi">📋 Ingresar requerimiento aquí</button><button type="button" class="rq-btn" id="rqNoAqui">Cancelar</button></div></div>`);
+  $('#rqNoAqui', h).addEventListener('click', () => cerrarHoja());
+  const si = $('#rqSi', h);
+  si.addEventListener('click', ocupar(si, async () => {
+    if (!RQ.destinos) { try { RQ.destinos = await rpc('req_destinos'); } catch (e) { RQ.destinos = { gestores: [], cuadrillas: [] }; } }
+    const n = RQ.nuevo = rqNuevoVacio();
+    if (esPunto) { n.modo = 'catastro'; n.gid = sel.gid; n.gidTxt = `Llave ${sel.llave ?? '—'} · ${[sel.calle_1, sel.direccion].filter((x) => x != null && x !== '').join(' ') || 'sin dirección'}`; }
     else { n.modo = 'libre'; n.lat = sel.lat; n.lng = sel.lng; }
-  }
-  if (!n || (n.modo === 'catastro' ? !n.gid : n.lat == null)) { RQ.nuevo = null; cambiarVista('req'); return; }   // canceló sin haber elegido nada
-  cambiarVista('req'); rqAbrirNuevo(true);
+    rqAbrirNuevo(true);
+  }));
 }
-function rqIniciarNuevo() { RQ.nuevo = rqNuevoVacio(); RQ.nuevo.modo = null; rqElegirEnMapa(); }
 
 /* ---- Requerimientos en el mapa: se ven los activos, se tocan para abrirlos y se sale con «Salir de requerimientos» ---- */
 const RQM = { capa: null, n: 0 };
@@ -4489,7 +4484,7 @@ function rqDibujarMapa(centrar) {
   if (RQM.capa) { map.removeLayer(RQM.capa); RQM.capa = null; }
   const g = L.layerGroup(); const pts = [];
   RQ.lista.filter((r) => r.lat != null && r.lng != null && rqAbierto(r)).forEach((r) => {
-    L.marker([r.lat, r.lng], { icon: rqIcono(r), zIndexOffset: r.urgente ? 3000 : 2000, keyboard: false }).on('click', (e) => { L.DomEvent.stopPropagation(e); if (!S.reqElegir) rqAbrirDetalle(r.id); }).addTo(g);
+    L.marker([r.lat, r.lng], { icon: rqIcono(r), zIndexOffset: r.urgente ? 3000 : 2000, keyboard: false }).on('click', (e) => { L.DomEvent.stopPropagation(e); rqAbrirDetalle(r.id); }).addTo(g);
     pts.push([r.lat, r.lng]);
   });
   g.addTo(map); RQM.capa = g; RQM.n = pts.length;
@@ -4499,7 +4494,7 @@ function rqDibujarMapa(centrar) {
 function pintarChipReq() {
   const c = $('#chipReq'); if (!c) return;
   c.hidden = !S.reqMapa;
-  c.textContent = S.reqMapa ? `📋 Requerimientos en el mapa · ${RQM.n} activo${RQM.n === 1 ? '' : 's'} · toca para salir` : '';
+  c.textContent = S.reqMapa ? `📋 Requerimientos en el mapa · ${RQM.n} activo${RQM.n === 1 ? '' : 's'}${rqCrea() ? ' · toca un punto para ingresar uno' : ''} · toca aquí para salir` : '';
 }
 async function rqEntrarMapa() {
   S.reqMapa = true; RQ.filtro = 'abiertos'; RQ.texto = ''; $('#rqBuscar').value = '';
