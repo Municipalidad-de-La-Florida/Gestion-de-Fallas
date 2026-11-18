@@ -2,7 +2,7 @@
 // - Archivos propios de la app: red primero (así las actualizaciones llegan de inmediato) y copia guardada de respaldo.
 // - Leaflet (CDN): copia guardada tras la primera carga.
 // - Supabase y mapas: siempre por red, nunca se guardan (datos siempre al día).
-const VERSION = 'fm-v173';
+const VERSION = 'fm-v174';
 const APP = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'badge-96.png'];
 
 self.addEventListener('install', (e) => {
@@ -70,6 +70,7 @@ self.addEventListener('notificationclick', (e) => {
   e.notification.close();
   const destino = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope);
   const id = destino.searchParams.get('falla');
+  const rid = destino.searchParams.get('req');
   e.waitUntil((async () => {
     // Se deja anotada la falla del aviso: si el mensaje directo se pierde (app congelada o en segundo plano),
     // la app la recoge sola al volver a primer plano.
@@ -82,6 +83,7 @@ self.addEventListener('notificationclick', (e) => {
     if (mia) {
       try { await mia.focus(); } catch (err) { /* */ }
       if (id) mia.postMessage({ tipo: 'abrir-falla', id });
+      if (rid) mia.postMessage({ tipo: 'abrir-req', id: rid });
       return;
     }
     return self.clients.openWindow(destino.href);

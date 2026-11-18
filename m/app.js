@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.9.13';
+const VERSION_APP = '2.10.1';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2959,10 +2959,12 @@ function cambiarVista(v) {
   $('#vistaLista').hidden = v !== 'lista';
   $('#vistaInsp').hidden = v !== 'insp';
   $('#vistaCuaderno').hidden = v !== 'cuaderno';
+  $('#vistaReq').hidden = v !== 'req';
   $$('.nav-btn[data-vista]').forEach((b) => b.classList.toggle('sel', b.dataset.vista === v));
   if (v === 'mapa' && map) { setTimeout(() => { map.invalidateSize(); cargarArea(); }, 50); }
   if (v === 'lista') renderLista();
   if (v === 'insp') cargarInspC3();
+  if (v === 'req') abrirReq();
   $('#zoomAviso').hidden = v !== 'mapa' || (map && map.getZoom() >= ZOOM_DATOS);
 }
 $$('.nav-btn[data-vista]').forEach((b) => b.addEventListener('click', () => cambiarVista(b.dataset.vista)));
@@ -3136,7 +3138,7 @@ const msgContrato = (e) => (/duplicate|unique|contratos_nombre/i.test(e.message)
 
 async function cargarUsuariosAdmin() {
   const [us, cs, rel, ns, pf, relM, conex, mants] = await Promise.all([
-    select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo,ver_cuaderno&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
+    select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo,ver_cuaderno,req_crear,req_gestionar&order=nombre.asc').catch(() => select('usuarios', 'select=id,nombre,rol,perfil,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion,puede_pasar_a_masivo&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria,ver_cuadrillas,ver_ubicacion&order=nombre.asc')).catch(() => select('usuarios', 'select=id,nombre,rol,email,notificador_externo_habilitado,foto_obligatoria&order=nombre.asc')),
     select('contratos', 'select=id,nombre,activo,defecto_para&order=nombre.asc').catch(() => []),
     select('usuario_contratos', 'select=usuario_id,contrato_id').catch(() => []),
     // fallas(count) con cascada=false: solo las fallas propias (órdenes), sin las filas en cascada de cada punto afectado
@@ -3634,7 +3636,7 @@ function editarUsuarioU(id) {
     const cont = $('#eHerr', h);
     if (u.rol === 'camion') { cont.innerHTML = ''; return; }
     const t = (k, tit, sub) => `<button type="button" class="u-tog ${u[k] ? 'on' : ''}" data-p="${k}" style="margin-top:8px"><span class="u-tx"><b>${tit}</b><span>${sub}</span></span><span class="u-sw ${u[k] ? 'on' : ''}"></span></button>`;
-    cont.innerHTML = `<div class="u-lbl" style="margin-top:14px">Herramientas</div>` + t('ver_cuadrillas', '🚚 Cuadrillas', 'Rendimiento de las cuadrillas por turno') + t('ver_ubicacion', '📍 Ubicación de camiones', 'Ver dónde están los camiones (permiso aparte)') + (u.ver_cuaderno !== undefined ? t('ver_cuaderno', '📓 Cuaderno', 'Anotar fallas en un cuaderno compartido, sin informarlas (solo app)') : '');
+    cont.innerHTML = `<div class="u-lbl" style="margin-top:14px">Herramientas</div>` + t('ver_cuadrillas', '🚚 Cuadrillas', 'Rendimiento de las cuadrillas por turno') + t('ver_ubicacion', '📍 Ubicación de camiones', 'Ver dónde están los camiones (permiso aparte)') + (u.ver_cuaderno !== undefined ? t('ver_cuaderno', '📓 Cuaderno', 'Anotar fallas en un cuaderno compartido, sin informarlas (solo app)') : '') + (u.req_crear !== undefined ? t('req_crear', '📋 Requerimientos: ingresar', 'Crear requerimientos (retiro, instalación, despeje…) y dar el visto bueno') + t('req_gestionar', '📋 Requerimientos: gestionar', 'Recibir los derivados, asignarlos a una cuadrilla y revisar la ejecución') : '');
   };
   pintarHerr();
   $('#eHerr', h).addEventListener('click', async (ev) => {
@@ -3645,7 +3647,8 @@ function editarUsuarioU(id) {
       const r = await api(`/rest/v1/usuarios?id=eq.${id}`, { method: 'PATCH', prefer: 'return=representation', body: { [k]: nuevo } });
       if (!r || !r.length) throw new Error('No se guardó (¿falta ejecutar el SQL?)');
       u[k] = nuevo;
-      if (id === S.perfil.id) { S.perfil[k] = nuevo; if (k === 'ver_ubicacion') S.perfil.ubic_col = true; if (k === 'ver_cuaderno' && S.funciones) { if (nuevo) S.funciones.add('cuaderno'); else S.funciones.delete('cuaderno'); pintarModo(); } }
+      if (id === S.perfil.id) { S.perfil[k] = nuevo; if (k === 'ver_ubicacion') S.perfil.ubic_col = true; if ((k === 'req_crear' || k === 'req_gestionar') && S.funciones) { if (nuevo) S.funciones.add(k); else S.funciones.delete(k); pintarModo(); }
+        if (k === 'ver_cuaderno' && S.funciones) { if (nuevo) S.funciones.add('cuaderno'); else S.funciones.delete('cuaderno'); pintarModo(); } }
       toast('Guardado', 'ok');
     } catch (e) { toast('No se pudo guardar: ' + e.message, 'error'); }
     pintarHerr();
@@ -3885,6 +3888,7 @@ function pintarModo() {
   const c = $('#chipModo'), n = $('#navInsp');
   n.hidden = !puede;
   pintarCuaderno();
+  pintarReqNav(); rqContar();
   aplicarNavOcultos();
   $('#navInferior').classList.toggle('apretado', $$('#navInferior .nav-btn:not([hidden])').length >= 4);
   if (!puede) { c.hidden = true; return; }
@@ -4159,6 +4163,238 @@ function editarCuaderno(it) {
     toast('Anotación actualizada', 'ok'); abrirListaCuaderno();
   }));
 }
+
+/* ===================== REQUERIMIENTOS (solicitudes que no son fallas) =====================
+   Flujo: solicitante → contratista (asigna) → cuadrilla (ejecuta) → contratista (revisa) → solicitante (visto bueno).
+   Las reglas viven en la base (req_*); aquí solo se muestran las acciones que la base permite. */
+const RQ_BUCKET = 'fotos-requerimientos';
+const RQ_ESTADOS = { derivado: 'Derivado', asignado: 'Asignado', ejecutado: 'Ejecutado · por revisar', revisado: 'Falta visto bueno', devuelto: 'Devuelto', cerrado: 'Cerrado', anulado: 'Anulado' };
+const RQ_TXT = { crear: 'ingresó y derivó a {d}', derivar: 'derivó a {d}', asignar: 'asignó a {d}', reasignar: 'reasignó a {d}', ejecutar: 'marcó como ejecutado', no_puede: 'indicó que la cuadrilla no puede hacerlo',
+  revisar: 'revisó la ejecución', devolver_a_cuadrilla: 'devolvió a la cuadrilla', cerrar: 'dio el visto bueno y cerró', rechazar: 'rechazó la ejecución', devolver_ito: 'devolvió al solicitante',
+  anular: 'anuló el requerimiento', urgente_on: 'marcó como urgente', urgente_off: 'quitó la marca de urgente', comentar: 'comentó', foto_solicitud: 'agregó una foto a la solicitud',
+  foto_ejecucion: 'agregó una foto de la ejecución', foto_quitada: 'quitó una foto' };
+const RQ_COLOR = { urgente_on: '#e23b33', anular: '#e23b33', rechazar: '#e23b33', no_puede: '#e23b33', devolver_ito: '#9a4a8a', devolver_a_cuadrilla: '#9a4a8a', cerrar: '#3a8a5c', comentar: '#8a8aa0', foto_solicitud: '#b9aed3', foto_ejecucion: '#b9aed3', foto_quitada: '#b9aed3' };
+const RQ_ACC = {
+  asignar: { t: 'Asignar a cuadrilla', sel: 'cuadrillas', com: 'op', cta: 'Asignar', p: 1 },
+  ejecutar: { t: 'Marcar como ejecutado', com: 'op', cta: 'Marcar ejecutado', p: 1, ph: 'Qué se hizo' },
+  no_puede: { t: 'No puedo hacerlo', com: 'req', cta: 'Devolver al contratista', d: 1, ph: 'Por qué no se puede hacer' },
+  revisar: { t: 'Revisado: pasar a visto bueno', com: 'op', cta: 'Enviar a visto bueno', p: 1 },
+  devolver_a_cuadrilla: { t: 'Devolver a la cuadrilla', com: 'req', cta: 'Devolver', ph: 'Qué falta' },
+  cerrar: { t: 'Dar visto bueno y cerrar', com: 'op', cta: 'Cerrar requerimiento', p: 1 },
+  rechazar: { t: 'Rechazar', com: 'req', cta: 'Rechazar y devolver', d: 1, ph: 'Por qué lo rechazas' },
+  derivar: { t: 'Volver a derivar', sel: 'gestores', com: 'op', cta: 'Derivar', p: 1 },
+  devolver_ito: { t: 'Devolver al solicitante', com: 'req', cta: 'Devolver', ph: 'Motivo de la devolución' },
+  urgente: { t: 'Marcar urgente', directo: 1 },
+  anular: { t: 'Anular', com: 'req', cta: 'Anular requerimiento', d: 1, ph: 'Motivo de la anulación' },
+};
+const RQ_ORDEN = ['asignar', 'ejecutar', 'no_puede', 'revisar', 'devolver_a_cuadrilla', 'cerrar', 'rechazar', 'derivar', 'devolver_ito', 'urgente', 'anular'];
+const RQ = { filtro: 'abiertos', texto: '', lista: [], conteos: {}, destinos: null, det: null, urls: {}, timer: null, busq: null };
+const rqVe = () => !!S.perfil && (rol() === 'admin' || rol() === 'camion' || tiene('req_crear') || tiene('req_gestionar'));
+const rqLuzHtml = '<div class="rq-luz"><div class="rq-estela"></div><div class="rq-halo"></div><div class="rq-nucleo"></div></div>';
+const rqAbierto = (r) => !['cerrado', 'anulado'].includes(r.estado);
+function rqFecha(iso) {
+  const d = new Date(iso), h = new Date(), p = (n) => String(n).padStart(2, '0'), hm = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  if (d.toDateString() === h.toDateString()) return 'Hoy ' + hm;
+  const ay = new Date(h); ay.setDate(h.getDate() - 1);
+  if (d.toDateString() === ay.toDateString()) return 'Ayer ' + hm;
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${hm}`;
+}
+function rqTeToca(r) {
+  const yo = S.perfil && S.perfil.id;
+  return (r.estado === 'derivado' && r.derivado_a.id === yo) || (r.estado === 'asignado' && r.asignado_a.id === yo) ||
+    (r.estado === 'ejecutado' && r.derivado_a.id === yo) || ((r.estado === 'revisado' || r.estado === 'devuelto') && r.creado_por.id === yo);
+}
+function rqQueToca(r) {
+  const a = r.acciones || [];
+  if (r.estado === 'derivado' && a.includes('asignar')) return 'Asignar a una cuadrilla';
+  if (r.estado === 'asignado' && a.includes('ejecutar')) return 'Ejecutar el trabajo';
+  if (r.estado === 'ejecutado' && a.includes('revisar')) return 'Revisar la ejecución';
+  if (r.estado === 'revisado' && a.includes('cerrar')) return 'Dar el visto bueno o rechazar';
+  if (r.estado === 'devuelto' && a.includes('derivar')) return 'Volver a derivar o anular';
+  return '';
+}
+function pintarReqNav() {
+  const n = $('#navReq'); if (!n) return;
+  n.hidden = !rqVe();
+  if (n.hidden && S.vista === 'req') cambiarVista('mapa');
+  $('#navInferior').classList.toggle('apretado', $$('#navInferior .nav-btn:not([hidden])').length >= 4);
+}
+async function rqContar() {
+  if (!S.perfil || !rqVe()) return;
+  try { const n = await rpc('req_contar'); const b = $('#rqBadge'); b.textContent = n > 99 ? '99+' : n; b.hidden = !n; } catch (e) { /* sin red o sin el SQL */ }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) rqContar(); });
+setInterval(() => { if (!document.hidden) rqContar(); }, 120000);
+
+async function abrirReq() {
+  if (!RQ.destinos) { try { RQ.destinos = await rpc('req_destinos'); } catch (e) { RQ.destinos = { gestores: [], cuadrillas: [] }; } }
+  rqCargar();
+}
+async function rqCargar() {
+  const z = $('#rqItems');
+  if (!RQ.lista.length) z.innerHTML = '<div class="rq-vacio">Cargando…</div>';
+  try {
+    const [l, c] = await Promise.all([rpc('req_listar', { p_filtro: RQ.filtro, p_texto: RQ.texto.trim() || null, p_limite: 300 }), rpc('req_conteos')]);
+    RQ.lista = l || []; RQ.conteos = c || {};
+  } catch (e) { z.innerHTML = `<div class="rq-vacio">No se pudo cargar: ${esc(e.message)}</div>`; return; }
+  rqPintarLista(); rqContar();
+}
+function rqPintarLista() {
+  const c = RQ.conteos || {};
+  $('#rqSeg').innerHTML = [['abiertos', 'Activos', c.abiertos], ['cerrados', 'Cerrados', c.cerrados], ['anulados', 'Anulados', c.anulados]]
+    .map(([k, t, n]) => `<button type="button" data-f="${k}" class="${RQ.filtro === k ? 'on' : ''}">${t}${n != null ? `<i>${n}</i>` : ''}</button>`).join('');
+  $$('#rqSeg button').forEach((b) => b.addEventListener('click', () => { RQ.filtro = b.dataset.f; RQ.lista = []; rqCargar(); }));
+  const z = $('#rqItems');
+  z.innerHTML = RQ.lista.length ? RQ.lista.map((r) => {
+    const urg = r.urgente && rqAbierto(r), toca = rqQueToca(r) && rqTeToca(r);
+    return `<div class="rq-card${urg ? ' urg' : ''}" data-id="${esc(r.id)}">${urg ? rqLuzHtml : ''}
+      <div class="rq-top"><span class="rq-cod">${esc(r.codigo)}</span>${urg ? '<span class="rq-chip rq-u">🔴 URGENTE</span>' : ''}<span class="rq-chip rq-e-${esc(r.estado)}" style="margin-left:auto;">${esc(RQ_ESTADOS[r.estado] || r.estado)}</span></div>
+      <div class="rq-tipo">${esc(r.tipo_label)}</div><div class="rq-sub">${esc(r.ubicacion)}</div>
+      <div class="rq-sub" style="margin-top:3px;">Solicitó ${esc(r.creado_por.nombre || '—')} · ${esc(rqFecha(r.creado_en))}${r.asignado_a.nombre ? ' · ' + esc(r.asignado_a.nombre) : ''}</div>
+      ${toca ? `<div class="rq-toca">👉 Te toca: ${esc(rqQueToca(r))}</div>` : ''}</div>`;
+  }).join('') : `<div class="rq-vacio">${RQ.texto ? 'Ningún requerimiento coincide con la búsqueda.' : (RQ.filtro === 'abiertos' ? 'No hay requerimientos activos.' : 'No hay requerimientos en esta lista.')}</div>`;
+  $$('.rq-card', z).forEach((el) => el.addEventListener('click', () => rqAbrirDetalle(el.dataset.id)));
+}
+$('#rqBuscar').addEventListener('input', (e) => { RQ.texto = e.target.value; clearTimeout(RQ.busq); RQ.busq = setTimeout(rqCargar, 280); });
+
+async function rqUrlFoto(ruta) {
+  if (RQ.urls[ruta] && RQ.urls[ruta].t > Date.now()) return RQ.urls[ruta].u;
+  try {
+    const r = await api(`/storage/v1/object/sign/${RQ_BUCKET}/${ruta}`, { method: 'POST', body: { expiresIn: 3600 } });
+    if (r && r.signedURL) { const u = SUPABASE_URL + '/storage/v1' + r.signedURL; RQ.urls[ruta] = { u, t: Date.now() + 3000000 }; return u; }
+  } catch (e) { /* */ }
+  return null;
+}
+async function rqSubirFoto(reqId, momento, blob) {
+  const ruta = `${reqId}/${momento}_${crypto.randomUUID ? crypto.randomUUID() : Date.now() + '-' + Math.random().toString(36).slice(2)}.jpg`;
+  const token = await tokenVigente();
+  let res;
+  try { res = await fetch(`${SUPABASE_URL}/storage/v1/object/${RQ_BUCKET}/${ruta}`, { method: 'POST', headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token, 'Content-Type': 'image/jpeg', 'x-upsert': 'false' }, body: blob }); }
+  catch (e) { throw new Error('Sin conexión al subir la foto. Intenta de nuevo.'); }
+  if (!res.ok) throw new Error('No se pudo subir la foto (' + res.status + ').');
+  try { await rpc('req_registrar_foto', { p_id: reqId, p_momento: momento, p_ruta: ruta, p_bytes: blob.size }); }
+  catch (e) { fetch(`${SUPABASE_URL}/storage/v1/object/${RQ_BUCKET}/${ruta}`, { method: 'DELETE', headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token } }).catch(() => {}); throw e; }
+}
+function rqVisor(url) {
+  const v = document.createElement('div'); v.className = 'rq-visor'; v.innerHTML = `<img src="${esc(url)}" alt="Foto">`;
+  v.addEventListener('click', () => v.remove()); document.body.appendChild(v);
+}
+function rqFotosHtml(fs, momento, agregar) {
+  return `<div class="rq-fotos">${fs.map((f) => `<div class="rq-th"><img src="${esc(f.url || '')}" alt="Foto" data-u="${esc(f.url || '')}">${agregar && f.mia ? `<span class="rq-q" data-f="${esc(f.id)}" role="button" aria-label="Quitar foto">×</span>` : ''}</div>`).join('')}${agregar && fs.length < 2 ? `<button type="button" class="rq-add" data-m="${momento}">📷 foto</button>` : ''}</div>`;
+}
+async function rqAbrirDetalle(id) {
+  RQ.id = id;
+  const h = abrirHoja('<div class="rq-vacio">Cargando…</div>');
+  let d;
+  try { d = await rpc('req_detalle', { p_id: id }); }
+  catch (e) { h.innerHTML = `<div class="rq-vacio">No se pudo abrir el requerimiento: ${esc(e.message)}</div>`; return; }
+  RQ.det = d;
+  await Promise.all(d.fotos.map(async (f) => { f.url = await rqUrlFoto(f.ruta); }));
+  if (RQ.id !== id || !hojaAbierta) return;
+  rqPintarDetalle();
+}
+function rqPintarDetalle() {
+  const d = RQ.det, r = d.req, acc = r.acciones || [], urg = r.urgente && rqAbierto(r);
+  const fSol = d.fotos.filter((f) => f.momento === 'solicitud'), fEje = d.fotos.filter((f) => f.momento === 'ejecucion');
+  const puedeEje = acc.includes('subir_foto_ejecucion');
+  const rondas = [...new Set(fEje.map((f) => f.ronda))].sort((a, b) => a - b);
+  if (puedeEje && !rondas.includes(r.ronda)) rondas.push(r.ronda);
+  const ejecBox = rondas.map((n) => {
+    const fs = fEje.filter((f) => f.ronda === n), actual = n === r.ronda && puedeEje;
+    return `<div class="rq-box"><b>Ejecución${rondas.length > 1 || n > 1 ? ' · intento ' + n : ''}</b>${fs.length || actual ? rqFotosHtml(fs, 'ejecucion', actual) : '<div class="rq-sub">Sin fotos</div>'}</div>`;
+  }).join('');
+  const botones = RQ_ORDEN.filter((k) => acc.includes(k)).map((k) => {
+    const c = RQ_ACC[k], t = k === 'urgente' ? (r.urgente ? 'Quitar urgente' : '🔴 Marcar urgente') : c.t;
+    return `<button type="button" class="rq-btn${c.p ? ' rq-p' : ''}${c.d ? ' rq-d' : ''}" data-a="${k}">${t}</button>`;
+  }).join('');
+  const tl = d.historial.map((x) => {
+    const txt = esc(RQ_TXT[x.accion] || x.accion).replace('{d}', `<b>${esc(x.destino || '—')}</b>`);
+    return `<div class="rq-ev" style="--c:${RQ_COLOR[x.accion] || '#6d3fc8'}"><b>${esc(x.usuario || '—')}</b> ${txt}<small>${esc(rqFecha(x.fecha))}</small>${x.comentario && x.accion !== 'crear' ? `<div class="rq-cm">${esc(x.comentario)}</div>` : ''}</div>`;
+  }).join('');
+  const quien = [`Solicitó <b>${esc(r.creado_por.nombre || '—')}</b>`, r.derivado_a.nombre ? `Contratista: <b>${esc(r.derivado_a.nombre)}</b>` : '', r.asignado_a.nombre ? `Cuadrilla: <b>${esc(r.asignado_a.nombre)}</b>` : ''].filter(Boolean).join(' · ');
+  const h = $('#hojaContenido');
+  h.innerHTML = `<div class="rq-wrap" style="--pri:#6d3fc8;--lil:#f3eefc;--lilb:#d9ccf5;--rojo:#e23b33;--rline:#e2dcee;--rsoft:#6a607f;">
+    <div class="rq-det${urg ? ' urg' : ''}">${urg ? rqLuzHtml : ''}
+      <div class="rq-top"><span class="rq-cod">${esc(r.codigo)}</span>${urg ? '<span class="rq-chip rq-u">🔴 URGENTE</span>' : ''}<span class="rq-chip rq-e-${esc(r.estado)}" style="margin-left:auto;">${esc(RQ_ESTADOS[r.estado] || r.estado)}</span></div>
+      <div class="rq-tipo" style="font-size:15px;">${esc(r.tipo_label)}</div>
+      <div class="rq-sub">${esc(r.ubicacion)}${r.lat != null ? ` · <a href="#" id="rqMapa" style="color:var(--pri);font-weight:700;">Ver en el mapa</a>` : ''}</div>
+      <div class="rq-box"><b>Solicitud</b><div class="rq-txt">${esc(r.descripcion)}</div>${fSol.length ? rqFotosHtml(fSol, 'solicitud', false) : ''}</div>
+      <div class="rq-sub">${quien}</div>${ejecBox}
+      ${botones ? `<div class="rq-acc" id="rqAcc">${botones}</div><div id="rqForm"></div>` : ''}
+    </div>
+    <div class="rq-h5">Historial</div><div class="rq-tl">${tl}</div>
+    ${acc.includes('comentar') ? `<div class="rq-form" style="margin-top:12px;"><textarea id="rqCom" rows="2" placeholder="Escribe un comentario…"></textarea><div style="margin-top:6px;"><button type="button" class="rq-btn rq-p" id="rqComBtn">Comentar</button> <span class="rq-err" id="rqComErr"></span></div></div>` : ''}</div>`;
+  const ma = $('#rqMapa', h);
+  if (ma) ma.addEventListener('click', (e) => { e.preventDefault(); cerrarHoja(); cambiarVista('mapa'); if (map) setTimeout(() => { map.invalidateSize(); map.setView([r.lat, r.lng], 19); }, 80); });
+  $$('.rq-th img', h).forEach((im) => im.addEventListener('click', () => { if (im.dataset.u) rqVisor(im.dataset.u); }));
+  $$('.rq-q', h).forEach((q) => q.addEventListener('click', async () => {
+    if (!confirm('¿Quitar esta foto?')) return;
+    try {
+      const ruta = await rpc('req_quitar_foto', { p_foto: q.dataset.f });
+      if (ruta) { const t = await tokenVigente(); fetch(`${SUPABASE_URL}/storage/v1/object/${RQ_BUCKET}/${ruta}`, { method: 'DELETE', headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + t } }).catch(() => {}); }
+      await rqRecargarDetalle();
+    } catch (e) { toast('No se pudo quitar: ' + e.message, 'error'); }
+  }));
+  $$('.rq-add', h).forEach((b) => b.addEventListener('click', () => {
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    inp.addEventListener('change', async () => {
+      const f = inp.files && inp.files[0]; if (!f) return;
+      b.disabled = true; b.textContent = '…';
+      try { await rqSubirFoto(r.id, b.dataset.m, await comprimirFoto(f)); await rqRecargarDetalle(); }
+      catch (e) { toast(e.message, 'error'); b.disabled = false; b.textContent = '📷 foto'; }
+    });
+    inp.click();
+  }));
+  $$('#rqAcc button', h).forEach((b) => b.addEventListener('click', () => rqAbrirForm(b.dataset.a)));
+  const cb = $('#rqComBtn', h);
+  if (cb) cb.addEventListener('click', async () => {
+    const t = $('#rqCom', h).value.trim(); if (!t) { $('#rqComErr', h).textContent = 'Escribe un comentario.'; return; }
+    cb.disabled = true;
+    try { await rpc('req_accion', { p_id: r.id, p_accion: 'comentar', p_comentario: t }); await rqRecargarDetalle(); }
+    catch (e) { $('#rqComErr', h).textContent = e.message; cb.disabled = false; }
+  });
+}
+async function rqRecargarDetalle() {
+  const d = await rpc('req_detalle', { p_id: RQ.det.req.id });
+  await Promise.all(d.fotos.map(async (f) => { f.url = await rqUrlFoto(f.ruta); }));
+  RQ.det = d;
+  if (hojaAbierta) rqPintarDetalle();
+  rqCargar();
+}
+function rqAbrirForm(k) {
+  const c = RQ_ACC[k], r = RQ.det.req, z = $('#rqForm');
+  if (k === 'urgente') { rqEjecutarAccion(k, null, null); return; }
+  const opts = c.sel ? ((RQ.destinos && RQ.destinos[c.sel]) || []) : null;
+  z.innerHTML = `<div class="rq-form"><b>${esc(c.t)}</b>
+    ${opts ? `<label>${c.sel === 'cuadrillas' ? 'Cuadrilla' : 'Contratista'}</label><select id="rqSel"><option value="">— Elige —</option>${opts.map((o) => `<option value="${esc(o.id)}" ${c.sel === 'cuadrillas' && o.id === r.asignado_a.id ? 'selected' : ''}>${esc(o.nombre)}</option>`).join('')}</select>` : ''}
+    ${c.com ? `<label>${c.com === 'req' ? 'Motivo (obligatorio)' : 'Comentario (opcional)'}</label><textarea id="rqTx" rows="2" placeholder="${esc(c.ph || '')}"></textarea>` : ''}
+    <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="rq-btn${c.d ? ' rq-d' : ' rq-p'}" id="rqOk">${esc(c.cta)}</button><button type="button" class="rq-btn" id="rqNo">Cancelar</button></div><div class="rq-err" id="rqErr"></div></div>`;
+  $('#rqNo').addEventListener('click', () => { z.innerHTML = ''; });
+  $('#rqOk').addEventListener('click', async () => {
+    const sel = $('#rqSel'), tx = $('#rqTx'), err = $('#rqErr');
+    if (sel && !sel.value) { err.textContent = 'Elige a quién.'; return; }
+    if (c.com === 'req' && !tx.value.trim()) { err.textContent = 'Escribe el motivo.'; return; }
+    $('#rqOk').disabled = true;
+    await rqEjecutarAccion(k, tx ? tx.value.trim() : null, sel ? sel.value : null, err, $('#rqOk'));
+  });
+}
+async function rqEjecutarAccion(k, com, dest, err, btn) {
+  try { await rpc('req_accion', { p_id: RQ.det.req.id, p_accion: k, p_comentario: com || null, p_destino: dest || null }); await rqRecargarDetalle(); }
+  catch (e) { if (err) err.textContent = e.message; else toast(e.message, 'error'); if (btn) btn.disabled = false; }
+}
+// Avisos (push) con ?req=<id>: abren el requerimiento
+function rqIdDeUrl() {
+  try {
+    const u = new URL(location.href), id = u.searchParams.get('req');
+    if (id) { u.searchParams.delete('req'); history.replaceState(history.state, '', u.pathname + (u.search || '') + u.hash); }
+    return id && /^[\w-]{1,64}$/.test(id) ? id : null;
+  } catch (e) { return null; }
+}
+async function rqAbrirDeAviso(id) {
+  if (!id || !S.perfil || !rqVe()) return;
+  cambiarVista('req'); await abrirReq(); rqAbrirDetalle(id);
+}
+
 function pintarCuadernoClicks() {
   $('#navCuaderno').addEventListener('click', abrirCuaderno);
   $('#chipCuaderno').addEventListener('click', abrirCuaderno);
@@ -4507,6 +4743,7 @@ async function entrarApp() {
   try { localStorage.setItem('fm_carga', String(Date.now())); } catch (e) { /* */ }
   const habiaAviso = !!S.fallaPendiente;
   abrirPendienteDeAviso();
+  if (S.reqPendiente) { const q = S.reqPendiente; S.reqPendiente = null; rqAbrirDeAviso(q); }
   await cargarFallas();
   if (!habiaAviso) restaurarBorrador();
   cargarArea(true);
@@ -4538,9 +4775,12 @@ setInterval(() => { if (!document.hidden && S.perfil) recogerAvisoPendiente(); }
   }
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { /* sin SW: la app funciona igual */ });
   S.fallaPendiente = fallaDeUrl();
+  S.reqPendiente = rqIdDeUrl();
   if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
     try { navigator.serviceWorker.startMessages && navigator.serviceWorker.startMessages(); } catch (e) { /* */ }
     navigator.serviceWorker.addEventListener('message', (ev) => {
+      const rid = ev.data && ev.data.tipo === 'abrir-req' && ev.data.id;
+      if (rid && /^[\w-]{1,64}$/.test(rid)) { S.reqPendiente = rid; if (S.perfil) { const q = S.reqPendiente; S.reqPendiente = null; rqAbrirDeAviso(q); } return; }
       const id = ev.data && ev.data.tipo === 'abrir-falla' && ev.data.id;
       if (!id || !/^[\w-]{1,64}$/.test(id)) return;
       S.fallaPendiente = id;
