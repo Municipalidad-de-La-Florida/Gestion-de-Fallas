@@ -1568,6 +1568,7 @@ $('#btnActualizar').addEventListener('click', () => {
   cacheEmp = null; cacheBbox = null;
   cargarFallas(true);
   btn.classList.add('girando');
+  rqRefrescar();
   Promise.resolve(cargarArea(true)).finally(() => setTimeout(() => btn.classList.remove('girando'), 400));
   if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration().then((r) => r && r.update()).catch(() => {});
 });
@@ -4228,6 +4229,16 @@ function pintarReqNav() {
   if (n.hidden && S.vista === 'req') cambiarVista('mapa');
   $('#navInferior').classList.toggle('apretado', $$('#navInferior .nav-btn:not([hidden])').length >= 4);
 }
+// El botón Actualizar también recarga los requerimientos (lista, pines y tarjeta abierta) para que cambien de estado/color
+async function rqRefrescar() {
+  if (!S.perfil || !rqVe()) return;
+  rqContar();
+  try {
+    if (S.vista === 'req') await rqCargar();
+    else if (S.reqMapa) { RQ.lista = (await rpc('req_listar', { p_filtro: 'abiertos', p_texto: null, p_limite: 300 })) || []; rqDibujarMapa(false); }
+    if (hojaAbierta && RQ.det && $('.rq-det') && !($('#rqForm') && $('#rqForm').children.length)) rqRecargarDetalle();
+  } catch (e) { /* sin red */ }
+}
 async function rqContar() {
   if (!S.perfil || !rqVe()) return;
   try { const c = await rpc('req_conteos'); const n = (c && c.abiertos) || 0; const b = $('#rqBadge'); b.textContent = n > 99 ? '99+' : n; b.hidden = !n; } catch (e) { /* sin red o sin el SQL */ }
@@ -4293,9 +4304,20 @@ async function rqSubirFoto(reqId, momento, blob) {
   try { await rpc('req_registrar_foto', { p_id: reqId, p_momento: momento, p_ruta: ruta, p_bytes: blob.size }); }
   catch (e) { fetch(`${SUPABASE_URL}/storage/v1/object/${RQ_BUCKET}/${ruta}`, { method: 'DELETE', headers: { apikey: SUPABASE_KEY, Authorization: 'Bearer ' + token } }).catch(() => {}); throw e; }
 }
-function rqVisor(url) {
-  const v = document.createElement('div'); v.className = 'rq-visor'; v.innerHTML = `<img src="${esc(url)}" alt="Foto">`;
-  v.addEventListener('click', () => v.remove()); document.body.appendChild(v);
+function rqVisor(urls, i0) {
+  const us = (Array.isArray(urls) ? urls : [urls]).filter(Boolean); let i = Math.max(0, Math.min(i0 || 0, us.length - 1));
+  const v = document.createElement('div'); v.className = 'rq-visor';
+  v.innerHTML = `<img alt="Foto">${us.length > 1 ? '<button type="button" class="rqv-n rqv-ant" aria-label="Anterior">‹</button><button type="button" class="rqv-n rqv-sig" aria-label="Siguiente">›</button><span class="rqv-c"></span>' : ''}<button type="button" class="rqv-x" aria-label="Cerrar">✕</button>`;
+  const img = $('img', v), cnt = $('.rqv-c', v);
+  const ver = (k) => { i = (k + us.length) % us.length; img.src = us[i]; if (cnt) cnt.textContent = (i + 1) + ' / ' + us.length; };
+  const cerrar = () => { document.removeEventListener('keydown', tecla); v.remove(); };
+  const tecla = (e) => { if (e.key === 'Escape') cerrar(); else if (e.key === 'ArrowRight') ver(i + 1); else if (e.key === 'ArrowLeft') ver(i - 1); };
+  document.addEventListener('keydown', tecla);
+  v.addEventListener('click', (e) => { if (e.target.closest('.rqv-ant')) ver(i - 1); else if (e.target.closest('.rqv-sig')) ver(i + 1); else cerrar(); });
+  let x0 = null; v.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+  v.addEventListener('touchend', (e) => { if (x0 == null || us.length < 2) return; const dx = e.changedTouches[0].clientX - x0; x0 = null; if (Math.abs(dx) > 50) { v.dataset.sw = '1'; ver(i + (dx < 0 ? 1 : -1)); setTimeout(() => { delete v.dataset.sw; }, 350); } });
+  v.addEventListener('click', (e) => { if (v.dataset.sw) e.stopImmediatePropagation(); }, true);
+  ver(i); document.body.appendChild(v);
 }
 function rqFotosHtml(fs, momento, agregar) {
   return `<div class="rq-fotos">${fs.map((f) => `<div class="rq-th"><img src="${esc(f.url || '')}" alt="Foto" data-u="${esc(f.url || '')}">${agregar && f.mia ? `<span class="rq-q" data-f="${esc(f.id)}" role="button" aria-label="Quitar foto">×</span>` : ''}</div>`).join('')}${agregar && fs.length < 2 ? `<button type="button" class="rq-add" data-m="${momento}" data-src="cam" aria-label="Tomar foto">📷</button><button type="button" class="rq-add" data-m="${momento}" data-src="gal" aria-label="Elegir de la galería">🖼</button>` : ''}</div>`;
@@ -4346,7 +4368,7 @@ function rqPintarDetalle() {
     ${acc.includes('comentar') ? `<div class="rq-form" style="margin-top:12px;"><textarea id="rqCom" rows="2" placeholder="Escribe un comentario…"></textarea><div style="margin-top:6px;"><button type="button" class="rq-btn rq-p" id="rqComBtn">Comentar</button> <span class="rq-err" id="rqComErr"></span></div></div>` : ''}</div>`;
   const ma = $('#rqMapa', h);
   if (ma) ma.addEventListener('click', async (e) => { e.preventDefault(); cerrarHoja(); detenerSeguir(); S.sinAutoSeguir = true; if (!S.reqMapa) await rqEntrarMapa(true); else cambiarVista('mapa'); if (map) setTimeout(() => { map.invalidateSize(); detenerSeguir(); map.setView([r.lat, r.lng], 19); }, 250); });
-  $$('.rq-th img', h).forEach((im) => im.addEventListener('click', () => { if (im.dataset.u) rqVisor(im.dataset.u); }));
+  $$('.rq-th img', h).forEach((im) => im.addEventListener('click', () => { if (!im.dataset.u) return; const g = $$('.rq-th img', im.closest('.rq-fotos')).map((x) => x.dataset.u).filter(Boolean); rqVisor(g, Math.max(0, g.indexOf(im.dataset.u))); }));
   $$('.rq-q', h).forEach((q) => q.addEventListener('click', async () => {
     if (!confirm('¿Quitar esta foto?')) return;
     try {
