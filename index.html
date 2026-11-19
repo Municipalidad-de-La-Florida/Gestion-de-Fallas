@@ -864,7 +864,7 @@
 .rq-dist small{ font-weight:500; color:#8a82a0; }
 .rq-mk.e-ejecutado .rq-cd{ color:#6b4d00; border-color:#d9aa2b; background:#fff5d1; }
 .rq-mk.e-revisado .rq-cd{ color:#115c32; border-color:#3f9d68; background:#e4f5ea; }
-  .corte-lin{ stroke-linecap:round; stroke-dasharray:14 10; animation:corteFluye 1s linear infinite; filter:drop-shadow(0 0 4px #00b4ff) drop-shadow(0 0 9px #1e90ff); }
+  .corte-lin{ stroke-linecap:round; stroke-dasharray:14 10; animation:corteFluye 1s linear infinite; filter:drop-shadow(0 0 4px #2f6bff) drop-shadow(0 0 10px #0b3de0); }
   @keyframes corteFluye{ to{ stroke-dashoffset:-24; } }
   @keyframes corteLat{ 0%{ box-shadow:0 0 0 0 rgba(0,180,255,.65); } 70%{ box-shadow:0 0 0 12px rgba(0,180,255,0); } 100%{ box-shadow:0 0 0 0 rgba(0,180,255,0); } }
   .codigo-btn.corte-btn{ background:linear-gradient(135deg,#0a62ff,#00c2ff) !important; border-color:#00a2ff !important; color:#fff !important; animation:corteLat 1.8s ease-out infinite; }
@@ -3123,12 +3123,15 @@ function clienteCorte(cli, gid){
   if(gid != null && CORTES.gids.has(gid)){ const x = Object.values(CORTES.info).find(i => i.circuito_gid === gid); return x ? String(x.n_cliente).trim() : null; }
   return null;
 }
+// Grosor de la línea de corte según el zoom: más gruesa de lejos para que se vea
+function pesoCorte(){ const z = (typeof map !== 'undefined' && map && map.getZoom) ? map.getZoom() : 18; return z <= 16 ? 11 : z === 17 ? 10 : z === 18 ? 8 : 6; }
 function estiloCircuito(f){
   const p = f && f.properties || {};
-  return clienteCorte(p.n_cliente, p.gid) ? {className: 'corte-lin', color: '#00b4ff', weight: 6, opacity: 1} : {color:'#8a9a90', weight:2.5, opacity:0.85, className: ''};
+  return clienteCorte(p.n_cliente, p.gid) ? {className: 'corte-lin', color: '#0b3de0', weight: pesoCorte(), opacity: 1} : {color:'#8a9a90', weight:2.5, opacity:0.85, className: ''};
 }
-function iconoPuntoWeb(f){ return clienteCorte(f.properties.n_cliente, null) ? iconoParaPunto(f.properties.simb_poste, '#00b4ff', '#0a5db5') : iconoParaPunto(f.properties.simb_poste, '#5b7a68', '#3d5548'); }
+function iconoPuntoWeb(f){ return clienteCorte(f.properties.n_cliente, null) ? iconoParaPunto(f.properties.simb_poste, '#0b3de0', '#061f8a') : iconoParaPunto(f.properties.simb_poste, '#5b7a68', '#3d5548'); }
 async function cargarCortesWeb(){
+  if(!window._corteZoomOn && typeof map !== 'undefined' && map && map.on){ window._corteZoomOn = true; map.on('zoomend', () => { if(typeof layerCircuitos !== 'undefined' && layerCircuitos && CORTES.clientes.size) layerCircuitos.setStyle(estiloCircuito); }); }
   try{
     db.rpc('cortes_fallas', {}).then(l => { CORTE_FALLAS = new Set(l || []); }).catch(() => {});
     const l = await db.rpc('cortes_activos', {});

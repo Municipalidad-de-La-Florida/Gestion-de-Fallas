@@ -883,7 +883,7 @@ html[data-tema=oscuro] .chip-modo.reqm{ color:#fff; }
 .codigo.corte.sel{ background:linear-gradient(135deg,#0a3fc4,#0089d6); border-color:#fff; box-shadow:0 0 0 3px #00b4ff, inset 0 0 0 1px #fff; animation:none; }
 .codigo.corte.sel b::after{ content:""; }
 @keyframes corteLat{ 0%{ box-shadow:0 0 0 0 rgba(0,180,255,.65); } 70%{ box-shadow:0 0 0 12px rgba(0,180,255,0); } 100%{ box-shadow:0 0 0 0 rgba(0,180,255,0); } }
-.corte-lin{ stroke-linecap:round; stroke-dasharray:14 10; animation:corteFluye 1s linear infinite; filter:drop-shadow(0 0 4px #00b4ff) drop-shadow(0 0 9px #1e90ff); }
+.corte-lin{ stroke-linecap:round; stroke-dasharray:14 10; animation:corteFluye 1s linear infinite; filter:drop-shadow(0 0 4px #2f6bff) drop-shadow(0 0 10px #0b3de0); }
 @keyframes corteFluye{ to{ stroke-dashoffset:-24; } }
 .corte-aviso{ margin:10px 0; padding:11px 13px; border-radius:12px; background:linear-gradient(135deg,#0a62ff,#00c2ff); color:#fff; display:flex; flex-direction:column; gap:3px; animation:corteLat 1.8s ease-out infinite; }
 .corte-aviso b{ font-size:16px; } .corte-aviso small{ opacity:.92; font-size:12.5px; }
