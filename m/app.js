@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.15';
+const VERSION_APP = '2.12.16';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2507,6 +2507,11 @@ const ICO_ACC = {
   borrar: _ia('<path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/>'),
 };
 async function abrirFalla(p, geom) {
+  // Admin: al tocar un punto pendiente de un circuito (cascada) se abre la falla del circuito, que es la que se edita o se cierra (también por corte)
+  if (p.cascada && p.estado === 'pendiente' && p.circuito_origen_id && rol() === 'admin') {
+    const padre = S.features.find((x) => x.properties.id === p.circuito_origen_id);
+    if (padre) return abrirFalla(padre.properties, padre.geometry);
+  }
   detenerSeguir();   // al mirar una falla, el mapa deja de seguirte (tocas el botón de ubicación para volver)
   const c = centroGeom(geom);
   const desc = descFalla(p);
@@ -2554,9 +2559,9 @@ async function abrirFalla(p, geom) {
   }
   if (luminariaFicha) kv.push(['Luminaria que falló', luminariaFicha]);
   const evFicha = [];
-  if ((p.estado === 'pendiente' || p.estado === 'reparada') && p.pendiente_por_nombre) {
+  if (p.estado === 'pendiente' || (p.estado === 'reparada' && p.pendiente_por_nombre)) {
     evFicha.push({ t: p.fecha_pendiente, html: `<div class="info-warn"><h3>Pendiente</h3>
-      <dl class="kv"><dt>Responde</dt><dd>${esc(p.pendiente_por_nombre)}</dd><dt>Fecha respuesta</dt><dd>${esc(fmtFecha(p.fecha_pendiente))}</dd></dl>
+      <dl class="kv"><dt>Responde</dt><dd>${esc(p.pendiente_por_nombre || '—')}</dd><dt>Fecha respuesta</dt><dd>${esc(fmtFecha(p.fecha_pendiente))}</dd></dl>
       <h4>Motivo ${tiene('falla_editar_cualquiera') && p.estado === 'pendiente' && !p.cascada ? '<button type="button" id="bEditPend" class="btn-link" title="Editar el motivo" aria-label="Editar el motivo" style="font-size:13px;padding:0 6px">✏️</button>' : ''}</h4><pre class="texto" id="motPend">${esc(p.motivo_pendiente || '')}</pre>
     </div>` });
   }
