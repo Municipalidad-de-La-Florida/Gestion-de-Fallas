@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.19';
+const VERSION_APP = '2.12.20';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4888,9 +4888,8 @@ $('#btnMenu').addEventListener('click', () => {
       ${S.instalar ? '<button id="mInstalar" class="btn btn-primario" style="margin:10px 0 6px;width:100%">Instalar la app en este teléfono</button>' : ''}
       ${!S.instalar && esIOS() && !esStandalone() ? '<div class="aviso">Para instalarla en iPhone: toca el botón <b>Compartir</b> de Safari y luego <b>Añadir a pantalla de inicio</b>.</div>' : ''}
       ${tiene('ubicacion_gps_compartir') ? '<div class="hint" style="margin:4px 6px 8px">📍 Tu ubicación se comparte con el administrador mientras la app está abierta.</div>' : ''}
-      ${(puedeUbicacion() && !puedeCuadrillas()) || tiene('maestros') || tiene('operativo_activar') ? '<div class="m-grupo">Operación</div>' : ''}
+      ${(puedeUbicacion() && !puedeCuadrillas()) || tiene('operativo_activar') ? '<div class="m-grupo">Operación</div>' : ''}
       ${puedeUbicacion() && !puedeCuadrillas() ? `<button id="mCamiones" class="m-fila"><span class="m-ico m-azul">${ico('<path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>')}</span><span class="t">Camiones en el mapa</span>${chev}</button>` : ''}
-      ${tiene('maestros') ? `<button id="mMaestros" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-4 3-6 7-6s6.5 2 7 6"/>')}</span><span class="t">Maestros</span>${chev}</button>` : ''}
       ${tiene('operativo_activar') ? `<button id="mOperativo" class="m-fila"><span class="m-ico m-ambar">${ico('<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>')}</span><span class="t">Operativo</span>${chev}</button>` : ''}
       ${esAdminMenu ? '<div class="m-grupo">Administración</div>' : ''}
       ${tiene('admin_usuarios') ? `<button id="mUsuarios" class="m-fila"><span class="m-ico m-azul">${ico('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.5-4 3-6 6.5-6s6 2 6.5 6"/><path d="M17 11h5M19.5 8.5v5"/>')}</span><span class="t">Usuarios y permisos</span>${chev}</button>` : ''}
@@ -4928,8 +4927,6 @@ $('#btnMenu').addEventListener('click', () => {
   if (mcm) mcm.addEventListener('click', () => { cerrarHoja(); mostrarCamionesMapa(); });
   const mcu = $('#mCuadrillas', h);
   if (mcu) mcu.addEventListener('click', () => abrirCuadrillas());
-  const mma = $('#mMaestros', h);
-  if (mma) mma.addEventListener('click', () => abrirMaestros());
   const mop = $('#mOperativo', h);
   if (mop) mop.addEventListener('click', () => abrirOperativos());
   const mpf = $('#mPerfiles', h);
