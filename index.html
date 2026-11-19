@@ -3125,7 +3125,7 @@ function clienteCorte(cli, gid){
   return null;
 }
 // Grosor de la línea de corte según el zoom: más gruesa de lejos para que se vea
-function pesoCorte(){ const z = (typeof map !== 'undefined' && map && map.getZoom) ? map.getZoom() : 18; return z <= 13 ? 13 : z <= 15 ? 12 : z <= 16 ? 11 : z === 17 ? 10 : z === 18 ? 8 : 6; }
+function pesoCorte(){ const z = (typeof map !== 'undefined' && map && map.getZoom) ? map.getZoom() : 18; return z <= 16 ? 6 : z === 17 ? 6 : 5; }
 // Línea de los circuitos cortados dibujada a cualquier zoom (los circuitos normales solo se cargan de cerca)
 let capaCortesWeb = null, _cortesSig = '';
 function pintarCortesWeb(){
@@ -4024,7 +4024,7 @@ function partesChile(iso){
 async function abrirEditorFalla(p){
   let fila;
   try{
-    const filas = await db.select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,fecha_falla,notificador_id,inspeccion_id,masivo,contrato_id,puntos_luminarios(simb_poste)`);
+    const filas = await db.select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,fecha_falla,notificador_id,inspeccion_id,masivo,contrato_id,estado,puntos_luminarios(simb_poste)`);
     fila = filas && filas[0];
   }catch(e){ alert('No se pudo cargar la falla: ' + e.message); return; }
   if(!fila){ alert('No se encontró la falla.'); return; }
@@ -4060,8 +4060,15 @@ async function abrirEditorFalla(p){
     <div style="margin-top:10px;">${filasCatalogo}</div>
     <textarea class="popup-input" id="edDesc" placeholder="Comentario (opcional; obligatorio si eliges OTRO)" style="margin-top:8px;"></textarea>
     ${htmlOrdenExterna()}
+    ${fila.estado === 'pendiente' && rolEfectivo() === 'admin' ? '<button type="button" class="popup-btn corte-btn" id="edCorteBtn" style="margin-top:10px; width:100%;" title="Marca el circuito sin suministro hasta nuevo aviso (la falla sigue pendiente)">⚡ Cortado desde la Distribución</button>' : ''}
     <button class="popup-btn" id="edGuardarBtn" style="margin-top:12px;">Guardar cambios</button>
   `);
+  { const bc = panel.querySelector('#edCorteBtn'); if(bc) bc.onclick = async () => {
+    if(!confirm('¿Marcar este circuito como sin suministro por corte? Quedará en azul hasta que un administrador restablezca el suministro. La falla sigue pendiente.')) return;
+    bc.disabled = true;
+    try{ await db.rpc('corte_marcar_pendiente', {p_falla_id: p.id}); invalidarCacheTodasFallas(); try{ await cargarCortesWeb(); cargarFallasDelArea(); renderFallasOnMap(); }catch(err){} cerrarPanel(); }
+    catch(err){ alert('No se pudo marcar el corte: ' + err.message); bc.disabled = false; }
+  }; }
   panel.querySelector('#edDesc').value = fila.descripcion_otro || '';
   panel.querySelectorAll('.codigo-btn').forEach(b => b.onclick = () => {
     panel.querySelectorAll('.codigo-btn').forEach(x => x.classList.remove('sel'));
