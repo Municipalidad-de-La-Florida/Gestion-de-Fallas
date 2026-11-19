@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.4';
+const VERSION_APP = '2.12.5';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2014,6 +2014,10 @@ async function abrirOperativos() {
 }
 async function abrirMaestros() {
   const h = abrirHoja('<h2>Maestros</h2><div class="hint">Cargando…</div>');
+  await montarMaestros(h);
+}
+// Lista de maestros dentro de un contenedor (hoja inferior o pestaña «Maestros» de Usuarios y permisos)
+async function montarMaestros(h) {
   let grupos = [], ms = [], porMant = true;
   try {
     ms = await select('maestros', 'select=id,nombre,contrato_id,mantenedor_id,activo&order=nombre.asc');
@@ -3456,7 +3460,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function pintarTabsU() {
   const pend = U.notifs.filter((n) => !n.validado).length;
-  const tabs = U.modo === 'config' ? [['contratos', 'Contratos'], ['notificadores', 'Notificadores'], ['ajustes', 'Enel y ajustes']] : U.modo === 'perfiles' ? [['perfiles', 'Perfiles']] : [['usuarios', 'Usuarios']];
+  const tabs = U.modo === 'config' ? [['contratos', 'Contratos'], ['notificadores', 'Notificadores'], ['ajustes', 'Enel y ajustes']] : U.modo === 'perfiles' ? [['perfiles', 'Perfiles']] : tiene('maestros') ? [['usuarios', 'Usuarios'], ['maestros', 'Maestros']] : [['usuarios', 'Usuarios']];
   $('#uTabs').hidden = tabs.length < 2;
   $('#uTabs').innerHTML = tabs
     .map(([k, t]) => `<button type="button" data-tab="${k}" class="${U.tab === k ? 'on' : ''}">${t}${k === 'notificadores' && pend ? `<b>${pend}</b>` : ''}</button>`).join('');
@@ -3467,6 +3471,7 @@ function pintarU() {
   else if (U.tab === 'usuarios') pintarListaU();
   else if (U.tab === 'contratos') pintarContratosU();
   else if (U.tab === 'ajustes') pintarAjustesU();
+  else if (U.tab === 'maestros') { $('#uCuerpo').innerHTML = '<div class="u-vacio">Cargando…</div>'; montarMaestros($('#uCuerpo')); }
   else pintarNotifsU();
 }
 
@@ -3811,6 +3816,7 @@ $('#uAtras').addEventListener('click', () => cerrarUsuarios());
 $('#uMas').addEventListener('click', () => {
   if (U.tab === 'contratos') nuevoContratoU();
   else if (U.tab === 'notificadores') { const i = $('#nNuevo'); if (i) i.focus(); }
+  else if (U.tab === 'maestros') { const i = $('#uCuerpo input[data-n]'); if (i) i.focus(); }
   else toast('Los usuarios nuevos se crean en Supabase (Authentication → Add user).', '');
 });
 $('#uTabs').addEventListener('click', (ev) => { const b = ev.target.closest('button[data-tab]'); if (!b) return; U.tab = b.dataset.tab; pintarU(); $('#uCuerpo').scrollTop = 0; });
