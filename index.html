@@ -1756,6 +1756,7 @@ async function cargarPerfilYIniciar(userId){
     };
     actualizarVisibilidadPorRol();
     initMap();
+    pintarCortesWeb();   // los cortes pueden haberse cargado antes de que existiera el mapa
     restaurarModoInspeccion();   // retoma una inspección que quedó en curso (si sigue vigente)
   }catch(e){
     document.getElementById('loginError').textContent = 'Error cargando tu perfil: ' + e.message;
@@ -3126,9 +3127,10 @@ function clienteCorte(cli, gid){
 // Grosor de la línea de corte según el zoom: más gruesa de lejos para que se vea
 function pesoCorte(){ const z = (typeof map !== 'undefined' && map && map.getZoom) ? map.getZoom() : 18; return z <= 13 ? 13 : z <= 15 ? 12 : z <= 16 ? 11 : z === 17 ? 10 : z === 18 ? 8 : 6; }
 // Línea de los circuitos cortados dibujada a cualquier zoom (los circuitos normales solo se cargan de cerca)
-let capaCortesWeb = null;
+let capaCortesWeb = null, _cortesSig = '';
 function pintarCortesWeb(){
   if(typeof map === 'undefined' || !map) return;
+  if(!window._corteZoomOn ){ window._corteZoomOn = true; map.on('zoomend', () => { if(typeof layerCircuitos !== 'undefined' && layerCircuitos && CORTES.clientes.size) layerCircuitos.setStyle(estiloCircuito); if(capaCortesWeb) capaCortesWeb.setStyle(() => ({className: 'corte-lin', color: '#0b3de0', weight: pesoCorte(), opacity: 1})); }); }
   if(capaCortesWeb){ map.removeLayer(capaCortesWeb); capaCortesWeb = null; }
   const g = CORTES.geo; if(!g || !g.features || !g.features.length) return;
   capaCortesWeb = L.geoJSON(g, {interactive: false, style: () => ({className: 'corte-lin', color: '#0b3de0', weight: pesoCorte(), opacity: 1})}).addTo(map);
@@ -3140,7 +3142,6 @@ function estiloCircuito(f){
 }
 function iconoPuntoWeb(f){ return clienteCorte(f.properties.n_cliente, null) ? iconoParaPunto(f.properties.simb_poste, '#0b3de0', '#061f8a') : iconoParaPunto(f.properties.simb_poste, '#5b7a68', '#3d5548'); }
 async function cargarCortesWeb(){
-  if(!window._corteZoomOn && typeof map !== 'undefined' && map && map.on){ window._corteZoomOn = true; map.on('zoomend', () => { if(typeof layerCircuitos !== 'undefined' && layerCircuitos && CORTES.clientes.size) layerCircuitos.setStyle(estiloCircuito); if(capaCortesWeb) capaCortesWeb.setStyle(() => ({className: 'corte-lin', color: '#0b3de0', weight: pesoCorte(), opacity: 1})); }); }
   try{
     db.rpc('cortes_fallas', {}).then(l => { CORTE_FALLAS = new Set(l || []); }).catch(() => {});
     const l = await db.rpc('cortes_activos', {});
@@ -3150,6 +3151,7 @@ async function cargarCortesWeb(){
     try{ c.geo = c.clientes.size ? await db.rpc('cortes_geojson', {}) : null; }catch(e){ c.geo = null; }
     CORTES = c;
     pintarCortesWeb();
+    { const sig = [...c.fallas].sort().join(','); if(sig !== _cortesSig){ _cortesSig = sig; try{ renderFallasDesdeCache(); }catch(e){} } }   // las verdes cerradas con 900 dejan de pintarse
     if(clave !== _cortesClave){ _cortesClave = clave; if(typeof layerCircuitos !== 'undefined' && layerCircuitos){ layerCircuitos.setStyle(estiloCircuito); layerPuntos.eachLayer(l => { if(l.setIcon && l.feature) l.setIcon(iconoPuntoWeb(l.feature)); }); } }
   }catch(e){ /* sin la función: no hay cortes */ }
 }

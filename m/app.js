@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.10';
+const VERSION_APP = '2.12.11';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -977,7 +977,7 @@ const contenido = (c, b) => c && b[0] >= c[0] && b[1] >= c[1] && b[2] <= c[2] &&
 const rpcReint = async (fn, args) => { try { return await rpc(fn, args); } catch (e) { if (e.name === 'SesionExpirada') throw e; await new Promise((r) => setTimeout(r, 600)); return rpc(fn, args); } };
 let _areaSeq = 0;
 /* ---------- Circuitos con corte de suministro (cierre "Cortado Suministro Distribución") ---------- */
-let capaCortes = null, _cortesClave = '';
+let capaCortes = null, _cortesClave = '', _cortesSig = '';
 S.cortes = { clientes: new Set(), gids: new Set(), info: {}, fallas: new Set() };
 S.corteFallas = new Set();
 const tagCorte = (id) => (S.corteFallas.has(id) ? ' <span class="tag-corte" title="Falla de un circuito cortado por falta de pago/suministro">⚡ #EnCorte</span>' : '');
@@ -989,9 +989,11 @@ async function cargarCortes() {
     const c = { clientes: new Set(), gids: new Set(), info: {}, fallas: new Set() };
     (l || []).forEach((x) => { if (x.falla_id) c.fallas.add(x.falla_id); (x.fallas_900 || []).forEach((id) => c.fallas.add(id)); const k = String(x.n_cliente).trim(); c.clientes.add(k); if (x.circuito_gid != null) c.gids.add(x.circuito_gid); c.info[k] = x; });
     const clave = [...c.clientes].sort().join('|');
+    const sig = [...c.fallas].sort().join(',');
     S.cortes = c;
     try { S.cortesGeo = c.clientes.size ? await rpc('cortes_geojson') : null; } catch (e) { S.cortesGeo = null; }   // geometría de los circuitos cortados: se dibuja a cualquier zoom
     if (map) pintarCortes();
+    if (sig !== _cortesSig) { _cortesSig = sig; try { dibujarFallas(); } catch (e) { /* aún sin mapa */ } }   // las verdes cerradas con 900 dejan de pintarse
     if (clave !== _cortesClave) { _cortesClave = clave; if (map) { cacheBbox = null; cargarArea(true); } }
   } catch (e) { if (e.name === 'SesionExpirada') throw e; /* sin la función: no hay cortes */ }
 }
@@ -5040,6 +5042,7 @@ async function entrarApp() {
   S.vista = 'mapa';
   cambiarVista('mapa');
   iniciarMapa();
+  if (S.cortesGeo) pintarCortes();   // los cortes pueden haberse cargado antes de que existiera el mapa
   iniciarSuministro();
   setTimeout(() => map.invalidateSize(), 80);
   cacheBbox = null;
