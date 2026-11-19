@@ -864,6 +864,16 @@
 .rq-dist small{ font-weight:500; color:#8a82a0; }
 .rq-mk.e-ejecutado .rq-cd{ color:#6b4d00; border-color:#d9aa2b; background:#fff5d1; }
 .rq-mk.e-revisado .rq-cd{ color:#115c32; border-color:#3f9d68; background:#e4f5ea; }
+  .corte-lin{ stroke-linecap:round; stroke-dasharray:14 10; animation:corteFluye 1s linear infinite; filter:drop-shadow(0 0 4px #00b4ff) drop-shadow(0 0 9px #1e90ff); }
+  @keyframes corteFluye{ to{ stroke-dashoffset:-24; } }
+  @keyframes corteLat{ 0%{ box-shadow:0 0 0 0 rgba(0,180,255,.65); } 70%{ box-shadow:0 0 0 12px rgba(0,180,255,0); } 100%{ box-shadow:0 0 0 0 rgba(0,180,255,0); } }
+  .codigo-btn.corte-btn{ background:linear-gradient(135deg,#0a62ff,#00c2ff) !important; border-color:#00a2ff !important; color:#fff !important; animation:corteLat 1.8s ease-out infinite; }
+  .codigo-btn.corte-btn.sel, .codigo-btn.corte-btn.activo, .codigo-btn.corte-btn.seleccionado{ background:linear-gradient(135deg,#0a3fc4,#0089d6) !important; animation:none; box-shadow:0 0 0 3px #00b4ff; }
+  #corteBar{ position:fixed; top:70px; left:50%; transform:translateX(-50%); z-index:1900; background:linear-gradient(135deg,#0a62ff,#00c2ff); color:#fff; padding:11px 40px 11px 16px; border-radius:12px; display:flex; flex-direction:column; gap:3px; max-width:92vw; box-shadow:0 6px 22px rgba(0,100,255,.45); animation:corteLat 1.8s ease-out infinite; }
+  #corteBar b{ font-size:15px; } #corteBar small{ opacity:.92; font-size:12px; }
+  #corteBar button{ border:0; border-radius:8px; cursor:pointer; font-weight:700; } #corteBar #corteRest{ margin-top:7px; background:#fff; color:#0a3fc4; padding:7px 12px; }
+  #corteBar #corteX{ position:absolute; top:6px; right:8px; background:none; color:#fff; font-size:20px; line-height:1; }
+  @media (prefers-reduced-motion: reduce){ .corte-lin,.codigo-btn.corte-btn,#corteBar{ animation:none; } }
 </style>
 </head>
 <body>
@@ -1709,7 +1719,7 @@ async function cargarPerfilYIniciar(userId){
     currentUser = data[0];
     try{ MODO_MANT = !!(await db.rpc('es_usuario_mantenedor', {})); }catch(_){ MODO_MANT = false; }   // sin el SQL: colores de siempre
     setTimeout(iniciarNotifs, 1500);
-    cargarLibreria();   // códigos de falla y de cierre desde la Librería (sin bloquear el inicio)
+    cargarLibreria(); cargarCortesWeb();   // códigos de falla y de cierre desde la Librería (sin bloquear el inicio)
     currentUser.ver_cuadrillas = false; currentUser.ver_ubicacion = false; currentUser.ubic_col = false;
     currentUser.ver_fiscalizacion = false; currentUser.fisc_col = false;
     currentUser.puede_pasar_a_masivo = false;
@@ -2521,11 +2531,11 @@ function initMap(){
 
   layerCalles = L.geoJSON(null, {style:{color:'#9aa79e',weight:1.4,opacity:0.9}});
   layerCircuitos = L.geoJSON(null, {
-    style:{color:'#8a9a90',weight:2.5,opacity:0.85},
+    style: estiloCircuito,
     onEachFeature:(f,l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); if(rqIngresando()){ rqPreguntarIngreso(e.latlng, null); return; } handleCircuitoClick(f,l); })
   });
   layerPuntos = L.geoJSON(null, {
-    pointToLayer:(f,latlng) => L.marker(latlng, {icon: iconoParaPunto(f.properties.simb_poste, '#5b7a68', '#3d5548')}),
+    pointToLayer:(f,latlng) => L.marker(latlng, {icon: iconoPuntoWeb(f)}),
     onEachFeature:(f,l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); handlePuntoClick(f,l); })
   });
   layerLoteos = L.geoJSON(null, {interactive:false, style:{color:'#c9d6cc',weight:1,fillColor:'#e7ede8',fillOpacity:0.35}});
@@ -2891,6 +2901,7 @@ async function refrescarFallas(manual){
       fallasPeriodoLayerGroup.eachLayer(l => l.bringToFront());
     }
     ultimoRefrescoFallas = Date.now();
+    cargarCortesWeb();
     rqRefrescarTodo();
   }catch(e){ console.error(e); }
   // que el giro se alcance a ver aunque la respuesta sea muy rápida
@@ -3025,6 +3036,7 @@ let modoHistorial = false;
 
 function handlePuntoClick(feature, layer){
   if(rqIngresando()){ RQ.ultPunto = Date.now(); const [lo, la] = feature.geometry.coordinates; rqPreguntarIngreso(L.latLng(la, lo), feature.properties); return; }
+  avisoCorteWeb(feature.properties.n_cliente, null);
   if(modoHistorial && tieneReal('modo_historial')){
     resaltarPuntoConsulta(feature.geometry.coordinates[1], feature.geometry.coordinates[0]);
     mostrarHistorial('punto', feature.properties.gid, `Punto lumínico ${feature.properties.llave ?? ''}`);
@@ -3062,6 +3074,7 @@ function handlePuntoClick(feature, layer){
 }
 function handleCircuitoClick(feature, layer){
   if(rqIngresando()){ return; }
+  avisoCorteWeb(feature.properties.n_cliente, feature.properties.gid);
   map.fitBounds(layer.getBounds(), {padding:[50,50]});
   if(modoHistorial && tieneReal('modo_historial')){
     resaltarCircuitoConsulta(feature);
@@ -3097,6 +3110,45 @@ async function verificarDuplicadoYAbrir(campo, gid, siguientePaso){
   }
 }
 
+// ---------- CIRCUITOS CON CORTE DE SUMINISTRO (cierre "Cortado Suministro Distribución") ----------
+let CORTES = {clientes: new Set(), gids: new Set(), info: {}}, _cortesClave = '';
+function clienteCorte(cli, gid){
+  const k = cli == null ? '' : String(cli).trim();
+  if(k && CORTES.clientes.has(k)) return k;
+  if(gid != null && CORTES.gids.has(gid)){ const x = Object.values(CORTES.info).find(i => i.circuito_gid === gid); return x ? String(x.n_cliente).trim() : null; }
+  return null;
+}
+function estiloCircuito(f){
+  const p = f && f.properties || {};
+  return clienteCorte(p.n_cliente, p.gid) ? {className: 'corte-lin', color: '#00b4ff', weight: 6, opacity: 1} : {color:'#8a9a90', weight:2.5, opacity:0.85, className: ''};
+}
+function iconoPuntoWeb(f){ return clienteCorte(f.properties.n_cliente, null) ? iconoParaPunto(f.properties.simb_poste, '#00b4ff', '#0a5db5') : iconoParaPunto(f.properties.simb_poste, '#5b7a68', '#3d5548'); }
+async function cargarCortesWeb(){
+  try{
+    const l = await db.rpc('cortes_activos', {});
+    const c = {clientes: new Set(), gids: new Set(), info: {}};
+    (l || []).forEach(x => { const k = String(x.n_cliente).trim(); c.clientes.add(k); if(x.circuito_gid != null) c.gids.add(x.circuito_gid); c.info[k] = x; });
+    const clave = [...c.clientes].sort().join('|');
+    CORTES = c;
+    if(clave !== _cortesClave){ _cortesClave = clave; if(typeof layerCircuitos !== 'undefined' && layerCircuitos){ layerCircuitos.setStyle(estiloCircuito); layerPuntos.eachLayer(l => { if(l.setIcon && l.feature) l.setIcon(iconoPuntoWeb(l.feature)); }); } }
+  }catch(e){ /* sin la función: no hay cortes */ }
+}
+// Aviso al tocar un punto o circuito de un circuito cortado (el admin puede restablecer)
+function avisoCorteWeb(cli, gid){
+  document.getElementById('corteBar')?.remove();
+  const k = clienteCorte(cli, gid); if(!k) return;
+  const i = CORTES.info[k] || {};
+  const d = document.createElement('div'); d.id = 'corteBar'; d.setAttribute('role', 'alert');
+  d.innerHTML = `<b>⚡ Circuito sin suministro por corte</b><small>Desde ${escHtml(i.desde ? new Date(i.desde).toLocaleString('es-CL') : '—')}${i.por ? ' · marcado por ' + escHtml(i.por) : ''} · hasta nuevo aviso</small>${currentUser && currentUser.rol === 'admin' ? '<button type="button" id="corteRest">Restablecer suministro</button>' : ''}<button type="button" id="corteX" aria-label="Cerrar">×</button>`;
+  document.body.appendChild(d);
+  d.querySelector('#corteX').onclick = () => d.remove();
+  const r = d.querySelector('#corteRest');
+  if(r) r.onclick = async () => {
+    if(!confirm('¿Restablecer el suministro de este circuito? Se quitará la marca azul.')) return;
+    try{ await db.rpc('corte_restablecer', {p_n_cliente: k, p_nota: null}); d.remove(); await cargarCortesWeb(); }catch(e){ alert('No se pudo restablecer: ' + e.message); }
+  };
+  setTimeout(() => { if(d.isConnected) d.remove(); }, 15000);
+}
 // ---------- LIBRERÍA DE CÓDIGOS (tablas codigos_falla / codigos_cierre) ----------
 // Los formularios leen los códigos activos de la base; si no se pueden leer (sin red o sin el SQL), se usan las listas fijas de abajo.
 const CIERRES_FIJOS = [
@@ -3117,12 +3169,12 @@ function libreriaAplicar(d){
   });
   const ci = d.cierre || [];
   LIBRERIA.desc.cierre = Object.fromEntries(ci.map(f => [f.codigo, f.descripcion]));
-  LIBRERIA.cierre = ci.filter(f => f.activo).sort((a, b) => (a.orden - b.orden) || a.codigo.localeCompare(b.codigo)).map(f => ({c: f.codigo, d: f.descripcion}));
+  LIBRERIA.cierre = ci.filter(f => f.activo).sort((a, b) => (a.orden - b.orden) || a.codigo.localeCompare(b.codigo)).map(f => ({c: f.codigo, d: f.descripcion, corte: !!f.corte}));
   LIBRERIA.frec = d.frec || null;
 }
 async function cargarLibreria(){
   try{
-    const [falla, cierre] = await Promise.all([db.select('codigos_falla', 'select=categoria,codigo,descripcion,orden,activo'), db.select('codigos_cierre', 'select=codigo,descripcion,orden,activo')]);
+    const [falla, cierre] = await Promise.all([db.select('codigos_falla', 'select=categoria,codigo,descripcion,orden,activo'), db.select('codigos_cierre', 'select=codigo,descripcion,orden,activo,corte')]);
     let frec = null; try{ frec = await db.rpc('codigos_frecuentes', {p_dias: 90}); }catch(e){}
     const d = {falla, cierre, frec};
     libreriaAplicar(d);
@@ -4283,7 +4335,8 @@ async function abrirPopupFalla(feat){
   const puedeComentar = tiene('falla_comentar') && !p.cascada && !p._vistaHistorica;
   let contenidoPanel, panelDosColumnas = false;
   if(tiene('reparacion_cerrar') && (rolEfectivo() !== 'admin' || adminPuedeReparar()) && !p.cascada && p.estado !== 'reparada'){
-    const filasCierre = htmlCodigosAgrupados('cierre', CATALOGO_CIERRES, item => `
+    const filaCorte = CATALOGO_CIERRES.filter(x => x.corte).map(item => `<div class="falla-opcion-row"><button class="codigo-btn cierre-btn corte-btn" data-desc="${(item.c + ' ' + item.d).replace(/"/g,'&quot;')}" title="Marca el circuito hasta nuevo aviso">⚡</button><span class="falla-opcion-desc"><b>${escHtml(item.d)}</b><br><small>Marca el circuito hasta nuevo aviso</small></span></div>`).join('');
+    const filasCierre = filaCorte + htmlCodigosAgrupados('cierre', CATALOGO_CIERRES.filter(x => !x.corte), item => `
       <div class="falla-opcion-row">
         <button class="codigo-btn cierre-btn" data-desc="${(item.c + ' ' + item.d).replace(/"/g,'&quot;')}">${escHtml(item.c)}</button>
         <span class="falla-opcion-desc">${escHtml(item.d)}</span>

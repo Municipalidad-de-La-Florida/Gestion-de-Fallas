@@ -95,12 +95,12 @@ function libreriaAplicar(d) {
   });
   const ci = d.cierre || [];
   LIBRERIA.desc.cierre = Object.fromEntries(ci.map((f) => [f.codigo, f.descripcion]));
-  LIBRERIA.cierre = ci.filter((f) => f.activo).sort((a, b) => (a.orden - b.orden) || a.codigo.localeCompare(b.codigo)).map((f) => ({ c: f.codigo, d: f.descripcion }));
+  LIBRERIA.cierre = ci.filter((f) => f.activo).sort((a, b) => (a.orden - b.orden) || a.codigo.localeCompare(b.codigo)).map((f) => ({ c: f.codigo, d: f.descripcion, corte: !!f.corte }));
   LIBRERIA.frec = d.frec || null;
 }
 async function cargarLibreria() {
   try {
-    const [falla, cierre] = await Promise.all([select('codigos_falla', 'select=categoria,codigo,descripcion,orden,activo'), select('codigos_cierre', 'select=codigo,descripcion,orden,activo')]);
+    const [falla, cierre] = await Promise.all([select('codigos_falla', 'select=categoria,codigo,descripcion,orden,activo'), select('codigos_cierre', 'select=codigo,descripcion,orden,activo,corte')]);
     let frec = null; try { frec = await rpc('codigos_frecuentes', { p_dias: 90 }); } catch (e) { /* sin frecuentes */ }
     const d = { falla, cierre, frec };
     libreriaAplicar(d);
@@ -148,8 +148,9 @@ function htmlCodigosGrupo(cat, items, fila) {
   const sec = (t) => `<div class="codigos-sec">${t}</div>`;
   return sec('Más frecuentes') + top.map(fila).join('') + sec('Otros códigos') + resto.map(fila).join('');
 }
-const filaCierre = (x) => `<button type="button" class="codigo" data-t="${esc(x.c + ' ' + x.d)}"><b>${esc(x.c)}</b><span>${esc(x.d)}</span></button>`;
-const htmlCierres = () => `<div class="codigos">${htmlCodigosGrupo('cierre', catalogoActivo('cierre'), filaCierre)}</div>`;
+const filaCierre = (x) => `<button type="button" class="codigo${x.corte ? ' corte' : ''}" data-t="${esc(x.c + ' ' + x.d)}"><b>${x.corte ? '⚡' : esc(x.c)}</b><span>${esc(x.d)}${x.corte ? '<small>Marca el circuito hasta nuevo aviso</small>' : ''}</span></button>`;
+// "Cortado Suministro Distribución" va siempre primero y destacado
+const htmlCierres = () => { const it = catalogoActivo('cierre'); return `<div class="codigos">${it.filter((x) => x.corte).map(filaCierre).join('')}${htmlCodigosGrupo('cierre', it.filter((x) => !x.corte), filaCierre)}</div>`; };
 const ETIQUETA_ESTADO = { reportada: 'Reportada', pendiente: 'Pendiente', reiterada: 'Reiterada', reparada: 'Reparada' };
 const COLOR_ESTADO = { reportada: '#f2b705', pendiente: '#2fa8d8', reiterada: '#7b3fe4', reparada: '#2e9e57', vencida: '#d33a2c' };
 // Amarillo reportada, morado reiterada, celeste pendiente; pasan a rojo con más de 48 h (reportada/reiterada,
@@ -975,6 +976,45 @@ const contenido = (c, b) => c && b[0] >= c[0] && b[1] >= c[1] && b[2] <= c[2] &&
 // Reintenta una vez una consulta de capa (red móvil inestable)
 const rpcReint = async (fn, args) => { try { return await rpc(fn, args); } catch (e) { if (e.name === 'SesionExpirada') throw e; await new Promise((r) => setTimeout(r, 600)); return rpc(fn, args); } };
 let _areaSeq = 0;
+/* ---------- Circuitos con corte de suministro (cierre "Cortado Suministro Distribución") ---------- */
+let capaCortes = null, _cortesClave = '';
+S.cortes = { clientes: new Set(), gids: new Set(), info: {} };
+async function cargarCortes() {
+  try {
+    const l = await rpc('cortes_activos');
+    const c = { clientes: new Set(), gids: new Set(), info: {} };
+    (l || []).forEach((x) => { const k = String(x.n_cliente).trim(); c.clientes.add(k); if (x.circuito_gid != null) c.gids.add(x.circuito_gid); c.info[k] = x; });
+    const clave = [...c.clientes].sort().join('|');
+    S.cortes = c;
+    if (clave !== _cortesClave) { _cortesClave = clave; if (map) { cacheBbox = null; cargarArea(true); } }
+  } catch (e) { if (e.name === 'SesionExpirada') throw e; /* sin la función: no hay cortes */ }
+}
+const clienteCorte = (cli, gid) => { const k = cli == null ? '' : String(cli).trim(); if (k && S.cortes.clientes.has(k)) return k; if (gid != null && S.cortes.gids.has(gid)) { const x = Object.values(S.cortes.info).find((i) => i.circuito_gid === gid); return x ? String(x.n_cliente).trim() : null; } return null; };
+function clienteDePunto(gid) { let cli = null; if (capaPuntos) capaPuntos.eachLayer((l) => { if (l.feature && l.feature.properties.gid === gid) cli = l.feature.properties.n_cliente; }); return cli; }
+function avisoCorteHtml(cli, gid) {
+  const k = clienteCorte(cli, gid); if (!k) return '';
+  const i = S.cortes.info[k] || {};
+  return `<div class="corte-aviso" role="alert"><b>⚡ Circuito sin suministro por corte</b><small>Desde ${esc(i.desde ? fmtFecha(i.desde) : '—')}${i.por ? ' · marcado por ' + esc(i.por) : ''} · hasta nuevo aviso</small>${rol() === 'admin' ? `<button type="button" class="btn corte-rest" data-k="${esc(k)}">Restablecer suministro</button>` : ''}</div>`;
+}
+function ligarCorte(h) {
+  const b = $('.corte-rest', h); if (!b) return;
+  b.addEventListener('click', ocupar(b, async () => {
+    if (!confirm('¿Restablecer el suministro de este circuito? Se quitará la marca azul.')) return;
+    await rpc('corte_restablecer', { p_n_cliente: b.dataset.k, p_nota: null });
+    cerrarHoja(); toast('Suministro restablecido', 'ok'); cargarCortes();
+  }));
+}
+// Dibuja en azul eléctrico (con animación) los circuitos marcados; va en un panel SVG propio porque el canvas no anima
+function pintarCortes() {
+  if (!map) return;
+  if (!capaCortes) { map.createPane('cortes'); map.getPane('cortes').style.zIndex = 405; map.getPane('cortes').style.pointerEvents = 'none'; capaCortes = L.layerGroup().addTo(map); }
+  capaCortes.clearLayers();
+  const svg = L.svg({ pane: 'cortes', padding: 0.5 });
+  capaCircuitos.eachLayer((l) => {
+    const p = l.feature && l.feature.properties; if (!p || !clienteCorte(p.n_cliente, p.gid)) return;
+    L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { className: 'corte-lin', color: '#00b4ff', weight: 6, opacity: 1 } }).addTo(capaCortes);
+  });
+}
 async function cargarArea(forzar) {
   if (!map) return true;
   const z = map.getZoom();
@@ -1014,10 +1054,11 @@ async function cargarArea(forzar) {
     }
     if (pts) {
       L.geoJSON(pts, {
-        pointToLayer: (f, ll) => new MarcadorForma(ll, { renderer: rend, forma: formaPoste(f.properties.simb_poste), radius: radioPunto(), weight: 2, color: '#1f4d3d', fillColor: '#ffd54a', fillOpacity: 0.9 }),
+        pointToLayer: (f, ll) => new MarcadorForma(ll, { renderer: rend, forma: formaPoste(f.properties.simb_poste), radius: radioPunto(), weight: 2, color: clienteCorte(f.properties.n_cliente, null) ? '#0a5db5' : '#1f4d3d', fillColor: clienteCorte(f.properties.n_cliente, null) ? '#00b4ff' : '#ffd54a', fillOpacity: 0.9 }),
         onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirPunto(f.properties, f.geometry); }),
       }).eachLayer((l) => capaPuntos.addLayer(l));
     }
+    pintarCortes();
     if (ok) cacheBbox = grande;
     capaFallas.bringToFront && capaFallas.bringToFront();
   } catch (e) {
@@ -1544,7 +1585,7 @@ async function cargarRepBusq() {
 }
 
 async function cargarFallas(manual) {
-  cargarSuministro();
+  cargarSuministro(); cargarCortes();
   if (!Object.keys(CONTR).length) cargarContratosEtiqueta();
   const btn = $('#btnActualizar');
   if (manual) btn.classList.add('girando');
@@ -1660,6 +1701,7 @@ function abrirPunto(p, geom) {
   const act = fallaActivaCargada('punto', p.gid); if (act) return abrirFalla(act.properties, act.geometry);
   const h = abrirHoja(`
     <h2>Punto lumínico · Llave ${esc(p.llave ?? '—')}</h2>
+    ${avisoCorteHtml(p.n_cliente, null)}
     <div class="hint">${esc([p.calle_1, p.direccion].filter((x) => x != null && x !== '').join(' ') || '')}</div>
     <dl class="kv info-card">
       <dt>N.° de llave</dt><dd>${esc(p.llave ?? '—')}</dd>
@@ -1671,6 +1713,7 @@ function abrirPunto(p, geom) {
     <h3>Estado</h3><div id="estPunto" class="hint">Cargando…</div>
     ${infoSoloLectura()}
     ${accionesReporte('Reportar falla', geom)}`);
+  ligarCorte(h);
   botonVerReparada(h, 'punto', p.gid);
   rpc('luminarias_punto', { p_gid: p.gid }).then((ls) => {
     const b = $('#lumsPunto', h); if (!b || !document.body.contains(b)) return;
@@ -1703,12 +1746,14 @@ function abrirCircuito(p, geom) {
   const act = fallaActivaCargada('circuito', p.gid); if (act) return abrirFalla(act.properties, act.geometry);
   const h = abrirHoja(`
     <h2>Circuito ${esc(p.id ?? '')}</h2>
+    ${avisoCorteHtml(p.n_cliente, p.gid)}
     <dl class="kv">
       <dt>Luminarias</dt><dd>${esc(p.cantidad_luminarias_cliente ?? '—')}</dd>
       <dt>N.° de cliente</dt><dd>${esc(p.n_cliente ?? '—')}</dd>
     </dl>
     ${infoSoloLectura()}
     ${accionesReporte('Reportar falla de circuito', geom)}`);
+  ligarCorte(h);
   botonVerReparada(h, 'circuito', p.gid);
   const b = $('#bReportar', h);
   if (b) b.addEventListener('click', ocupar(b, async () => {
@@ -2509,6 +2554,7 @@ async function abrirFalla(p, geom) {
   const lineaFicha = evFicha.map((e) => e.html).join('');
   const h = abrirHoja(`
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
+    ${avisoCorteHtml(p.ref_punto_gid != null ? clienteDePunto(p.ref_punto_gid) : null, p.ref_circuito_gid)}
     <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span>${p.contrato_id && CONTR[p.contrato_id] ? `<span class="tag-ctr n">${esc(CONTR[p.contrato_id].nombre)}</span>` : ''}${p.mantenedor_id && MANT[p.mantenedor_id] ? `<span class="tag-mant">${esc(MANT[p.mantenedor_id])}</span>` : ''}${p.masivo ? '<span class="tag-masivo" style="margin-left:4px">#Masivo</span>' : ''}</div>
     <dl class="kv info-card">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && tiene('asignacion_quitar') ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
     <div id="fotoReporte"></div>
@@ -2525,6 +2571,7 @@ async function abrirFalla(p, geom) {
       </div>
     </div>
     `);
+  ligarCorte(h);
   ofrecerEdicionReparacion(p, h);
   const bep = $('#bEditPend', h);
   if (bep) bep.addEventListener('click', () => {
