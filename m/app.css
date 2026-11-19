@@ -860,3 +860,9 @@ html[data-tema=oscuro] .chip-modo.reqm{ color:#fff; }
 .rq-urgt{display:inline-flex;gap:6px;align-items:center;font-weight:700;color:#c1443c;font-size:13px;cursor:pointer;border:1.5px solid #f0c9c6;border-radius:14px;padding:3px 10px;background:#fff;white-space:nowrap;}
 .rq-urgt:has(input:checked){background:#e23b33;color:#fff;border-color:#e23b33;}
 .rqs-ed{min-height:84px;}
+
+.rq-c-ejecutado{ background:#fff5d1; border-color:#d9aa2b; box-shadow:inset 4px 0 0 #d9aa2b; }
+.rq-c-revisado{ background:#e4f5ea; border-color:#4fae7a; box-shadow:inset 4px 0 0 #4fae7a; }
+.rq-e-ejecutado{ color:#6b4d00; border-color:#d9aa2b; background:#f7e08f; } .rq-e-revisado{ color:#115c32; border-color:#4fae7a; background:#c8ecd6; }
+.rq-dist{ font-size:12px; font-weight:700; color:#6d3fc8; margin-top:3px; }
+.rq-dist small{ font-weight:500; color:#8a82a0; }

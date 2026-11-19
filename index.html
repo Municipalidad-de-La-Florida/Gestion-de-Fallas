@@ -857,6 +857,11 @@
 .rq-urgt{display:inline-flex;gap:6px;align-items:center;font-weight:700;color:#c1443c;font-size:13px;cursor:pointer;border:1.5px solid #f0c9c6;border-radius:14px;padding:3px 10px;background:#fff;white-space:nowrap;}
 .rq-urgt:has(input:checked){background:#e23b33;color:#fff;border-color:#e23b33;}
 .rqs-ed{min-height:84px;}
+.rq-c-ejecutado{ background:#fff5d1; border-color:#d9aa2b; box-shadow:inset 4px 0 0 #d9aa2b; }
+.rq-c-revisado{ background:#e4f5ea; border-color:#4fae7a; box-shadow:inset 4px 0 0 #4fae7a; }
+.rq-e-ejecutado{ color:#6b4d00; border-color:#d9aa2b; background:#f7e08f; } .rq-e-revisado{ color:#115c32; border-color:#4fae7a; background:#c8ecd6; }
+.rq-dist{ font-size:12px; font-weight:700; color:#6d3fc8; margin-top:3px; }
+.rq-dist small{ font-weight:500; color:#8a82a0; }
 </style>
 </head>
 <body>
@@ -11680,12 +11685,20 @@ async function rqCargar(){
   }catch(e){ const z = rqEl('rqLista'); if(z) z.innerHTML = `<div class="rq-vacio">No se pudo cargar: ${escHtml(e.message)}</div>`; return; }
   rqPintarLista(); rqBadge(); rqRefrescarMapa(false);
 }
+function rqDistTxt(r){
+  if(r.dist_m == null) return '';
+  const d = r.dist_m >= 1000 ? (r.dist_m / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(r.dist_m) + ' m';
+  const e = r.pos_min != null && r.pos_min > 10 ? ` <small>· hace ${r.pos_min >= 60 ? Math.round(r.pos_min / 60) + ' h' : r.pos_min + ' min'}</small>` : '';
+  return `<div class="rq-dist" title="Distancia en línea recta de la cuadrilla al punto">🚚 a ${d}${e}</div>`;
+}
+const rqClaseEst = (r) => (r.estado === 'ejecutado' || r.estado === 'revisado') ? ' rq-c-' + r.estado : '';
 function rqCardHtml(r){
   const urg = r.urgente && !['cerrado', 'anulado'].includes(r.estado), toca = rqQueToca(r) && rqTeToca(r);
-  return `<div class="rq-card${urg ? ' urg' : ''}" data-id="${r.id}">${urg ? '<div class="rq-luz"><div class="rq-estela"></div><div class="rq-halo"></div><div class="rq-nucleo"></div></div>' : ''}
+  return `<div class="rq-card${urg ? ' urg' : ''}${rqClaseEst(r)}" data-id="${r.id}">${urg ? '<div class="rq-luz"><div class="rq-estela"></div><div class="rq-halo"></div><div class="rq-nucleo"></div></div>' : ''}
     <div class="rq-top"><span class="rq-cod">${r.codigo}</span>${urg ? '<span class="rq-chip rq-u">🔴 URGENTE</span>' : ''}<span class="rq-chip rq-e-${r.estado}" style="margin-left:auto;">${RQ_ESTADOS[r.estado] || r.estado}</span></div>
     <div class="rq-tipo">${escHtml(r.tipo_label)}</div><div class="rq-sub">${escHtml(r.ubicacion)}</div>
     <div class="rq-sub" style="margin-top:2px;" title="Solicitó ${escAttr(r.creado_por.nombre || '—')}${r.derivado_a.nombre ? ' · Contratista: ' + escAttr(r.derivado_a.nombre) : ''}${r.asignado_a.nombre ? ' · Cuadrilla: ' + escAttr(r.asignado_a.nombre) : ''}">${escHtml(r.creado_por.nombre || '—')} · ${tiempoHace(r.creado_en)}${r.asignado_a.nombre ? ' · ' + escHtml(r.asignado_a.nombre) : (r.derivado_a.nombre ? ' → ' + escHtml(r.derivado_a.nombre) : '')}</div>
+    ${rqDistTxt(r)}
     ${toca ? `<div class="rq-toca">👉 Te toca: ${rqQueToca(r)}</div>` : ''}</div>`;
 }
 function rqPintarLista(){
@@ -11786,9 +11799,9 @@ function rqPintarDetalle(){
   rqEl('rqHd').innerHTML = `<button type="button" class="rq-back" id="rqVolver">‹ Lista</button><span class="rq-cod">${r.codigo}</span>${urg ? '<span class="rq-chip rq-u">🔴 URGENTE</span>' : ''}<span class="rq-chip rq-e-${r.estado}">${RQ_ESTADOS[r.estado] || r.estado}</span><span class="rq-grow"></span><button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
   rqEl('rqX').onclick = rqCerrar; rqEl('rqVolver').onclick = () => rqVistaLista();
   const quien = [`Solicitó <b>${escHtml(r.creado_por.nombre || '—')}</b>`, r.derivado_a.nombre ? `Contratista: <b>${escHtml(r.derivado_a.nombre)}</b>` : '', r.asignado_a.nombre ? `Cuadrilla: <b>${escHtml(r.asignado_a.nombre)}</b>` : ''].filter(Boolean).join(' · ');
-  rqEl('rqBody').innerHTML = `<div class="rq-det${urg ? ' urg' : ''}">${urg ? '<div class="rq-luz"><div class="rq-estela"></div><div class="rq-halo"></div><div class="rq-nucleo"></div></div>' : ''}
+  rqEl('rqBody').innerHTML = `<div class="rq-det${urg ? ' urg' : ''}${rqClaseEst(r)}">${urg ? '<div class="rq-luz"><div class="rq-estela"></div><div class="rq-halo"></div><div class="rq-nucleo"></div></div>' : ''}
     <div class="rq-tipo" style="font-size:15px;">${escHtml(r.tipo_label)}</div>
-    <div class="rq-sub">${escHtml(r.ubicacion)}${r.lat != null ? ' · <a id="rqMapa">Ver en el mapa</a>' : ''}</div>
+    <div class="rq-sub">${escHtml(r.ubicacion)}${r.lat != null ? ' · <a id="rqMapa">Ver en el mapa</a>' : ''}</div>${rqDistTxt(r)}
     <div class="rq-box"><b>Solicitud</b><div class="rq-txt">${escHtml(r.descripcion)}</div>${fSol.length || acc.includes('subir_foto_solicitud') ? rqFotosHtml(fSol, 'solicitud', acc.includes('subir_foto_solicitud'), acc.includes('subir_foto_solicitud')) : ''}</div>
     <div class="rq-sub">${quien}</div>${ejecBox}
     ${botones ? `<div class="rq-acc" id="rqAcc">${botones}</div><div id="rqForm"></div>` : ''}
