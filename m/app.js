@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.6';
+const VERSION_APP = '2.12.7';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -978,7 +978,7 @@ const rpcReint = async (fn, args) => { try { return await rpc(fn, args); } catch
 let _areaSeq = 0;
 /* ---------- Circuitos con corte de suministro (cierre "Cortado Suministro Distribución") ---------- */
 let capaCortes = null, _cortesClave = '';
-S.cortes = { clientes: new Set(), gids: new Set(), info: {} };
+S.cortes = { clientes: new Set(), gids: new Set(), info: {}, fallas: new Set() };
 S.corteFallas = new Set();
 const tagCorte = (id) => (S.corteFallas.has(id) ? ' <span class="tag-corte" title="Falla de un circuito cortado por falta de pago/suministro">⚡ #EnCorte</span>' : '');
 const textoCorte = (p, q) => { const t = q.replace(/^#/, ''); return S.corteFallas.has(p.id) && t.length >= 3 && 'encorte'.startsWith(t); };
@@ -986,8 +986,8 @@ async function cargarCortes() {
   try {
     rpc('cortes_fallas').then((l) => { S.corteFallas = new Set(l || []); }).catch(() => {});
     const l = await rpc('cortes_activos');
-    const c = { clientes: new Set(), gids: new Set(), info: {} };
-    (l || []).forEach((x) => { const k = String(x.n_cliente).trim(); c.clientes.add(k); if (x.circuito_gid != null) c.gids.add(x.circuito_gid); c.info[k] = x; });
+    const c = { clientes: new Set(), gids: new Set(), info: {}, fallas: new Set() };
+    (l || []).forEach((x) => { if (x.falla_id) c.fallas.add(x.falla_id); const k = String(x.n_cliente).trim(); c.clientes.add(k); if (x.circuito_gid != null) c.gids.add(x.circuito_gid); c.info[k] = x; });
     const clave = [...c.clientes].sort().join('|');
     S.cortes = c;
     if (clave !== _cortesClave) { _cortesClave = clave; if (map) { cacheBbox = null; cargarArea(true); } }
@@ -1297,6 +1297,7 @@ function dibujarFallas() {
   });
   S.features.forEach((f) => {
     const p = f.properties;
+    if (p.estado === 'reparada' && S.cortes.fallas && (S.cortes.fallas.has(p.id) || (p.circuito_origen_id && S.cortes.fallas.has(p.circuito_origen_id)))) return;   // cerrada con 900: no se pinta verde, queda solo el marcador azul del corte
     if (p.estado === 'reparada' && ((p.ref_punto_gid != null && activasEn.has('p' + p.ref_punto_gid)) || (p.ref_circuito_gid != null && !p.cascada && activasEn.has('c' + p.ref_circuito_gid)))) return;
     // Subcontrato: los puntos de cascada se ocultan (manda el circuito); las reparadas recientes se siguen viendo
     if (subF !== 'todas') { if (p.cascada) return; if (!pasaTag(subF, p.masivo, S.corteFallas.has(p.id))) return; }
