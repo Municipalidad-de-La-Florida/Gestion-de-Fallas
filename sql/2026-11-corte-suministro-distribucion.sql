@@ -80,3 +80,12 @@ update public.codigos_cierre set descripcion = 'Cortado desde la Distribución' 
 -- Si se edita la descripción de un cierre y pasa a incluir el código de corte, también se marca el circuito
 drop trigger if exists trg_reparacion_marca_corte_upd on public.reparaciones;
 create trigger trg_reparacion_marca_corte_upd after update of descripcion on public.reparaciones for each row when (old.descripcion is distinct from new.descripcion) execute function public._reparacion_marca_corte();
+-- Tag #EnCorte también para fallas cuya reparación o motivo de pendiente dicen «corte de suministro»
+create or replace function public._falla_texto_corte(p_id uuid) returns boolean
+language sql stable security definer set search_path to 'public' as $$
+  select exists (select 1 from public.reparaciones r where r.falla_id = p_id and r.descripcion ~* 'corte de suministro')
+      or exists (select 1 from public.fallas f where f.id = p_id and (f.motivo_pendiente ~* 'corte de suministro' or f.descripcion_otro ~* 'corte de suministro'))
+$$;
+revoke all on function public._falla_texto_corte(uuid) from public, anon;
+-- cortes_fallas() = (fallas de circuitos cortados o cerradas con 900) UNION (fallas con ese texto)
+-- resumen_todas_fallas: la columna de búsqueda '#encorte encorte' también usa _falla_texto_corte(f.id)

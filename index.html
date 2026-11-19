@@ -1137,6 +1137,7 @@
             <div class="lat-chips" id="chipsSubcontrato">
               <button type="button" class="fchip fchip-sel on" data-sub="todas">Todas <span class="n" id="tagTodasN"></span></button>
               <button type="button" class="fchip fchip-sel" data-sub="masivo">Masivo <span class="n" id="masivoN"></span></button>
+              <button type="button" class="fchip fchip-sel" data-sub="encorte">⚡ EnCorte <span class="n" id="corteN"></span></button>
               <button type="button" class="fchip fchip-sel" data-sub="normal">Sin TAG <span class="n" id="normalN"></span></button>
             </div>
           </div>
@@ -3913,7 +3914,7 @@ function renderFallasDesdeCache(){
       // Subcontrato: los puntos de cascada se ocultan (manda el circuito); las reparadas recientes se siguen viendo
       if(subFiltro !== 'todas'){
         if(feat.properties.cascada) return;
-        if(subFiltro === 'masivo' ? !feat.properties.masivo : !!feat.properties.masivo) return;
+        if(!pasaTag(subFiltro, feat.properties.masivo, CORTE_FALLAS.has(feat.properties.id))) return;
       }
       // Contrato: igual que Subcontrato, manda el circuito
       const conF = contratoActivo(), mantF = mantenedorActivo();
@@ -4865,7 +4866,9 @@ function filtroSinAsignarActivo(){ return asignacionActiva() === 'sin'; }
 function soloMasivoActivo(){ return filtroSubcontrato === 'masivo'; }
 // ¿Una falla de la lista pasa los filtros de Asignación y Subcontrato?
 // «omitir» deja fuera un grupo ('asig' | 'tag' | 'con' | 'mant' | 'cod'): sirve para contar cuántas fallas daría cada opción de ese grupo
-function pasaFiltrosOtros(masivo, asignadoCamionId, contratoId, tipoFalla, mantenedorId, omitir){
+// TAG: 'masivo' | 'encorte' (circuito cortado por suministro) | 'normal' (sin ningún TAG) | 'todas'
+function pasaTag(sub, masivo, corte){ return sub === 'masivo' ? !!masivo : sub === 'encorte' ? !!corte : sub === 'normal' ? !masivo && !corte : true; }
+function pasaFiltrosOtros(masivo, asignadoCamionId, contratoId, tipoFalla, mantenedorId, omitir, enCorte){
   const a = asignacionActiva(), c = contratoActivo(), m = mantenedorActivo();
   if(omitir !== 'cod' && filtroCodigos.size && !filtroCodigos.has(tipoFalla)) return false;
   if(omitir !== 'asig'){
@@ -4873,8 +4876,7 @@ function pasaFiltrosOtros(masivo, asignadoCamionId, contratoId, tipoFalla, mante
     if(a === 'asignadas' && !asignadoCamionId) return false;
   }
   if(omitir !== 'tag'){
-    if(filtroSubcontrato === 'masivo' && !masivo) return false;
-    if(filtroSubcontrato === 'normal' && masivo) return false;
+    if(!pasaTag(filtroSubcontrato, masivo, enCorte)) return false;
   }
   if(omitir !== 'con'){
     if(c === 'sin' && contratoId) return false;
@@ -4890,7 +4892,7 @@ function actualizarFiltrosOtrosUI(){
   // Los números de cada opción son las fallas que quedarían al elegirla, con los demás filtros (y los estados) ya puestos:
   // así las opciones de un grupo siempre suman «Todas» y calzan con lo que muestra la lista.
   const filas = (fallasEnArea || []).map(normalizarFilaLateral).filter(f => filtrosEstadoVisible[f.estado] !== false);
-  const cuenta = (omitir, extra) => filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id, f.tipo_falla, f.mantenedor_id, omitir) && (!extra || extra(f))).length;
+  const cuenta = (omitir, extra) => filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id, f.tipo_falla, f.mantenedor_id, omitir, CORTE_FALLAS.has(f.id)) && (!extra || extra(f))).length;
   const poner = (id, n) => { const el = document.getElementById(id); if(el) el.textContent = n; };
   const mostrar = (id, v) => { const g = document.getElementById(id); if(g) g.style.display = v ? '' : 'none'; };
   // Asignación
@@ -4898,8 +4900,8 @@ function actualizarFiltrosOtrosUI(){
   const nSin = cuenta('asig', f => !f.asignado), nTodasAsig = cuenta('asig');
   poner('sinAsignarN', nSin); poner('asignadasN', nTodasAsig - nSin); poner('asigTodasN', nTodasAsig);
   // TAG
-  const nTodasTag = cuenta('tag'), nMas = cuenta('tag', f => f.masivo);
-  poner('tagTodasN', nTodasTag); poner('masivoN', nMas); poner('normalN', nTodasTag - nMas);
+  const nTodasTag = cuenta('tag'), nMas = cuenta('tag', f => f.masivo), nCorte = cuenta('tag', f => CORTE_FALLAS.has(f.id)), nNormal = cuenta('tag', f => !f.masivo && !CORTE_FALLAS.has(f.id));
+  poner('tagTodasN', nTodasTag); poner('masivoN', nMas); poner('corteN', nCorte); poner('normalN', nNormal);
   document.querySelectorAll('#chipsAsignacion .fchip').forEach(c => c.classList.toggle('on', c.dataset.asig === filtroAsignacion));
   document.querySelectorAll('#chipsSubcontrato .fchip').forEach(c => c.classList.toggle('on', c.dataset.sub === filtroSubcontrato));
   // Contrato (perfiles de mantenedor y admin)
@@ -4941,7 +4943,7 @@ function alternarCodigoLateral(c){
 function pintarCodigosLateral(filas, cuentaFn){
   const cont = document.getElementById('chipsCodigo'); if(!cont) return;
   const cu = {};
-  filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id, f.tipo_falla, f.mantenedor_id, 'cod')).forEach(f => { if(f.tipo_falla) cu[f.tipo_falla] = (cu[f.tipo_falla] || 0) + 1; });
+  filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id, f.tipo_falla, f.mantenedor_id, 'cod', CORTE_FALLAS.has(f.id))).forEach(f => { if(f.tipo_falla) cu[f.tipo_falla] = (cu[f.tipo_falla] || 0) + 1; });
   filtroCodigos.forEach(c => { if(!(c in cu)) cu[c] = 0; });   // un código marcado se mantiene visible aunque ya no haya fallas
   const codigos = Object.keys(cu).sort((a, b) => cu[b] - cu[a] || a.localeCompare(b));
   document.getElementById('filtroCodigoGrupo').hidden = !codigos.length;
@@ -5008,11 +5010,11 @@ function renderFallasList(){
     if(busquedaLateral.error){ list.innerHTML = `<div class="empty-state">No se pudo buscar: ${escHtml(busquedaLateral.error)}</div>`; estado.style.display = 'none'; return; }
     // La búsqueda de texto respeta los filtros puestos (asignación, subcontrato, contrato, código y estados)
     filas = (busquedaLateral.filas || []).map(normalizarFilaLateral)
-      .filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id, f.tipo_falla, f.mantenedor_id))
+      .filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id, f.tipo_falla, f.mantenedor_id, undefined, CORTE_FALLAS.has(f.id)))
       .filter(f => filtrosEstadoVisible[f.estado] !== false);
   } else {
     filas = fallasEnArea.map(normalizarFilaLateral);
-    filas = filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id, f.tipo_falla, f.mantenedor_id));
+    filas = filas.filter(f => pasaFiltrosOtros(f.masivo, f.asignado, f.contrato_id, f.tipo_falla, f.mantenedor_id, undefined, CORTE_FALLAS.has(f.id)));
     filas = filas.filter(f => filtrosEstadoVisible[f.estado] !== false);
   }
   actualizarFiltrosOtrosUI();
@@ -5489,7 +5491,7 @@ document.getElementById('toggleExportBtn').onclick = () => {
   });
   const partes = [];
   if(filtroEstadoTodasFallas.size) partes.push('estado: ' + [...filtroEstadoTodasFallas].join(', '));
-  if(filtroMasivoTodasFallas !== 'todas') partes.push('subcontrato: ' + (filtroMasivoTodasFallas === 'si' ? 'masivo' : 'normal'));
+  if(filtroMasivoTodasFallas !== 'todas') partes.push('subcontrato: ' + (filtroMasivoTodasFallas === 'si' ? 'masivo' : filtroMasivoTodasFallas === 'corte' ? 'EnCorte' : 'normal'));
   if(filtroContratoTodasFallas !== 'todos') partes.push('contrato: ' + (filtroContratoTodasFallas === 'sin' ? 'sin contrato' : (CONTRATOS_MAPA[filtroContratoTodasFallas] || '')));
   if(filtroCodigosTodasFallas.size) partes.push('código: ' + [...filtroCodigosTodasFallas].join(', '));
   if(ver && filtroAsignTodasFallas !== 'todas') partes.push(filtroAsignTodasFallas === 'sin' ? 'sin asignar' : 'asignadas');
@@ -5811,7 +5813,7 @@ function filtrosActivosTodas(){
   filtroEstadoTodasFallas.forEach(e => a.push({t: 'Estado: ' + e, k: 'estado:' + e}));
   if(verAsignacionTodas() && filtroAsignTodasFallas !== 'todas') a.push({t: filtroAsignTodasFallas === 'sin' ? 'Sin asignar' : 'Asignadas', k: 'asig'});
   if(verAsignacionTodas()) filtroAsignadoresTodasFallas.forEach(id => { const f = ultimosTodasFallas.find(x => x.asignado_por_id === id); a.push({t: 'Asignada por: ' + (f ? f.asignado_por_nombre : '—'), k: 'asignador:' + id}); });
-  if(filtroMasivoTodasFallas !== 'todas') a.push({t: filtroMasivoTodasFallas === 'si' ? 'Masivo' : 'Normal', k: 'masivo'});
+  if(filtroMasivoTodasFallas !== 'todas') a.push({t: filtroMasivoTodasFallas === 'si' ? 'Masivo' : filtroMasivoTodasFallas === 'corte' ? 'EnCorte' : 'Normal', k: 'masivo'});
   if(filtroContratoTodasFallas !== 'todos') a.push({t: 'Contrato: ' + (filtroContratoTodasFallas === 'sin' ? 'sin contrato' : (CONTRATOS_MAPA[filtroContratoTodasFallas] || '—')), k: 'contrato'});
   filtroMantenedoresTodas.forEach(id => a.push({t: 'Mantenedor: ' + (id === 'sin' ? 'sin mantenedor' : (MANTENEDORES_MAPA[id] || '—')), k: 'mant:' + id}));
   if(filtroPeriodoTodas !== 'todo') a.push({t: 'Período: ' + ({hoy: 'hoy', '7': 'últimos 7 días', mes: 'este mes', rango: 'rango'}[filtroPeriodoTodas]), k: 'periodo'});
@@ -5903,7 +5905,7 @@ function pasaFiltrosAsignacionTodas(f){
 }
 function actualizarChipsAsignacionTodas(){
   const contMas = document.getElementById('todasFiltroMasivo');
-  if(contMas) pintarMultiTodas(contMas, 'Masivo', [{id: 'todas', nombre: 'Todas'}, {id: 'si', nombre: 'Masivo'}, {id: 'no', nombre: 'Normal'}],
+  if(contMas) pintarMultiTodas(contMas, 'Masivo', [{id: 'todas', nombre: 'Todas'}, {id: 'si', nombre: 'Masivo'}, {id: 'corte', nombre: '⚡ EnCorte'}, {id: 'no', nombre: 'Normal'}],
     filtroMasivoTodasFallas, filtrarTodasFallasPorMasivo, 'Todas', {single: true, sinBuscador: true, neutro: 'todas'});
   const contAsig = document.getElementById('todasFiltroAsignacion');
   const contPor = document.getElementById('todasFiltroAsignador');
@@ -6172,7 +6174,8 @@ function renderTodasFallasTabla(){
     ? datosOrdenados.filter(f => filtroEstadoTodasFallas.has(f.estado))
     : datosOrdenados;
   if(filtroMasivoTodasFallas === 'si') porEstado = porEstado.filter(f => f.masivo);
-  else if(filtroMasivoTodasFallas === 'no') porEstado = porEstado.filter(f => !f.masivo);
+  else if(filtroMasivoTodasFallas === 'corte') porEstado = porEstado.filter(f => CORTE_FALLAS.has(f.id));
+  else if(filtroMasivoTodasFallas === 'no') porEstado = porEstado.filter(f => !f.masivo && !CORTE_FALLAS.has(f.id));
   if(filtroContratoTodasFallas === 'sin') porEstado = porEstado.filter(f => !f.contrato_id);
   else if(filtroContratoTodasFallas !== 'todos') porEstado = porEstado.filter(f => f.contrato_id === filtroContratoTodasFallas);
   if(filtroCodigosTodasFallas.size) porEstado = porEstado.filter(f => filtroCodigosTodasFallas.has(f.tipo_falla));
@@ -6306,7 +6309,7 @@ async function exportarCsv(){
     // Mismos filtros que la tabla (estado, subcontrato, asignación)
     filas = (filas || []).filter(f =>
       (!filtroEstadoTodasFallas.size || filtroEstadoTodasFallas.has(f.estado)) &&
-      (filtroMasivoTodasFallas === 'todas' || (filtroMasivoTodasFallas === 'si' ? !!f.masivo : !f.masivo)) &&
+      (filtroMasivoTodasFallas === 'todas' || (filtroMasivoTodasFallas === 'si' ? !!f.masivo : filtroMasivoTodasFallas === 'corte' ? CORTE_FALLAS.has(f.id) : (!f.masivo && !CORTE_FALLAS.has(f.id)))) &&
       (filtroContratoTodasFallas === 'todos' || (filtroContratoTodasFallas === 'sin' ? !f.contrato_id : f.contrato_id === filtroContratoTodasFallas)) &&
       (!filtroCodigosTodasFallas.size || filtroCodigosTodasFallas.has(f.tipo_falla)) &&
       (!ver || filtroAsignTodasFallas === 'todas' || (filtroAsignTodasFallas === 'sin' ? !f.asignado_camion_nombre : !!f.asignado_camion_nombre)));
