@@ -1349,7 +1349,9 @@
   <div class="modal-card modal-card-wide">
     <button class="close-x" id="closeUsuariosBtn">×</button>
     <h2>Usuarios</h2>
-    <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><button id="guardarUsuariosBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;" disabled>Guardar cambios</button><span id="usuariosEstado" class="hint" style="margin:0;">Sin cambios</span></div>
+    <div id="gestionTabs" style="display:none; gap:4px; border-bottom:2px solid var(--line); margin-bottom:10px;"><button type="button" class="gu-tab on" data-tab="usuarios">Usuarios</button><button type="button" class="gu-tab" data-tab="maestros">Maestros</button></div>
+    <div id="guardarUsuariosFila" style="display:flex; align-items:center; gap:10px; margin-bottom:10px;"><button id="guardarUsuariosBtn" style="background:var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 16px; font-size:13px; font-weight:600; cursor:pointer;" disabled>Guardar cambios</button><span id="usuariosEstado" class="hint" style="margin:0;">Sin cambios</span></div>
+    <div class="gu-pane" data-pane="maestros" style="display:none;"><div id="maestrosAdmin2" style="border:1.5px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px;"></div></div>
     <div class="gu-pane" data-pane="usuarios">
     <details class="hint" style="margin-bottom:12px;"><summary style="cursor:pointer; font-weight:600;">ℹ️ Cómo funciona esta pantalla (crear usuarios, casillas y columnas)</summary><div style="margin-top:6px;">Para crear un usuario nuevo, hazlo desde Supabase (Authentication → Add user) — aquí puedes asignarle nombre y rol una vez creado, y enviarle un reseteo de contraseña si lo necesita. La casilla <b>Foto obligatoria</b> (solo contratistas) exige adjuntar al menos una fotografía al registrar una reparación, y esas reparaciones se hacen desde la app del teléfono. La casilla <b>Notificadores</b> permite a ese usuario informar fallas a nombre de un notificador externo y elegir fecha y hora al agregarlas (solo roles que ingresan fallas). La columna <b>Contratos</b> (contratistas y camiones) indica a qué contratos pertenece cada usuario; puede ser más de uno. Los cambios se guardan todos juntos con el botón <b>Guardar cambios</b>.</div></details>
       <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:10px;">
@@ -12154,6 +12156,8 @@ document.getElementById('usuariosModal').addEventListener('click', (e) => {
 function elegirPestanaGestion(tab){
   document.querySelectorAll('#gestionTabs .gu-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   document.querySelectorAll('#usuariosModal .gu-pane').forEach(p => p.style.display = p.dataset.pane === tab ? '' : 'none');
+  const fila = document.getElementById('guardarUsuariosFila'); if(fila) fila.style.display = tab === 'usuarios' ? 'flex' : 'none';   // «Guardar cambios» solo aplica a la tabla de usuarios
+  if(tab === 'maestros') pintarMaestrosAdmin('maestrosAdmin2');
 }
 document.querySelectorAll('#gestionTabs .gu-tab').forEach(b => b.onclick = () => elegirPestanaGestion(b.dataset.tab));
 // Buscador + filtro por rol de la tabla de usuarios
@@ -12182,6 +12186,7 @@ function llenarFiltroPerfiles(){
 
 function mostrarModalUsuarios(){
   document.getElementById('usuariosModal').classList.add('visible');
+  { const t = document.getElementById('gestionTabs'); if(t) t.style.display = tiene('maestros') ? 'flex' : 'none'; }   // 2.ª pestaña: Maestros (según permiso)
   elegirPestanaGestion('usuarios');
   { const b = document.getElementById('usuariosBuscar'); b.value = ''; b.setAttribute('readonly', ''); document.getElementById('usuariosFiltroRol').value = ''; }   // el navegador no debe rellenarlo con el correo de inicio de sesión
   cargarUsuarios();
@@ -12791,8 +12796,8 @@ async function pintarPerfilesAdmin(){
 }
 
 // Maestros (personal que hace los aportes): misma lista que en la app
-async function pintarMaestrosAdmin(){
-  const caja = document.getElementById('maestrosAdmin');
+async function pintarMaestrosAdmin(idCaja){
+  const caja = document.getElementById(idCaja || 'maestrosAdmin');
   caja.innerHTML = '<div class="hint">Cargando…</div>';
   let cts = [], ms = [], porMant = true;
   try{
