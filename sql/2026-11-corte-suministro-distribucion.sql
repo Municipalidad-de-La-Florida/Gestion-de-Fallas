@@ -98,3 +98,7 @@ create or replace function public.cortes_activos() returns jsonb language sql st
 -- Circuitos de fallas cerradas con 900 antes del trigger: se marcan; cortes_activos() entrega 'fallas_900' (ids de las fallas cerradas con 900 de cada
 -- circuito cortado, que no se pintan verdes) y cortes_geojson() entrega la geometría de los circuitos cortados para dibujarlos a cualquier zoom.
 -- (Ver las definiciones vigentes en la base: migración cortes_backfill_900_geojson_fallas.)
+
+-- corte_marcar_pendiente(p_falla_id): el administrador, al editar el motivo de una falla pendiente, puede marcar el circuito como cortado
+-- (inserta en circuitos_corte como el trigger y agrega «Corte de suministro (Cortado desde la Distribución)» al motivo). La falla sigue pendiente.
+-- Ver la definición vigente en la base: migración corte_marcar_pendiente.
