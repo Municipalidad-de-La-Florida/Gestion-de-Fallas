@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.14';
+const VERSION_APP = '2.12.15';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1323,7 +1323,8 @@ function dibujarFallas() {
     if (S.estadosOff[p.estado]) return;
     const reparada = p.estado === 'reparada';
     if (p.cascada && z < ZOOM_DATOS) return;
-    const color = COLOR_ESTADO[claveColor(p)] || '#d33a2c';
+    // Pendiente de un circuito cortado (⚡): se pinta con el azul fuerte del corte, no con el celeste de las pendientes
+    const color = (p.estado === 'pendiente' && clienteCorte(p.n_cliente, p.ref_circuito_gid)) ? '#0b3de0' : (COLOR_ESTADO[claveColor(p)] || '#d33a2c');
     let capa;
     if (f.geometry.type === 'Point') {
       const [lng, lat] = f.geometry.coordinates;

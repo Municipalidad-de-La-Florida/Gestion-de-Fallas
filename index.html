@@ -3956,7 +3956,8 @@ function renderFallasDesdeCache(){
         if(estado === 'reparada' || feat.properties.cascada) return;
         if(asigFiltro === 'sin' ? !!feat.properties.asignado_camion_id : !feat.properties.asignado_camion_id) return;
       }
-      const color = colorFalla(estado, feat.properties.fecha_falla_real || feat.properties.fecha_falla, feat.properties.fecha_pendiente);
+      // Pendiente de un circuito cortado (⚡): se pinta con el azul fuerte del corte, no con el celeste de las pendientes
+      const color = (estado === 'pendiente' && clienteCorte(feat.properties.n_cliente, feat.properties.ref_circuito_gid)) ? '#0b3de0' : colorFalla(estado, feat.properties.fecha_falla_real || feat.properties.fecha_falla, feat.properties.fecha_pendiente);
       const atrasada = MODO_MANT && diasAtraso(estado, feat.properties.fecha_falla_real || feat.properties.fecha_falla, feat.properties.fecha_pendiente) > 0;
       const fallaId = feat.properties.id;
       // Si la falla ya está reparada y el usuario está en modo "agregar/informar falla" (y no viendo
