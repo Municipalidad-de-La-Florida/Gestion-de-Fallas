@@ -4190,6 +4190,13 @@ const RQ_ACC = {
   anular: { t: 'Anular', com: 'req', cta: 'Anular requerimiento', d: 1, ph: 'Motivo de la anulación' },
 };
 const RQ_ORDEN = ['asignar', 'ejecutar', 'no_puede', 'revisar', 'devolver_a_cuadrilla', 'cerrar', 'rechazar', 'derivar', 'devolver_ito', 'urgente', 'anular'];
+function rqDistTxt(r){
+  if(r.dist_m == null) return '';
+  const d = r.dist_m >= 1000 ? (r.dist_m / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(r.dist_m) + ' m';
+  const e = r.pos_min != null && r.pos_min > 10 ? ` <small>· hace ${r.pos_min >= 60 ? Math.round(r.pos_min / 60) + ' h' : r.pos_min + ' min'}</small>` : '';
+  return `<div class="rq-dist" title="Distancia en línea recta de la cuadrilla al punto">🚚 a ${d}${e}</div>`;
+}
+const rqClaseEst = (r) => (r.estado === 'ejecutado' || r.estado === 'revisado') ? ' rq-c-' + r.estado : '';
 const RQ = { orden: 'desc', filtro: 'abiertos', texto: '', lista: [], conteos: {}, destinos: null, det: null, urls: {}, timer: null, busq: null };
 const rqVe = () => !!S.perfil && (rol() === 'admin' || rol() === 'camion' || tiene('req_crear') || tiene('req_gestionar'));
 const rqLuzHtml = '<div class="rq-luz"><div class="rq-estela"></div><div class="rq-halo"></div><div class="rq-nucleo"></div></div>';
@@ -4254,10 +4261,11 @@ function rqPintarLista() {
   const z = $('#rqItems');
   z.innerHTML = lista.length ? lista.map((r) => {
     const urg = r.urgente && rqAbierto(r), toca = rqQueToca(r) && rqTeToca(r);
-    return `<div class="rq-card${urg ? ' urg' : ''}" data-id="${esc(r.id)}">${urg ? rqLuzHtml : ''}
+    return `<div class="rq-card${urg ? ' urg' : ''}${rqClaseEst(r)}" data-id="${esc(r.id)}">${urg ? rqLuzHtml : ''}
       <div class="rq-top"><span class="rq-cod">${esc(r.codigo)}</span>${urg ? '<span class="rq-chip rq-u">🔴 URGENTE</span>' : ''}<span class="rq-chip rq-e-${esc(r.estado)}" style="margin-left:auto;">${esc(RQ_ESTADOS[r.estado] || r.estado)}</span></div>
       <div class="rq-tipo">${esc(r.tipo_label)}</div><div class="rq-sub">${esc(r.ubicacion)}</div>
       <div class="rq-sub" style="margin-top:3px;">Solicitó ${esc(r.creado_por.nombre || '—')} · ${esc(rqFecha(r.creado_en))}${r.asignado_a.nombre ? ' · ' + esc(r.asignado_a.nombre) : ''}</div>
+      ${rqDistTxt(r)}
       ${toca ? `<div class="rq-toca">👉 Te toca: ${esc(rqQueToca(r))}</div>` : ''}</div>`;
   }).join('') : `<div class="rq-vacio">${RQ.texto ? 'Ningún requerimiento coincide con la búsqueda.' : (RQ.filtro === 'abiertos' ? 'No hay requerimientos activos.' : 'No hay requerimientos en esta lista.')}</div>`;
   $$('.rq-card', z).forEach((el) => el.addEventListener('click', () => rqAbrirDetalle(el.dataset.id)));
@@ -4324,10 +4332,11 @@ function rqPintarDetalle() {
   const quien = [`Solicitó <b>${esc(r.creado_por.nombre || '—')}</b>`, r.derivado_a.nombre ? `Contratista: <b>${esc(r.derivado_a.nombre)}</b>` : '', r.asignado_a.nombre ? `Cuadrilla: <b>${esc(r.asignado_a.nombre)}</b>` : ''].filter(Boolean).join(' · ');
   const h = $('#hojaContenido');
   h.innerHTML = `<div class="rq-wrap" style="--pri:#6d3fc8;--lil:#f3eefc;--lilb:#d9ccf5;--rojo:#e23b33;--rline:#e2dcee;--rsoft:#6a607f;">
-    <div class="rq-det${urg ? ' urg' : ''}">${urg ? rqLuzHtml : ''}
+    <div class="rq-det${urg ? ' urg' : ''}${rqClaseEst(r)}">${urg ? rqLuzHtml : ''}
       <div class="rq-top"><span class="rq-cod">${esc(r.codigo)}</span>${urg ? '<span class="rq-chip rq-u">🔴 URGENTE</span>' : ''}<span class="rq-chip rq-e-${esc(r.estado)}" style="margin-left:auto;">${esc(RQ_ESTADOS[r.estado] || r.estado)}</span></div>
       <div class="rq-tipo" style="font-size:15px;">${esc(r.tipo_label)}</div>
       <div class="rq-sub">${esc(r.ubicacion)}${r.lat != null ? ` · <a href="#" id="rqMapa" style="color:var(--pri);font-weight:700;">Ver en el mapa</a>` : ''}</div>
+      ${rqDistTxt(r)}
       ${r.lat != null ? `<div class="rq-acc" style="margin:8px 0 0;"><a class="rq-btn rq-ir" id="rqIr" href="${esc(urlComoLlegar([r.lat, r.lng]))}" target="_blank" rel="noopener">🧭 Cómo llegar</a></div>` : ''}
       <div class="rq-box"><b>Solicitud</b><div class="rq-txt">${esc(r.descripcion)}</div>${fSol.length ? rqFotosHtml(fSol, 'solicitud', false) : ''}</div>
       <div class="rq-sub">${quien}</div>${ejecBox}
