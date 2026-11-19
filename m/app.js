@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.5';
+const VERSION_APP = '2.12.6';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1128,11 +1128,13 @@ const conActivo = () => (veFiltroContrato() ? FO.con : 'todos');
 const mantActivo = () => (veFiltroMant() ? FO.mant : 'todos');
 const cuentaFiltrosOtros = () => (asigActiva() !== 'todas' ? 1 : 0) + (FO.sub !== 'todas' ? 1 : 0) + (conActivo() !== 'todos' ? 1 : 0) + (mantActivo() !== 'todos' ? 1 : 0) + (FO.cod.size ? 1 : 0);
 // «omitir» deja fuera un grupo ('asig' | 'tag' | 'con' | 'mant' | 'cod') para contar cuántas fallas daría cada opción de ese grupo
-function pasaFiltrosOtros(masivo, asignadoId, tipoFalla, contratoId, mantenedorId, omitir) {
+// TAG: 'masivo' | 'encorte' (circuito cortado por suministro) | 'normal' (sin ningún TAG) | 'todas'
+const pasaTag = (sub, masivo, corte) => (sub === 'masivo' ? !!masivo : sub === 'encorte' ? !!corte : sub === 'normal' ? !masivo && !corte : true);
+function pasaFiltrosOtros(masivo, asignadoId, tipoFalla, contratoId, mantenedorId, omitir, enCorte) {
   const a = asigActiva(), c = conActivo(), m = mantActivo();
   if (omitir !== 'cod' && FO.cod.size && !FO.cod.has(tipoFalla)) return false;
   if (omitir !== 'asig') { if (a === 'sin' && asignadoId) return false; if (a === 'asignadas' && !asignadoId) return false; }
-  if (omitir !== 'tag') { if (FO.sub === 'masivo' && !masivo) return false; if (FO.sub === 'normal' && masivo) return false; }
+  if (omitir !== 'tag' && !pasaTag(FO.sub, masivo, enCorte)) return false;
   if (omitir !== 'con') { if (c === 'sin' && contratoId) return false; if (c !== 'todos' && c !== 'sin' && contratoId !== c) return false; }
   if (omitir !== 'mant') { if (m === 'sin' && mantenedorId) return false; if (m !== 'todos' && m !== 'sin' && mantenedorId !== m) return false; }
   return true;
@@ -1194,13 +1196,13 @@ function actualizarFiltrosOtrosUI() {
   // Los números de cada opción son las fallas que quedarían al elegirla, con los demás filtros (y los estados) ya puestos:
   // así las opciones de un grupo siempre suman «Todas» y calzan con lo que muestra la lista.
   const base = S.activas.filter((f) => !f.properties.cascada && !S.estadosOff[f.properties.estado]);
-  const cuenta = (omitir, extra) => base.filter((f) => { const p = f.properties; return pasaFiltrosOtros(!!p.masivo, p.asignado_camion_id, p.tipo_falla, p.contrato_id || null, p.mantenedor_id || null, omitir) && (!extra || extra(p)); }).length;
+  const cuenta = (omitir, extra) => base.filter((f) => { const p = f.properties; return pasaFiltrosOtros(!!p.masivo, p.asignado_camion_id, p.tipo_falla, p.contrato_id || null, p.mantenedor_id || null, omitir, S.corteFallas.has(p.id)) && (!extra || extra(p)); }).length;
   const poner = (id, n) => { const el = $(id); if (el) el.textContent = n; };
   grupo.hidden = !veFiltroAsig();
   const nSin = cuenta('asig', (p) => !p.asignado_camion_id), nAsigTodas = cuenta('asig');
   poner('#listaSinAsignarN', nSin); poner('#listaAsignadasN', nAsigTodas - nSin); poner('#listaAsigTodasN', nAsigTodas);
-  const nTagTodas = cuenta('tag'), nMas = cuenta('tag', (p) => !!p.masivo);
-  poner('#listaTagTodasN', nTagTodas); poner('#listaMasivoN', nMas); poner('#listaNormalN', nTagTodas - nMas);
+  const nTagTodas = cuenta('tag'), nMas = cuenta('tag', (p) => !!p.masivo), nCorte = cuenta('tag', (p) => S.corteFallas.has(p.id)), nNormal = cuenta('tag', (p) => !p.masivo && !S.corteFallas.has(p.id));
+  poner('#listaTagTodasN', nTagTodas); poner('#listaMasivoN', nMas); poner('#listaCorteN', nCorte); poner('#listaNormalN', nNormal);
   $$('#listaAsig .fchip').forEach((c) => c.classList.toggle('on', c.dataset.asig === FO.asig));
   $$('#listaSub .fchip').forEach((c) => c.classList.toggle('on', c.dataset.sub === FO.sub));
   // Contrato (perfiles de mantenedor y admin)
@@ -1215,13 +1217,13 @@ function actualizarFiltrosOtrosUI() {
   pintarGrupoChips('listaMantGrupo', 'Mantenedor', 'mant', veFiltroMant() && nomMan.length > 0, opMan, cuenta('mant'));
   // Código de falla
   const cu = {};
-  base.filter((f) => { const p = f.properties; return pasaFiltrosOtros(!!p.masivo, p.asignado_camion_id, p.tipo_falla, p.contrato_id || null, p.mantenedor_id || null, 'cod'); }).forEach((f) => { const c = f.properties.tipo_falla; if (c) cu[c] = (cu[c] || 0) + 1; });
+  base.filter((f) => { const p = f.properties; return pasaFiltrosOtros(!!p.masivo, p.asignado_camion_id, p.tipo_falla, p.contrato_id || null, p.mantenedor_id || null, 'cod', S.corteFallas.has(p.id)); }).forEach((f) => { const c = f.properties.tipo_falla; if (c) cu[c] = (cu[c] || 0) + 1; });
   FO.cod.forEach((c) => { if (!(c in cu)) cu[c] = 0; });
   pintarCodigos(Object.keys(cu).sort((a, b) => cu[b] - cu[a] || a.localeCompare(b)), cu);
   // Aviso sobre el mapa mientras haya filtros puestos
   const partes = [];
   if (asigActiva() === 'sin') partes.push('sin asignar'); else if (asigActiva() === 'asignadas') partes.push('asignadas');
-  if (FO.sub === 'masivo') partes.push('TAG masivo'); else if (FO.sub === 'normal') partes.push('sin TAG');
+  if (FO.sub === 'masivo') partes.push('TAG masivo'); else if (FO.sub === 'encorte') partes.push('TAG EnCorte'); else if (FO.sub === 'normal') partes.push('sin TAG');
   if (conActivo() !== 'todos') partes.push(conActivo() === 'sin' ? 'sin contrato' : ((CONTR[FO.con] || {}).nombre || 'contrato'));
   if (mantActivo() !== 'todos') partes.push(mantActivo() === 'sin' ? 'sin mantenedor' : (MANT[FO.mant] || 'mantenedor'));
   if (FO.cod.size) partes.push([...FO.cod].join(', '));
@@ -1297,7 +1299,7 @@ function dibujarFallas() {
     const p = f.properties;
     if (p.estado === 'reparada' && ((p.ref_punto_gid != null && activasEn.has('p' + p.ref_punto_gid)) || (p.ref_circuito_gid != null && !p.cascada && activasEn.has('c' + p.ref_circuito_gid)))) return;
     // Subcontrato: los puntos de cascada se ocultan (manda el circuito); las reparadas recientes se siguen viendo
-    if (subF !== 'todas') { if (p.cascada) return; if (subF === 'masivo' ? !p.masivo : !!p.masivo) return; }
+    if (subF !== 'todas') { if (p.cascada) return; if (!pasaTag(subF, p.masivo, S.corteFallas.has(p.id))) return; }
     // Contrato y Mantenedor: igual, manda el circuito
     const conF = conActivo(), mantF = mantActivo();
     if (conF !== 'todos') { if (p.cascada) return; const cid = p.contrato_id || null; if (conF === 'sin' ? cid : cid !== conF) return; }
@@ -2934,7 +2936,7 @@ function renderLista() {
   const q = S.busqueda.trim().toLowerCase();
   actualizarFiltrosOtrosUI();
   let items = S.activas.filter((f) => !f.properties.cascada);
-  items = items.filter((f) => pasaFiltrosOtros(!!f.properties.masivo, f.properties.asignado_camion_id, f.properties.tipo_falla, f.properties.contrato_id || null, f.properties.mantenedor_id || null));
+  items = items.filter((f) => pasaFiltrosOtros(!!f.properties.masivo, f.properties.asignado_camion_id, f.properties.tipo_falla, f.properties.contrato_id || null, f.properties.mantenedor_id || null, undefined, S.corteFallas.has(f.properties.id)));
   const total = items.length;
   items = items.filter((f) => !S.estadosOff[f.properties.estado]);
   actualizarFiltrosListaUI();
@@ -2953,8 +2955,7 @@ function renderLista() {
       const p = f.properties;
       if (p.cascada || idsMostradas.has(p.id)) return false;
       if (asigActiva() !== 'todas') return false;
-      if (FO.sub === 'masivo' && !p.masivo) return false;
-      if (FO.sub === 'normal' && p.masivo) return false;
+      if (!pasaTag(FO.sub, p.masivo, S.corteFallas.has(p.id))) return false;
       return [p.ot, p.orden_externa, p.tipo_falla, descFalla(p), p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q)) || textoCorte(p, q);
     });
     nRep = rep.length;
