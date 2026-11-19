@@ -4845,7 +4845,7 @@ function pintarCampana() {
 }
 async function cargarNotifs() {
   if (!veCampana()) return;
-  try { NOTIFS = await select('notificaciones', 'select=id,falla_id,titulo,cuerpo,creado_en,leida&creado_en=gte.' + encodeURIComponent(new Date(Date.now() - 864e5).toISOString()) + '&order=creado_en.desc&limit=200') || []; }
+  try { NOTIFS = await select('notificaciones', 'select=id,falla_id,titulo,cuerpo,url,creado_en,leida&creado_en=gte.' + encodeURIComponent(new Date(Date.now() - 864e5).toISOString()) + '&order=creado_en.desc&limit=200') || []; }
   catch (e) { if (e.name === 'SesionExpirada') throw e; /* sin el SQL de avisos o sin red: se deja lo que hay */ }
   pintarCampana();
 }
@@ -4859,8 +4859,9 @@ function iniciarCampana() {
   _campanaTimer = setInterval(() => { if (!document.hidden) cargarNotifs(); }, 5 * 60 * 1000);
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil && veCampana()) cargarNotifs(); });
+const rqIdNotif = (u) => { const m = /[?&]req=([\w-]{1,64})/.exec(u || ''); return m ? m[1] : ''; };
 function listaNotifsHtml() {
-  return NOTIFS.length ? NOTIFS.map((n) => `<div class="av-it${n.leida ? '' : ' nueva'}" data-id="${esc(n.id)}" data-f="${esc(n.falla_id || '')}" role="button" tabindex="0"><div class="tx"><b>${esc(n.titulo)}</b>${n.cuerpo ? `<span class="cu">${esc(n.cuerpo)}</span>` : ''}<small>${esc(hace(n.creado_en))}${n.falla_id ? ' · toca para verla en el mapa' : ''}</small></div></div>`).join('')
+  return NOTIFS.length ? NOTIFS.map((n) => `<div class="av-it${n.leida ? '' : ' nueva'}" data-id="${esc(n.id)}" data-f="${esc(n.falla_id || '')}" data-r="${esc(rqIdNotif(n.url))}" role="button" tabindex="0"><div class="tx"><b>${esc(n.titulo)}</b>${n.cuerpo ? `<span class="cu">${esc(n.cuerpo)}</span>` : ''}<small>${esc(hace(n.creado_en))}${n.falla_id ? ' · toca para verla en el mapa' : (rqIdNotif(n.url) ? ' · toca para abrir el requerimiento' : '')}</small></div></div>`).join('')
     : '<div class="u-vacio">No hay notificaciones en las últimas 24 horas.</div>';
 }
 $('#btnCampana').addEventListener('click', async () => {
@@ -4875,7 +4876,8 @@ $('#btnCampana').addEventListener('click', async () => {
         const n = NOTIFS.find((x) => x.id === it.dataset.id);
         if (n && !n.leida) { n.leida = true; pintarCampana(); api(`/rest/v1/notificaciones?id=eq.${n.id}`, { method: 'PATCH', body: { leida: true } }).catch(() => {}); }
         cerrarHoja();
-        if (it.dataset.f) abrirFallaPorId(it.dataset.f);   // acerca el mapa a la falla y abre su ficha, igual que el aviso del celular
+        if (it.dataset.r) rqAbrirDeAviso(it.dataset.r);
+        else if (it.dataset.f) abrirFallaPorId(it.dataset.f);   // acerca el mapa a la falla y abre su ficha, igual que el aviso del celular
       }
     } catch (err) { if (err.name === 'SesionExpirada') throw err; toast('No se pudo actualizar los avisos.', 'error'); }
   });
