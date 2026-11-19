@@ -68,3 +68,7 @@ revoke all on function public.cortes_activos() from public, anon;
 revoke all on function public.corte_restablecer(text, text) from public, anon;
 grant execute on function public.cortes_activos() to authenticated;
 grant execute on function public.corte_restablecer(text, text) to authenticated;
+
+-- Tag #EnCorte (migración corte_tag_encorte): fallas cerradas con el código de corte y fallas activas de circuitos cortados.
+-- cortes_fallas() devuelve sus ids; resumen_todas_fallas (búsqueda de la web) entiende "EnCorte" / "#EnCorte".
+-- Ver la definición vigente de ambas funciones en la base.

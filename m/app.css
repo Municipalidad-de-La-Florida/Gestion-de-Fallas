@@ -892,3 +892,4 @@ html[data-tema=oscuro] .chip-modo.reqm{ color:#fff; }
 @media (prefers-reduced-motion: reduce){ .codigo.corte,.corte-aviso{ animation:none; } .corte-lin{ animation:none; } }
 html[data-tema=oscuro] .codigo.corte{ background:linear-gradient(135deg,#0a62ff,#00a9e6); color:#fff; }
 html[data-tema=oscuro] .codigo.corte.sel{ background:linear-gradient(135deg,#0a3fc4,#0089d6); }
+.tag-corte{ display:inline-block; background:linear-gradient(135deg,#0a62ff,#00c2ff); color:#fff; border-radius:6px; padding:0 6px; font-size:11px; font-weight:700; margin-left:4px; }

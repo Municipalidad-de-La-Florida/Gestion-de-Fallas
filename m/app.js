@@ -979,8 +979,12 @@ let _areaSeq = 0;
 /* ---------- Circuitos con corte de suministro (cierre "Cortado Suministro Distribución") ---------- */
 let capaCortes = null, _cortesClave = '';
 S.cortes = { clientes: new Set(), gids: new Set(), info: {} };
+S.corteFallas = new Set();
+const tagCorte = (id) => (S.corteFallas.has(id) ? ' <span class="tag-corte" title="Falla de un circuito cortado por falta de pago/suministro">⚡ #EnCorte</span>' : '');
+const textoCorte = (p, q) => { const t = q.replace(/^#/, ''); return S.corteFallas.has(p.id) && t.length >= 3 && 'encorte'.startsWith(t); };
 async function cargarCortes() {
   try {
+    rpc('cortes_fallas').then((l) => { S.corteFallas = new Set(l || []); }).catch(() => {});
     const l = await rpc('cortes_activos');
     const c = { clientes: new Set(), gids: new Set(), info: {} };
     (l || []).forEach((x) => { const k = String(x.n_cliente).trim(); c.clientes.add(k); if (x.circuito_gid != null) c.gids.add(x.circuito_gid); c.info[k] = x; });
@@ -2555,7 +2559,7 @@ async function abrirFalla(p, geom) {
   const h = abrirHoja(`
     <h2>${esc(p.tipo_falla)}${desc ? ' · ' + esc(desc) : ''}</h2>
     ${avisoCorteHtml(p.ref_punto_gid != null ? clienteDePunto(p.ref_punto_gid) : null, p.ref_circuito_gid)}
-    <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span>${p.contrato_id && CONTR[p.contrato_id] ? `<span class="tag-ctr n">${esc(CONTR[p.contrato_id].nombre)}</span>` : ''}${p.mantenedor_id && MANT[p.mantenedor_id] ? `<span class="tag-mant">${esc(MANT[p.mantenedor_id])}</span>` : ''}${p.masivo ? '<span class="tag-masivo" style="margin-left:4px">#Masivo</span>' : ''}</div>
+    <div style="margin-top:6px"><span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span>${p.contrato_id && CONTR[p.contrato_id] ? `<span class="tag-ctr n">${esc(CONTR[p.contrato_id].nombre)}</span>` : ''}${p.mantenedor_id && MANT[p.mantenedor_id] ? `<span class="tag-mant">${esc(MANT[p.mantenedor_id])}</span>` : ''}${p.masivo ? '<span class="tag-masivo" style="margin-left:4px">#Masivo</span>' : ''}${tagCorte(p.id)}</div>
     <dl class="kv info-card">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}${k === 'Asignado a' && puedeAsignarEsta && p.asignado_camion_id && tiene('asignacion_quitar') ? ' <button id="bQuitarAsig" class="btn-link" style="color:var(--rojo);font-size:12px;font-weight:600;border:1px solid var(--rojo);border-radius:10px;padding:0 8px;margin-left:6px">Quitar</button>' : ''}</dd>`).join('')}</dl>
     <div id="fotoReporte"></div>
     ${lineaFicha}
@@ -2933,7 +2937,7 @@ function renderLista() {
   if (q) {
     items = items.filter((f) => {
       const p = f.properties;
-      return [p.ot, p.orden_externa, p.tipo_falla, descFalla(p), p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q));
+      return [p.ot, p.orden_externa, p.tipo_falla, descFalla(p), p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q)) || textoCorte(p, q);
     });
   }
   // Al buscar (cualquier perfil), se suman las reparadas de los últimos 10 días que el perfil puede ver (sin búsqueda no aparecen)
@@ -2947,7 +2951,7 @@ function renderLista() {
       if (asigActiva() !== 'todas') return false;
       if (FO.sub === 'masivo' && !p.masivo) return false;
       if (FO.sub === 'normal' && p.masivo) return false;
-      return [p.ot, p.orden_externa, p.tipo_falla, descFalla(p), p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q));
+      return [p.ot, p.orden_externa, p.tipo_falla, descFalla(p), p.llave, p.nro_mun, p.nombre_creador].some((v) => String(v ?? '').toLowerCase().includes(q)) || textoCorte(p, q);
     });
     nRep = rep.length;
     items = items.concat(rep);
@@ -2968,7 +2972,7 @@ function renderLista() {
     return `<button class="tarjeta est-${esc(claveColor(p))}" data-i="${i}">
       <div class="tarjeta-top"><b>${esc(p.tipo_falla)} · ${esc(descFalla(p))}</b>${d != null ? `<span class="dist">${esc(fmtDist(d))}</span>` : ''}</div>
       <div class="sub">OS ${esc(p.ot || '—')} · ${p.tipo === 'punto' ? 'Llave ' + esc(p.llave ?? '—') : esc(p.puntos_afectados ?? '') + ' puntos (circuito)'} · <span class="insignia ${esc(p.estado)}">${esc(ETIQUETA_ESTADO[p.estado] || p.estado)}</span></div>
-      <div class="sub">${esc(p.nombre_creador || '—')} · ${esc(hace(p.fecha_falla))}${tagContrato(p.contrato_id)}${tagMantenedor(p.mantenedor_id)}${tagMasivo(p.masivo)}${tagDerivacion(p)}</div>
+      <div class="sub">${esc(p.nombre_creador || '—')} · ${esc(hace(p.fecha_falla))}${tagContrato(p.contrato_id)}${tagMantenedor(p.mantenedor_id)}${tagMasivo(p.masivo)}${tagDerivacion(p)}${tagCorte(p.id)}</div>
     </button>`;
   }).join('') : '<div class="vacio">No hay fallas activas con este filtro.</div>';
   $$('#listaItems .tarjeta').forEach((b) => b.addEventListener('click', () => {

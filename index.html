@@ -874,6 +874,7 @@
   #corteBar button{ border:0; border-radius:8px; cursor:pointer; font-weight:700; } #corteBar #corteRest{ margin-top:7px; background:#fff; color:#0a3fc4; padding:7px 12px; }
   #corteBar #corteX{ position:absolute; top:6px; right:8px; background:none; color:#fff; font-size:20px; line-height:1; }
   @media (prefers-reduced-motion: reduce){ .corte-lin,.codigo-btn.corte-btn,#corteBar{ animation:none; } }
+  .tag-corte{display:inline-block; background:linear-gradient(135deg,#0a62ff,#00c2ff); color:#fff; border-radius:6px; padding:0 6px; font-size:10.5px; font-weight:700; margin-left:4px; vertical-align:1px;}
 </style>
 </head>
 <body>
@@ -3111,7 +3112,8 @@ async function verificarDuplicadoYAbrir(campo, gid, siguientePaso){
 }
 
 // ---------- CIRCUITOS CON CORTE DE SUMINISTRO (cierre "Cortado Suministro Distribución") ----------
-let CORTES = {clientes: new Set(), gids: new Set(), info: {}}, _cortesClave = '';
+let CORTES = {clientes: new Set(), gids: new Set(), info: {}}, _cortesClave = '', CORTE_FALLAS = new Set();
+function corteTag(id){ return CORTE_FALLAS.has(id) ? '<span class="tag-corte" title="Falla de un circuito cortado por falta de pago/suministro">⚡ #EnCorte</span>' : ''; }
 function clienteCorte(cli, gid){
   const k = cli == null ? '' : String(cli).trim();
   if(k && CORTES.clientes.has(k)) return k;
@@ -3125,6 +3127,7 @@ function estiloCircuito(f){
 function iconoPuntoWeb(f){ return clienteCorte(f.properties.n_cliente, null) ? iconoParaPunto(f.properties.simb_poste, '#00b4ff', '#0a5db5') : iconoParaPunto(f.properties.simb_poste, '#5b7a68', '#3d5548'); }
 async function cargarCortesWeb(){
   try{
+    db.rpc('cortes_fallas', {}).then(l => { CORTE_FALLAS = new Set(l || []); }).catch(() => {});
     const l = await db.rpc('cortes_activos', {});
     const c = {clientes: new Set(), gids: new Set(), info: {}};
     (l || []).forEach(x => { const k = String(x.n_cliente).trim(); c.clientes.add(k); if(x.circuito_gid != null) c.gids.add(x.circuito_gid); c.info[k] = x; });
@@ -4328,7 +4331,7 @@ async function abrirPopupFalla(feat){
   const descripcionFallaPopup = descripcionCodigoAnalisis(p.tipo, p.tipo_falla);
   // Insignia de estado junto al título (mismos colores de .badge: reportada, pendiente, reiterada, reparada)
   const insigniaEstado = `<span class="badge ${['reportada','pendiente','reiterada','reparada'].includes(p.estado) ? p.estado : ''}" style="flex-shrink:0;">${escHtml(String(p.estado || '').replace('_',' '))}</span>`;
-  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${mantenedorTag(p.mantenedor_id)}${masivoTag(p.masivo)}${p.contrato_id ? '' : derivacionTag(p.derivacion)}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
+  const tituloConEliminar = `${(botonEditarHtml || botonEliminarHtml) ? `<div class="panel-acciones">${botonEditarHtml}${botonEliminarHtml}</div>` : ''}<div class="panel-titulo"><span class="pt-nom">${p.tipo_falla}${descripcionFallaPopup ? ' · ' + descripcionFallaPopup : ''}</span>${contratoTag(p.contrato_id)}${mantenedorTag(p.mantenedor_id)}${masivoTag(p.masivo)}${corteTag(p.id)}${p.contrato_id ? '' : derivacionTag(p.derivacion)}${insigniaEstado.replace(' style="flex-shrink:0;"', '')}</div>
     <div class="hint" style="margin-bottom:4px;">${tipoLabel} · OS: <b>${p.ot || '—'}</b>${p.orden_externa ? ` · Orden Externa: <b>${escHtml(p.orden_externa)}</b>` : ''}</div><div id="fotoReporteWeb"></div>`;
 
   // Quién puede dejar un comentario en una falla ya creada (todos menos el observador); los puntos de cascada comentan en su circuito
@@ -5031,7 +5034,7 @@ function renderFallasList(){
     const lineaLlave = (buscando && f.llave != null && terminos.some(t => String(f.llave).toLowerCase().includes(t.toLowerCase())))
       ? `<div class="fi-nom" style="margin-top:1px;">Llave ${resaltarTexto(f.llave, terminos)}</div>` : '';
     return `<div class="fi fi-est-${claveColorFalla(f.estado, f.creado_en || f.fecha, null)}" onclick="enfocarFalla('${f.id}', true)" title="Clic: acerca el mapa a la falla y abre su ventana">
-      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${contratoTag(f.contrato_id)}${mantenedorTag(f.mantenedor_id)}${masivoTag(f.masivo)}${f.contrato_id ? '' : derivacionTag(f.derivacion)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
+      <div class="fi-1"><span class="fi-cod">${escHtml(f.tipo_falla)}</span><span class="fi-os">OS ${resaltarTexto(f.ot || '—', terminos)}${contratoTag(f.contrato_id)}${mantenedorTag(f.mantenedor_id)}${masivoTag(f.masivo)}${corteTag(f.id)}${f.contrato_id ? '' : derivacionTag(f.derivacion)}</span><span class="fi-sp"></span>${botones}<span class="badge ${f.estado}">${f.estado.replace('_', ' ')}</span></div>
       <div class="fi-nom">${escHtml(nombreFalla)}</div>
       <div class="fi-2"><span class="fi-q">${resaltarTexto(f.quien, terminos)}</span><span class="fi-oe${f.orden_externa ? '' : ' vacio'}">OE: ${f.orden_externa ? resaltarTexto(f.orden_externa, terminos) : '—'}</span><span class="fi-fh">${fechaTxt}</span></div>
       ${lineaLlave}
