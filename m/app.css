@@ -875,3 +875,21 @@ html[data-tema=oscuro] .chip-modo.reqm{ color:#fff; }
 .rqv-ant{ left:8px; } .rqv-sig{ right:8px; }
 .rqv-c{ position:absolute; bottom:calc(18px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); color:#fff; font:700 13px system-ui,sans-serif; background:rgba(0,0,0,.5); padding:4px 12px; border-radius:12px; }
 .rqv-x{ position:absolute; top:calc(12px + env(safe-area-inset-top)); right:12px; width:40px; height:40px; border:0; border-radius:50%; background:rgba(255,255,255,.2); color:#fff; font-size:18px; cursor:pointer; }
+
+/* Cierre "Cortado Suministro Distribución" y circuitos sin suministro */
+.codigo.corte{ background:linear-gradient(135deg,#0a62ff,#00c2ff); border-color:#00a2ff; color:#fff; animation:corteLat 1.8s ease-out infinite; }
+.codigo.corte b{ color:#fff; font-size:20px; min-width:34px; }
+.codigo.corte span{ font-weight:700; color:#fff; display:flex; flex-direction:column; }
+.codigo.corte span small{ font-weight:500; font-size:11.5px; opacity:.9; }
+.codigo.corte.sel{ background:linear-gradient(135deg,#0a3fc4,#0089d6); border-color:#fff; box-shadow:0 0 0 3px #00b4ff, inset 0 0 0 1px #fff; animation:none; }
+.codigo.corte.sel b::after{ content:""; }
+@keyframes corteLat{ 0%{ box-shadow:0 0 0 0 rgba(0,180,255,.65); } 70%{ box-shadow:0 0 0 12px rgba(0,180,255,0); } 100%{ box-shadow:0 0 0 0 rgba(0,180,255,0); } }
+.corte-lin{ stroke-linecap:round; stroke-dasharray:14 10; animation:corteFluye 1s linear infinite; filter:drop-shadow(0 0 4px #00b4ff) drop-shadow(0 0 9px #1e90ff); }
+@keyframes corteFluye{ to{ stroke-dashoffset:-24; } }
+.corte-aviso{ margin:10px 0; padding:11px 13px; border-radius:12px; background:linear-gradient(135deg,#0a62ff,#00c2ff); color:#fff; display:flex; flex-direction:column; gap:3px; animation:corteLat 1.8s ease-out infinite; }
+.corte-aviso b{ font-size:16px; } .corte-aviso small{ opacity:.92; font-size:12.5px; }
+.corte-aviso .corte-rest{ margin-top:8px; background:#fff; color:#0a3fc4; border:0; font-weight:700; }
+@media (prefers-reduced-motion: reduce){ .codigo.corte,.corte-aviso{ animation:none; } .corte-lin{ animation:none; } }
+html[data-tema=oscuro] .codigo.corte{ background:linear-gradient(135deg,#0a62ff,#00a9e6); color:#fff; }
+html[data-tema=oscuro] .codigo.corte.sel{ background:linear-gradient(135deg,#0a3fc4,#0089d6); }
+.tag-corte{ display:inline-block; background:linear-gradient(135deg,#0a62ff,#00c2ff); color:#fff; border-radius:6px; padding:0 6px; font-size:11px; font-weight:700; margin-left:4px; }
