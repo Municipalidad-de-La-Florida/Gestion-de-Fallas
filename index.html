@@ -11855,8 +11855,13 @@ function rqAbrirForm(k){
     await rqEjecutarAccion(k, tx ? tx.value.trim() : null, sel ? sel.value : null, err, rqEl('rqOk'));
   };
 }
+function rqAviso(msg){
+  const t = document.createElement('div'); t.textContent = msg;
+  t.style.cssText = 'position:fixed;left:50%;bottom:34px;transform:translateX(-50%);z-index:100000;background:#1f7a52;color:#fff;font-weight:700;padding:11px 18px;border-radius:12px;box-shadow:0 6px 20px rgba(0,0,0,.35);max-width:90vw;text-align:center;';
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3500);
+}
 async function rqEjecutarAccion(k, com, dest, err, btn){
-  try{ await db.rpc('req_accion', {p_id: RQ.det.req.id, p_accion: k, p_comentario: com || null, p_destino: dest || null}); await rqVistaDetalle(RQ.det.req.id); rqBadge(); rqRefrescarMapa(false); }
+  try{ await db.rpc('req_accion', {p_id: RQ.det.req.id, p_accion: k, p_comentario: com || null, p_destino: dest || null}); await rqVistaDetalle(RQ.det.req.id); rqBadge(); rqRefrescarMapa(false); if(k === 'ejecutar') rqAviso('✅ Requerimiento ejecutado correctamente'); }
   catch(e){ if(err) err.textContent = e.message; else alert(e.message); if(btn) btn.disabled = false; }
 }
 // Modo «Requerimientos en el mapa»: los activos se ven como pines y se tocan para abrirlos; dura hasta «Salir de requerimientos»
