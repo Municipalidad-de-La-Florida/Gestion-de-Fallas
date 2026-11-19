@@ -3071,6 +3071,7 @@ function handlePuntoClick(feature, layer){
     if(hb) hb.addEventListener('click', () => mostrarHistorial('punto', pp.gid, `Punto lumínico ${pp.llave ?? ''}`));
     return;
   }
+  if(clienteCorte(feature.properties.n_cliente, null)) return;   // circuito cortado: solo el aviso azul, sin ventana de falla
   verificarDuplicadoYAbrir('ref_punto_gid', feature.properties.gid,
     () => {
       const esMonoposte = (feature.properties.simb_poste || '').toUpperCase().trim() === 'MONOPOSTE';
@@ -3091,6 +3092,7 @@ function handleCircuitoClick(feature, layer){
     mostrarPanel(`<b>Circuito ${feature.properties.id||''}</b><div class="hint">${feature.properties.cantidad_luminarias_cliente||0} luminarias</div>`);
     return;
   }
+  if(clienteCorte(feature.properties.n_cliente, feature.properties.gid)) return;
   verificarDuplicadoYAbrir('ref_circuito_gid', feature.properties.gid,
     () => abrirFormularioFallaCircuito(feature.properties.gid, feature.properties.id));
 }
@@ -3163,7 +3165,7 @@ function avisoCorteWeb(cli, gid){
   const k = clienteCorte(cli, gid); if(!k) return;
   const i = CORTES.info[k] || {};
   const d = document.createElement('div'); d.id = 'corteBar'; d.setAttribute('role', 'alert');
-  d.innerHTML = `<b>⚡ Circuito sin suministro por corte</b><small>Desde ${escHtml(i.desde ? new Date(i.desde).toLocaleString('es-CL') : '—')}${i.por ? ' · marcado por ' + escHtml(i.por) : ''} · hasta nuevo aviso</small>${currentUser && currentUser.rol === 'admin' ? '<button type="button" id="corteRest">Restablecer suministro</button>' : ''}<button type="button" id="corteX" aria-label="Cerrar">×</button>`;
+  d.innerHTML = `<b>⚡ Circuito sin suministro por corte</b><small>Desde ${escHtml(i.desde ? new Date(i.desde).toLocaleString('es-CL') : '—')}${i.por ? ' · marcado por ' + escHtml(i.por) : ''}</small>${currentUser && currentUser.rol === 'admin' ? '<button type="button" id="corteRest">Restablecer suministro</button>' : ''}<button type="button" id="corteX" aria-label="Cerrar">×</button>`;
   document.body.appendChild(d);
   d.querySelector('#corteX').onclick = () => d.remove();
   const r = d.querySelector('#corteRest');

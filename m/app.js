@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.18';
+const VERSION_APP = '2.12.19';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1004,7 +1004,7 @@ function clienteDePunto(gid) { let cli = null; if (capaPuntos) capaPuntos.eachLa
 function avisoCorteHtml(cli, gid) {
   const k = clienteCorte(cli, gid); if (!k) return '';
   const i = S.cortes.info[k] || {};
-  return `<div class="corte-aviso" role="alert"><b>⚡ Circuito sin suministro por corte</b><small>Desde ${esc(i.desde ? fmtFecha(i.desde) : '—')}${i.por ? ' · marcado por ' + esc(i.por) : ''} · hasta nuevo aviso</small>${rol() === 'admin' ? `<button type="button" class="btn corte-rest" data-k="${esc(k)}">Restablecer suministro</button>` : ''}</div>`;
+  return `<div class="corte-aviso" role="alert"><b>⚡ Circuito sin suministro por corte</b><small>Desde ${esc(i.desde ? fmtFecha(i.desde) : '—')}${i.por ? ' · marcado por ' + esc(i.por) : ''}</small>${rol() === 'admin' ? `<button type="button" class="btn corte-rest" data-k="${esc(k)}">Restablecer suministro</button>` : ''}</div>`;
 }
 function ligarCorte(h) {
   const b = $('.corte-rest', h); if (!b) return;
@@ -1656,12 +1656,12 @@ async function contextoReporte() {
 }
 
 // Acciones de la ventana de un punto o circuito: reportar (solo quien puede) + «Cómo llegar» para todos
-function accionesReporte(textoReportar, geom) {
+function accionesReporte(textoReportar, geom, bloqueado) {
   const c = geom ? centroGeom(geom) : null;
   return `<div class="acciones acc-grid" id="accFalla">
     <div class="acc-prim">
-      ${puedeReportar() ? `<button id="bReportar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}<span>${esc(textoReportar)}</span></button>` : ''}
-      ${tiene('aporte_registrar') ? `<button id="bAporte" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}<span>Registrar aporte</span></button>` : ''}
+      ${puedeReportar() && !bloqueado ? `<button id="bReportar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}<span>${esc(textoReportar)}</span></button>` : ''}
+      ${tiene('aporte_registrar') && !bloqueado ? `<button id="bAporte" class="btn btn-primario" style="margin-top:0">${ICO_ACC.alerta}<span>Registrar aporte</span></button>` : ''}
     </div>
     <div class="acc-sec">
       ${c ? `<a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>` : ''}
@@ -1731,7 +1731,7 @@ function abrirPunto(p, geom) {
     <h3>Luminarias del punto</h3><div id="lumsPunto" class="hint">Cargando…</div>
     <h3>Estado</h3><div id="estPunto" class="hint">Cargando…</div>
     ${infoSoloLectura()}
-    ${accionesReporte('Reportar falla', geom)}`);
+    ${accionesReporte('Reportar falla', geom, !!clienteCorte(p.n_cliente, null))}`);
   ligarCorte(h);
   botonVerReparada(h, 'punto', p.gid);
   rpc('luminarias_punto', { p_gid: p.gid }).then((ls) => {
@@ -1771,7 +1771,7 @@ function abrirCircuito(p, geom) {
       <dt>N.° de cliente</dt><dd>${esc(p.n_cliente ?? '—')}</dd>
     </dl>
     ${infoSoloLectura()}
-    ${accionesReporte('Reportar falla de circuito', geom)}`);
+    ${accionesReporte('Reportar falla de circuito', geom, !!clienteCorte(p.n_cliente, p.gid))}`);
   ligarCorte(h);
   botonVerReparada(h, 'circuito', p.gid);
   const b = $('#bReportar', h);
