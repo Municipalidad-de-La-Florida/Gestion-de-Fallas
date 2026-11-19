@@ -3133,7 +3133,8 @@ function pintarCortesWeb(){
   if(!window._corteZoomOn ){ window._corteZoomOn = true; map.on('zoomend', () => { if(typeof layerCircuitos !== 'undefined' && layerCircuitos && CORTES.clientes.size) layerCircuitos.setStyle(estiloCircuito); if(capaCortesWeb) capaCortesWeb.setStyle(() => ({className: 'corte-lin', color: '#0b3de0', weight: pesoCorte(), opacity: 1})); }); }
   if(capaCortesWeb){ map.removeLayer(capaCortesWeb); capaCortesWeb = null; }
   const g = CORTES.geo; if(!g || !g.features || !g.features.length) return;
-  capaCortesWeb = L.geoJSON(g, {interactive: false, style: () => ({className: 'corte-lin', color: '#0b3de0', weight: pesoCorte(), opacity: 1})}).addTo(map);
+  if(!map.getPane('cortesPane')){ map.createPane('cortesPane'); const pn = map.getPane('cortesPane'); pn.style.zIndex = 420; pn.style.pointerEvents = 'none'; }   // por encima de los circuitos (400), debajo de los puntos
+  capaCortesWeb = L.geoJSON(g, {pane: 'cortesPane', interactive: false, style: () => ({className: 'corte-lin', color: '#0b3de0', weight: pesoCorte(), opacity: 1})}).addTo(map);
   capaCortesWeb.bringToFront();
 }
 function estiloCircuito(f){
