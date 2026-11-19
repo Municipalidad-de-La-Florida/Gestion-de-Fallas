@@ -4338,7 +4338,7 @@ async function abrirPopupFalla(feat){
   const puedeComentar = tiene('falla_comentar') && !p.cascada && !p._vistaHistorica;
   let contenidoPanel, panelDosColumnas = false;
   if(tiene('reparacion_cerrar') && (rolEfectivo() !== 'admin' || adminPuedeReparar()) && !p.cascada && p.estado !== 'reparada'){
-    const filaCorte = CATALOGO_CIERRES.filter(x => x.corte).map(item => `<div class="falla-opcion-row"><button class="codigo-btn cierre-btn corte-btn" data-desc="${(item.c + ' ' + item.d).replace(/"/g,'&quot;')}" title="Marca el circuito hasta nuevo aviso">⚡</button><span class="falla-opcion-desc"><b>${escHtml(item.d)}</b><br><small>Marca el circuito hasta nuevo aviso</small></span></div>`).join('');
+    const filaCorte = CATALOGO_CIERRES.filter(x => x.corte).map(item => `<div class="falla-opcion-row"><button class="codigo-btn cierre-btn corte-btn" data-desc="${(item.c + ' ' + item.d).replace(/"/g,'&quot;')}" title="Marca el circuito hasta nuevo aviso">⚡</button><span class="falla-opcion-desc"><b>${escHtml(item.d)}</b></span></div>`).join('');
     const filasCierre = filaCorte + htmlCodigosAgrupados('cierre', CATALOGO_CIERRES.filter(x => !x.corte), item => `
       <div class="falla-opcion-row">
         <button class="codigo-btn cierre-btn" data-desc="${(item.c + ' ' + item.d).replace(/"/g,'&quot;')}">${escHtml(item.c)}</button>
