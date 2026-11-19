@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.8';
+const VERSION_APP = '2.12.9';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -987,9 +987,11 @@ async function cargarCortes() {
     rpc('cortes_fallas').then((l) => { S.corteFallas = new Set(l || []); }).catch(() => {});
     const l = await rpc('cortes_activos');
     const c = { clientes: new Set(), gids: new Set(), info: {}, fallas: new Set() };
-    (l || []).forEach((x) => { if (x.falla_id) c.fallas.add(x.falla_id); const k = String(x.n_cliente).trim(); c.clientes.add(k); if (x.circuito_gid != null) c.gids.add(x.circuito_gid); c.info[k] = x; });
+    (l || []).forEach((x) => { if (x.falla_id) c.fallas.add(x.falla_id); (x.fallas_900 || []).forEach((id) => c.fallas.add(id)); const k = String(x.n_cliente).trim(); c.clientes.add(k); if (x.circuito_gid != null) c.gids.add(x.circuito_gid); c.info[k] = x; });
     const clave = [...c.clientes].sort().join('|');
     S.cortes = c;
+    try { S.cortesGeo = c.clientes.size ? await rpc('cortes_geojson') : null; } catch (e) { S.cortesGeo = null; }   // geometría de los circuitos cortados: se dibuja a cualquier zoom
+    if (map) pintarCortes();
     if (clave !== _cortesClave) { _cortesClave = clave; if (map) { cacheBbox = null; cargarArea(true); } }
   } catch (e) { if (e.name === 'SesionExpirada') throw e; /* sin la función: no hay cortes */ }
 }
@@ -1014,10 +1016,10 @@ function pintarCortes() {
   if (!capaCortes) { map.createPane('cortes'); map.getPane('cortes').style.zIndex = 405; map.getPane('cortes').style.pointerEvents = 'none'; capaCortes = L.layerGroup().addTo(map); }
   capaCortes.clearLayers();
   if (!pintarCortes._z) { pintarCortes._z = true; map.on('zoomend', () => { if (S.cortes.clientes.size) pintarCortes(); }); }
-  const z = map.getZoom(), w = z <= 16 ? 11 : z === 17 ? 10 : z === 18 ? 8 : 6;   // más gruesa de lejos
-  const svg = L.svg({ pane: 'cortes', padding: 0.5 });
-  capaCircuitos.eachLayer((l) => {
-    const p = l.feature && l.feature.properties; if (!p || !clienteCorte(p.n_cliente, p.gid)) return;
+  const z = map.getZoom(), w = z <= 13 ? 13 : z <= 15 ? 12 : z <= 16 ? 11 : z === 17 ? 10 : z === 18 ? 8 : 6;   // más gruesa de lejos
+  const svg = pintarCortes._svg || (pintarCortes._svg = L.svg({ pane: 'cortes', padding: 0.5 }));
+  ((S.cortesGeo && S.cortesGeo.features) || []).forEach((feature) => {
+    const l = { feature };
     // halo hecho con líneas anchas translúcidas (el filtro CSS no se dibuja en todos los teléfonos) + línea azul fuerte animada
     L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { color: '#2f6bff', weight: w + 12, opacity: 0.2, lineCap: 'round' } }).addTo(capaCortes);
     L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { color: '#2f6bff', weight: w + 5, opacity: 0.4, lineCap: 'round' } }).addTo(capaCortes);

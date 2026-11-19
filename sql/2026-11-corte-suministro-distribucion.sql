@@ -94,3 +94,7 @@ create or replace function public.cortes_activos() returns jsonb language sql st
   select coalesce(jsonb_agg(jsonb_build_object('n_cliente', c.n_cliente, 'circuito_gid', c.circuito_gid, 'desde', c.desde, 'falla_id', c.falla_id,
            'por', (select u.nombre from public.usuarios u where u.id = c.por)) order by c.desde desc), '[]'::jsonb)
   from public.circuitos_corte c where c.activo and auth.uid() is not null $$;
+
+-- Circuitos de fallas cerradas con 900 antes del trigger: se marcan; cortes_activos() entrega 'fallas_900' (ids de las fallas cerradas con 900 de cada
+-- circuito cortado, que no se pintan verdes) y cortes_geojson() entrega la geometría de los circuitos cortados para dibujarlos a cualquier zoom.
+-- (Ver las definiciones vigentes en la base: migración cortes_backfill_900_geojson_fallas.)
