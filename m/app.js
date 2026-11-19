@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.12';
+const VERSION_APP = '2.12.13';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1020,13 +1020,13 @@ function pintarCortes() {
   if (!capaCortes) { map.createPane('cortes'); map.getPane('cortes').style.zIndex = 405; map.getPane('cortes').style.pointerEvents = 'none'; capaCortes = L.layerGroup().addTo(map); }
   capaCortes.clearLayers();
   if (!pintarCortes._z) { pintarCortes._z = true; map.on('zoomend', () => { if (S.cortes.clientes.size) pintarCortes(); }); }
-  const z = map.getZoom(), w = z <= 13 ? 13 : z <= 15 ? 12 : z <= 16 ? 11 : z === 17 ? 10 : z === 18 ? 8 : 6;   // más gruesa de lejos
+  const z = map.getZoom(), w = z <= 17 ? 6 : 5;   // línea fina; el halo la destaca
   const svg = pintarCortes._svg || (pintarCortes._svg = L.svg({ pane: 'cortes', padding: 0.5 }));
   ((S.cortesGeo && S.cortesGeo.features) || []).forEach((feature) => {
     const l = { feature };
     // halo hecho con líneas anchas translúcidas (el filtro CSS no se dibuja en todos los teléfonos) + línea azul fuerte animada
-    L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { color: '#2f6bff', weight: w + 12, opacity: 0.2, lineCap: 'round' } }).addTo(capaCortes);
-    L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { color: '#2f6bff', weight: w + 5, opacity: 0.4, lineCap: 'round' } }).addTo(capaCortes);
+    L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { color: '#2f6bff', weight: w + 8, opacity: 0.2, lineCap: 'round' } }).addTo(capaCortes);
+    L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { color: '#2f6bff', weight: w + 3, opacity: 0.4, lineCap: 'round' } }).addTo(capaCortes);
     L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { className: 'corte-lin', color: '#0b3de0', weight: w, opacity: 1 } }).addTo(capaCortes);
   });
 }
@@ -2428,7 +2428,7 @@ async function ofrecerSegundaFalla(p, h) {
 // Se puede cambiar código, comentario, orden externa y masivo. La ubicación no: si está mal, se elimina y se vuelve a informar.
 async function editarFallaApp(p) {
   let fila;
-  try { const r = await select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,masivo,puntos_luminarios(simb_poste)`); fila = r && r[0]; }
+  try { const r = await select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,masivo,estado,puntos_luminarios(simb_poste)`); fila = r && r[0]; }
   catch (e) { toast('No se pudo cargar la falla: ' + e.message, 'error'); return; }
   if (!fila) { toast('No se encontró la falla.', 'error'); return; }
   const esCircuito = fila.tipo === 'linea';
@@ -2442,7 +2442,14 @@ async function editarFallaApp(p) {
     <h3>Comentario</h3>
     <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
+    ${fila.estado === 'pendiente' && rol() === 'admin' ? '<button type="button" id="fCorte" class="codigo corte" style="width:100%;margin-top:6px"><b>⚡</b><span>Cortado desde la Distribución</span></button>' : ''}
     <div class="acciones fija"><button id="fGuardar" class="btn btn-primario">Guardar cambios</button></div>`);
+  const bfc = $('#fCorte', h);
+  if (bfc) bfc.addEventListener('click', ocupar(bfc, async () => {
+    if (!confirm('¿Marcar este circuito como sin suministro por corte? Queda en azul hasta que un administrador restablezca el suministro. La falla sigue pendiente.')) return;
+    await rpc('corte_marcar_pendiente', { p_falla_id: p.id });
+    cerrarHoja(); toast('Circuito marcado sin suministro', 'ok'); await cargarCortes(); cargarFallas();
+  }));
   $$('.codigo', h).forEach((b) => {
     if (b.dataset.c === codigo) b.classList.add('sel');
     b.addEventListener('click', () => { $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c; });
