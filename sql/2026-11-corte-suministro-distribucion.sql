@@ -72,3 +72,7 @@ grant execute on function public.corte_restablecer(text, text) to authenticated;
 -- Tag #EnCorte (migración corte_tag_encorte): fallas cerradas con el código de corte y fallas activas de circuitos cortados.
 -- cortes_fallas() devuelve sus ids; resumen_todas_fallas (búsqueda de la web) entiende "EnCorte" / "#EnCorte".
 -- Ver la definición vigente de ambas funciones en la base.
+
+-- Renombre (migración corte_desde_la_distribucion): el código 900 pasa a "Cortado desde la Distribución" y el trigger
+-- reconoce el corte por el código al inicio de una línea (no por el nombre), para no depender de nombres guardados en celulares.
+update public.codigos_cierre set descripcion = 'Cortado desde la Distribución' where codigo = '900' and corte;

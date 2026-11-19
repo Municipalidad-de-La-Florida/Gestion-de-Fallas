@@ -148,7 +148,7 @@ function htmlCodigosGrupo(cat, items, fila) {
   const sec = (t) => `<div class="codigos-sec">${t}</div>`;
   return sec('Más frecuentes') + top.map(fila).join('') + sec('Otros códigos') + resto.map(fila).join('');
 }
-const filaCierre = (x) => `<button type="button" class="codigo${x.corte ? ' corte' : ''}" data-t="${esc(x.c + ' ' + x.d)}"><b>${x.corte ? '⚡' : esc(x.c)}</b><span>${esc(x.d)}${x.corte ? '<small>Marca el circuito hasta nuevo aviso</small>' : ''}</span></button>`;
+const filaCierre = (x) => `<button type="button" class="codigo${x.corte ? ' corte' : ''}" data-t="${esc(x.c + ' ' + x.d)}"><b>${x.corte ? '⚡' : esc(x.c)}</b><span>${esc(x.d)}</span></button>`;
 // "Cortado Suministro Distribución" va siempre primero y destacado
 const htmlCierres = () => { const it = catalogoActivo('cierre'); return `<div class="codigos">${it.filter((x) => x.corte).map(filaCierre).join('')}${htmlCodigosGrupo('cierre', it.filter((x) => !x.corte), filaCierre)}</div>`; };
 const ETIQUETA_ESTADO = { reportada: 'Reportada', pendiente: 'Pendiente', reiterada: 'Reiterada', reparada: 'Reparada' };
