@@ -4394,7 +4394,7 @@ function rqAbrirForm(k) {
   });
 }
 async function rqEjecutarAccion(k, com, dest, err, btn) {
-  try { await rpc('req_accion', { p_id: RQ.det.req.id, p_accion: k, p_comentario: com || null, p_destino: dest || null }); await rqRecargarDetalle(); }
+  try { await rpc('req_accion', { p_id: RQ.det.req.id, p_accion: k, p_comentario: com || null, p_destino: dest || null }); await rqRecargarDetalle(); if (k === 'ejecutar') toast('✅ Requerimiento ejecutado correctamente'); }
   catch (e) { if (err) err.textContent = e.message; else toast(e.message, 'error'); if (btn) btn.disabled = false; }
 }
 
