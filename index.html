@@ -2891,6 +2891,7 @@ async function refrescarFallas(manual){
       fallasPeriodoLayerGroup.eachLayer(l => l.bringToFront());
     }
     ultimoRefrescoFallas = Date.now();
+    rqRefrescarTodo();
   }catch(e){ console.error(e); }
   // que el giro se alcance a ver aunque la respuesta sea muy rápida
   const resto = 700 - (Date.now() - t0);
@@ -11881,6 +11882,15 @@ function rqDibujarMapa(centrar, foco){
   const b = rqEl('rqMapaBar'); if(b) b.querySelector('span').textContent = `📋 ${pts.length} activo${pts.length === 1 ? '' : 's'}${rqCrea() ? ' · clic en el mapa = ingresar' : ''}`;
   if(foco) map.setView(foco, 19);
   else if(centrar && pts.length) map.fitBounds(pts, {padding: [80, 80], maxZoom: 18});
+}
+// Al actualizar: recarga la lista abierta, la tarjeta abierta y los pines, para que cambien de estado/color
+async function rqRefrescarTodo(){
+  try{
+    if(typeof rqBadge !== 'function' || typeof currentUser === 'undefined' || !currentUser) return;
+    if(rqEl('rqOv') && !rqEl('rqPick') && !RQ.nuevo){ if(RQ.vista === 'lista') await rqCargar(); else if(RQ.vista === 'detalle' && RQ.id && !rqEl('rqForm')?.children.length) await rqVistaDetalle(RQ.id); }
+    else if(RQ.mapa) await rqRefrescarMapa(false);
+    rqBadge();
+  }catch(e){ /* sin red o sin permiso */ }
 }
 async function rqRefrescarMapa(centrar, foco){
   if(!RQ.mapa) return;
