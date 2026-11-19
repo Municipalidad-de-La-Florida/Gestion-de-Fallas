@@ -4060,7 +4060,7 @@ async function abrirEditorFalla(p){
     <div style="margin-top:10px;">${filasCatalogo}</div>
     <textarea class="popup-input" id="edDesc" placeholder="Comentario (opcional; obligatorio si eliges OTRO)" style="margin-top:8px;"></textarea>
     ${htmlOrdenExterna()}
-    ${fila.estado === 'pendiente' && rolEfectivo() === 'admin' ? '<button type="button" class="popup-btn corte-btn" id="edCorteBtn" style="margin-top:10px; width:100%;" title="Marca el circuito sin suministro hasta nuevo aviso (la falla sigue pendiente)">⚡ Cortado desde la Distribución</button>' : ''}
+    ${fila.estado === 'pendiente' && rolEfectivo() === 'admin' ? '<div class="falla-opcion-row" style="margin-top:10px;"><button type="button" class="codigo-btn corte-btn" id="edCorteBtn" title="Marca el circuito sin suministro hasta nuevo aviso (la falla sigue pendiente)">⚡</button><span class="falla-opcion-desc"><b>Cortado desde la Distribución</b></span></div>' : ''}
     <button class="popup-btn" id="edGuardarBtn" style="margin-top:12px;">Guardar cambios</button>
   `);
   { const bc = panel.querySelector('#edCorteBtn'); if(bc) bc.onclick = async () => {
@@ -4434,7 +4434,7 @@ async function abrirPopupFalla(feat){
     const ed = document.createElement('div');
     ed.innerHTML = `<textarea id="motEd" class="popup-input" style="width:100%; min-height:60px; box-sizing:border-box;"></textarea>
       <div style="display:flex; gap:6px;"><button class="popup-btn" id="motOk" style="margin:0; background:#1f8a4c;">Guardar motivo</button><button class="popup-btn" id="motNo" style="margin:0; background:#666;">Cancelar</button></div>
-      <button class="popup-btn corte-btn" id="motCorte" type="button" style="margin:6px 0 0; width:100%;" title="Marca el circuito sin suministro hasta nuevo aviso (la falla sigue pendiente)">⚡ Cortado desde la Distribución</button>
+      <div class="falla-opcion-row" style="margin-top:6px;"><button class="codigo-btn corte-btn" id="motCorte" type="button" title="Marca el circuito sin suministro hasta nuevo aviso (la falla sigue pendiente)">⚡</button><span class="falla-opcion-desc"><b>Cortado desde la Distribución</b></span></div>
       <div id="motErr" class="hint" style="color:#c0392b;"></div>`;
     caja.parentNode.after(ed);
     ed.querySelector('#motEd').value = p.motivo_pendiente || '';

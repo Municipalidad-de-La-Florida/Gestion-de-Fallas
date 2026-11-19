@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.13';
+const VERSION_APP = '2.12.14';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2442,7 +2442,7 @@ async function editarFallaApp(p) {
     <h3>Comentario</h3>
     <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
-    ${fila.estado === 'pendiente' && rol() === 'admin' ? '<button type="button" id="fCorte" class="codigo corte" style="width:100%;margin-top:6px"><b>⚡</b><span>Cortado desde la Distribución</span></button>' : ''}
+    ${fila.estado === 'pendiente' && rol() === 'admin' ? `<div class="codigos" style="margin-top:8px">${filaCierre({ c: '900', d: 'Cortado desde la Distribución', corte: true }).replace('<button type="button"', '<button type="button" id="fCorte"')}</div>` : ''}
     <div class="acciones fija"><button id="fGuardar" class="btn btn-primario">Guardar cambios</button></div>`);
   const bfc = $('#fCorte', h);
   if (bfc) bfc.addEventListener('click', ocupar(bfc, async () => {
@@ -2605,9 +2605,9 @@ async function abrirFalla(p, geom) {
   const bep = $('#bEditPend', h);
   if (bep) bep.addEventListener('click', () => {
     const pre = $('#motPend', h); if (!pre || $('#motEd', h)) return;
-    pre.insertAdjacentHTML('afterend', `<textarea id="motEd" class="campo">${esc(p.motivo_pendiente || '')}</textarea><div class="acciones"><button type="button" id="motOk" class="btn btn-primario">Guardar motivo</button><button type="button" id="motNo" class="btn btn-secundario">Cancelar</button></div><button type="button" id="motCorte" class="codigo corte" style="width:100%;margin-top:6px"><b>⚡</b><span>Cortado desde la Distribución</span></button>`);
+    pre.insertAdjacentHTML('afterend', `<textarea id="motEd" class="campo">${esc(p.motivo_pendiente || '')}</textarea><div class="acciones"><button type="button" id="motOk" class="btn btn-primario">Guardar motivo</button><button type="button" id="motNo" class="btn btn-secundario">Cancelar</button></div><div class="codigos" style="margin-top:8px">${filaCierre({ c: '900', d: 'Cortado desde la Distribución', corte: true }).replace('<button type="button"', '<button type="button" id="motCorte"')}</div>`);
     pre.hidden = true;
-    $('#motNo', h).addEventListener('click', () => { $('#motCorte', h).remove(); $('#motEd', h).nextElementSibling.remove(); $('#motEd', h).remove(); pre.hidden = false; });
+    $('#motNo', h).addEventListener('click', () => { $('#motCorte', h).parentElement.remove(); $('#motEd', h).nextElementSibling.remove(); $('#motEd', h).remove(); pre.hidden = false; });
     const bco = $('#motCorte', h);
     bco.addEventListener('click', ocupar(bco, async () => {
       if (!confirm('¿Marcar este circuito como sin suministro por corte? Queda en azul hasta que un administrador restablezca el suministro. La falla sigue pendiente.')) return;
