@@ -76,3 +76,7 @@ grant execute on function public.corte_restablecer(text, text) to authenticated;
 -- Renombre (migración corte_desde_la_distribucion): el código 900 pasa a "Cortado desde la Distribución" y el trigger
 -- reconoce el corte por el código al inicio de una línea (no por el nombre), para no depender de nombres guardados en celulares.
 update public.codigos_cierre set descripcion = 'Cortado desde la Distribución' where codigo = '900' and corte;
+
+-- Si se edita la descripción de un cierre y pasa a incluir el código de corte, también se marca el circuito
+drop trigger if exists trg_reparacion_marca_corte_upd on public.reparaciones;
+create trigger trg_reparacion_marca_corte_upd after update of descripcion on public.reparaciones for each row when (old.descripcion is distinct from new.descripcion) execute function public._reparacion_marca_corte();
