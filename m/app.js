@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.9';
+const VERSION_APP = '2.12.10';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2594,9 +2594,15 @@ async function abrirFalla(p, geom) {
   const bep = $('#bEditPend', h);
   if (bep) bep.addEventListener('click', () => {
     const pre = $('#motPend', h); if (!pre || $('#motEd', h)) return;
-    pre.insertAdjacentHTML('afterend', `<textarea id="motEd" class="campo">${esc(p.motivo_pendiente || '')}</textarea><div class="acciones"><button type="button" id="motOk" class="btn btn-primario">Guardar motivo</button><button type="button" id="motNo" class="btn btn-secundario">Cancelar</button></div>`);
+    pre.insertAdjacentHTML('afterend', `<textarea id="motEd" class="campo">${esc(p.motivo_pendiente || '')}</textarea><div class="acciones"><button type="button" id="motOk" class="btn btn-primario">Guardar motivo</button><button type="button" id="motNo" class="btn btn-secundario">Cancelar</button></div><button type="button" id="motCorte" class="codigo corte" style="width:100%;margin-top:6px"><b>⚡</b><span>Cortado desde la Distribución</span></button>`);
     pre.hidden = true;
-    $('#motNo', h).addEventListener('click', () => { $('#motEd', h).nextElementSibling.remove(); $('#motEd', h).remove(); pre.hidden = false; });
+    $('#motNo', h).addEventListener('click', () => { $('#motCorte', h).remove(); $('#motEd', h).nextElementSibling.remove(); $('#motEd', h).remove(); pre.hidden = false; });
+    const bco = $('#motCorte', h);
+    bco.addEventListener('click', ocupar(bco, async () => {
+      if (!confirm('¿Marcar este circuito como sin suministro por corte? Queda en azul hasta que un administrador restablezca el suministro. La falla sigue pendiente.')) return;
+      await rpc('corte_marcar_pendiente', { p_falla_id: p.id });
+      cerrarHoja(); toast('Circuito marcado sin suministro', 'ok'); await cargarCortes(); cargarFallas();
+    }));
     const ok = $('#motOk', h);
     ok.addEventListener('click', ocupar(ok, async () => {
       const v = $('#motEd', h).value.trim();
