@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.7';
+const VERSION_APP = '2.12.8';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1013,10 +1013,15 @@ function pintarCortes() {
   if (!map) return;
   if (!capaCortes) { map.createPane('cortes'); map.getPane('cortes').style.zIndex = 405; map.getPane('cortes').style.pointerEvents = 'none'; capaCortes = L.layerGroup().addTo(map); }
   capaCortes.clearLayers();
+  if (!pintarCortes._z) { pintarCortes._z = true; map.on('zoomend', () => { if (S.cortes.clientes.size) pintarCortes(); }); }
+  const z = map.getZoom(), w = z <= 16 ? 11 : z === 17 ? 10 : z === 18 ? 8 : 6;   // más gruesa de lejos
   const svg = L.svg({ pane: 'cortes', padding: 0.5 });
   capaCircuitos.eachLayer((l) => {
     const p = l.feature && l.feature.properties; if (!p || !clienteCorte(p.n_cliente, p.gid)) return;
-    L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { className: 'corte-lin', color: '#00b4ff', weight: 6, opacity: 1 } }).addTo(capaCortes);
+    // halo hecho con líneas anchas translúcidas (el filtro CSS no se dibuja en todos los teléfonos) + línea azul fuerte animada
+    L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { color: '#2f6bff', weight: w + 12, opacity: 0.2, lineCap: 'round' } }).addTo(capaCortes);
+    L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { color: '#2f6bff', weight: w + 5, opacity: 0.4, lineCap: 'round' } }).addTo(capaCortes);
+    L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { className: 'corte-lin', color: '#0b3de0', weight: w, opacity: 1 } }).addTo(capaCortes);
   });
 }
 async function cargarArea(forzar) {
@@ -1058,7 +1063,7 @@ async function cargarArea(forzar) {
     }
     if (pts) {
       L.geoJSON(pts, {
-        pointToLayer: (f, ll) => new MarcadorForma(ll, { renderer: rend, forma: formaPoste(f.properties.simb_poste), radius: radioPunto(), weight: 2, color: clienteCorte(f.properties.n_cliente, null) ? '#0a5db5' : '#1f4d3d', fillColor: clienteCorte(f.properties.n_cliente, null) ? '#00b4ff' : '#ffd54a', fillOpacity: 0.9 }),
+        pointToLayer: (f, ll) => new MarcadorForma(ll, { renderer: rend, forma: formaPoste(f.properties.simb_poste), radius: radioPunto(), weight: 2, color: clienteCorte(f.properties.n_cliente, null) ? '#061f8a' : '#1f4d3d', fillColor: clienteCorte(f.properties.n_cliente, null) ? '#0b3de0' : '#ffd54a', fillOpacity: 0.9 }),
         onEachFeature: (f, l) => l.on('click', (e) => { L.DomEvent.stopPropagation(e); abrirPunto(f.properties, f.geometry); }),
       }).eachLayer((l) => capaPuntos.addLayer(l));
     }
