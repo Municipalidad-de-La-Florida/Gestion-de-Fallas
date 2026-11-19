@@ -1,0 +1,3 @@
+-- Editar requerimientos: acción 'editar' (creador o admin, mientras esté derivado, devuelto o asignado) y RPC req_editar.
+-- Cambia tipo y solicitud (y la referencia de ubicación si el punto es libre y se envía), deja el cambio en el historial y avisa al contratista/cuadrilla.
+-- Aplicado como migración 'requerimientos_editar' (+ correcciones de arrays y de ubicación nula). Ver req_editar en la base para la versión final.

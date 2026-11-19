@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.21';
+const VERSION_APP = '2.12.22';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4265,8 +4265,8 @@ const RQ_ESTADOS = {derivado:'Solicitado', asignado:'Derivado', ejecutado:'Ejecu
 const RQ_TXT = { crear: 'ingresó y derivó a {d}', derivar: 'derivó a {d}', asignar: 'asignó a {d}', reasignar: 'reasignó a {d}', ejecutar: 'marcó como ejecutado', no_puede: 'indicó que la cuadrilla no puede hacerlo',
   revisar: 'revisó la ejecución', devolver_a_cuadrilla: 'devolvió a la cuadrilla', cerrar: 'dio el visto bueno y cerró', rechazar: 'rechazó la ejecución', devolver_ito: 'devolvió al solicitante',
   anular: 'anuló el requerimiento', urgente_on: 'marcó como urgente', urgente_off: 'quitó la marca de urgente', comentar: 'comentó', foto_solicitud: 'agregó una foto a la solicitud',
-  foto_ejecucion: 'agregó una foto de la ejecución', foto_quitada: 'quitó una foto' };
-const RQ_COLOR = { urgente_on: '#e23b33', anular: '#e23b33', rechazar: '#e23b33', no_puede: '#e23b33', devolver_ito: '#9a4a8a', devolver_a_cuadrilla: '#9a4a8a', cerrar: '#3a8a5c', comentar: '#8a8aa0', foto_solicitud: '#b9aed3', foto_ejecucion: '#b9aed3', foto_quitada: '#b9aed3' };
+  foto_ejecucion: 'agregó una foto de la ejecución', foto_quitada: 'quitó una foto', editar: 'editó el requerimiento' };
+const RQ_COLOR = { editar: '#6d3fc8', urgente_on: '#e23b33', anular: '#e23b33', rechazar: '#e23b33', no_puede: '#e23b33', devolver_ito: '#9a4a8a', devolver_a_cuadrilla: '#9a4a8a', cerrar: '#3a8a5c', comentar: '#8a8aa0', foto_solicitud: '#b9aed3', foto_ejecucion: '#b9aed3', foto_quitada: '#b9aed3' };
 const RQ_ACC = {
   asignar: { t: 'Asignar a cuadrilla', sel: 'cuadrillas', com: 'op', cta: 'Asignar', p: 1 },
   ejecutar: { t: 'Marcar como ejecutado', com: 'op', cta: 'Marcar ejecutado', p: 1, ph: 'Qué se hizo' },
@@ -4278,9 +4278,10 @@ const RQ_ACC = {
   derivar: { t: 'Volver a derivar', sel: 'gestores', com: 'op', cta: 'Derivar', p: 1 },
   devolver_ito: { t: 'Devolver al solicitante', com: 'req', cta: 'Devolver', ph: 'Motivo de la devolución' },
   urgente: { t: 'Marcar urgente', directo: 1 },
+  editar: { t: '✏️ Editar' },
   anular: { t: 'Anular', com: 'req', cta: 'Anular requerimiento', d: 1, ph: 'Motivo de la anulación' },
 };
-const RQ_ORDEN = ['asignar', 'ejecutar', 'no_puede', 'revisar', 'devolver_a_cuadrilla', 'cerrar', 'rechazar', 'derivar', 'devolver_ito', 'urgente', 'anular'];
+const RQ_ORDEN = ['asignar', 'ejecutar', 'no_puede', 'revisar', 'devolver_a_cuadrilla', 'cerrar', 'rechazar', 'derivar', 'devolver_ito', 'urgente', 'editar', 'anular'];
 function rqDistTxt(r){
   if(r.dist_m == null) return '';
   const d = r.dist_m >= 1000 ? (r.dist_m / 1000).toFixed(1).replace('.', ',') + ' km' : Math.round(r.dist_m) + ' m';
@@ -4491,6 +4492,23 @@ async function rqRecargarDetalle() {
 function rqAbrirForm(k) {
   const c = RQ_ACC[k], r = RQ.det.req, z = $('#rqForm');
   if (k === 'urgente') { rqEjecutarAccion(k, null, null); return; }
+  if (k === 'editar') {
+    z.innerHTML = `<div class="rq-form"><b>Editar requerimiento</b>
+      <label>Tipo</label><select id="rqEdTipo">${RQ_TIPOS.map(([v, t]) => `<option value="${v}" ${v === r.tipo ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>
+      <label>Solicitud</label><textarea id="rqEdDesc" rows="4"></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="rq-btn rq-p" id="rqOk">Guardar cambios</button><button type="button" class="rq-btn" id="rqNo">Cancelar</button></div><div class="rq-err" id="rqErr"></div></div>`;
+    $('#rqEdDesc').value = r.descripcion;
+    $('#rqNo').addEventListener('click', () => { z.innerHTML = ''; });
+    $('#rqOk').addEventListener('click', async () => {
+      const err = $('#rqErr'), desc = $('#rqEdDesc').value.trim(), tipo = $('#rqEdTipo').value;
+      if (!desc) { err.textContent = 'Escribe la solicitud.'; return; }
+      if (desc === r.descripcion && tipo === r.tipo) { err.textContent = 'No hay cambios que guardar.'; return; }
+      $('#rqOk').disabled = true;
+      try { await rpc('req_editar', { p_id: r.id, p_tipo: tipo, p_descripcion: desc }); await rqRecargarDetalle(); toast('Requerimiento editado', 'ok'); }
+      catch (e) { err.textContent = e.message; $('#rqOk').disabled = false; }
+    });
+    return;
+  }
   const opts = c.sel ? ((RQ.destinos && RQ.destinos[c.sel]) || []) : null;
   z.innerHTML = `<div class="rq-form"><b>${esc(c.t)}</b>
     ${opts ? `<label>${c.sel === 'cuadrillas' ? 'Cuadrilla' : 'Contratista'}</label><select id="rqSel"><option value="">— Elige —</option>${opts.map((o) => `<option value="${esc(o.id)}" ${c.sel === 'cuadrillas' && o.id === r.asignado_a.id ? 'selected' : ''}>${esc(o.nombre)}</option>`).join('')}</select>` : ''}
