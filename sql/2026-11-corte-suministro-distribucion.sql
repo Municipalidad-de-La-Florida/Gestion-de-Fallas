@@ -102,3 +102,6 @@ create or replace function public.cortes_activos() returns jsonb language sql st
 -- corte_marcar_pendiente(p_falla_id): el administrador, al editar el motivo de una falla pendiente, puede marcar el circuito como cortado
 -- (inserta en circuitos_corte como el trigger y agrega «Corte de suministro (Cortado desde la Distribución)» al motivo). La falla sigue pendiente.
 -- Ver la definición vigente en la base: migración corte_marcar_pendiente.
+
+-- fallas_geojson() mantiene las fallas cerradas con 900 mientras su circuito siga cortado (_falla_cerrada_900_activa), así siguen en la lista de activas.
+-- Ver la definición vigente en la base: migración fallas_geojson_mantiene_cerradas_900_con_corte_activo.

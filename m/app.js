@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.11';
+const VERSION_APP = '2.12.12';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -982,6 +982,8 @@ S.cortes = { clientes: new Set(), gids: new Set(), info: {}, fallas: new Set() }
 S.corteFallas = new Set();
 const tagCorte = (id) => (S.corteFallas.has(id) ? ' <span class="tag-corte" title="Falla de un circuito cortado por falta de pago/suministro">⚡ #EnCorte</span>' : '');
 const textoCorte = (p, q) => { const t = q.replace(/^#/, ''); return S.corteFallas.has(p.id) && t.length >= 3 && 'encorte'.startsWith(t); };
+// Activas = no reparadas + las cerradas con 900 cuyo circuito sigue cortado (se mantienen hasta restablecer el suministro)
+const calcActivas = () => S.features.filter((f) => f.properties.estado !== 'reparada' || S.cortes.fallas.has(f.properties.id));
 async function cargarCortes() {
   try {
     rpc('cortes_fallas').then((l) => { S.corteFallas = new Set(l || []); }).catch(() => {});
@@ -993,7 +995,7 @@ async function cargarCortes() {
     S.cortes = c;
     try { S.cortesGeo = c.clientes.size ? await rpc('cortes_geojson') : null; } catch (e) { S.cortesGeo = null; }   // geometría de los circuitos cortados: se dibuja a cualquier zoom
     if (map) pintarCortes();
-    if (sig !== _cortesSig) { _cortesSig = sig; try { dibujarFallas(); } catch (e) { /* aún sin mapa */ } }   // las verdes cerradas con 900 dejan de pintarse
+    if (sig !== _cortesSig) { _cortesSig = sig; try { S.activas = calcActivas(); actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista(); } catch (e) { /* aún sin mapa */ } }   // las verdes cerradas con 900 dejan de pintarse
     if (clave !== _cortesClave) { _cortesClave = clave; if (map) { cacheBbox = null; cargarArea(true); } }
   } catch (e) { if (e.name === 'SesionExpirada') throw e; /* sin la función: no hay cortes */ }
 }
@@ -1608,7 +1610,7 @@ async function cargarFallas(manual) {
   try {
     const geo = await rpc('fallas_geojson', {});
     S.features = ((geo && geo.features) || []).map((f) => { f._c = centroGeom(f.geometry); return f; });
-    S.activas = S.features.filter((f) => f.properties.estado !== 'reparada');
+    S.activas = calcActivas();
     actualizarFiltrosOtrosUI();
     dibujarFallas();
     const n = S.activas.filter((f) => !f.properties.cascada).length;
@@ -4727,7 +4729,7 @@ async function abrirFallaPorId(id) {
       fresca._c = centroGeom(fresca.geometry);
       const i = S.features.findIndex((x) => x.properties.id === id);
       if (i >= 0) S.features[i] = fresca; else S.features.push(fresca);
-      S.activas = S.features.filter((x) => x.properties.estado !== 'reparada');
+      S.activas = calcActivas();
       f = fresca;
       cargarFallas(); // deja el mapa y la lista al día en segundo plano
     }

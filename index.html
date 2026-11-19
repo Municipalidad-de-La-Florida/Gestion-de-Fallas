@@ -3151,7 +3151,7 @@ async function cargarCortesWeb(){
     try{ c.geo = c.clientes.size ? await db.rpc('cortes_geojson', {}) : null; }catch(e){ c.geo = null; }
     CORTES = c;
     pintarCortesWeb();
-    { const sig = [...c.fallas].sort().join(','); if(sig !== _cortesSig){ _cortesSig = sig; try{ renderFallasDesdeCache(); }catch(e){} } }   // las verdes cerradas con 900 dejan de pintarse
+    { const sig = [...c.fallas].sort().join(','); if(sig !== _cortesSig){ _cortesSig = sig; try{ renderFallasDesdeCache(); cargarFallasDelArea(); }catch(e){} } }   // las verdes cerradas con 900 dejan de pintarse
     if(clave !== _cortesClave){ _cortesClave = clave; if(typeof layerCircuitos !== 'undefined' && layerCircuitos){ layerCircuitos.setStyle(estiloCircuito); layerPuntos.eachLayer(l => { if(l.setIcon && l.feature) l.setIcon(iconoPuntoWeb(l.feature)); }); } }
   }catch(e){ /* sin la función: no hay cortes */ }
 }
@@ -4825,10 +4825,15 @@ async function crearFallaCircuito(circuitoGid, tipoFalla, fechaCustom, descripci
 async function cargarFallasDelArea(){
   try{
     await asegurarContratos();
-    const query = 'select=id,ot,orden_externa,tipo,tipo_falla,estado,cascada,asignado_camion_id,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,fecha_pendiente,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
-      + ',masivo,contrato_id,mantenedor_id,derivacion'
-      + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=1000';
+    const baseSel = 'select=id,ot,orden_externa,tipo,tipo_falla,estado,cascada,asignado_camion_id,descripcion_otro,fecha_creacion:fecha_falla,creado_en:fecha_falla_real,fecha_pendiente,creado_por,ref_punto_gid,ref_circuito_gid,usuarios!fallas_informado_por_fkey(nombre),notificadores(nombre),puntos_luminarios(llave,nro_mun)'
+      + ',masivo,contrato_id,mantenedor_id,derivacion';
+    const query = baseSel + '&estado=neq.reparada&cascada=eq.false&order=ot.desc&limit=1000';
     fallasEnArea = await db.select('fallas', query);
+    // Las cerradas con 900 de un circuito que sigue cortado se mantienen entre las activas hasta restablecer el suministro
+    try{
+      const ya = new Set(fallasEnArea.map(f => f.id)), faltan = CORTES.fallas ? [...CORTES.fallas].filter(i => !ya.has(i)) : [];
+      if(faltan.length){ const extra = await db.select('fallas', baseSel + '&cascada=eq.false&id=in.(' + faltan.join(',') + ')'); fallasEnArea = fallasEnArea.concat(extra || []); }
+    }catch(e){ console.error(e); }
     renderFallasList();
     if(busquedaLateral.texto) ejecutarBusquedaLateral(busquedaLateral.texto);
   }catch(e){ console.error(e); }
