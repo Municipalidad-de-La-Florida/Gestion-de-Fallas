@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.20';
+const VERSION_APP = '2.12.21';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1308,6 +1308,7 @@ function dibujarFallas() {
   });
   S.features.forEach((f) => {
     const p = f.properties;
+    if (p.estado === 'reparada' && rol() === 'camion' && p.fecha_reparacion && Date.now() - new Date(p.fecha_reparacion).getTime() > 10 * 60000) return;   // cuadrilla: las verdes solo se ven 10 minutos
     if (p.estado === 'reparada' && S.cortes.fallas && (S.cortes.fallas.has(p.id) || (p.circuito_origen_id && S.cortes.fallas.has(p.circuito_origen_id)))) return;   // cerrada con 900: no se pinta verde, queda solo el marcador azul del corte
     if (p.estado === 'reparada' && ((p.ref_punto_gid != null && activasEn.has('p' + p.ref_punto_gid)) || (p.ref_circuito_gid != null && !p.cascada && activasEn.has('c' + p.ref_circuito_gid)))) return;
     // Subcontrato: los puntos de cascada se ocultan (manda el circuito); las reparadas recientes se siguen viendo
