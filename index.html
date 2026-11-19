@@ -864,7 +864,7 @@
 .rq-dist small{ font-weight:500; color:#8a82a0; }
 .rq-mk.e-ejecutado .rq-cd{ color:#6b4d00; border-color:#d9aa2b; background:#fff5d1; }
 .rq-mk.e-revisado .rq-cd{ color:#115c32; border-color:#3f9d68; background:#e4f5ea; }
-  .corte-lin{ stroke-linecap:round; stroke-dasharray:14 10; animation:corteFluye 1s linear infinite; filter:drop-shadow(0 0 4px #2f6bff) drop-shadow(0 0 10px #0b3de0); }
+  .corte-lin{ stroke-linecap:round; stroke-dasharray:12 12; animation:corteFluye 1s linear infinite; filter:drop-shadow(0 0 4px #2f6bff) drop-shadow(0 0 10px #0b3de0); }
   @keyframes corteFluye{ to{ stroke-dashoffset:-24; } }
   @keyframes corteLat{ 0%{ box-shadow:0 0 0 0 rgba(0,180,255,.65); } 70%{ box-shadow:0 0 0 12px rgba(0,180,255,0); } 100%{ box-shadow:0 0 0 0 rgba(0,180,255,0); } }
   .codigo-btn.corte-btn{ background:linear-gradient(135deg,#0a62ff,#00c2ff) !important; border-color:#00a2ff !important; color:#fff !important; animation:corteLat 1.8s ease-out infinite; }
@@ -3138,7 +3138,8 @@ function pintarCortesWeb(){
 }
 function estiloCircuito(f){
   const p = f && f.properties || {};
-  return clienteCorte(p.n_cliente, p.gid) ? {className: 'corte-lin', color: '#0b3de0', weight: pesoCorte(), opacity: 1} : {color:'#8a9a90', weight:2.5, opacity:0.85, className: ''};
+  // El circuito cortado lo dibuja aparte capaCortesWeb (una sola línea animada); si también se animara aquí, las dos líneas desfasadas taparían los espacios
+  return {color:'#8a9a90', weight:2.5, opacity:0.85, className: ''};
 }
 function iconoPuntoWeb(f){ return clienteCorte(f.properties.n_cliente, null) ? iconoParaPunto(f.properties.simb_poste, '#0b3de0', '#061f8a') : iconoParaPunto(f.properties.simb_poste, '#5b7a68', '#3d5548'); }
 async function cargarCortesWeb(){

@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.16';
+const VERSION_APP = '2.12.17';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1026,7 +1026,7 @@ function pintarCortes() {
     const l = { feature };
     // halo hecho con líneas anchas translúcidas (el filtro CSS no se dibuja en todos los teléfonos) + línea azul fuerte animada
     L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { color: '#2f6bff', weight: w + 8, opacity: 0.2, lineCap: 'round' } }).addTo(capaCortes);
-    L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { color: '#2f6bff', weight: w + 3, opacity: 0.4, lineCap: 'round' } }).addTo(capaCortes);
+    L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { color: '#2f6bff', weight: w + 3, opacity: 0.25, lineCap: 'round' } }).addTo(capaCortes);
     L.geoJSON(l.feature, { renderer: svg, interactive: false, style: { className: 'corte-lin', color: '#0b3de0', weight: w, opacity: 1 } }).addTo(capaCortes);
   });
 }
