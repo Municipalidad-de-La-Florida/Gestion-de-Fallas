@@ -89,3 +89,8 @@ $$;
 revoke all on function public._falla_texto_corte(uuid) from public, anon;
 -- cortes_fallas() = (fallas de circuitos cortados o cerradas con 900) UNION (fallas con ese texto)
 -- resumen_todas_fallas: la columna de búsqueda '#encorte encorte' también usa _falla_texto_corte(f.id)
+-- cortes_activos() incluye falla_id (la falla cerrada con 900): el mapa no la pinta verde mientras el corte siga activo
+create or replace function public.cortes_activos() returns jsonb language sql stable security definer set search_path to 'public' as $$
+  select coalesce(jsonb_agg(jsonb_build_object('n_cliente', c.n_cliente, 'circuito_gid', c.circuito_gid, 'desde', c.desde, 'falla_id', c.falla_id,
+           'por', (select u.nombre from public.usuarios u where u.id = c.por)) order by c.desde desc), '[]'::jsonb)
+  from public.circuitos_corte c where c.activo and auth.uid() is not null $$;
