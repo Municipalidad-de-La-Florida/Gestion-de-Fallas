@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.25';
+const VERSION_APP = '2.12.26';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4099,7 +4099,7 @@ async function abrirInspeccion() {
   }));
   const mt = $('#mTerminar', h);
   if (mt) mt.addEventListener('click', () => {
-    S.modo = { tipo: 'agregar', fecha: null, inspId: null }; guardarModo(); pintarModo(); cerrarHoja(); toast('Inspección terminada');
+    S.modo = { tipo: 'agregar', fecha: null, inspId: null }; guardarModo(); pintarModo(); cerrarHoja(); toast('🔍 Inspección terminada', 'insp');
   });
 }
 $('#navInsp').addEventListener('click', abrirInspeccion);
@@ -5052,18 +5052,28 @@ function iniciarCampana() {
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && S.perfil && veCampana()) cargarNotifs(); });
 const rqIdNotif = (u) => { const m = /[?&]req=([\w-]{1,64})/.exec(u || ''); return m ? m[1] : ''; };
+let NOTIF_TAB = 'fallas';   // 'fallas' | 'req' (la pestaña de requerimientos solo la ven quienes tienen esa herramienta)
+const notifsDe = (tab) => NOTIFS.filter((n) => (tab === 'req') === !!rqIdNotif(n.url));
 function listaNotifsHtml() {
-  return NOTIFS.length ? NOTIFS.map((n) => `<div class="av-it${n.leida ? '' : ' nueva'}" data-id="${esc(n.id)}" data-f="${esc(n.falla_id || '')}" data-r="${esc(rqIdNotif(n.url))}" role="button" tabindex="0"><div class="tx"><b>${esc(n.titulo)}</b>${n.cuerpo ? `<span class="cu">${esc(n.cuerpo)}</span>` : ''}<small>${esc(hace(n.creado_en))}${n.falla_id ? ' · toca para verla en el mapa' : (rqIdNotif(n.url) ? ' · toca para abrir el requerimiento' : '')}</small></div></div>`).join('')
-    : '<div class="u-vacio">No hay notificaciones en las últimas 24 horas.</div>';
+  const lista = rqVe() ? notifsDe(NOTIF_TAB) : NOTIFS;
+  return lista.length ? lista.map((n) => `<div class="av-it${n.leida ? '' : ' nueva'}" data-id="${esc(n.id)}" data-f="${esc(n.falla_id || '')}" data-r="${esc(rqIdNotif(n.url))}" role="button" tabindex="0"><div class="tx"><b>${esc(n.titulo)}</b>${n.cuerpo ? `<span class="cu">${esc(n.cuerpo)}</span>` : ''}<small>${esc(hace(n.creado_en))}${n.falla_id ? ' · toca para verla en el mapa' : (rqIdNotif(n.url) ? ' · toca para abrir el requerimiento' : '')}</small></div></div>`).join('')
+    : `<div class="u-vacio">${rqVe() && NOTIF_TAB === 'req' ? 'No hay avisos de requerimientos en las últimas 24 horas.' : 'No hay notificaciones en las últimas 24 horas.'}</div>`;
 }
 $('#btnCampana').addEventListener('click', async () => {
-  const h = abrirHoja(`<div id="avRaiz"><div class="av-cab"><b>Notificaciones</b><div class="av-acc"><button type="button" data-a="leer">Marcar leídos</button></div></div><div id="avLista">${listaNotifsHtml()}</div></div>`);
-  const repintar = () => { const l = $('#avLista', h); if (l) l.innerHTML = listaNotifsHtml(); pintarCampana(); };
+  const tabsHtml = () => rqVe() ? `<div class="av-tabs"><button type="button" data-t="fallas" class="${NOTIF_TAB === 'fallas' ? 'on' : ''}">Fallas${notifsDe('fallas').some((n) => !n.leida) ? '<i>' + notifsDe('fallas').filter((n) => !n.leida).length + '</i>' : ''}</button><button type="button" data-t="req" class="${NOTIF_TAB === 'req' ? 'on' : ''}">Requerimientos${notifsDe('req').some((n) => !n.leida) ? '<i>' + notifsDe('req').filter((n) => !n.leida).length + '</i>' : ''}</button></div>` : '';
+  if (!rqVe()) NOTIF_TAB = 'fallas';
+  const h = abrirHoja(`<div id="avRaiz"><div class="av-cab"><b>Notificaciones</b><div class="av-acc"><button type="button" data-a="leer">Marcar leídos</button></div></div><div id="avTabs">${tabsHtml()}</div><div id="avLista">${listaNotifsHtml()}</div></div>`);
+  const repintar = () => { const l = $('#avLista', h); if (l) l.innerHTML = listaNotifsHtml(); const t = $('#avTabs', h); if (t) t.innerHTML = tabsHtml(); pintarCampana(); };
   cargarNotifs().then(repintar);
   $('#avRaiz', h).addEventListener('click', async (e) => {   // el oyente va en un contenedor que se recrea cada vez que se abre
-    const a = e.target.closest('[data-a]'), it = e.target.closest('.av-it');
+    const a = e.target.closest('[data-a]'), it = e.target.closest('.av-it'), tb = e.target.closest('[data-t]');
+    if (tb) { NOTIF_TAB = tb.dataset.t; repintar(); return; }
     try {
-      if (a && a.dataset.a === 'leer') { await api('/rest/v1/notificaciones?leida=eq.false', { method: 'PATCH', body: { leida: true } }); NOTIFS.forEach((n) => { n.leida = true; }); repintar(); return; }
+      if (a && a.dataset.a === 'leer') {   // marca los de la pestaña que estás viendo
+        const ids = (rqVe() ? notifsDe(NOTIF_TAB) : NOTIFS).filter((n) => !n.leida).map((n) => n.id);
+        if (ids.length) await api('/rest/v1/notificaciones?id=in.(' + ids.join(',') + ')', { method: 'PATCH', body: { leida: true } });
+        NOTIFS.forEach((n) => { if (ids.includes(n.id)) n.leida = true; }); repintar(); return;
+      }
       if (it) {
         const n = NOTIFS.find((x) => x.id === it.dataset.id);
         if (n && !n.leida) { n.leida = true; pintarCampana(); api(`/rest/v1/notificaciones?id=eq.${n.id}`, { method: 'PATCH', body: { leida: true } }).catch(() => {}); }
