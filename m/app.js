@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.27';
+const VERSION_APP = '2.12.28';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4463,8 +4463,9 @@ function rqVisor(urls, i0) {
   v.addEventListener('click', (e) => { if (v.dataset.sw) e.stopImmediatePropagation(); }, true);
   ver(i); document.body.appendChild(v);
 }
+const RQ_MAX_FOTOS = 5;
 function rqFotosHtml(fs, momento, agregar) {
-  return `<div class="rq-fotos">${fs.map((f) => `<div class="rq-th"><img src="${esc(f.url || '')}" alt="Foto" data-u="${esc(f.url || '')}">${agregar && f.mia ? `<span class="rq-q" data-f="${esc(f.id)}" role="button" aria-label="Quitar foto">×</span>` : ''}</div>`).join('')}${agregar && fs.length < 2 ? `<button type="button" class="rq-add" data-m="${momento}" data-src="cam" aria-label="Tomar foto">📷</button><button type="button" class="rq-add" data-m="${momento}" data-src="gal" aria-label="Elegir de la galería">🖼</button>` : ''}</div>`;
+  return `<div class="rq-fotos">${fs.map((f) => `<div class="rq-th"><img src="${esc(f.url || '')}" alt="Foto" data-u="${esc(f.url || '')}">${agregar && f.mia ? `<span class="rq-q" data-f="${esc(f.id)}" role="button" aria-label="Quitar foto">×</span>` : ''}</div>`).join('')}${agregar && fs.length < RQ_MAX_FOTOS ? `<button type="button" class="rq-add" data-lib="${RQ_MAX_FOTOS - fs.length}" data-m="${momento}" data-src="cam" aria-label="Tomar foto">📷</button><button type="button" class="rq-add" data-lib="${RQ_MAX_FOTOS - fs.length}" data-m="${momento}" data-src="gal" aria-label="Elegir de la galería">🖼</button>` : ''}</div>`;
 }
 async function rqAbrirDetalle(id) {
   RQ.id = id;
@@ -4521,10 +4522,14 @@ function rqPintarDetalle() {
       await rqRecargarDetalle();
     } catch (e) { toast('No se pudo quitar: ' + e.message, 'error'); }
   }));
-  $$('.rq-add', h).forEach((b) => b.addEventListener('click', () => rqPedirFoto(b.dataset.src, async (f) => {
-    b.disabled = true;
-    try { await rqSubirFoto(r.id, b.dataset.m, await comprimirFoto(f)); await rqRecargarDetalle(); }
-    catch (e) { toast(e.message, 'error'); if (document.body.contains(b)) b.disabled = false; }
+  $$('.rq-add', h).forEach((b) => b.addEventListener('click', () => rqPedirFoto(b.dataset.src, async (fs) => {
+    const lib = +b.dataset.lib || RQ_MAX_FOTOS;
+    if (fs.length > lib) toast(`Máximo ${RQ_MAX_FOTOS} fotos: se agregarán solo ${lib}.`, 'error');
+    $$('.rq-add', h).forEach((x) => { x.disabled = true; });
+    let falla = '';
+    for (const f of fs.slice(0, lib)) { try { await rqSubirFoto(r.id, b.dataset.m, await comprimirFoto(f)); } catch (e) { falla = e.message; break; } }
+    if (falla) toast(falla, 'error');
+    await rqRecargarDetalle();
   })));
   $$('#rqAcc button', h).forEach((b) => b.addEventListener('click', () => rqAbrirForm(b.dataset.a)));
   const cb = $('#rqComBtn', h);
@@ -4675,7 +4680,7 @@ function rqAbrirNuevo(conservar) {
     <label>Punto <span class="rq-req">*</span></label>
     <div id="rnPunto" style="margin-top:8px;"></div><div id="rnSChips" class="rqs-chips" style="display:none;"></div>
     <label>Derivar a <span class="rq-req">*</span></label><select id="rnDer"><option value="">— Elige el contratista —</option>${gs.map((g) => `<option value="${esc(g.id)}" ${n.derivar === g.id ? 'selected' : ''}>${esc(g.nombre)}</option>`).join('')}</select>
-    <label>Fotos (opcional, máximo 2)</label><div id="rnFotos"></div>
+    <label>Fotos (opcional, máximo 5)</label><div id="rnFotos"></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="rq-btn rq-p" id="rnOk">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rnNo">Cancelar</button></div><div class="rq-err" id="rnErr"></div></div></div>`);
   const leer = () => { const tb = $('#rnDesc', h).querySelector('.rqsb.tipo'); if (tb) n.tipo = tb.dataset.k; n.desc = rqSolTexto($('#rnDesc', h)); n.descHtml = $('#rnDesc', h).innerHTML; n.derivar = $('#rnDer', h).value; n.urgente = $('#rnUrg', h).checked; const q = $('#rnQ', h); if (q) n.q = q.value; const u = $('#rnUbic', h); if (u) n.ubic = u.value; };
   const cambiaTipo = (k) => { rqSolCambiarTipo($('#rnDesc', h), k); n.tipo = k; leer(); };
@@ -4714,10 +4719,13 @@ function rqPintarPuntoN(h, leer) {
 }
 function rqPintarFotosN(h) {
   const n = RQ.nuevo, z = $('#rnFotos', h);
-  z.innerHTML = `<div class="rq-fotos">${n.fotos.map((f, i) => `<div class="rq-th"><img src="${esc(f.url)}" alt="Foto"><span class="rq-q" data-i="${i}" role="button" aria-label="Quitar foto">×</span></div>`).join('')}${n.fotos.length < 2 ? '<button type="button" class="rq-add" data-m="solicitud" data-src="cam" aria-label="Tomar foto">📷</button><button type="button" class="rq-add" data-m="solicitud" data-src="gal" aria-label="Elegir de la galería">🖼</button>' : ''}</div>`;
+  z.innerHTML = `<div class="rq-fotos">${n.fotos.map((f, i) => `<div class="rq-th"><img src="${esc(f.url)}" alt="Foto"><span class="rq-q" data-i="${i}" role="button" aria-label="Quitar foto">×</span></div>`).join('')}${n.fotos.length < RQ_MAX_FOTOS ? '<button type="button" class="rq-add" data-m="solicitud" data-src="cam" aria-label="Tomar foto">📷</button><button type="button" class="rq-add" data-m="solicitud" data-src="gal" aria-label="Elegir de la galería">🖼</button>' : ''}</div>`;
   $$('.rq-q', z).forEach((q) => q.addEventListener('click', () => { URL.revokeObjectURL(n.fotos[+q.dataset.i].url); n.fotos.splice(+q.dataset.i, 1); rqPintarFotosN(h); }));
-  $$('.rq-add', z).forEach((a) => a.addEventListener('click', () => rqPedirFoto(a.dataset.src, async (f) => {
-    try { const blob = await comprimirFoto(f); n.fotos.push({ blob, url: URL.createObjectURL(blob) }); if (RQ.nuevo === n && hojaAbierta && $('#rnFotos')) rqPintarFotosN($('#hojaContenido')); } catch (e) { toast(e.message, 'error'); }
+  $$('.rq-add', z).forEach((a) => a.addEventListener('click', () => rqPedirFoto(a.dataset.src, async (fs) => {
+    const lib = RQ_MAX_FOTOS - n.fotos.length;
+    if (fs.length > lib) toast(`Máximo ${RQ_MAX_FOTOS} fotos: se agregarán solo ${lib}.`, 'error');
+    for (const f of fs.slice(0, lib)) { try { const blob = await comprimirFoto(f); n.fotos.push({ blob, url: URL.createObjectURL(blob) }); } catch (e) { toast(e.message, 'error'); } }
+    if (RQ.nuevo === n && hojaAbierta && $('#rnFotos')) rqPintarFotosN($('#hojaContenido'));
   })));
 }
 // Las fotos se piden con campos de archivo que viven en la página (no creados al vuelo): en Android, un campo suelto
@@ -4726,8 +4734,8 @@ const RQ_FOTO = { cb: null };
 function rqCamposFoto() {
   if ($('#rqInCam')) return;
   [['rqInCam', true], ['rqInGal', false]].forEach(([id, cap]) => {
-    const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.id = id; i.hidden = true; if (cap) i.setAttribute('capture', 'environment');
-    i.addEventListener('change', () => { const f = i.files && i.files[0]; i.value = ''; const cb = RQ_FOTO.cb; if (f && cb) cb(f); });
+    const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.id = id; i.hidden = true; if (cap) i.setAttribute('capture', 'environment'); else i.multiple = true;
+    i.addEventListener('change', () => { const fs = [...(i.files || [])]; i.value = ''; const cb = RQ_FOTO.cb; if (fs.length && cb) cb(fs); });
     document.body.appendChild(i);
   });
 }
