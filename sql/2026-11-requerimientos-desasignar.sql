@@ -1,0 +1,2 @@
+-- Requerimientos: acción 'desasignar' (quitar la cuadrilla). La puede hacer quien puede asignar (contratista derivado o admin) mientras esté 'asignado'.
+-- Vuelve a 'derivado' sin cuadrilla, avisa a la cuadrilla y queda en el historial. Aplicado como migración 'requerimientos_desasignar'.

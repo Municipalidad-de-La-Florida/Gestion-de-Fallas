@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.22';
+const VERSION_APP = '2.12.23';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4265,7 +4265,7 @@ const RQ_ESTADOS = {derivado:'Solicitado', asignado:'Derivado', ejecutado:'Ejecu
 const RQ_TXT = { crear: 'ingresó y derivó a {d}', derivar: 'derivó a {d}', asignar: 'asignó a {d}', reasignar: 'reasignó a {d}', ejecutar: 'marcó como ejecutado', no_puede: 'indicó que la cuadrilla no puede hacerlo',
   revisar: 'revisó la ejecución', devolver_a_cuadrilla: 'devolvió a la cuadrilla', cerrar: 'dio el visto bueno y cerró', rechazar: 'rechazó la ejecución', devolver_ito: 'devolvió al solicitante',
   anular: 'anuló el requerimiento', urgente_on: 'marcó como urgente', urgente_off: 'quitó la marca de urgente', comentar: 'comentó', foto_solicitud: 'agregó una foto a la solicitud',
-  foto_ejecucion: 'agregó una foto de la ejecución', foto_quitada: 'quitó una foto', editar: 'editó el requerimiento' };
+  foto_ejecucion: 'agregó una foto de la ejecución', foto_quitada: 'quitó una foto', editar: 'editó el requerimiento', desasignar: 'quitó la asignación (sin cuadrilla)' };
 const RQ_COLOR = { editar: '#6d3fc8', urgente_on: '#e23b33', anular: '#e23b33', rechazar: '#e23b33', no_puede: '#e23b33', devolver_ito: '#9a4a8a', devolver_a_cuadrilla: '#9a4a8a', cerrar: '#3a8a5c', comentar: '#8a8aa0', foto_solicitud: '#b9aed3', foto_ejecucion: '#b9aed3', foto_quitada: '#b9aed3' };
 const RQ_ACC = {
   asignar: { t: 'Asignar a cuadrilla', sel: 'cuadrillas', com: 'op', cta: 'Asignar', p: 1 },
@@ -4511,7 +4511,7 @@ function rqAbrirForm(k) {
   }
   const opts = c.sel ? ((RQ.destinos && RQ.destinos[c.sel]) || []) : null;
   z.innerHTML = `<div class="rq-form"><b>${esc(c.t)}</b>
-    ${opts ? `<label>${c.sel === 'cuadrillas' ? 'Cuadrilla' : 'Contratista'}</label><select id="rqSel"><option value="">— Elige —</option>${opts.map((o) => `<option value="${esc(o.id)}" ${c.sel === 'cuadrillas' && o.id === r.asignado_a.id ? 'selected' : ''}>${esc(o.nombre)}</option>`).join('')}</select>` : ''}
+    ${opts ? `<label>${c.sel === 'cuadrillas' ? 'Cuadrilla' : 'Contratista'}</label><select id="rqSel"><option value="">— Elige —</option>${c.sel === 'cuadrillas' && r.estado === 'asignado' && (r.acciones || []).includes('desasignar') ? '<option value="__sin">Sin asignación (quitar la cuadrilla)</option>' : ''}${opts.map((o) => `<option value="${esc(o.id)}" ${c.sel === 'cuadrillas' && o.id === r.asignado_a.id ? 'selected' : ''}>${esc(o.nombre)}</option>`).join('')}</select>` : ''}
     ${c.com ? `<label>${c.com === 'req' ? 'Motivo (obligatorio)' : 'Comentario (opcional)'}</label><textarea id="rqTx" rows="2" placeholder="${esc(c.ph || '')}"></textarea>` : ''}
     <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="rq-btn${c.d ? ' rq-d' : ' rq-p'}" id="rqOk">${esc(c.cta)}</button><button type="button" class="rq-btn" id="rqNo">Cancelar</button></div><div class="rq-err" id="rqErr"></div></div>`;
   $('#rqNo').addEventListener('click', () => { z.innerHTML = ''; });
@@ -4520,6 +4520,7 @@ function rqAbrirForm(k) {
     if (sel && !sel.value) { err.textContent = 'Elige a quién.'; return; }
     if (c.com === 'req' && !tx.value.trim()) { err.textContent = 'Escribe el motivo.'; return; }
     $('#rqOk').disabled = true;
+    if (sel && sel.value === '__sin') { await rqEjecutarAccion('desasignar', tx ? tx.value.trim() : null, null, err, $('#rqOk')); return; }
     await rqEjecutarAccion(k, tx ? tx.value.trim() : null, sel ? sel.value : null, err, $('#rqOk'));
   });
 }
