@@ -11860,8 +11860,9 @@ async function rqVistaDetalle(id){
   if(RQ.id !== id || !rqEl('rqBody')) return;
   rqPintarDetalle();
 }
+const RQ_MAX_FOTOS = 5;
 function rqFotosHtml(fs, momento, puedeAgregar, puedeQuitar){
-  return `<div class="rq-fotos">${fs.map((f, i) => `<div class="rq-th"><img src="${f.url || ''}" alt="Foto" data-m="${momento}" data-r="${f.ronda}">${puedeQuitar && f.mia ? `<span class="rq-q" data-f="${f.id}" title="Quitar foto">×</span>` : ''}</div>`).join('')}${puedeAgregar && fs.length < 2 ? `<button type="button" class="rq-add" data-m="${momento}">＋ foto</button>` : ''}</div>`;
+  return `<div class="rq-fotos">${fs.map((f, i) => `<div class="rq-th"><img src="${f.url || ''}" alt="Foto" data-m="${momento}" data-r="${f.ronda}">${puedeQuitar && f.mia ? `<span class="rq-q" data-f="${f.id}" title="Quitar foto">×</span>` : ''}</div>`).join('')}${puedeAgregar && fs.length < RQ_MAX_FOTOS ? `<button type="button" class="rq-add" data-m="${momento}" data-lib="${RQ_MAX_FOTOS - fs.length}">＋ foto</button>` : ''}</div>`;
 }
 function rqPintarDetalle(){
   const d = RQ.det, r = d.req, acc = r.acciones || [], abierto = !['cerrado', 'anulado'].includes(r.estado), urg = r.urgente && abierto;
@@ -11904,11 +11905,14 @@ function rqPintarDetalle(){
     catch(e){ alert('No se pudo quitar: ' + e.message); }
   });
   body.querySelectorAll('.rq-add').forEach(b => b.onclick = () => {
-    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
     inp.onchange = async () => {
-      const f = inp.files && inp.files[0]; if(!f) return; b.disabled = true; b.textContent = '…';
-      try{ await rqSubirFoto(r.id, b.dataset.m, await comprimirFotoWeb(f)); await rqVistaDetalle(r.id); }
-      catch(e){ alert(e.message); b.disabled = false; b.textContent = '＋ foto'; }
+      const fs = [...(inp.files || [])]; if(!fs.length) return; b.disabled = true; b.textContent = '…';
+      const lib = +b.dataset.lib || RQ_MAX_FOTOS; let falla = '';
+      if(fs.length > lib) alert(`Máximo ${RQ_MAX_FOTOS} fotos: se agregarán solo ${lib}.`);
+      for(const f of fs.slice(0, lib)){ try{ await rqSubirFoto(r.id, b.dataset.m, await comprimirFotoWeb(f)); }catch(e){ falla = e.message; break; } }
+      if(falla) alert(falla);
+      await rqVistaDetalle(r.id);
     };
     inp.click();
   });
@@ -12106,7 +12110,7 @@ function rqVistaNuevo(){ rqAncho(false);
     <label class="rq-lbl">Punto <span class="rq-req">*</span></label>
     <div id="rqPunto" style="margin-top:8px;"></div><div id="rqSChips" class="rqs-chips" style="display:none;"></div>
     <label class="rq-lbl">Derivar a <span class="rq-req">*</span></label><select id="rqDer"><option value="">— Elige el contratista —</option>${gs.map(g => `<option value="${g.id}" ${n.derivar === g.id ? 'selected' : ''}>${escHtml(g.nombre)}</option>`).join('')}</select>
-    <label class="rq-lbl">Fotos (opcional, máximo 2)</label><div id="rqFotosN"></div>
+    <label class="rq-lbl">Fotos (opcional, máximo 5)</label><div id="rqFotosN"></div>
     <div style="margin-top:16px;display:flex;gap:8px;align-items:center;"><button type="button" class="rq-btn rq-p" id="rqCrear">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rqCancelar">Cancelar</button><span class="rq-err" id="rqErr"></span></div></div>`;
   const leer = () => { const tb = rqEl('rqDesc').querySelector('.rqsb.tipo'); if(tb) n.tipo = tb.dataset.k; n.desc = rqSolTexto(rqEl('rqDesc')); n.descHtml = rqEl('rqDesc').innerHTML; n.derivar = rqEl('rqDer').value; n.urgente = rqEl('rqUrg').checked; const q = rqEl('rqQ2'); if(q) n.q = q.value; const u = rqEl('rqUbic'); if(u) n.ubic = u.value; };
   const cambiaTipo = k => { rqSolCambiarTipo(rqEl('rqDesc'), k); n.tipo = k; leer(); };
@@ -12143,12 +12147,17 @@ function rqPintarPunto(leer){
 }
 function rqPintarFotosN(){
   const n = RQ.nuevo, z = rqEl('rqFotosN');
-  z.innerHTML = `<div class="rq-fotos">${n.fotos.map((f, i) => `<div class="rq-th"><img src="${f.url}" alt="Foto"><span class="rq-q" data-i="${i}">×</span></div>`).join('')}${n.fotos.length < 2 ? '<button type="button" class="rq-add" id="rqAddN">＋ foto</button>' : ''}</div>`;
+  z.innerHTML = `<div class="rq-fotos">${n.fotos.map((f, i) => `<div class="rq-th"><img src="${f.url}" alt="Foto"><span class="rq-q" data-i="${i}">×</span></div>`).join('')}${n.fotos.length < RQ_MAX_FOTOS ? '<button type="button" class="rq-add" id="rqAddN">＋ foto</button>' : ''}</div>`;
   z.querySelectorAll('.rq-q').forEach(q => q.onclick = () => { URL.revokeObjectURL(n.fotos[+q.dataset.i].url); n.fotos.splice(+q.dataset.i, 1); rqPintarFotosN(); });
   const a = rqEl('rqAddN');
   if(a) a.onclick = () => {
-    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
-    inp.onchange = async () => { const f = inp.files && inp.files[0]; if(!f) return; try{ const blob = await comprimirFotoWeb(f); n.fotos.push({blob, url: URL.createObjectURL(blob)}); rqPintarFotosN(); }catch(e){ alert(e.message); } };
+    const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'; inp.multiple = true;
+    inp.onchange = async () => {
+      const fs = [...(inp.files || [])]; if(!fs.length) return; const lib = RQ_MAX_FOTOS - n.fotos.length;
+      if(fs.length > lib) alert(`Máximo ${RQ_MAX_FOTOS} fotos: se agregarán solo ${lib}.`);
+      for(const f of fs.slice(0, lib)){ try{ const blob = await comprimirFotoWeb(f); n.fotos.push({blob, url: URL.createObjectURL(blob)}); }catch(e){ alert(e.message); } }
+      rqPintarFotosN();
+    };
     inp.click();
   };
 }

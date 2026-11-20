@@ -1,0 +1,2 @@
+-- req_registrar_foto: el máximo de fotos por momento pasa de 2 a 5 (aplicado en producción)
+-- Cambio: `if n >= 2 then raise exception 'Máximo 2 fotos'` -> `if n >= 5 then raise exception 'Máximo 5 fotos'`
