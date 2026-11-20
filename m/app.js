@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.23';
+const VERSION_APP = '2.12.24';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -3386,6 +3386,7 @@ async function cargarCuadrillas() {
       CU.datos.cuadrillas.forEach((c) => { c.contratos = []; });
     }
   } catch (e) { cont.innerHTML = `<div class="u-vacio">No se pudo cargar: ${esc(e.message)}</div>`; return; }
+  try { CU.req = await rpc('cuadrilla_requerimientos', prm); } catch (e) { CU.req = []; }   // requerimientos asignados / ejecutados por cada cuadrilla
   const sel = $('#cuSel'), previo = sel.value;
   const opCuad = (c) => `<option value="${esc(c.id)}">${esc(c.nombre)}</option>`;
   const cts = cuGrupos(), pre = cuModoM() ? 'm' : 'c', clave = cuModoM() ? 'mantenedores' : 'contratos';
@@ -3395,6 +3396,48 @@ async function cargarCuadrillas() {
     + (cts.length ? (sinGrupo.length ? `<optgroup label="${pre === 'm' ? 'Sin mantenedor' : 'Sin contrato'}">${sinGrupo.map(opCuad).join('')}</optgroup>` : '') : CU.datos.cuadrillas.map(opCuad).join(''));
   if ([...sel.options].some((o) => o.value === previo)) sel.value = previo;
   pintarCuadrillas();
+}
+// Requerimientos de una cuadrilla: asignados (por atender) y ejecutados dentro del turno
+function cuReqDe(id) {
+  const rqs = (CU.req || []).filter((q) => q.camion_id === id);
+  return {
+    por: rqs.filter((q) => q.estado === 'asignado' && !q.ejecutado_en).sort((p, q) => new Date(p.asignado_en) - new Date(q.asignado_en)),
+    eje: rqs.filter((q) => q.ejecutado_en).sort((p, q) => new Date(q.ejecutado_en) - new Date(p.ejecutado_en)),
+  };
+}
+function cuAbrirReqs(id) {
+  const { por, eje } = cuReqDe(id), cu = (CU.datos.cuadrillas.find((c) => c.id === id) || {}).nombre || 'Cuadrilla';
+  const fila = (q, izq, etq, col) => `<button class="cu-fila" data-r="${esc(q.req_id)}"><b>${esc(izq)}</b> · ${esc(q.codigo)}${q.urgente ? ' · 🔴 URGENTE' : ''} · ${esc(q.tipo_label)}<div class="s">${esc(q.ubicacion || '—')}</div><div class="s" style="color:${col};font-weight:600">${etq}</div></button>`;
+  const h = abrirHoja(`<div class="rq-wrap" style="--pri:#6d3fc8;"><button type="button" class="cu-rqbtn" data-mapa="1"><span>🗺 Requerimientos</span><small>Ver en el mapa ›</small></button><div class="s" style="margin:0 0 8px;color:var(--tinta-2)">${esc(cu)} · toca uno para verlo y gestionarlo</div>
+    <div class="cu-sec" style="color:#6d3fc8">Asignados (${por.length})</div>${por.length ? por.map((q) => fila(q, 'Asignado ' + cuHora(q.asignado_en), '● Por atender', '#6d3fc8')).join('') : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">No tiene requerimientos asignados.</div>'}
+    <div class="cu-sec" style="color:#b88a14">Ejecutados en el turno (${eje.length})</div>${eje.length ? eje.map((q) => fila(q, cuHora(q.ejecutado_en), '✔ Ejecutado', '#b88a14')).join('') : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">Aún no ha ejecutado ninguno.</div>'}</div>`);
+  h.querySelectorAll('[data-r]').forEach((b) => b.addEventListener('click', () => rqAbrirDetalle(b.dataset.r)));
+  const bm = h.querySelector('[data-mapa]');
+  if (bm) bm.addEventListener('click', () => {
+    if (!por.length) { toast('Esta cuadrilla no tiene requerimientos asignados.', 'ok'); return; }
+    RQM.solo = { ids: por.map((q) => q.req_id), nombre: cu };
+    cerrarHoja(); cerrarCuadrillas(); detenerSeguir(); S.sinAutoSeguir = true; rqEntrarMapa();
+  });
+}
+// Detalle de una tarjeta de la cuadrilla (reparadas, por atender, pendientes...): lista de fallas que se pueden abrir
+function cuAbrirDetalle(k) {
+  const { c, r } = CU.ult || {}; if (!r) return;
+  const hecha = (i) => i.reparada || i.pendiente, orden = (p, q) => (q.reparada ? q.rep : new Date(q.fecha_pendiente)) - (p.reparada ? p.rep : new Date(p.fecha_pendiente));
+  const T = {
+    inicio: ['Inició con', r.items.filter((i) => i.inicio)], total: ['Total del turno', r.items],
+    atenciones: ['Atenciones', r.items.filter(hecha).sort(orden)], reparadas: ['Reparadas', r.items.filter((i) => i.reparada).sort(orden)],
+    pendientes: ['Dejó pendientes', r.items.filter((i) => i.pendiente && !i.reparada).sort(orden)], sin: ['Sin atender', r.items.filter((i) => !hecha(i)).sort((p, q) => p.a - q.a)],
+    aportes: ['Aportes', r.aps.slice().sort((p, q) => new Date(q.reparada_en) - new Date(p.reparada_en))],
+  };
+  const [titulo, lista] = T[k] || ['', []];
+  const fila = (i) => {
+    const izq = k === 'aportes' ? cuHora(i.reparada_en) : hecha(i) ? cuHora(i.reparada ? i.reparada_en : i.fecha_pendiente) : (i.inicio ? (i.inicioPend ? 'Antes del turno (ya pendiente)' : 'Antes del turno') : 'Asignada ' + cuHora(i.asignado_en));
+    const etq = k === 'aportes' ? '🛠 Aporte · ' + (i.maestro || 'maestro') : i.reparada ? '✔ Reparada' : i.pendiente ? '● Pendiente' : '● Sin atender';
+    const col = k === 'aportes' ? '#6b4fa0' : i.reparada ? CU_COL.reparada : i.pendiente ? CU_COL.pendiente : CU_COL.sin;
+    return `<button class="cu-fila" data-f="${esc(i.falla_id)}"><b>${esc(izq)}</b> · OS ${esc(i.ot || '—')} · ${esc(i.tipo_falla || '')}<div class="s">${esc(i.direccion || '—')}</div><div class="s" style="color:${col};font-weight:600">${etq}</div></button>`;
+  };
+  const h = abrirHoja(`<div class="rq-wrap"><h2 style="margin:0 0 2px">${esc(titulo)} (${lista.length})</h2><div class="s" style="margin:0 0 8px;color:var(--tinta-2)">${esc(c.nombre)} · toca una falla para abrirla</div>${lista.length ? lista.map(fila).join('') : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">No hay fallas en esta categoría.</div>'}</div>`);
+  h.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { cerrarHoja(); cerrarCuadrillas(); abrirFallaPorId(b.dataset.f); }));
 }
 function pintarCuadrillas() {
   if (!CU.datos) return;
@@ -3428,24 +3471,19 @@ function pintarCuadrillas() {
   } else {
     const x = todasLas.find((y) => y.c.id === selId); if (!x) { cont.innerHTML = ''; return; }
     const { c, r } = x;
-    html += `<h3 style="margin:0 0 8px">${esc(c.nombre)}</h3><div class="cu-kpis">${kpi('Inició con', `${r.inicio}`, '#2563a8')}${kpi('Total', r.total, '#9aa5b1')}${kpi('Atenciones', r.reparadas + r.pendientes, CU_COL.reparada)}${kpi('Reparadas', r.reparadas, CU_COL.reparada)}${kpi('Dejó pendientes', r.pendientes, CU_COL.pendiente)}${kpi('Sin atender', r.sin, CU_COL.sin)}${kpi('Aportes', r.aportes || 0, '#6b4fa0')}${kpi('Cumplimiento', r.cumplimiento == null ? '—' : r.cumplimiento + '%', '#7a5ca8')}</div>
-      <div class="s" style="margin:-4px 2px 8px;font-size:12.5px;color:var(--tinta-2)">Tiempo medio entre reparaciones: <b>${cuDur(r.medio)}</b></div>`;
-    if (r.aportes) html += `<div class="cu-sec" style="color:#6b4fa0">Aportes del turno (${r.aportes}) · extra al trabajo normal</div>` + r.aps.slice().sort((p, q) => new Date(q.reparada_en) - new Date(p.reparada_en)).map((i) =>
-      `<button class="cu-fila" data-f="${esc(i.falla_id)}"><b>${esc(cuHora(i.reparada_en))}</b> · OS ${esc(i.ot || '—')} · ${esc(i.tipo_falla || '')}<div class="s">${esc(i.direccion || '—')}</div><div class="s" style="color:#6b4fa0;font-weight:600">🛠 Aporte · ${esc(i.maestro || 'maestro')}</div></button>`).join('');
-    if (!r.total) html += '<div class="u-vacio">Esta cuadrilla no tuvo fallas en este turno.</div>';
-    else {
-      const hechas = r.items.filter((i) => i.reparada || i.pendiente).sort((p, q) => (q.reparada ? q.rep : new Date(q.fecha_pendiente)) - (p.reparada ? p.rep : new Date(p.fecha_pendiente)));
-      const por = r.items.filter((i) => !i.reparada && !i.pendiente).sort((p, q) => p.a - q.a);
-      const fila = (i, izq, etq, col) => `<button class="cu-fila" data-f="${esc(i.falla_id)}"><b>${esc(izq)}</b> · OS ${esc(i.ot || '—')} · ${esc(i.tipo_falla || '')}<div class="s">${esc(i.direccion || '—')}</div><div class="s" style="color:${col};font-weight:600">${etq}</div></button>`;
-      html += `<div class="cu-sec" style="color:#3a8a5c">Atendidas en el turno (${hechas.length})</div>` + (hechas.length
-        ? hechas.map((i) => fila(i, cuHora(i.reparada ? i.reparada_en : i.fecha_pendiente) + (i.es_aporte ? ' · 🛠 aporte de ' + (i.maestro || 'maestro') : ''), '', CU_COL[i.resultado]).replace('<div class="s" style="color:' + CU_COL[i.resultado] + ';font-weight:600"></div>', `<div class="s" style="color:${CU_COL[i.resultado]};font-weight:600">${i.reparada ? '✔ Reparada' : '● Pendiente'}</div>`)).join('')
-        : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">Aún no ha atendido ninguna.</div>');
-      html += `<div class="cu-sec" style="color:#c1443c">Por atender (${por.length})</div>` + (por.length
-        ? por.map((i) => fila(i, i.inicio ? (i.inicioPend ? 'Antes del turno (ya pendiente)' : 'Antes del turno') : 'Asignada ' + cuHora(i.asignado_en), '● Sin atender', CU_COL.sin)).join('')
-        : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">No le queda nada por atender.</div>');
-    }
+    CU.ult = { c, r };
+    // Cada tarjeta con detalle se toca para ver sus fallas (el detalle ya no se apila debajo)
+    const kt = (k, l, v, col) => kpi(l, v, col).replace('<div class="cu-kpi"', `<div class="cu-kpi cu-tap" data-k="${k}"`).replace(/<\/div>$/, '<span class="cu-chev">›</span></div>');
+    const rd = cuReqDe(selId);
+    const rqCard = (l, v, col) => `<div class="cu-kpi cu-tap" data-rq="1" style="border-top-color:${col}"><div class="l">${l}</div><div class="v">${v}</div><span class="cu-chev">›</span></div>`;
+    html += `<h3 style="margin:0 0 8px">${esc(c.nombre)}</h3><div class="cu-kpis">${kt('inicio', 'Inició con', `${r.inicio}`, '#2563a8')}${kt('total', 'Total', r.total, '#9aa5b1')}${kt('atenciones', 'Atenciones', r.reparadas + r.pendientes, CU_COL.reparada)}${kt('reparadas', 'Reparadas', r.reparadas, CU_COL.reparada)}${kt('pendientes', 'Dejó pendientes', r.pendientes, CU_COL.pendiente)}${kt('sin', 'Sin atender', r.sin, CU_COL.sin)}${kt('aportes', 'Aportes', r.aportes || 0, '#6b4fa0')}${kpi('Cumplimiento', r.cumplimiento == null ? '—' : r.cumplimiento + '%', '#7a5ca8')}</div>
+      <div class="s" style="margin:-4px 2px 8px;font-size:12.5px;color:var(--tinta-2)">Tiempo medio entre reparaciones: <b>${cuDur(r.medio)}</b></div>
+      <div class="cu-sec cu-rqh" style="color:#6d3fc8">Requerimientos</div><div class="cu-kpis">${rqCard('Requerimientos asignados', rd.por.length, '#6d3fc8')}${rqCard('Requerimientos ejecutados', rd.eje.length, '#d9aa2b')}</div>`;
+    if (!r.total && !r.aportes) html += '<div class="u-vacio">Esta cuadrilla no tuvo fallas en este turno.</div>';
   }
   cont.innerHTML = html;
+  cont.querySelectorAll('[data-rq]').forEach((b) => b.addEventListener('click', () => cuAbrirReqs(selId)));
+  cont.querySelectorAll('[data-k]').forEach((b) => b.addEventListener('click', () => cuAbrirDetalle(b.dataset.k)));
   cont.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => { $('#cuSel').value = b.dataset.c; pintarCuadrillas(); cont.scrollTop = 0; }));
   cont.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { cerrarCuadrillas(); abrirFallaPorId(b.dataset.f); }));
 }
@@ -4708,7 +4746,7 @@ function rqDibujarMapa(centrar) {
   if (!S.reqMapa || !map) return;
   if (RQM.capa) { map.removeLayer(RQM.capa); RQM.capa = null; }
   const g = L.layerGroup(); const pts = [];
-  RQ.lista.filter((r) => r.lat != null && r.lng != null && rqAbierto(r)).forEach((r) => {
+  RQ.lista.filter((r) => r.lat != null && r.lng != null && rqAbierto(r) && (!RQM.solo || RQM.solo.ids.includes(r.id))).forEach((r) => {
     L.marker([r.lat, r.lng], { icon: rqIcono(r), zIndexOffset: r.urgente ? 3000 : 2000, keyboard: false }).on('click', (e) => { L.DomEvent.stopPropagation(e); rqAbrirDetalle(r.id); }).addTo(g);
     pts.push([r.lat, r.lng]);
   });
@@ -4719,7 +4757,7 @@ function rqDibujarMapa(centrar) {
 function pintarChipReq() {
   const c = $('#chipReq'); if (!c) return;
   c.hidden = !S.reqMapa;
-  c.textContent = S.reqMapa ? `📋 ${RQM.n} activo${RQM.n === 1 ? '' : 's'}${rqCrea() ? ' · toca un punto para ingresar' : ''} · ✕ salir` : '';
+  c.textContent = S.reqMapa ? `📋 ${RQM.solo ? RQM.solo.nombre + ': ' + RQM.n + ' asignado' + (RQM.n === 1 ? '' : 's') : RQM.n + ' activo' + (RQM.n === 1 ? '' : 's')}${rqCrea() && !RQM.solo ? ' · toca un punto para ingresar' : ''} · ✕ salir` : '';
 }
 async function rqEntrarMapa(sinCentrar) {
   S.reqMapa = true; RQ.filtro = 'abiertos'; RQ.texto = ''; $('#rqBuscar').value = '';
@@ -4729,7 +4767,7 @@ async function rqEntrarMapa(sinCentrar) {
 }
 function rqSalirMapa() {
   S.reqMapa = false; if (RQM.capa && map) { map.removeLayer(RQM.capa); RQM.capa = null; }
-  RQM.n = 0; pintarChipReq();
+  RQM.n = 0; RQM.solo = null; pintarChipReq();
 }
 // Avisos (push) con ?req=<id>: abren el requerimiento
 function rqIdDeUrl() {
