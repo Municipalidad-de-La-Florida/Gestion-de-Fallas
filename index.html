@@ -9,11 +9,19 @@
 <link rel="apple-touch-icon" href="icono-180.png">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script>
+/* Librerías de exportación (PDF, Excel, captura): ~2 MB que ya no frenan la carga de la página. Se descargan en segundo plano
+   cuando la página terminó de abrir y en orden (el complemento de tablas necesita jsPDF primero). */
+window.addEventListener('load', function(){
+  var base = 'https://cdnjs.cloudflare.com/ajax/libs/', libs = ['jspdf/2.5.1/jspdf.umd.min.js', 'jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js', 'html2canvas/1.4.1/html2canvas.min.js', 'xlsx/0.18.5/xlsx.full.min.js', 'exceljs/4.4.0/exceljs.min.js'];
+  (function sig(i){
+    if(i >= libs.length) return;
+    var s = document.createElement('script'); s.src = base + libs[i];
+    s.onload = s.onerror = function(){ sig(i + 1); };
+    document.head.appendChild(s);
+  })(0);
+});
+</script>
 <style>
   :root{
     --bg:#f4f6f4; --panel:#ffffff; --ink:#1c2b23; --ink-soft:#55665c; --line:#dbe2dc;
@@ -1825,7 +1833,6 @@ async function cargarFunciones(){
 // Contratista2 se muestra como "contratista" en el recuadro de rol del perfil
 function rolVisible(r){ return (r === 'contratista2' || r === 'contratista3') ? 'contratista' : r; }
 // Contratista2 y Contratista3 comparten las mismas capacidades base
-const esContratista2o3 = r => r === 'contratista2' || r === 'contratista3';
 
 function actualizarVisibilidadPorRol(){
   const rol = rolEfectivo();
@@ -4759,10 +4766,6 @@ function htmlSelectContrato(valor, siempre){
   return `<div class="sel-contrato" ${siempre ? 'data-siempre="1"' : 'hidden'} style="margin-top:6px; font-size:12.5px;">Contrato <select class="sel-contrato-sel" style="padding:4px 6px; border:1.5px solid var(--line); border-radius:6px; font-size:12.5px;">${ops}</select></div>`;
 }
 function leerContrato(panel){ const sel = panel.querySelector('.sel-contrato-sel'); return sel && sel.value ? sel.value : null; }
-function htmlBotonMasivo(on){
-  return `<button type="button" class="btn-masivo${on ? ' on' : ''}" title="Marcar como falla masiva" aria-pressed="${on ? 'true' : 'false'}" onclick="this.classList.toggle('on'); this.setAttribute('aria-pressed', this.classList.contains('on')); var sc = this.parentElement.querySelector('.sel-contrato'); if(sc && !sc.dataset.siempre) sc.hidden = !this.classList.contains('on')">Masivo</button>`;
-}
-function leerMasivo(panel){ return !!panel.querySelector('.btn-masivo.on'); }
 
 // extra (opcional): {fechaISO, notificadorId} elegidos en la ventana de "Agregar falla" (usuarios con el permiso)
 async function crearFallaPunto(puntoGid, tipoFalla, cardinalidad, descripcionOtro, fechaCustom, ordenExterna, extra, masivo, contratoId, mantDatos, fotoReporte){
@@ -4912,8 +4915,6 @@ function contratoActivo(){ return veFiltroContrato() ? filtroContrato : 'todos';
 function mantenedorActivo(){ return veFiltroMantenedor() ? filtroMantenedor : 'todos'; }
 const filtroCodigos = new Set();  // códigos de falla marcados (F01, F04…); vacío = todos
 function asignacionActiva(){ return veFiltroAsignacion() ? filtroAsignacion : 'todas'; }
-function filtroSinAsignarActivo(){ return asignacionActiva() === 'sin'; }
-function soloMasivoActivo(){ return filtroSubcontrato === 'masivo'; }
 // ¿Una falla de la lista pasa los filtros de Asignación y Subcontrato?
 // «omitir» deja fuera un grupo ('asig' | 'tag' | 'con' | 'mant' | 'cod'): sirve para contar cuántas fallas daría cada opción de ese grupo
 // TAG: 'masivo' | 'encorte' (circuito cortado por suministro) | 'normal' (sin ningún TAG) | 'todas'
@@ -8929,7 +8930,6 @@ async function generarPdfAnalisis(soloResumen, opciones){
     const gris = [85, 102, 92];
     const num = (x) => (x === null || x === undefined) ? '-' : String(x).replace('.', ',');
     const dias = (x) => fmtHoras(x, '-');
-    const pdfProm = (v, n) => fmtProm(v, n, '-');
     const ini = d.rango ? d.rango.inicio : '', fin = d.rango ? d.rango.fin : '';
     const fmtF = (s) => String(s).slice(8, 10) + '-' + String(s).slice(5, 7) + '-' + String(s).slice(0, 4);
     const perEt = etiquetaPeriodoPdf(ini, fin);
@@ -8953,15 +8953,12 @@ async function generarPdfAnalisis(soloResumen, opciones){
       return r;
     };
     if(!primero) pdf.addPage();
-    const etiquetaContrato = (yy) => {};
     // ---------- HOJA 1: mapa del período + indicadores ----------
     const plural = (n, s, p) => `${n} ${n === 1 ? s : p}`;
     const rr = d.resumen || {};
     const codigos = d.por_codigo || [];
     const cobP = d.cobertura || {};
     const diasP = cobP.por_dia || [];
-    const habilesSinP = diasP.filter(x => x.dow >= 1 && x.dow <= 5 && !x.inspecciones).length;
-    const nInspecciones = (cobP.por_ito || []).reduce((s, i) => s + (i.inspecciones || 0), 0);
     const nDiasRango = Math.round((new Date(fin + 'T00:00:00Z') - new Date(ini + 'T00:00:00Z')) / 86400000) + 1;
     const pctRep = rr.fallas ? Math.round((rr.reparadas || 0) / rr.fallas * 100) : 0;
     const LIMA = [123, 211, 0];
@@ -10178,52 +10175,6 @@ async function generarPdfAnalisis(soloResumen, opciones){
 
 // Cacheada por rango de fechas, misma razón que la capa azul de período.
 const cacheEstadisticasPorRango = {};
-function htmlEstadisticas(d, sid){
-    const total = d.total_fallas || 0;
-    const pct = (n) => total ? Math.round((n/total)*100) : 0;
-    const entradasCodigo = Object.entries(d.por_codigo || {}).sort((a,b) => b[1]-a[1]);
-
-    return `
-      <div class="stat-grid-modal">
-        <div class="stat-box-modal">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-            <div>
-              <div class="num">${total}</div>
-              <div class="lbl">Fallas reportadas</div>
-            </div>
-            <div style="display:flex; flex-direction:column; gap:4px;">
-              <div style="background:#fff; border-radius:8px; padding:5px 9px; display:flex; justify-content:space-between; gap:8px; font-size:11px; white-space:nowrap;">
-                <span>Individual</span><span><b>${d.fallas_punto_individual||0}</b> (${pct(d.fallas_punto_individual)}%)</span>
-              </div>
-              <div style="background:#fff; border-radius:8px; padding:5px 9px; display:flex; justify-content:space-between; gap:8px; font-size:11px; white-space:nowrap;">
-                <span>Circuito</span><span><b>${d.fallas_circuito||0}</b> (${pct(d.fallas_circuito)}%)</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="stat-box-modal"><div class="num">${d.puntos_afectados_total||0}</div><div class="lbl">Puntos lumínicos afectados (${((d.puntos_afectados_total||0)/TOTAL_PUNTOS_COMUNA*100).toFixed(2)}% de la comuna)</div></div>
-      </div>
-
-      <h3>Fallas por Tipo</h3>
-      <div id="graficoCircularFallas${sid}"></div>
-
-      <h3>Reparaciones</h3>
-      <div class="stat-grid-modal">
-        <div class="stat-box-modal"><div class="num">${total}</div><div class="lbl">Fallas Reportadas</div></div>
-        <div class="stat-box-modal"><div class="num">${d.reparadas||0}</div><div class="lbl">Fallas Reparadas (${pct(d.reparadas)}%)</div></div>
-      </div>
-
-      <h3>Estado actual (de lo reportado en el período)</h3>
-      <div class="stat-row"><span>Reparadas</span><span>${d.reparadas||0} (${pct(d.reparadas)}%)</span></div>
-      <div class="stat-row"><span>Pendientes</span><span>${d.pendientes||0} (${pct(d.pendientes)}%)</span></div>
-      <div class="stat-row"><span>Más de una vez</span><span>${d.reiteradas||0} (${pct(d.reiteradas)}%)</span></div>
-      <div class="stat-row"><span>Reportadas (activas)</span><span>${d.reportadas_activas||0} (${pct(d.reportadas_activas)}%)</span></div>
-      <h3>Puntos lumínicos afectados</h3>
-      <div class="stat-row"><span>Por falla individual</span><span>${d.puntos_afectados_individual||0}</span></div>
-      <div class="stat-row"><span>Por cascada de circuito</span><span>${d.puntos_afectados_cascada||0}</span></div>
-    `;
-
-}
 
 // ---------- Resumen escueto (4 cifras) para los tres modos del panel de estadísticas ----------
 function kpiHtml(num, etiqueta, chico, ok){
@@ -10577,45 +10528,6 @@ async function generarPdfEstadisticas(){
 }
 
 
-function dibujarGraficoCircular(entradas, total, idCont){
-  const cont = document.getElementById(idCont || 'graficoCircularFallas');
-  if(!cont) return;
-  if(!total || !entradas.length){
-    cont.innerHTML = '<div class="hint" style="margin-bottom:10px;">Sin datos para graficar.</div>';
-    return;
-  }
-  const cx = 60, cy = 60, r = 55;
-  let anguloActual = -90; // empezar arriba
-  const slices = entradas.map(([cod, cnt], i) => {
-    const porcentaje = cnt / total;
-    const anguloInicio = anguloActual;
-    const anguloFin = anguloActual + porcentaje * 360;
-    anguloActual = anguloFin;
-    const color = COLORES_GRAFICO[i % COLORES_GRAFICO.length];
-    const [x1, y1] = puntoEnCirculo(cx, cy, r, anguloInicio);
-    const [x2, y2] = puntoEnCirculo(cx, cy, r, anguloFin);
-    const granArco = (anguloFin - anguloInicio) > 180 ? 1 : 0;
-    const path = `M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${granArco} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z`;
-    return {cod, cnt, color, path};
-  });
-
-  const svg = `
-    <svg width="130" height="130" viewBox="0 0 120 120" style="flex-shrink:0;">
-      ${slices.map(s => `<path d="${s.path}" fill="${s.color}" stroke="#fff" stroke-width="1.5"><title>${s.cod}: ${s.cnt}</title></path>`).join('')}
-    </svg>
-  `;
-  const leyenda = slices.map(s => `
-    <div style="display:flex; align-items:center; gap:6px; font-size:12px; margin-bottom:5px;">
-      <span style="width:10px; height:10px; border-radius:3px; background:${s.color}; flex-shrink:0;"></span>
-      <span>${s.cod}: <b>${s.cnt}</b> (${Math.round(s.cnt/total*100)}%)</span>
-    </div>
-  `).join('');
-
-  cont.innerHTML = `<div style="display:flex; gap:16px; align-items:center; justify-content:center; margin-bottom:10px;">
-    ${svg}
-    <div>${leyenda}</div>
-  </div>`;
-}
 
 function puntoEnCirculo(cx, cy, r, anguloGrados){
   const rad = (anguloGrados * Math.PI) / 180;
@@ -10737,14 +10649,6 @@ function cuadMesEnlazar(cont){
   cont.querySelectorAll('[data-mes-m]').forEach(el => el.onclick = () => { const n = el.dataset.mesM; if(CUAD_MES.abiertos.has(n)) CUAD_MES.abiertos.delete(n); else CUAD_MES.abiertos.add(n); cuadPintar(); });
   cont.querySelectorAll('[data-mes-f]').forEach(tr => tr.onclick = ev => { ev.stopPropagation(); enfocarFalla(tr.dataset.mesF, true); });
   if(inp && !CUAD_MES.filas && !CUAD_MES.cargando && !CUAD_MES.error) cuadMesCargar();
-}
-function cuadAportesMaestros(apItems){
-  if(!apItems.length) return '';
-  const pm = {};
-  apItems.forEach(i => { const k = i.maestro || 'Sin maestro'; const m = pm[k] || (pm[k] = {n: 0, c: {}}); m.n++; m.c[i.cuad] = (m.c[i.cuad] || 0) + 1; });
-  const filas = Object.entries(pm).sort((p, q) => q[1].n - p[1].n).map(([n, m]) =>
-    `<div style="display:grid; grid-template-columns:2fr .8fr 3fr; padding:10px 16px; border-bottom:1px solid #eef1ef; align-items:center;"><b>${escHtml(n)}</b><div style="font-weight:700; color:#6b4fa0;">${m.n}</div><div style="font-size:12px; color:var(--ink-soft);">${Object.entries(m.c).map(([c, k]) => escHtml(c) + ' (' + k + ')').join(' · ')}</div></div>`).join('');
-  return `<div style="margin-top:16px; background:#fff; border-radius:14px; box-shadow:0 1px 4px #0001; overflow:hidden;"><div style="display:grid; grid-template-columns:2fr .8fr 3fr; padding:10px 16px; background:#6b4fa0; color:#fff; font-size:11.5px; font-weight:600; letter-spacing:.3px;"><div>APORTES POR MAESTRO</div><div>TOTAL</div><div>CUADRILLA</div></div>${filas}</div>`;
 }
 function cuadKpi(l, v, color){ return `<div class="cu-kpi" style="border-top-color:${color};"><div class="l">${l}</div><div class="v">${v}</div></div>`; }
 // Atenciones del turno = reparadas + pendientes que dejó la cuadrilla. La píldora usa el mismo relleno que la barra (verde reparadas, ámbar pendientes).
