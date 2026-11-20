@@ -10,7 +10,7 @@ begin
   return coalesce((
     select jsonb_agg(jsonb_build_object(
       'req_id', x.id, 'codigo', public._req_codigo(x.numero), 'tipo_label', public._req_tipo_label(x.tipo),
-      'ubicacion', public._req_ubic(x), 'urgente', x.urgente, 'estado', x.estado, 'camion_id', x.camion_id,
+      'ubicacion', public._req_ubic((select q from public.requerimientos q where q.id = x.id)), 'urgente', x.urgente, 'estado', x.estado, 'camion_id', x.camion_id,
       'asignado_en', x.asignado_en, 'ejecutado_en', x.ejecutado_en) order by coalesce(x.ejecutado_en, x.asignado_en))
     from (
       select r.*, r.asignado_a as camion_id,
