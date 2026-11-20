@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.26';
+const VERSION_APP = '2.12.27';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1265,12 +1265,6 @@ function fijarFiltroOtros(k, v) {
   FO[k] = v;
   actualizarFiltrosOtrosUI(); dibujarFallas(); if (S.vista === 'lista') renderLista();
 }
-const htmlBotonMasivo = () => '<button type="button" class="btn-masivo" id="fMasivo" aria-pressed="false">Masivo</button>';
-function activarBotonMasivo(h) {
-  const b = $('#fMasivo', h);
-  b.addEventListener('click', () => { b.classList.toggle('on'); b.setAttribute('aria-pressed', b.classList.contains('on') ? 'true' : 'false'); });
-}
-const leerMasivo = (h) => !!$('#fMasivo.on', h);
 
 // Parpadeo de los puntos reiterados (puntos y circuitos): se alterna la opacidad por JS cada 0,55 s, sin depender de animaciones CSS
 let _parpadeoTimer = null, _parpadeoOn = true;
@@ -1605,12 +1599,17 @@ async function cargarRepBusq() {
 }
 
 async function cargarFallas(manual) {
-  cargarSuministro(); cargarCortes();
+  // Suministro y cortes cambian poco: no se piden en cada ciclo de 60 s sino cada 3 min (o al actualizar a mano)
+  if (manual || !S.ultCatalogos || Date.now() - S.ultCatalogos > 180000) { S.ultCatalogos = Date.now(); cargarSuministro(); cargarCortes(); }
   if (!Object.keys(CONTR).length) cargarContratosEtiqueta();
   const btn = $('#btnActualizar');
   if (manual) btn.classList.add('girando');
   try {
     const geo = await rpc('fallas_geojson', {});
+    // Si nada cambió desde la carga anterior no se repinta todo el mapa (salvo al actualizar a mano)
+    const firma = JSON.stringify((geo && geo.features) || []);
+    if (!manual && S.firmaFallas === firma && S.features && S.features.length) return;
+    S.firmaFallas = firma;
     S.features = ((geo && geo.features) || []).map((f) => { f._c = centroGeom(f.geometry); return f; });
     S.activas = calcActivas();
     actualizarFiltrosOtrosUI();
@@ -2027,10 +2026,6 @@ async function abrirOperativos() {
     })));
   };
   await pintar();
-}
-async function abrirMaestros() {
-  const h = abrirHoja('<h2>Maestros</h2><div class="hint">Cargando…</div>');
-  await montarMaestros(h);
 }
 // Lista de maestros dentro de un contenedor (hoja inferior o pestaña «Maestros» de Usuarios y permisos)
 async function montarMaestros(h) {
@@ -3280,7 +3275,6 @@ function cerrarUsuarios(desdePop) {
   usrHist = false;
 }
 window._usrPop = () => { if (usrVolviendo) { usrVolviendo = false; return; } if (!$('#pantallaUsuarios').hidden) cerrarUsuarios(true); };
-const formUsuarios = () => abrirUsuarios();
 
 /* ------------------ Compartir ubicación (solo camiones, solo con la app abierta) ------------------ */
 const ubicActiva = () => true;   // los camiones comparten siempre mientras la app está abierta (el teléfono pide el permiso de GPS)
@@ -3319,14 +3313,6 @@ function cuRango() {
 const cuHora = (iso) => (iso ? new Date(iso).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—');
 function cuDur(ms) { if (ms == null) return '—'; const min = Math.round(ms / 60000); return min >= 60 ? `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min` : `${min} min`; }
 // Atenciones del turno = reparadas + pendientes que dejó la cuadrilla. La píldora usa el mismo relleno que la barra.
-function cuPildora(r) {
-  const a = r.reparadas + r.pendientes, txt = a + (a === 1 ? ' atención' : ' atenciones');
-  const nombres = [...new Set((r.aps || []).map((x) => x.maestro).filter(Boolean))].join(', ');
-  const ap = r.aportes ? `<div class="cu-pill cu-ap">🛠 + ${r.aportes} aporte${r.aportes > 1 ? 's' : ''}${nombres ? ' · ' + esc(nombres) : ''}</div>` : '';
-  const pr = a ? 100 * r.reparadas / a : 0;
-  const base = a ? `<div class="cu-pill" style="background:linear-gradient(90deg,${CU_COL.reparada} ${pr}%,${CU_COL.pendiente} ${pr}%)">${txt}</div>` : `<div class="cu-pill cero">${txt}</div>`;
-  return `<div class="cu-pills">${base}${ap}</div>`;
-}
 function cuCalcular(todasFilas, desde, hasta) {
   // Los aportes son un extra al trabajo normal: no entran en atenciones, cumplimiento ni tiempos
   const aps = todasFilas.filter((r) => r.es_aporte && r.reparada_en && new Date(r.reparada_en) >= desde && new Date(r.reparada_en) < hasta);
@@ -3453,7 +3439,10 @@ function pintarCuadrillas() {
   const cont = $('#cuCuerpo'), { desde, hasta } = cuRango(), selId = $('#cuSel').value;
   const ctSel = /^[cm]:/.test(selId) ? selId.slice(2) : null, modoM = cuModoM();
   const ctNombre = ctSel ? ((cuGrupos().find((x) => x.id === ctSel)) || {}).nombre : null;
-  const todasLas = CU.datos.cuadrillas.map((c) => ({ c, r: cuCalcular(CU.datos.filas.filter((f) => f.camion_id === c.id && !(modoM && ctSel && f.mantenedor_id !== ctSel)), desde, hasta) }));
+  // Las filas se agrupan una vez por cuadrilla; en la vista de una sola cuadrilla solo se calcula esa
+  const filasPor = new Map(); CU.datos.filas.forEach((f) => { const a = filasPor.get(f.camion_id); if (a) a.push(f); else filasPor.set(f.camion_id, [f]); });
+  const soloUna = selId && !ctSel;
+  const todasLas = CU.datos.cuadrillas.filter((c) => !soloUna || c.id === selId).map((c) => ({ c, r: cuCalcular((filasPor.get(c.id) || []).filter((f) => !(modoM && ctSel && f.mantenedor_id !== ctSel)), desde, hasta) }));
   const todas = ctSel ? todasLas.filter((x) => ((modoM ? x.c.mantenedores : x.c.contratos) || []).includes(ctSel)) : todasLas;
   const kpi = (l, v, col, sub) => `<div class="cu-kpi" style="border-top-color:${col}"><div class="l">${l}</div><div class="v">${v}</div>${sub ? `<div class="l" style="font-size:10.5px">${sub}</div>` : ''}</div>`;
   let html = '';
@@ -4852,11 +4841,23 @@ async function avisoPendienteSW(consumir) {
     return d && d.id && /^[\w-]{1,64}$/.test(d.id) && Date.now() - (d.t || 0) < 300000 ? d.id : null;
   } catch (e) { return null; }
 }
+// Igual que la falla anotada, pero para el aviso de un requerimiento (el service worker lo guarda como 'pendiente_req')
+async function reqPendienteSW() {
+  try {
+    if (!window.caches) return null;
+    const c = await caches.open('fm-aviso'), r = await c.match('pendiente_req');
+    if (!r) return null;
+    await c.delete('pendiente_req');
+    const d = await r.json();
+    return d && d.id && /^[\w-]{1,64}$/.test(d.id) && Date.now() - (d.t || 0) < 300000 ? d.id : null;
+  } catch (e) { return null; }
+}
 async function recogerAvisoPendiente() {
   if (!S.perfil) return;
   const id = await avisoPendienteSW(true);
-  if (!id) return;
-  S.fallaPendiente = id; abrirPendienteDeAviso();
+  if (id) { S.fallaPendiente = id; abrirPendienteDeAviso(); return; }
+  const rid = await reqPendienteSW();
+  if (rid && typeof rqAbrirDeAviso === 'function') rqAbrirDeAviso(rid);
 }
 function fallaDeUrl() {
   try {
@@ -5183,8 +5184,8 @@ async function entrarApp() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) repararPantalla(); if (!document.hidden && S.perfil) { cargarFallas(); revisarVersion(); setTimeout(recogerAvisoPendiente, 400); } });
 window.addEventListener('focus', () => { repararPantalla(); setTimeout(recogerAvisoPendiente, 400); });
 window.addEventListener('pageshow', () => { repararPantalla(); setTimeout(recogerAvisoPendiente, 400); });
-// Con la app ya abierta, ni el foco ni el mensaje del service worker llegan siempre (Android): se revisa el aviso anotado cada 1,5 s mientras la app está a la vista
-setInterval(() => { if (!document.hidden && S.perfil) recogerAvisoPendiente(); }, 1500);
+// Con la app ya abierta, ni el foco ni el mensaje del service worker llegan siempre (Android): se revisa el aviso anotado cada 3 s mientras la app está a la vista
+setInterval(() => { if (!document.hidden && S.perfil) recogerAvisoPendiente(); }, 3000);
 
 (async function iniciar() {
   if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) {
@@ -5203,7 +5204,7 @@ setInterval(() => { if (!document.hidden && S.perfil) recogerAvisoPendiente(); }
     try { navigator.serviceWorker.startMessages && navigator.serviceWorker.startMessages(); } catch (e) { /* */ }
     navigator.serviceWorker.addEventListener('message', (ev) => {
       const rid = ev.data && ev.data.tipo === 'abrir-req' && ev.data.id;
-      if (rid && /^[\w-]{1,64}$/.test(rid)) { S.reqPendiente = rid; if (S.perfil) { const q = S.reqPendiente; S.reqPendiente = null; rqAbrirDeAviso(q); } return; }
+      if (rid && /^[\w-]{1,64}$/.test(rid)) { reqPendienteSW(); S.reqPendiente = rid; if (S.perfil) { const q = S.reqPendiente; S.reqPendiente = null; rqAbrirDeAviso(q); } return; }
       const id = ev.data && ev.data.tipo === 'abrir-falla' && ev.data.id;
       if (!id || !/^[\w-]{1,64}$/.test(id)) return;
       S.fallaPendiente = id;

@@ -2,7 +2,7 @@
 // - Archivos propios de la app: red primero (así las actualizaciones llegan de inmediato) y copia guardada de respaldo.
 // - Leaflet (CDN): copia guardada tras la primera carga.
 // - Supabase y mapas: siempre por red, nunca se guardan (datos siempre al día).
-const VERSION = 'fm-v211';
+const VERSION = 'fm-v212';
 const APP = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'badge-96.png'];
 
 self.addEventListener('install', (e) => {
@@ -37,8 +37,8 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(req, { cache: 'no-cache' })
         .then((res) => {
-          const copia = res.clone();
-          caches.open(VERSION).then((c) => c.put(req, copia));
+          // Solo se guardan respuestas buenas: un 404 o un error no debe pisar la copia que funciona
+          if (res.ok) { const copia = res.clone(); caches.open(VERSION).then((c) => c.put(req, copia)); }
           return res;
         })
         .catch(() => caches.match(req).then((r) => r || caches.match('index.html')))
@@ -50,8 +50,7 @@ self.addEventListener('fetch', (e) => {
   if (url.hostname === 'cdnjs.cloudflare.com') {
     e.respondWith(
       caches.match(req).then((r) => r || fetch(req).then((res) => {
-        const copia = res.clone();
-        caches.open(VERSION).then((c) => c.put(req, copia));
+        if (res.ok) { const copia = res.clone(); caches.open(VERSION).then((c) => c.put(req, copia)); }
         return res;
       }))
     );
@@ -76,6 +75,9 @@ self.addEventListener('notificationclick', (e) => {
     // la app la recoge sola al volver a primer plano.
     if (id) {
       try { const c = await caches.open('fm-aviso'); await c.put('pendiente', new Response(JSON.stringify({ id, t: Date.now() }))); } catch (err) { /* */ }
+    }
+    if (rid) {   // lo mismo para los avisos de requerimientos
+      try { const c = await caches.open('fm-aviso'); await c.put('pendiente_req', new Response(JSON.stringify({ id: rid, t: Date.now() }))); } catch (err) { /* */ }
     }
     const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     const mia = cs.find((c) => c.url.startsWith(self.registration.scope) && 'focus' in c);
