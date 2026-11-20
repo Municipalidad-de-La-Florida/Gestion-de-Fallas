@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.24';
+const VERSION_APP = '2.12.25';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -3304,7 +3304,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
    Misma lógica que la web: por turno, solo cuenta lo que cerró o dejó pendiente un camión. */
 const CU_TURNOS = { '0': [0, 8], '1': [8, 16], '2': [16, 24], d: [0, 24] };
 const CU_COL = { reparada: '#3a8a5c', pendiente: '#d98e2f', sin: '#c1443c' };
-const CU = { datos: null, hist: false, volviendo: false };
+const CU = { datos: null, hist: false, volviendo: false, orden: 'nombre' };
 // Las cuadrillas se agrupan por mantenedor (si el SQL sql/2026-10-rendimiento-mantenedores.sql está ejecutado) o, si no, por contrato
 const cuModoM = () => Array.isArray(CU.datos && CU.datos.mantenedores) && CU.datos.mantenedores.length > 0;
 const cuGrupos = () => (cuModoM() ? CU.datos.mantenedores : CU.datos.contratos) || [];
@@ -3371,7 +3371,14 @@ function cerrarCuadrillas(desdePop) {
   CU.hist = false;
 }
 window._cuPop = () => { if (CU.volviendo) { CU.volviendo = false; return; } if (!$('#pantallaCuad').hidden) cerrarCuadrillas(true); };
+function cuFechaTxt() {
+  const v = $('#cuFecha').value, t = $('#cuFechaTxt'); if (!t) return;
+  if (!v) { t.textContent = 'Fecha'; return; }
+  const [y, m, d] = v.split('-').map(Number), dia = new Date(y, m - 1, d).toLocaleDateString('es-CL', { weekday: 'long' });
+  t.textContent = dia.charAt(0).toUpperCase() + dia.slice(1) + ' ' + String(d).padStart(2, '0') + '/' + String(m).padStart(2, '0') + '/' + y;
+}
 async function cargarCuadrillas() {
+  cuFechaTxt();
   const cont = $('#cuCuerpo');
   if (!$('#cuFecha').value) return;
   cont.innerHTML = '<div class="u-vacio">Cargando…</div>';
@@ -3439,6 +3446,8 @@ function cuAbrirDetalle(k) {
   const h = abrirHoja(`<div class="rq-wrap"><h2 style="margin:0 0 2px">${esc(titulo)} (${lista.length})</h2><div class="s" style="margin:0 0 8px;color:var(--tinta-2)">${esc(c.nombre)} · toca una falla para abrirla</div>${lista.length ? lista.map(fila).join('') : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">No hay fallas en esta categoría.</div>'}</div>`);
   h.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { cerrarHoja(); cerrarCuadrillas(); abrirFallaPorId(b.dataset.f); }));
 }
+const cuBarra = (r, p, s) => { const t = r + p + s || 1; return `<div class="cu-sbar"><i style="width:${100 * r / t}%;background:${CU_COL.reparada}"></i><i style="width:${100 * p / t}%;background:${CU_COL.pendiente}"></i><i style="width:${100 * s / t}%;background:${CU_COL.sin}"></i></div>`; };
+const cuLeyenda = (r, p, s, largo, k) => { const it = (n, c, l, kk) => `<${k ? 'button type="button" data-k="' + kk + '"' : 'span'} style="--c:${c}"><b>${n}</b>${largo ? ' ' + l : ''}</${k ? 'button' : 'span'}>`; return `<div class="cu-lgd">${it(r, CU_COL.reparada, 'reparadas', 'reparadas')}${it(p, CU_COL.pendiente, 'pendientes', 'pendientes')}${it(s, CU_COL.sin, 'sin atender', 'sin')}</div>`; };
 function pintarCuadrillas() {
   if (!CU.datos) return;
   const cont = $('#cuCuerpo'), { desde, hasta } = cuRango(), selId = $('#cuSel').value;
@@ -3455,13 +3464,25 @@ function pintarCuadrillas() {
     const { hay: hayAct, acts } = cuActivasDe(ctSel);
     const aIni = acts.reduce((n, a) => n + a.inicio, 0), aIng = acts.reduce((n, a) => n + a.ingresadas, 0), aTot = aIni + aIng;
     if (cuGrupos().length) html += `<div class="cu-sec" style="margin-top:0">${ctNombre ? (modoM ? 'Mantenedor: ' : 'Contrato: ') + esc(ctNombre) : (modoM ? 'Todos los mantenedores' : 'Todos los contratos')}</div>`;
-    html += `<div class="cu-kpis">${hayAct ? kpi('Fallas activas', aTot, '#1f4d3d', `${aIni} al inicio del turno · ${aIng} ingresadas en el turno`) : ''}${kpi('Asignadas a cuadrillas', G.t, '#9aa5b1', hayAct ? `de ${aTot} activas` : '')}${kpi('Reparadas por camión', G.r, CU_COL.reparada)}${apItems.length ? kpi('Aportes', apItems.length, '#7a5ca8', 'extra al trabajo normal') : ''}${kpi('Cumplimiento de las asignadas', G.t ? Math.round(100 * G.r / G.t) + '%' : '—', '#7a5ca8', G.t ? `${G.r} de ${G.t}` : '')}${kpi('Atendidas por contratista', G.c, '#d98e2f')}</div>`;
+    // Resumen del turno: tarjeta grande con el total, la barra (reparadas / pendientes / sin atender) y cuántas ingresaron en el turno
+    const S = todas.reduce((g, x) => ({ t: g.t + x.r.total, r: g.r + x.r.reparadas, p: g.p + x.r.pendientes, s: g.s + x.r.sin, i: g.i + x.r.items.filter((y) => !y.inicio).length }), { t: 0, r: 0, p: 0, s: 0, i: 0 });
+    const meds = todas.map((x) => x.r.medio).filter((m) => m != null), medG = meds.length ? meds.reduce((a, b) => a + b, 0) / meds.length : null;
+    const idsT = todas.map((x) => x.c.id), rqT = (CU.req || []).filter((q) => idsT.includes(q.camion_id));
+    const rqA = rqT.filter((q) => q.estado === 'asignado' && !q.ejecutado_en).length, rqE = rqT.filter((q) => q.ejecutado_en).length;
+    html += `<div class="cu-big"><div class="l">Fallas totales del turno</div><div class="v">${S.t}<small>${S.i} ${S.i === 1 ? 'ingresó' : 'ingresaron'} en este turno</small></div>${cuBarra(S.r, S.p, S.s)}${cuLeyenda(S.r, S.p, S.s, true)}
+      ${hayAct ? `<div class="cu-nota">Fallas activas: <b>${aTot}</b> · ${aIni} al inicio del turno · ${aIng} ingresadas en el turno</div>` : ''}${G.c ? `<div class="cu-nota">🔧 ${G.c} atendida${G.c > 1 ? 's' : ''} por contratista</div>` : ''}</div>
+      <div class="cu-mini"><div class="cu-kpi" style="border-top-color:#6b4fa0"><div class="l">Aportes</div><div class="v">${apItems.length}</div></div><div class="cu-kpi" style="border-top-color:#2563a8"><div class="l">Tiempo medio</div><div class="v">${cuDur(medG)}</div></div><div class="cu-kpi" style="border-top-color:#7a5ca8"><div class="l">Cumplimiento</div><div class="v">${S.t ? Math.round(100 * S.r / S.t) + '%' : '—'}</div></div></div>
+      <div class="cu-sec" style="color:#6d3fc8">Requerimientos</div><div class="cu-kpis"><div class="cu-kpi" style="border-top-color:#6d3fc8"><div class="l">Asignados</div><div class="v">${rqA}</div></div><div class="cu-kpi" style="border-top-color:#d9aa2b"><div class="l">Ejecutados</div><div class="v">${rqE}</div></div></div>`;
     if (!todas.length) html += `<div class="u-vacio">Este ${modoM ? 'mantenedor' : 'contrato'} aún no tiene cuadrillas.</div>`;
-    html += todas.map(({ c, r }) => { const t = r.total || 1;
-      return `<button class="cu-card" data-c="${esc(c.id)}"><div class="top"><span>${esc(c.nombre)}</span><span style="color:${r.cumplimiento == null ? 'var(--tinta-2)' : (r.cumplimiento >= 60 ? '#1f4d3d' : '#b36b00')}">${r.cumplimiento == null ? '—' : r.cumplimiento + '%'}</span></div>
-        ${(r.total || r.aportes) ? `<div class="cu-centro">${cuPildora(r)}</div><div class="cu-barra"><i style="width:${100 * r.reparadas / t}%;background:${CU_COL.reparada}"></i><i style="width:${100 * r.pendientes / t}%;background:${CU_COL.pendiente}"></i><i style="width:${100 * r.sin / t}%;background:${CU_COL.sin}"></i></div>
-        <div class="cu-leyenda"><span style="color:${CU_COL.reparada}">● ${r.reparadas} reparadas</span><span style="color:#b36b00">● ${r.pendientes} pend.</span><span style="color:${CU_COL.sin}">● ${r.sin} sin atender</span></div>` : '<div class="s" style="margin-top:6px;color:var(--tinta-2)">Sin fallas en este turno</div>'}
-        ${(r.contrRep || r.contrPend) ? `<div class="s" style="margin-top:6px;font-size:12px;color:#8a5200">🔧 ${r.contrRep ? r.contrRep + ' cerrada' + (r.contrRep > 1 ? 's' : '') + ' por contratista' : ''}${r.contrRep && r.contrPend ? ' · ' : ''}${r.contrPend ? r.contrPend + ' pendiente' + (r.contrPend > 1 ? 's' : '') + ' por contratista' : ''}</div>` : ''}</button>`; }).join('') || '<div class="u-vacio">No hay cuadrillas.</div>';
+    const nom = (x, y) => x.c.nombre.localeCompare(y.c.nombre, 'es', { numeric: true });
+    const atraso = (x) => (x.r.total ? x.r.cumplimiento : 999);   // sin trabajos al final
+    const lista = [...todas].sort(CU.orden === 'atraso' ? (x, y) => atraso(x) - atraso(y) || y.r.sin - x.r.sin || nom(x, y) : nom);
+    html += `<div class="cu-sec" style="display:flex;align-items:center">Cuadrillas<button type="button" class="cu-ord" id="cuOrd">Orden: ${CU.orden === 'atraso' ? 'más atrasadas' : 'nombre'} ⇅</button></div><div class="cu-cgrid">` + (lista.map(({ c, r }) => {
+      if (!r.total) return `<button class="cu-cb vac" data-c="${esc(c.id)}"><h4>${esc(c.nombre)}</h4><div class="tt">Sin trabajos</div>${r.aportes ? `<div class="ing">🛠 ${r.aportes} aporte${r.aportes > 1 ? 's' : ''}</div>` : ''}</button>`;
+      const est = r.cumplimiento < 50 ? ['Atrasada', '#c1443c'] : r.cumplimiento < 80 ? ['Atención', '#d98e2f'] : ['Al día', '#3a8a5c'];
+      const rd = cuReqDe(c.id), nIng = r.items.filter((y) => !y.inicio).length;
+      return `<button class="cu-cb" data-c="${esc(c.id)}"><h4><span>${esc(c.nombre)}</span><i style="background:${est[1]}">${est[0]}</i></h4><div class="tt"><b>${r.total}</b> fallas · ${r.cumplimiento}%</div>${cuBarra(r.reparadas, r.pendientes, r.sin)}${cuLeyenda(r.reparadas, r.pendientes, r.sin)}<div class="ing"><b>${nIng}</b> ${nIng === 1 ? 'ingresó' : 'ingresaron'} en el turno</div><div class="rq">📋 ${rd.por.length} req.${rd.por.some((q) => q.urgente) ? ' 🔴' : ''}</div></button>`;
+    }).join('') || '<div class="u-vacio">No hay cuadrillas.</div>') + '</div>';
     if (apItems.length) {
       const pm = {};
       apItems.forEach((i) => { const k = i.maestro || 'Sin maestro'; const m = pm[k] || (pm[k] = { n: 0, c: {} }); m.n++; m.c[i.cuad] = (m.c[i.cuad] || 0) + 1; });
@@ -3476,12 +3497,16 @@ function pintarCuadrillas() {
     const kt = (k, l, v, col) => kpi(l, v, col).replace('<div class="cu-kpi"', `<div class="cu-kpi cu-tap" data-k="${k}"`).replace(/<\/div>$/, '<span class="cu-chev">›</span></div>');
     const rd = cuReqDe(selId);
     const rqCard = (l, v, col) => `<div class="cu-kpi cu-tap" data-rq="1" style="border-top-color:${col}"><div class="l">${l}</div><div class="v">${v}</div><span class="cu-chev">›</span></div>`;
-    html += `<h3 style="margin:0 0 8px">${esc(c.nombre)}</h3><div class="cu-kpis">${kt('inicio', 'Inició con', `${r.inicio}`, '#2563a8')}${kt('total', 'Total', r.total, '#9aa5b1')}${kt('atenciones', 'Atenciones', r.reparadas + r.pendientes, CU_COL.reparada)}${kt('reparadas', 'Reparadas', r.reparadas, CU_COL.reparada)}${kt('pendientes', 'Dejó pendientes', r.pendientes, CU_COL.pendiente)}${kt('sin', 'Sin atender', r.sin, CU_COL.sin)}${kt('aportes', 'Aportes', r.aportes || 0, '#6b4fa0')}${kpi('Cumplimiento', r.cumplimiento == null ? '—' : r.cumplimiento + '%', '#7a5ca8')}</div>
-      <div class="s" style="margin:-4px 2px 8px;font-size:12.5px;color:var(--tinta-2)">Tiempo medio entre reparaciones: <b>${cuDur(r.medio)}</b></div>
+    const est = !r.total ? ['Sin trabajos', '#8a9892'] : r.cumplimiento < 50 ? ['Atrasada', '#c1443c'] : r.cumplimiento < 80 ? ['Atención', '#d98e2f'] : ['Al día', '#3a8a5c'];
+    const nIng = r.items.filter((y) => !y.inicio).length, urg = rd.por.filter((q) => q.urgente).length;
+    html += `<div class="cu-ttl">${esc(c.nombre)}<span style="color:${est[1]}">${est[0]}${urg ? ' · 🔴 ' + urg + ' urgente' + (urg > 1 ? 's' : '') : ''}</span></div>
+      <div class="cu-big"><button type="button" class="cu-bigb" data-k="total"><span class="l">Fallas totales del turno ›</span><span class="v">${r.total}<small>${nIng} ${nIng === 1 ? 'ingresó' : 'ingresaron'} en este turno · inició con ${r.inicio}</small></span></button>${cuBarra(r.reparadas, r.pendientes, r.sin)}${cuLeyenda(r.reparadas, r.pendientes, r.sin, true, true)}</div>
+      <div class="cu-mini">${kt('aportes', 'Aportes', r.aportes || 0, '#6b4fa0')}${kpi('Tiempo medio', cuDur(r.medio), '#2563a8')}${kpi('Cumplimiento', r.cumplimiento == null ? '—' : r.cumplimiento + '%', '#7a5ca8')}</div>
       <div class="cu-sec cu-rqh" style="color:#6d3fc8">Requerimientos</div><div class="cu-kpis">${rqCard('Requerimientos asignados', rd.por.length, '#6d3fc8')}${rqCard('Requerimientos ejecutados', rd.eje.length, '#d9aa2b')}</div>`;
     if (!r.total && !r.aportes) html += '<div class="u-vacio">Esta cuadrilla no tuvo fallas en este turno.</div>';
   }
   cont.innerHTML = html;
+  const ob = $('#cuOrd'); if (ob) ob.addEventListener('click', () => { const h = abrirHoja(`<div class="rq-wrap"><h2 style="margin:0 0 8px">Ordenar cuadrillas</h2><button class="cu-fila" data-o="nombre">${CU.orden !== 'atraso' ? '✔ ' : ''}Por nombre</button><button class="cu-fila" data-o="atraso">${CU.orden === 'atraso' ? '✔ ' : ''}Más atrasadas primero</button></div>`); h.querySelectorAll('[data-o]').forEach((b) => b.addEventListener('click', () => { CU.orden = b.dataset.o; cerrarHoja(); pintarCuadrillas(); })); });
   cont.querySelectorAll('[data-rq]').forEach((b) => b.addEventListener('click', () => cuAbrirReqs(selId)));
   cont.querySelectorAll('[data-k]').forEach((b) => b.addEventListener('click', () => cuAbrirDetalle(b.dataset.k)));
   cont.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => { $('#cuSel').value = b.dataset.c; pintarCuadrillas(); cont.scrollTop = 0; }));
@@ -3525,6 +3550,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('#badgeCamiones').addEventListener('click', ocultarCamionesMapa);
   $('#cuAtras').addEventListener('click', () => { if ($('#cuSel').value) { $('#cuSel').value = ''; pintarCuadrillas(); } else cerrarCuadrillas(); });
   ['#cuFecha', '#cuTurno'].forEach((s) => $(s).addEventListener('change', cargarCuadrillas));
+  $('#cuFecha').addEventListener('click', (e) => { try { e.target.showPicker(); } catch (er) { /* el navegador lo abre solo */ } });
   $('#cuSel').addEventListener('change', pintarCuadrillas);
 });
 
