@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.28';
+const VERSION_APP = '2.12.29';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2439,14 +2439,7 @@ async function editarFallaApp(p) {
     <h3>Comentario</h3>
     <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
     <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
-    ${fila.estado === 'pendiente' && rol() === 'admin' ? `<div class="codigos" style="margin-top:8px">${filaCierre({ c: '900', d: 'Cortado desde la Distribución', corte: true }).replace('<button type="button"', '<button type="button" id="fCorte"')}</div>` : ''}
     <div class="acciones fija"><button id="fGuardar" class="btn btn-primario">Guardar cambios</button></div>`);
-  const bfc = $('#fCorte', h);
-  if (bfc) bfc.addEventListener('click', ocupar(bfc, async () => {
-    if (!confirm('¿Marcar este circuito como sin suministro por corte? Queda en azul hasta que un administrador restablezca el suministro. La falla sigue pendiente.')) return;
-    await rpc('corte_marcar_pendiente', { p_falla_id: p.id });
-    cerrarHoja(); toast('Circuito marcado sin suministro', 'ok'); await cargarCortes(); cargarFallas();
-  }));
   $$('.codigo', h).forEach((b) => {
     if (b.dataset.c === codigo) b.classList.add('sel');
     b.addEventListener('click', () => { $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c; });
@@ -2607,15 +2600,9 @@ async function abrirFalla(p, geom) {
   const bep = $('#bEditPend', h);
   if (bep) bep.addEventListener('click', () => {
     const pre = $('#motPend', h); if (!pre || $('#motEd', h)) return;
-    pre.insertAdjacentHTML('afterend', `<textarea id="motEd" class="campo">${esc(p.motivo_pendiente || '')}</textarea><div class="acciones"><button type="button" id="motOk" class="btn btn-primario">Guardar motivo</button><button type="button" id="motNo" class="btn btn-secundario">Cancelar</button></div><div class="codigos" style="margin-top:8px">${filaCierre({ c: '900', d: 'Cortado desde la Distribución', corte: true }).replace('<button type="button"', '<button type="button" id="motCorte"')}</div>`);
+    pre.insertAdjacentHTML('afterend', `<textarea id="motEd" class="campo">${esc(p.motivo_pendiente || '')}</textarea><div class="acciones"><button type="button" id="motOk" class="btn btn-primario">Guardar motivo</button><button type="button" id="motNo" class="btn btn-secundario">Cancelar</button></div>`);
     pre.hidden = true;
-    $('#motNo', h).addEventListener('click', () => { $('#motCorte', h).parentElement.remove(); $('#motEd', h).nextElementSibling.remove(); $('#motEd', h).remove(); pre.hidden = false; });
-    const bco = $('#motCorte', h);
-    bco.addEventListener('click', ocupar(bco, async () => {
-      if (!confirm('¿Marcar este circuito como sin suministro por corte? Queda en azul hasta que un administrador restablezca el suministro. La falla sigue pendiente.')) return;
-      await rpc('corte_marcar_pendiente', { p_falla_id: p.id });
-      cerrarHoja(); toast('Circuito marcado sin suministro', 'ok'); await cargarCortes(); cargarFallas();
-    }));
+    $('#motNo', h).addEventListener('click', () => { $('#motEd', h).nextElementSibling.remove(); $('#motEd', h).remove(); pre.hidden = false; });
     const ok = $('#motOk', h);
     ok.addEventListener('click', ocupar(ok, async () => {
       const v = $('#motEd', h).value.trim();

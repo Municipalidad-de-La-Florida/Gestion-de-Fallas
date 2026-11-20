@@ -1,0 +1,7 @@
+-- Cierre 900 «Cortado desde la Distribución» deja la falla PENDIENTE (ya aplicado en Supabase: migración cierre_900_pasa_a_pendiente_y_902)
+-- · codigos_cierre: 900 deja de ser «corte» y queda ordenado en «Otros» (900=28, 901=29, 902=30); nuevo 902 «Restitución del suministro».
+-- · cerrar_falla_tras_reparacion(): si la reparación trae una línea «900 …», la falla y los puntos de su circuito quedan pendientes
+--   (motivo «Corte de suministro (Cortado desde la Distribución)»); cualquier otro cierre las deja reparadas.
+-- · Las 11 fallas cerradas con 900 (y 64 puntos de sus circuitos) pasaron a pendiente.
+-- · Se eliminan trg_reparacion_marca_corte(_upd) y corte_marcar_pendiente; los circuitos_corte activos se desactivaron (sin azul).
+-- · cortes_fallas() (etiqueta #EnCorte) ahora solo mira el texto «corte de suministro» en la reparación o el motivo pendiente.
