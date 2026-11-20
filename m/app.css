@@ -892,3 +892,10 @@ html[data-tema=oscuro] .chip-modo.reqm{ color:#fff; }
 html[data-tema=oscuro] .codigo.corte{ background:linear-gradient(135deg,#0a62ff,#00a9e6); color:#fff; }
 html[data-tema=oscuro] .codigo.corte.sel{ background:linear-gradient(135deg,#0a3fc4,#0089d6); }
 .tag-corte{ display:inline-block; background:linear-gradient(135deg,#0a62ff,#00c2ff); color:#fff; border-radius:6px; padding:0 6px; font-size:11px; font-weight:700; margin-left:4px; }
+
+/* Cuadrillas: tarjetas que se pueden tocar para ver su detalle */
+.cu-tap{cursor:pointer;position:relative}
+.cu-tap:active{filter:brightness(.92)}
+.cu-chev{position:absolute;right:12px;top:8px;font-size:20px;line-height:1;opacity:.45}
+
+.cu-rqbtn{display:flex;align-items:center;justify-content:space-between;width:100%;margin:6px 0 10px;padding:11px 14px;border:1.5px solid #6d3fc8;border-radius:12px;background:rgba(109,63,200,.12);color:#8f6ae0;font:700 16px/1.2 inherit;cursor:pointer}.cu-rqbtn small{font-weight:600;font-size:12.5px;opacity:.9}.cu-rqbtn:active{filter:brightness(.9)}
