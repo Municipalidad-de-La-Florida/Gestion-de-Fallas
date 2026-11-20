@@ -773,6 +773,20 @@ window.addEventListener('load', function(){
   .rq-btn.rq-p{ background:var(--pri); color:#fff; } .rq-btn.rq-d{ background:#fdeceb; color:#c1443c; } .rq-btn[disabled]{ opacity:.55; cursor:default; }
   .rq-in{ display:flex; align-items:center; gap:8px; background:#fff; border:1.5px solid var(--lilb); border-radius:12px; padding:8px 12px; margin-bottom:10px; }
   .rq-in input{ flex:1; border:0; outline:0; font:inherit; background:transparent; min-width:0; } .rq-clr{ cursor:pointer; color:#a99cc4; }
+  .rq-win.rq-ancha{ max-width:1280px; width:96vw; height:92vh; max-height:92vh; }
+  .rq-kpis,.rq-chips{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+  .rq-kp{ flex:1 1 120px; text-align:left; background:#fff; border:1px solid var(--rline); border-top:4px solid var(--c); border-radius:12px; padding:8px 12px; cursor:pointer; font-family:inherit; color:inherit; }
+  .rq-kp small{ display:block; color:var(--rsoft); font-size:11.5px; } .rq-kp b{ font-size:22px; } .rq-kp.on{ box-shadow:0 0 0 2px var(--c); }
+  .rq-n{ color:var(--rsoft); font-size:12px; margin:0 2px 6px; }
+  .rq-tw{ background:#fff; border:1px solid var(--rline); border-radius:12px; overflow:auto; max-height:calc(92vh - 330px); min-height:160px; }
+  .rq-tb{ width:100%; border-collapse:collapse; font-size:13px; } .rq-tb th{ position:sticky; top:0; z-index:2; text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--rsoft); padding:9px 10px; background:#faf8fe; border-bottom:1px solid var(--rline); white-space:nowrap; }
+  .rq-tb th.s{ cursor:pointer; } .rq-tb th.s:hover,.rq-tb th.on{ color:var(--pri); }
+  .rq-tb td{ padding:8px 10px; border-bottom:1px solid #f0ecf7; vertical-align:middle; } .rq-tb td.u{ max-width:260px; } .rq-tb td.n{ white-space:nowrap; color:var(--rsoft); } .rq-tb td.c{ width:34px; text-align:center; } .rq-tb td.go{ color:#a99cc4; font-size:18px; }
+  .rq-tb tbody tr{ cursor:pointer; } .rq-tb tbody tr:hover td{ background:#faf7ff; } .rq-tb tr.sel td{ background:var(--lil); } .rq-tb tr.urg td:first-child{ box-shadow:inset 4px 0 var(--rojo); }
+  .rq-mut{ color:#b3a9c9; } .rq-toca-s{ font-size:11px; color:var(--pri); font-weight:700; margin-top:2px; }
+  .rq-asig{ border:1px solid var(--lilb); border-radius:8px; padding:5px 7px; background:#fff; font:inherit; max-width:170px; } .rq-asig.vac{ border-style:dashed; color:var(--pri); font-weight:600; }
+  .rq-lote{ position:sticky; bottom:0; margin-top:10px; background:#241a38; color:#fff; border-radius:12px; padding:10px 14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; box-shadow:0 8px 24px rgba(0,0,0,.3); }
+  .rq-lote select{ border-radius:8px; border:0; padding:6px 8px; font:inherit; color:#241a38; } .rq-lote .rq-btn{ padding:6px 11px; } .rq-lim{ margin-left:auto; background:none; border:0; color:#cfc6e6; cursor:pointer; font:inherit; }
   .rq-seg{ display:inline-flex; background:#ebe5f7; border-radius:12px; padding:3px; margin-bottom:10px; flex-wrap:wrap; }
   .rq-seg button{ border:0; background:none; padding:6px 12px; border-radius:9px; font-weight:700; font-size:12.5px; color:#6a5a92; cursor:pointer; font-family:inherit; }
   .rq-seg button.on{ background:var(--pri); color:#fff; box-shadow:0 2px 6px rgba(109,63,200,.35); } .rq-seg i{ font-style:normal; opacity:.75; margin-left:3px; }
@@ -781,8 +795,7 @@ window.addEventListener('load', function(){
   .rq-ch.on{ background:var(--lil); border-color:var(--pri); } .rq-ch.r{ color:var(--rojo); border-color:#f2b9b5; }
   .rq-vacio{ text-align:center; color:var(--rsoft); padding:30px 10px; }
   .rq-card{ background:#fff; border:1px solid var(--rline); border-radius:12px; padding:8px 11px; margin-bottom:0; position:relative; overflow:hidden; cursor:pointer; min-width:0; }
-  #rqLista{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:9px; align-items:start; }
-  #rqLista .rq-vacio{ grid-column:1/-1; }
+  #rqLista{ display:block; }
   .rq-card .rq-cod{ font-size:14px; } .rq-card .rq-tipo{ margin:3px 0 1px; font-size:13px; } .rq-card .rq-sub{ font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .rq-card:hover{ border-color:var(--lilb); box-shadow:0 2px 10px rgba(109,63,200,.12); }
   .rq-card.urg, .rq-det.urg{ border-color:rgba(226,59,51,.5); animation:rqLatido 2.6s linear infinite; }
@@ -11684,10 +11697,10 @@ async function abrirRequerimientos(abrirId){
 
 // ===== Lista =====
 async function rqVistaLista(){
-  RQ.vista = 'lista'; RQ.nuevo = RQ.nuevo && RQ.nuevo.pendiente ? RQ.nuevo : null;
+  RQ.vista = 'lista'; rqAncho(true); RQ.nuevo = RQ.nuevo && RQ.nuevo.pendiente ? RQ.nuevo : null;
   rqEl('rqHd').innerHTML = `<b>📋 Requerimientos</b><span class="rq-grow"></span><button type="button" class="rq-btn" id="rqMapaBtn">🗺 Ver en el mapa</button>${rqCrea() ? '<button type="button" class="rq-btn rq-p" id="rqNuevoBtn">＋ Nuevo</button>' : ''}<button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
   rqEl('rqBody').innerHTML = `<div class="rq-in">🔍<input id="rqQ" type="search" autocomplete="off" placeholder="Buscar por código, solicitud, dirección, llave o persona…" value="${escAttr(RQ.texto)}"><span class="rq-clr" id="rqClr" ${RQ.texto ? '' : 'hidden'}>✕</span></div>
-    <div class="rq-seg" id="rqSeg"></div><button type="button" class="rq-ch" id="rqOrden" style="margin:0 0 10px 8px;vertical-align:top;height:34px;"></button><div class="rq-chips" id="rqChips"></div><div id="rqLista"><div class="rq-vacio">Cargando…</div></div>`;
+    <div class="rq-seg" id="rqSeg"></div><div class="rq-chips" id="rqChips"></div><div id="rqLista"><div class="rq-vacio">Cargando…</div></div>`;
   rqEl('rqX').onclick = rqCerrar;
   rqEl('rqMapaBtn').onclick = () => rqModoMapa();
   const nb = rqEl('rqNuevoBtn'); if(nb) nb.onclick = () => rqModoMapa(null, null, true);
@@ -11719,25 +11732,77 @@ function rqCardHtml(r){
     ${rqDistTxt(r)}
     ${toca ? `<div class="rq-toca">👉 Te toca: ${rqQueToca(r)}</div>` : ''}</div>`;
 }
+// ===== Lista en tabla (pantalla amplia): contadores, columnas ordenables, asignación rápida y acciones en lote =====
+RQ.sel = new Set(); RQ.sort = {k: 'creado_en', dir: 'desc'};
+const RQ_COLS = [['codigo', 'Código'], ['tipo_label', 'Tipo'], ['ubicacion', 'Ubicación'], ['solicito', 'Solicitó'], ['contratista', 'Contratista'], ['cuadrilla', 'Cuadrilla'], ['estado', 'Estado'], ['creado_en', 'Antigüedad']];
+const rqValOrden = (r, k) => k === 'solicito' ? (r.creado_por.nombre || '') : k === 'contratista' ? (r.derivado_a.nombre || '') : k === 'cuadrilla' ? (r.asignado_a.nombre || '') : k === 'creado_en' ? new Date(r.creado_en).getTime() : k === 'estado' ? ['derivado', 'asignado', 'ejecutado', 'revisado', 'devuelto', 'cerrado', 'anulado'].indexOf(r.estado) : (r[k] || '');
+function rqFilasVisibles(){
+  let ls = [...RQ.lista];
+  if(RQ.chip === 'urg') ls = ls.filter(r => r.urgente && !['cerrado', 'anulado'].includes(r.estado));
+  else if(RQ.chip === 'mios') ls = ls.filter(rqTeToca);
+  else if(RQ.chip) ls = ls.filter(r => r.estado === RQ.chip);
+  const {k, dir} = RQ.sort, m = dir === 'asc' ? 1 : -1;
+  return ls.sort((a, b) => { const x = rqValOrden(a, k), y = rqValOrden(b, k); return m * (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'es', {numeric: true})); });
+}
+function rqCuadrillaCelda(r){
+  const acc = r.acciones || [], opts = (RQ.destinos && RQ.destinos.cuadrillas) || [];
+  if(!acc.includes('asignar') || !opts.length) return r.asignado_a.nombre ? escHtml(r.asignado_a.nombre) : '<span class="rq-mut">—</span>';
+  const act = r.asignado_a.id || '';
+  return `<select class="rq-asig${act ? '' : ' vac'}" data-id="${r.id}" aria-label="Asignar cuadrilla"><option value="">${act ? 'Cambiar…' : '＋ Asignar…'}</option>${opts.map(o => `<option value="${escAttr(o.id)}"${o.id === act ? ' selected' : ''}>${escHtml(o.nombre)}</option>`).join('')}${act && acc.includes('desasignar') ? '<option value="__sin">— Sin asignación —</option>' : ''}</select>`;
+}
+function rqFilaTabla(r){
+  const urg = r.urgente && !['cerrado', 'anulado'].includes(r.estado), toca = rqQueToca(r) && rqTeToca(r);
+  return `<tr class="${urg ? 'urg' : ''}${RQ.sel.has(r.id) ? ' sel' : ''}" data-id="${r.id}"><td class="c"><input type="checkbox" class="rq-chk" data-id="${r.id}" ${RQ.sel.has(r.id) ? 'checked' : ''}></td>
+    <td><span class="rq-cod">${escHtml(r.codigo)}</span>${urg ? '<span class="rq-chip rq-u" style="margin-left:6px;">URGENTE</span>' : ''}</td><td>${escHtml(r.tipo_label)}</td><td class="u">${escHtml(r.ubicacion)}</td>
+    <td>${escHtml(r.creado_por.nombre || '—')}</td><td>${r.derivado_a.nombre ? escHtml(r.derivado_a.nombre) : '<span class="rq-mut">—</span>'}</td><td>${rqCuadrillaCelda(r)}</td>
+    <td><span class="rq-chip rq-e-${r.estado}">${RQ_ESTADOS[r.estado] || r.estado}</span>${toca ? '<div class="rq-toca-s">👉 Te toca</div>' : ''}</td><td class="n">${tiempoHace(r.creado_en)}</td><td class="c go">›</td></tr>`;
+}
 function rqPintarLista(){
   const seg = rqEl('rqSeg'), ch = rqEl('rqChips'), z = rqEl('rqLista'); if(!seg || !z) return;
   const c = RQ.conteos || {};
   seg.innerHTML = [['abiertos', 'Activos', c.abiertos], ['cerrados', 'Cerrados', c.cerrados], ['anulados', 'Anulados', c.anulados], ['todos', 'Todos', null]]
     .map(([k, t, n]) => `<button type="button" data-f="${k}" class="${RQ.filtro === k ? 'on' : ''}">${t}${n != null ? `<i>${n}</i>` : ''}</button>`).join('');
-  seg.querySelectorAll('button').forEach(b => b.onclick = () => { RQ.filtro = b.dataset.f; RQ.chip = ''; rqCargar(); });
-  const nUrg = RQ.lista.filter(r => r.urgente && !['cerrado', 'anulado'].includes(r.estado)).length, nMios = RQ.lista.filter(rqTeToca).length;
-  ch.innerHTML = RQ.filtro === 'abiertos' || RQ.filtro === 'todos'
-    ? `<button type="button" class="rq-ch r${RQ.chip === 'urg' ? ' on' : ''}" data-c="urg">🔴 Urgentes ${nUrg}</button><button type="button" class="rq-ch${RQ.chip === 'mios' ? ' on' : ''}" data-c="mios">Mis pendientes ${nMios}</button>` +
-      ['derivado', 'asignado', 'ejecutado', 'revisado', 'devuelto'].map(e => `<button type="button" class="rq-ch${RQ.chip === e ? ' on' : ''}" data-c="${e}">${RQ_ESTADOS[e]}</button>`).join('') : '';
-  ch.querySelectorAll('button').forEach(b => b.onclick = () => { RQ.chip = RQ.chip === b.dataset.c ? '' : b.dataset.c; rqPintarLista(); });
-  const ob = rqEl('rqOrden');
-  if(ob){ ob.textContent = RQ.orden === 'asc' ? '⇅ Más antiguas primero' : '⇅ Más recientes primero'; ob.title = 'Cambiar el orden de la lista'; ob.onclick = () => { RQ.orden = RQ.orden === 'asc' ? 'desc' : 'asc'; rqPintarLista(); }; }
-  let ls = [...RQ.lista].sort((a, b) => (RQ.orden === 'asc' ? 1 : -1) * (new Date(a.creado_en) - new Date(b.creado_en)));
-  if(RQ.chip === 'urg') ls = ls.filter(r => r.urgente && !['cerrado', 'anulado'].includes(r.estado));
-  else if(RQ.chip === 'mios') ls = ls.filter(rqTeToca);
-  else if(RQ.chip) ls = ls.filter(r => r.estado === RQ.chip);
-  z.innerHTML = ls.length ? ls.map(rqCardHtml).join('') : `<div class="rq-vacio">${RQ.texto || RQ.chip ? 'Ningún requerimiento coincide con la búsqueda.' : (RQ.filtro === 'abiertos' ? 'No hay requerimientos activos.' : 'No hay requerimientos en esta lista.')}</div>`;
-  z.querySelectorAll('.rq-card').forEach(el => el.onclick = () => rqVistaDetalle(el.dataset.id));
+  seg.querySelectorAll('button').forEach(b => b.onclick = () => { RQ.filtro = b.dataset.f; RQ.chip = ''; RQ.sel.clear(); rqCargar(); });
+  // Contadores: cada uno es un filtro
+  const abiertos = RQ.lista.filter(r => !['cerrado', 'anulado'].includes(r.estado));
+  const cnt = e => RQ.lista.filter(r => r.estado === e).length;
+  const kp = [['urg', '🔴 Urgentes', abiertos.filter(r => r.urgente).length, '#e23b33'], ['mios', 'Mis pendientes', RQ.lista.filter(rqTeToca).length, '#6d3fc8'], ['derivado', 'Solicitados', cnt('derivado'), '#2563a8'], ['asignado', 'Derivados', cnt('asignado'), '#7a5ca8'], ['ejecutado', 'Ejecutados', cnt('ejecutado'), '#d9aa2b'], ['revisado', 'Revisados', cnt('revisado'), '#3f9d68'], ['devuelto', 'Devueltos', cnt('devuelto'), '#c1443c']];
+  ch.innerHTML = RQ.filtro === 'abiertos' || RQ.filtro === 'todos' ? kp.map(([k, t, n, col]) => `<button type="button" class="rq-kp${RQ.chip === k ? ' on' : ''}" data-c="${k}" style="--c:${col}"><small>${t}</small><b>${n}</b></button>`).join('') : '';
+  ch.querySelectorAll('button').forEach(b => b.onclick = () => { RQ.chip = RQ.chip === b.dataset.c ? '' : b.dataset.c; RQ.sel.clear(); rqPintarLista(); });
+  const ls = rqFilasVisibles(); RQ.sel.forEach(id => { if(!ls.some(r => r.id === id)) RQ.sel.delete(id); });
+  if(!ls.length){ z.innerHTML = `<div class="rq-vacio">${RQ.texto || RQ.chip ? 'Ningún requerimiento coincide con la búsqueda.' : (RQ.filtro === 'abiertos' ? 'No hay requerimientos activos.' : 'No hay requerimientos en esta lista.')}</div>`; return; }
+  const th = RQ_COLS.map(([k, t]) => `<th class="s${RQ.sort.k === k ? ' on' : ''}" data-k="${k}">${t}${RQ.sort.k === k ? (RQ.sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>`).join('');
+  z.innerHTML = `<div class="rq-n">${ls.length} requerimiento${ls.length === 1 ? '' : 's'}</div><div class="rq-tw"><table class="rq-tb"><thead><tr><th class="c"><input type="checkbox" id="rqChkTodos" ${ls.every(r => RQ.sel.has(r.id)) ? 'checked' : ''}></th>${th}<th></th></tr></thead><tbody>${ls.map(rqFilaTabla).join('')}</tbody></table></div><div id="rqLote"></div>`;
+  z.querySelectorAll('th.s').forEach(t => t.onclick = () => { const k = t.dataset.k; RQ.sort = {k, dir: RQ.sort.k === k && RQ.sort.dir === 'asc' ? 'desc' : 'asc'}; rqPintarLista(); });
+  z.querySelectorAll('tbody tr').forEach(tr => tr.onclick = e => { if(e.target.closest('input,select')) return; rqVistaDetalle(tr.dataset.id); });
+  z.querySelectorAll('.rq-chk').forEach(cb => cb.onchange = () => { if(cb.checked) RQ.sel.add(cb.dataset.id); else RQ.sel.delete(cb.dataset.id); cb.closest('tr').classList.toggle('sel', cb.checked); rqPintarLote(ls); });
+  rqEl('rqChkTodos').onchange = e => { ls.forEach(r => { if(e.target.checked) RQ.sel.add(r.id); else RQ.sel.delete(r.id); }); z.querySelectorAll('.rq-chk').forEach(cb => { cb.checked = e.target.checked; cb.closest('tr').classList.toggle('sel', e.target.checked); }); rqPintarLote(ls); };
+  z.querySelectorAll('select.rq-asig').forEach(s => s.onchange = async () => {
+    if(!s.value) return; const id = s.dataset.id; s.disabled = true;
+    try{ await db.rpc('req_accion', {p_id: id, p_accion: s.value === '__sin' ? 'desasignar' : 'asignar', p_comentario: null, p_destino: s.value === '__sin' ? null : s.value}); rqAviso(s.value === '__sin' ? 'Se quitó la asignación' : 'Cuadrilla asignada'); await rqCargar(); }
+    catch(e){ alert(e.message); s.disabled = false; s.value = ''; }
+  });
+  rqPintarLote(ls);
+}
+// Barra de acciones en lote: solo se aplica a las filas que permiten la acción
+function rqPintarLote(ls){
+  const z = rqEl('rqLote'); if(!z) return;
+  const sel = (ls || rqFilasVisibles()).filter(r => RQ.sel.has(r.id));
+  if(!sel.length){ z.innerHTML = ''; return; }
+  const opts = (RQ.destinos && RQ.destinos.cuadrillas) || [], puedeAsig = sel.filter(r => (r.acciones || []).includes('asignar')), puedeUrg = sel.filter(r => (r.acciones || []).includes('urgente'));
+  z.innerHTML = `<div class="rq-lote"><b>${sel.length} seleccionado${sel.length === 1 ? '' : 's'}</b>
+    ${puedeAsig.length && opts.length ? `<select id="rqLoteSel"><option value="">Asignar a…</option>${opts.map(o => `<option value="${escAttr(o.id)}">${escHtml(o.nombre)}</option>`).join('')}</select><button type="button" class="rq-btn rq-p" id="rqLoteAsig">Asignar (${puedeAsig.length})</button>` : ''}
+    ${puedeUrg.length ? `<button type="button" class="rq-btn" id="rqLoteUrg">🔴 Marcar urgente (${puedeUrg.length})</button>` : ''}
+    <button type="button" class="rq-lim" id="rqLoteLim">Limpiar</button></div>`;
+  const aplicar = async (lista, accion, dest, btn) => {
+    btn.disabled = true; let ok = 0, fallo = [];
+    for(const r of lista){ try{ await db.rpc('req_accion', {p_id: r.id, p_accion: accion, p_comentario: null, p_destino: dest || null}); ok++; }catch(e){ fallo.push(r.codigo + ': ' + e.message); } }
+    RQ.sel.clear(); await rqCargar(); rqAviso(`${ok} requerimiento${ok === 1 ? '' : 's'} actualizado${ok === 1 ? '' : 's'}${fallo.length ? ' · ' + fallo.length + ' con error' : ''}`);
+    if(fallo.length) alert('No se pudieron actualizar:\n' + fallo.join('\n'));
+  };
+  const a = rqEl('rqLoteAsig'); if(a) a.onclick = () => { const v = rqEl('rqLoteSel').value; if(!v){ rqAviso('Elige una cuadrilla'); return; } aplicar(puedeAsig, 'asignar', v, a); };
+  const u = rqEl('rqLoteUrg'); if(u) u.onclick = () => aplicar(puedeUrg, 'urgente', null, u);
+  rqEl('rqLoteLim').onclick = () => { RQ.sel.clear(); rqPintarLista(); };
 }
 
 // ===== Fotos =====
@@ -11781,8 +11846,9 @@ const RQ_ACC = {
   anular: {t: 'Anular', com: 'req', cta: 'Anular requerimiento', d: 1, ph: 'Motivo de la anulación'}
 };
 const RQ_ORDEN = ['asignar', 'ejecutar', 'no_puede', 'revisar', 'devolver_a_cuadrilla', 'cerrar', 'rechazar', 'derivar', 'devolver_ito', 'urgente', 'editar', 'anular'];
+function rqAncho(on){ const w = document.querySelector('#rqOv .rq-win'); if(w) w.classList.toggle('rq-ancha', !!on); }
 async function rqVistaDetalle(id){
-  RQ.vista = 'detalle'; RQ.id = id;
+  RQ.vista = 'detalle'; rqAncho(false); RQ.id = id;
   rqEl('rqHd').innerHTML = `<button type="button" class="rq-back" id="rqVolver">‹ Lista</button><span class="rq-grow"></span><button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
   rqEl('rqX').onclick = rqCerrar; rqEl('rqVolver').onclick = () => rqVistaLista();
   rqEl('rqBody').innerHTML = '<div class="rq-vacio">Cargando…</div>';
@@ -12031,7 +12097,7 @@ function rqNuevoVacio(){
   const g = (RQ.destinos && RQ.destinos.gestores) || [];
   return {pendiente: true, tipo: 'retiro', desc: '', descHtml: '', modo: 'catastro', q: '', res: [], gid: null, gidTxt: '', lat: null, lng: null, ubic: '', urgente: false, derivar: g.length === 1 ? g[0].id : '', fotos: []};
 }
-function rqVistaNuevo(){
+function rqVistaNuevo(){ rqAncho(false);
   RQ.vista = 'nuevo'; const n = RQ.nuevo = RQ.nuevo || rqNuevoVacio(); const gs = (RQ.destinos && RQ.destinos.gestores) || [];
   rqEl('rqHd').innerHTML = `<button type="button" class="rq-back" id="rqVolver">‹ Lista</button><b>Nuevo requerimiento</b><span class="rq-grow"></span><label class="rq-urgt"><input type="checkbox" id="rqUrg" ${n.urgente ? 'checked' : ''}> 🔴 Urgente</label><button type="button" class="rq-x" id="rqX" aria-label="Cerrar">×</button>`;
   rqEl('rqX').onclick = rqCerrar; rqEl('rqVolver').onclick = () => { RQ.nuevo = null; if(RQ.mapa) rqCerrar(); else rqVistaLista(); };
