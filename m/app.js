@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.13.1';
+const VERSION_APP = '2.13.2';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4343,7 +4343,9 @@ function rqFecha(iso) {
 function rqTeToca(r) {
   const yo = S.perfil && S.perfil.id;
   return (r.estado === 'derivado' && r.derivado_a.id === yo) || (r.estado === 'asignado' && r.asignado_a.id === yo) ||
-    (r.estado === 'ejecutado' && r.derivado_a.id === yo) || ((r.estado === 'revisado' || r.estado === 'devuelto') && r.creado_por.id === yo);
+    (r.estado === 'ejecutado' && r.derivado_a.id === yo) || ((r.estado === 'revisado' || r.estado === 'devuelto') && r.creado_por.id === yo) ||
+    // el administrador también revisa (ejecutado) y da el visto bueno (revisado) aunque no sea quien derivó o creó
+    (S.perfil && S.perfil.rol === 'admin' && ((r.estado === 'ejecutado' && (r.acciones || []).includes('revisar')) || (r.estado === 'revisado' && (r.acciones || []).includes('cerrar'))));
 }
 function rqQueToca(r) {
   const a = r.acciones || [];
