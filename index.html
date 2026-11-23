@@ -11661,7 +11661,9 @@ function rqFecha(iso){
 function rqTeToca(r){
   const yo = currentUser && currentUser.id;
   return (r.estado === 'derivado' && r.derivado_a.id === yo) || (r.estado === 'asignado' && r.asignado_a.id === yo) ||
-         (r.estado === 'ejecutado' && r.derivado_a.id === yo) || ((r.estado === 'revisado' || r.estado === 'devuelto') && r.creado_por.id === yo);
+         (r.estado === 'ejecutado' && r.derivado_a.id === yo) || ((r.estado === 'revisado' || r.estado === 'devuelto') && r.creado_por.id === yo) ||
+         // el administrador también revisa (ejecutado) y da el visto bueno (revisado) aunque no sea quien derivó o creó
+         (rolEfectivo() === 'admin' && ((r.estado === 'ejecutado' && (r.acciones || []).includes('revisar')) || (r.estado === 'revisado' && (r.acciones || []).includes('cerrar'))));
 }
 function rqQueToca(r){
   const a = r.acciones || [];
