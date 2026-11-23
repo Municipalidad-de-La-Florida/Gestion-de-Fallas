@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.29';
+const VERSION_APP = '2.12.30';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2757,7 +2757,7 @@ async function editarReparacionApp(p, est) {
   try { existentes = (await select('fallas_fotos', `falla_id=eq.${p.id}&archivada_en=is.null&anulada_en=is.null&select=id,ruta&order=creado_en.asc`)) || []; } catch (e) { existentes = []; }
   pintar();
   const agregar = async (files) => {
-    const libres = MAX_FOTOS - existentes.length - nuevas.length;
+    const libres = Math.max(0, MAX_FOTOS - existentes.length - nuevas.length);
     for (const f of Array.from(files || []).slice(0, libres)) {
       try { const blob = await comprimirFoto(f); nuevas.push({ blob, url: URL.createObjectURL(blob) }); } catch (e) { toast(e.message, 'error'); }
     }

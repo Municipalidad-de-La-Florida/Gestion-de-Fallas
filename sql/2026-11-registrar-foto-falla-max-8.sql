@@ -1,0 +1,2 @@
+-- registrar_foto_falla: tope de fotos por falla 4 -> 8 (4 del cierre anterior con 900 + 4 del cierre nuevo); cuenta solo fotos activas
+-- (archivada_en y anulada_en nulos). Los formularios siguen permitiendo 4 fotos por cierre. Aplicado en Supabase: migración registrar_foto_falla_max_8.
