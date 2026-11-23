@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.12.30';
+const VERSION_APP = '2.12.31';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2780,7 +2780,7 @@ async function editarReparacionApp(p, est) {
     if (codigo !== est.tipo_falla) { cambios.tipo_falla = codigo; if (codigo !== 'OTRO') cambios.descripcion_otro = null; }
     if (codigo === 'OTRO' && o !== (est.descripcion_otro || '')) cambios.descripcion_otro = o;
     if ((oe.valor || null) !== (est.orden_externa || null)) cambios.orden_externa = oe.valor || null;
-    for (let i = 0; i < nuevas.length; i++) { gu.textContent = `Subiendo foto ${i + 1} de ${nuevas.length}…`; await subirFoto(p.id, nuevas[i].blob); }
+    for (let i = 0; i < nuevas.length; i++) { if (nuevas[i].subida) continue; gu.textContent = `Subiendo foto ${i + 1} de ${nuevas.length}…`; await subirFoto(p.id, nuevas[i].blob); nuevas[i].subida = true; }
     const rv = $('#rRevision', h).value.trim();
     if (rv) cambios.revision = rv;
     if (Object.keys(cambios).length) { gu.textContent = 'Guardando…'; await rpc('editar_reparacion', { p_falla_id: p.id, p_cambios: cambios }); }
