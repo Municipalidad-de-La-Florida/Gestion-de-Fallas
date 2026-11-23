@@ -913,6 +913,7 @@ window.addEventListener('load', function(){
       <button type="submit" id="loginBtn">Ingresar</button>
     </form>
     <div class="login-error" id="loginError"></div>
+    <button type="button" id="loginOlvido" style="background:none; border:0; padding:6px 0 0; color:#2f6b57; font-size:13px; text-decoration:underline; cursor:pointer;">Olvidé mi contraseña</button>
   </div>
 </div>
 
@@ -1713,6 +1714,16 @@ document.getElementById('togglePassBtn').onclick = () => {
   const btn = document.getElementById('togglePassBtn');
   inp.type = inp.type === 'password' ? 'text' : 'password';
   btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+};
+
+document.getElementById('loginOlvido').onclick = async () => {
+  const email = document.getElementById('loginEmail').value.trim();
+  const errBox = document.getElementById('loginError');
+  if(!email){ errBox.textContent = 'Escribe tu correo arriba y vuelve a pulsar «Olvidé mi contraseña».'; return; }
+  try{
+    const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {method: 'POST', headers: {'apikey': SUPABASE_KEY, 'Content-Type': 'application/json'}, body: JSON.stringify({email})});
+    errBox.textContent = res.ok ? 'Si el correo está registrado, recibirás un mensaje para crear una nueva contraseña.' : 'No se pudo enviar el correo. Intenta más tarde.';
+  }catch(e){ errBox.textContent = 'No se pudo enviar el correo: ' + e.message; }
 };
 
 async function login(){
@@ -13199,17 +13210,29 @@ document.getElementById('guardarPassBtn').onclick = async () => {
   try{
     const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       method: 'PUT',
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${window._recTok || accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: nueva })
     });
     const data = await res.json();
     if(!res.ok) throw new Error(data.message || data.msg || 'No se pudo cambiar la contraseña');
     document.getElementById('passModal').classList.remove('visible');
-    alert('Contraseña actualizada correctamente.');
+    alert('Contraseña actualizada correctamente.' + (window._recTok ? ' Ya puedes ingresar con ella.' : ''));
+    if(window._recTok){ window._recTok = null; location.reload(); }
   }catch(e){
     errBox.textContent = 'Error: ' + e.message;
   }
 };
+// Enlace del correo de recuperación: el sitio abre con #access_token=…&type=recovery y pide la nueva contraseña
+(function(){
+  const h = new URLSearchParams((location.hash || '').replace(/^#/, ''));
+  if(h.get('error_code')){ history.replaceState(null, '', location.pathname + location.search); const eb = document.getElementById('loginError'); if(eb) eb.textContent = 'El enlace de recuperación venció o ya se usó. Pulsa «Olvidé mi contraseña» para pedir otro.'; return; }
+  if(h.get('type') !== 'recovery' || !h.get('access_token')) return;
+  window._recTok = h.get('access_token');
+  history.replaceState(null, '', location.pathname + location.search);
+  document.querySelector('#passModal h2').textContent = 'Crea tu nueva contraseña';
+  document.getElementById('closePassBtn').style.display = 'none';
+  document.getElementById('passModal').classList.add('visible');
+})();
 </script>
 </body>
 </html>
