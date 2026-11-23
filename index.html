@@ -13208,6 +13208,12 @@ document.getElementById('guardarPassBtn').onclick = async () => {
   if(nueva.length < 6){ errBox.textContent = 'La contraseña debe tener al menos 6 caracteres.'; return; }
   if(nueva !== confirmar){ errBox.textContent = 'Las contraseñas no coinciden.'; return; }
   try{
+    if(window._recHash && !window._recTok){
+      const rv = await fetch(`${SUPABASE_URL}/auth/v1/verify`, {method: 'POST', headers: {'apikey': SUPABASE_KEY, 'Content-Type': 'application/json'}, body: JSON.stringify({type: 'recovery', token_hash: window._recHash})});
+      const dv = await rv.json().catch(() => ({}));
+      if(!rv.ok || !dv.access_token) throw new Error('El enlace venció o ya se usó. Vuelve a pulsar «Olvidé mi contraseña» para pedir otro.');
+      window._recTok = dv.access_token;
+    }
     const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
       method: 'PUT',
       headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${window._recTok || accessToken}`, 'Content-Type': 'application/json' },
@@ -13216,14 +13222,23 @@ document.getElementById('guardarPassBtn').onclick = async () => {
     const data = await res.json();
     if(!res.ok) throw new Error(data.message || data.msg || 'No se pudo cambiar la contraseña');
     document.getElementById('passModal').classList.remove('visible');
-    alert('Contraseña actualizada correctamente.' + (window._recTok ? ' Ya puedes ingresar con ella.' : ''));
-    if(window._recTok){ window._recTok = null; location.reload(); }
+    alert('Contraseña actualizada correctamente.' + ((window._recTok || window._recHash) ? ' Ya puedes ingresar con ella.' : ''));
+    if(window._recTok || window._recHash){ window._recTok = null; window._recHash = null; location.reload(); }
   }catch(e){
     errBox.textContent = 'Error: ' + e.message;
   }
 };
 // Enlace del correo de recuperación: el sitio abre con #access_token=…&type=recovery y pide la nueva contraseña
 (function(){
+  const q = new URLSearchParams(location.search);
+  if(q.get('type') === 'recovery' && q.get('token_hash')){
+    window._recHash = q.get('token_hash'); window._recTok = null;
+    history.replaceState(null, '', location.pathname);
+    document.querySelector('#passModal h2').textContent = 'Crea tu nueva contraseña';
+    document.getElementById('closePassBtn').style.display = 'none';
+    document.getElementById('passModal').classList.add('visible');
+    return;
+  }
   const h = new URLSearchParams((location.hash || '').replace(/^#/, ''));
   if(h.get('error_code')){ history.replaceState(null, '', location.pathname + location.search); const eb = document.getElementById('loginError'); if(eb) eb.textContent = 'El enlace de recuperación venció o ya se usó. Pulsa «Olvidé mi contraseña» para pedir otro.'; return; }
   if(h.get('type') !== 'recovery' || !h.get('access_token')) return;
