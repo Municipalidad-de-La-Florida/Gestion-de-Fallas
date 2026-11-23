@@ -5377,7 +5377,7 @@ async function abrirEditarReparacion(p, est, modo){
   pintarFotos();
   $('erAddFoto').onclick = () => $('erFotoIn').click();
   $('erFotoIn').onchange = async (e) => {
-    const libres = MAX_FOTOS_CIERRE - existentes.length - nuevas.length;
+    const libres = Math.max(0, MAX_FOTOS_CIERRE - existentes.length - nuevas.length);
     const archivos = Array.from(e.target.files || []).slice(0, libres); e.target.value = '';
     for(const a of archivos){ try{ const blob = await comprimirFotoWeb(a); nuevas.push({blob, url: URL.createObjectURL(blob)}); }catch(err){ error(err.message); } }
     pintarFotos();
