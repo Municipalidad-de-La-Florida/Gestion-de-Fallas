@@ -4633,8 +4633,10 @@ async function abrirPopupFalla(feat){
       const textoBtn = btn.textContent;
       try{
         for(let i = 0; i < fotosCierre.length; i++){
+          if(fotosCierre[i].subida) continue;   // ya subida en un intento anterior que falló después: no se vuelve a subir
           btn.textContent = `Subiendo foto ${i+1} de ${fotosCierre.length}…`;
           await subirFotoReparacion(p.id, fotosCierre[i].blob);
+          fotosCierre[i].subida = true;
         }
         btn.textContent = 'Guardando…';
       }catch(err){
@@ -5404,7 +5406,7 @@ async function abrirEditarReparacion(p, est, modo){
     if(cod.value === 'OTRO' && o !== (est.descripcion_otro || '')) cambios.descripcion_otro = o;
     if(cod.value !== 'OTRO' && est.descripcion_otro && (cambios.tipo_falla)) cambios.descripcion_otro = null;
     if(oe !== (est.orden_externa || '')) cambios.orden_externa = oe || null;
-    for(let i = 0; i < nuevas.length; i++){ g.textContent = `Subiendo foto ${i + 1} de ${nuevas.length}…`; await subirFotoReparacion(p.id, nuevas[i].blob); }
+    for(let i = 0; i < nuevas.length; i++){ if(nuevas[i].subida) continue; g.textContent = `Subiendo foto ${i + 1} de ${nuevas.length}…`; await subirFotoReparacion(p.id, nuevas[i].blob); nuevas[i].subida = true; }
     const rv = ($('erRevision').value || '').trim();
     if(rv) cambios.revision = rv;
     if(Object.keys(cambios).length){ g.textContent = 'Guardando…'; await db.rpc('editar_reparacion', {p_falla_id: p.id, p_cambios: cambios}); }
