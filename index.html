@@ -11662,14 +11662,14 @@ function rqTeToca(r){
   const yo = currentUser && currentUser.id;
   return (r.estado === 'derivado' && r.derivado_a.id === yo) || (r.estado === 'asignado' && r.asignado_a.id === yo) ||
          (r.estado === 'ejecutado' && r.derivado_a.id === yo) || ((r.estado === 'revisado' || r.estado === 'devuelto') && r.creado_por.id === yo) ||
-         // el administrador también revisa (ejecutado) y da el visto bueno (revisado) aunque no sea quien derivó o creó
-         (rolEfectivo() === 'admin' && ((r.estado === 'ejecutado' && (r.acciones || []).includes('revisar')) || (r.estado === 'revisado' && (r.acciones || []).includes('cerrar'))));
+         // el administrador da el visto bueno (revisado) aunque no sea quien creó; la revisión (ejecutado) le toca primero al gestor
+         (rolEfectivo() === 'admin' && r.estado === 'revisado' && (r.acciones || []).includes('cerrar'));
 }
 function rqQueToca(r){
   const a = r.acciones || [];
   if(r.estado === 'derivado' && a.includes('asignar')) return 'Asignar a una cuadrilla';
   if(r.estado === 'asignado' && a.includes('ejecutar')) return 'Ejecutar el trabajo';
-  if(r.estado === 'ejecutado' && a.includes('revisar')) return 'Revisar la ejecución';
+  if(r.estado === 'ejecutado' && a.includes('revisar') && r.derivado_a.id === (currentUser && currentUser.id)) return 'Revisar la ejecución';
   if(r.estado === 'revisado' && a.includes('cerrar')) return 'Dar el visto bueno o rechazar';
   if(r.estado === 'devuelto' && a.includes('derivar')) return 'Volver a derivar o anular';
   return '';
@@ -12054,21 +12054,43 @@ function rqSolCambiarTipo(ed, tipo){
   const b = ed.querySelector('.rqsb.tipo'); if(!b) return;
   b.dataset.t = RQ_TIPO_TXT[tipo] || tipo; b.dataset.k = tipo; b.firstChild.nodeValue = b.dataset.t;
 }
+/* Menú de dos niveles de la burbuja: categorías → trabajos. tipo = valor del requerimiento; t = texto de la burbuja; urg = marca Urgente; ind = qué hay que indicar después */
+const RQ_MENU = [
+  {c: 'Típicas', it: [{tipo: 'despeje', t: 'el despeje de la luminaria', n: 'Despeje de luminaria'}, {tipo: 'retiro', t: 'el retiro de la luminaria', n: 'Retiro de luminaria'}, {tipo: 'instalacion', t: 'la instalación de una luminaria', n: 'Instalación de luminaria'}, {tipo: 'otro', t: 'lo siguiente', n: 'Otro'}]},
+  {c: '🔴 Urgentes', it: [{tipo: 'otro', t: 'luminaria colgando', urg: 1}, {tipo: 'otro', t: 'poste energizado', urg: 1}, {tipo: 'otro', t: 'calpe colgando energizado', urg: 1}]},
+  {c: 'Instalar', it: [{tipo: 'instalacion', t: 'instalar luminaria', ind: 'luminaria'}, {tipo: 'otro', t: 'instalar tapa tablero'}, {tipo: 'otro', t: 'instalar tapa escotilla'}]},
+  {c: 'Retirar', it: [{tipo: 'retiro', t: 'retirar luminaria', ind: 'luminaria'}, {tipo: 'otro', t: 'retirar gancho en desuso', ind: 'vial o peatonal'}]},
+  {c: 'Postes', it: [{tipo: 'otro', t: 'pintar poste'}, {tipo: 'otro', t: 'reparar base poste'}, {tipo: 'otro', t: 'enumerar poste/s'}]},
+  {c: 'Calpe / caja', it: [{tipo: 'otro', t: 'tensar calpa'}, {tipo: 'otro', t: 'cambiar calpe', ind: 'tramo'}, {tipo: 'otro', t: 'afianzar caja API'}]},
+  {c: 'Tapas', it: [{tipo: 'otro', t: 'cerrar tapa tablero'}, {tipo: 'otro', t: 'cerrar tapa escotilla'}]},
+  {c: 'Ganchos', it: [{tipo: 'otro', t: 'retirar gancho en desuso', ind: 'vial o peatonal'}]}
+];
+function rqSolElegir(ed, b, w, alElegir){
+  alElegir(w.tipo);                                     // fija el tipo del requerimiento (despeje / retiro / instalación / otro)
+  b.dataset.t = w.t; b.firstChild.nodeValue = w.t; b.dataset.w = w.t;   // la burbuja muestra el trabajo elegido
+  if(w.urg){ const u = document.getElementById('rqUrg') || document.getElementById('rnUrg'); if(u && !u.checked){ u.checked = true; u.dispatchEvent(new Event('change', {bubbles: true})); } }
+  if(w.ind && w.ind !== 'luminaria'){ ed._r = null; rqSolInsertarTexto(ed, '(' + w.ind + '): '); }   // el cursor vuelve al final del texto
+}
 function rqSolMenu(ed, b, alElegir){
   document.querySelectorAll('.rqs-menu').forEach(m => m.remove());
-  const m = document.createElement('div'); m.className = 'rqs-menu';
-  RQ_TIPOS.forEach(([k, t]) => { const o = document.createElement('button'); o.type = 'button'; o.textContent = t; if(b.dataset.k === k) o.className = 'on'; o.onclick = e => { e.stopPropagation(); m.remove(); alElegir(k); }; m.appendChild(o); });
+  const m = document.createElement('div'); m.className = 'rqs-menu'; m.style.maxHeight = '55vh'; m.style.overflowY = 'auto';
+  m.addEventListener('mousedown', e => e.preventDefault());   // los botones del menú no le quitan el foco al texto
+  const nivel1 = () => {
+    m.innerHTML = '';
+    RQ_MENU.forEach(g => { const o = document.createElement('button'); o.type = 'button'; o.textContent = g.c + '  ›'; o.onclick = e => { e.stopPropagation(); nivel2(g); }; m.appendChild(o); });
+  };
+  const nivel2 = g => {
+    m.innerHTML = '';
+    const v = document.createElement('button'); v.type = 'button'; v.textContent = '‹ Volver · ' + g.c; v.style.fontWeight = '700'; v.style.color = '#6d3fc8'; v.onclick = e => { e.stopPropagation(); nivel1(); }; m.appendChild(v);
+    g.it.forEach(w => { const o = document.createElement('button'); o.type = 'button'; o.textContent = (w.n || (w.t.charAt(0).toUpperCase() + w.t.slice(1))) + (w.ind && w.ind !== 'luminaria' ? ' (' + w.ind + ')' : ''); if(w.urg) o.style.color = '#c1443c'; if((b.dataset.w || b.dataset.t) === w.t) o.className = 'on';
+      o.onclick = e => { e.stopPropagation(); m.remove(); rqSolElegir(ed, b, w, alElegir); }; m.appendChild(o); });
+  };
+  nivel1();
   const rb = b.getBoundingClientRect(), pr = ed.parentNode.getBoundingClientRect();
   m.style.left = Math.max(0, rb.left - pr.left) + 'px'; m.style.top = (rb.bottom - pr.top + 4) + 'px'; ed.parentNode.appendChild(m);
-  setTimeout(() => document.addEventListener('click', function f(){ m.remove(); document.removeEventListener('click', f); }), 0);
+  setTimeout(() => document.addEventListener('click', function f(e){ if(m.contains(e.target)) return; m.remove(); document.removeEventListener('click', f); }), 0);
 }
 /* ed = div editable; chips = contenedor de atajos; n = estado; rpcFn = función rpc; onTipo(k) = avisa cambio de tipo */
-const RQ_TRABAJOS = [
-  {t: 'Tensar calpa'}, {t: 'Cambiar calpe', ind: 'tramo'}, {t: 'Afianzar caja API'}, {t: 'Cerrar tapa tablero'}, {t: 'Instalar tapa tablero'},
-  {t: 'Instalar tapa escotilla'}, {t: 'Cerrar tapa escotilla'}, {t: 'Pintar poste'}, {t: 'Reparar base poste'}, {t: 'Enumerar poste/s'},
-  {t: 'Luminaria colgando', urg: 1}, {t: 'Retirar gancho en desuso', ind: 'vial o peatonal'}, {t: 'Retirar luminaria', ind: 'indicar cuál'},
-  {t: 'Instalar luminaria', ind: 'indicar cuál'}, {t: 'Poste energizado', urg: 1}, {t: 'Calpe colgando energizado', urg: 1}
-];
 function rqSolMontar(ed, chips, n, rpcFn, onTipo, frases){
   if(n.descHtml){ ed.innerHTML = n.descHtml; } else rqSolBase(ed, n.tipo);
   ['keyup', 'mouseup', 'input', 'blur', 'touchend'].forEach(ev => ed.addEventListener(ev, () => { const s = window.getSelection(); if(s.rangeCount && ed.contains(s.anchorNode)) ed._r = s.getRangeAt(0).cloneRange(); }));
@@ -12079,18 +12101,7 @@ function rqSolMontar(ed, chips, n, rpcFn, onTipo, frases){
     const t = e.target.closest('.rqsb.tipo'); if(t){ e.stopPropagation(); rqSolMenu(ed, t, k => { onTipo(k); }); }
   });
   if(frases){
-    frases.innerHTML = '<span class="rqs-h">Trabajos a realizar · toca para añadir (🔴 = urgente por defecto)</span>';
-    RQ_TRABAJOS.forEach(w => {
-      const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip fr'; b.textContent = (w.urg ? '🔴 ' : '') + w.t + (w.ind ? ' …' : ''); b.title = w.ind ? 'Después de tocarlo, indica: ' + w.ind : w.t; b.onmousedown = e => e.preventDefault();
-      b.onclick = () => {
-        // si la solicitud aún no tiene texto propio, el tipo pasa a «lo siguiente» para que se lea bien
-        const base = ed.querySelector('.rqsb.tipo'), solo = rqSolTexto(ed).replace(/^Se solicita\s+/i, '') === (base ? base.dataset.t : '');
-        if(base && solo && base.dataset.k !== 'otro') onTipo('otro');
-        rqSolInsertarTexto(ed, w.t + (w.ind ? ' (' + w.ind + '): ' : '. '));
-        if(w.urg){ n.urgente = true; const u = document.getElementById('rqUrg') || document.getElementById('rnUrg'); if(u) u.checked = true; }
-      };
-      frases.appendChild(b);
-    });
+    frases.innerHTML = '';
     const r = document.createElement('button'); r.type = 'button'; r.className = 'rqs-rei'; r.textContent = '↺ Reiniciar texto'; r.onclick = () => { const k = (ed.querySelector('.rqsb.tipo') || {dataset: {}}).dataset.k || n.tipo; rqSolBase(ed, k); ed.focus(); }; frases.appendChild(r);
   }
   chips.innerHTML = '';
