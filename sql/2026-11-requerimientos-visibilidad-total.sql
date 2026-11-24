@@ -1,0 +1,4 @@
+-- Aplicado en producción (migración req_visibilidad_total_actuan_participantes)
+-- _req_participa = regla anterior de visibilidad (creador, derivado, asignado, quien intervino, admin).
+-- _req_ve: todos ven todos los requerimientos; las cuadrillas (camion) solo donde participan.
+-- _req_acciones: 'comentar' solo para participantes y admin (las demás acciones ya dependen de creador/gestor/cuadrilla).
