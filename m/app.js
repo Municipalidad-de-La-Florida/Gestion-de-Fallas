@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.13.2';
+const VERSION_APP = '2.13.3';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4629,6 +4629,12 @@ function rqSolMenu(ed, b, alElegir){
   setTimeout(() => document.addEventListener('click', function f(){ m.remove(); document.removeEventListener('click', f); }), 0);
 }
 /* ed = div editable; chips = contenedor de atajos; n = estado; rpcFn = función rpc; onTipo(k) = avisa cambio de tipo */
+const RQ_TRABAJOS = [
+  {t: 'Tensar calpa'}, {t: 'Cambiar calpe', ind: 'tramo'}, {t: 'Afianzar caja API'}, {t: 'Cerrar tapa tablero'}, {t: 'Instalar tapa tablero'},
+  {t: 'Instalar tapa escotilla'}, {t: 'Cerrar tapa escotilla'}, {t: 'Pintar poste'}, {t: 'Reparar base poste'}, {t: 'Enumerar poste/s'},
+  {t: 'Luminaria colgando', urg: 1}, {t: 'Retirar gancho en desuso', ind: 'vial o peatonal'}, {t: 'Retirar luminaria', ind: 'indicar cuál'},
+  {t: 'Instalar luminaria', ind: 'indicar cuál'}, {t: 'Poste energizado', urg: 1}, {t: 'Calpe colgando energizado', urg: 1}
+];
 const RQ_FRASES = ['por encontrarse en el área de influencia de un monoposte', 'por interferir con el arbolado', 'por daño tras un choque', 'a solicitud de los vecinos'];
 function rqSolMontar(ed, chips, n, rpcFn, onTipo, frases){
   if(n.descHtml){ ed.innerHTML = n.descHtml; } else rqSolBase(ed, n.tipo);
@@ -4640,7 +4646,19 @@ function rqSolMontar(ed, chips, n, rpcFn, onTipo, frases){
     const t = e.target.closest('.rqsb.tipo'); if(t){ e.stopPropagation(); rqSolMenu(ed, t, k => { onTipo(k); }); }
   });
   if(frases){
-    frases.innerHTML = '<span class="rqs-h">Frases rápidas</span>';
+    frases.innerHTML = '<span class="rqs-h">Trabajos a realizar · toca para añadir (🔴 = urgente por defecto)</span>';
+    RQ_TRABAJOS.forEach(w => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip fr'; b.textContent = (w.urg ? '🔴 ' : '') + w.t + (w.ind ? ' …' : ''); b.title = w.ind ? 'Después de tocarlo, indica: ' + w.ind : w.t; b.onmousedown = e => e.preventDefault();
+      b.onclick = () => {
+        // si la solicitud aún no tiene texto propio, el tipo pasa a «lo siguiente» para que se lea bien
+        const base = ed.querySelector('.rqsb.tipo'), solo = rqSolTexto(ed).replace(/^Se solicita\s+/i, '') === (base ? base.dataset.t : '');
+        if(base && solo && base.dataset.k !== 'otro') onTipo('otro');
+        rqSolInsertarTexto(ed, w.t + (w.ind ? ' (' + w.ind + '): ' : '. '));
+        if(w.urg){ n.urgente = true; const u = document.getElementById('rqUrg') || document.getElementById('rnUrg'); if(u) u.checked = true; }
+      };
+      frases.appendChild(b);
+    });
+    const hf = document.createElement('span'); hf.className = 'rqs-h'; hf.style.marginTop = '6px'; hf.textContent = 'Frases rápidas'; frases.appendChild(hf);
     RQ_FRASES.forEach(f => { const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip fr'; b.textContent = f; b.onmousedown = e => e.preventDefault(); b.onclick = () => rqSolInsertarTexto(ed, f); frases.appendChild(b); });
     const r = document.createElement('button'); r.type = 'button'; r.className = 'rqs-rei'; r.textContent = '↺ Reiniciar texto'; r.onclick = () => { const k = (ed.querySelector('.rqsb.tipo') || {dataset: {}}).dataset.k || n.tipo; rqSolBase(ed, k); ed.focus(); }; frases.appendChild(r);
   }
