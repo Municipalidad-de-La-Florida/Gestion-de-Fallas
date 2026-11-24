@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.13.9';
+const VERSION_APP = '2.14.0';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2072,8 +2072,8 @@ function htmlCodigos(cat, nombreCat) {
 // ---------- Notificador externo: reportar a nombre de otra persona (permiso notificador_externo; no en inspecciones ni Cuaderno) ----------
 let NOTIF_LISTA = null;   // { notificadores, usuarios }
 function puedeNotificadorApp() { return !CQ.abierto && S.modo.tipo !== 'inspeccion' && tiene('notificador_externo') && tiene('informar_falla'); }
-function htmlNotificadorApp() {
-  if (!puedeNotificadorApp()) return '';
+function htmlNotificadorApp(forzar) {
+  if (!forzar && !puedeNotificadorApp()) return '';
   return `<h3>Informa</h3>
     <select id="fNotif" class="campo" aria-label="Notificador"><option value="">Yo mismo</option></select>
     <input id="fNotifOtro" class="campo" maxlength="60" autocomplete="off" placeholder="Escribe el nombre del notificador" hidden>`;
@@ -2422,24 +2422,61 @@ async function ofrecerSegundaFalla(p, h) {
 }
 
 // Edita una falla recién ingresada (dentro de 15 min) o cualquiera si eres admin. La base valida el permiso (editar_falla).
-// Se puede cambiar código, comentario, orden externa y masivo. La ubicación no: si está mal, se elimina y se vuelve a informar.
+// Agrega un comentario a una falla ya creada (sin editarla ni cerrarla); aparece en la ficha, igual que en la web.
+function comentarFallaApp(p) {
+  const h = abrirHoja(`
+    <h2>Comentar · OS ${esc(p.ot || '—')}</h2>
+    <div class="hint">${esc(p.tipo_falla)} · ${esc(tipoLabel(p))}. El comentario queda en la ficha de la falla.</div>
+    <h3>Comentario</h3>
+    <textarea id="cmTx" class="campo" placeholder="Escribe un comentario sobre esta falla"></textarea>
+    <div class="acciones fija"><button id="cmOk" class="btn btn-primario">Guardar comentario</button></div>`);
+  const ok = $('#cmOk', h);
+  ok.addEventListener('click', ocupar(ok, async () => {
+    const tx = $('#cmTx', h).value.trim();
+    if (!tx) { toast('Escribe el comentario.', 'error'); return; }
+    ok.textContent = 'Guardando…';
+    await api('/rest/v1/fallas_comentarios', { method: 'POST', body: { falla_id: p.id, tipo: 'comentario', comentario: tx, autor_id: S.perfil.id, autor_nombre: S.perfil.nombre } });
+    cerrarHoja();
+    toast('Comentario guardado', 'ok');
+    const f = S.features.find((x) => x.properties.id === p.id);
+    if (f) abrirFalla(f.properties, f.geometry);
+  }));
+}
+
+// Editar falla: mismo formulario que al informar (dos columnas: informa, foto, orden externa y comentario | código).
+// La ubicación no: si está mal, se elimina y se vuelve a informar.
 async function editarFallaApp(p) {
-  let fila;
-  try { const r = await select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,masivo,estado,puntos_luminarios(simb_poste)`); fila = r && r[0]; }
-  catch (e) { toast('No se pudo cargar la falla: ' + e.message, 'error'); return; }
+  let fila, fotoRep = null;
+  try {
+    const r = await select('fallas', `id=eq.${p.id}&select=tipo,tipo_falla,descripcion_otro,orden_externa,masivo,estado,creado_por,inspeccion_id,notificador_id,puntos_luminarios(simb_poste)`); fila = r && r[0];
+    const fr = await select('fallas_foto_reporte', `falla_id=eq.${p.id}&select=ruta`).catch(() => []); fotoRep = fr && fr[0];
+  } catch (e) { toast('No se pudo cargar la falla: ' + e.message, 'error'); return; }
   if (!fila) { toast('No se encontró la falla.', 'error'); return; }
   const esCircuito = fila.tipo === 'linea';
   const nomCat = catFalla({ tipo: fila.tipo, tipo_falla: fila.tipo_falla, simb_poste: fila.puntos_luminarios && fila.puntos_luminarios.simb_poste });
   const cat = catalogoActivo(nomCat, fila.tipo_falla);
   let codigo = fila.tipo_falla;
-  const h = abrirHoja(`
+  const conNotif = tiene('notificador_externo') && !fila.inspeccion_id;     // la web tampoco deja cambiar el notificador en fallas de una inspección
+  const esCreador = fila.creado_por === S.perfil.id;
+  const sinFotoYPuede = !fotoRep && esCreador && tiene('informar_falla');
+  const h = abrirHojaForm(`
     <h2>Editar falla · OS ${esc(p.ot || '—')}</h2>
-    <div class="hint">${esc(tipoLabel(p))}${p.tipo === 'punto' ? ` · llave ${esc(p.llave ?? '—')}` : ''}. La ubicación no se puede cambiar: si está mal, elimina la falla y vuelve a informarla.${esCircuito ? ' Los cambios también se aplican a sus puntos afectados.' : ''}</div>
-    <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
-    <h3>Comentario</h3>
-    <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
-    <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
-    <div class="acciones fija"><button id="fGuardar" class="btn btn-primario">Guardar cambios</button></div>`);
+    <div class="hint">${esc(tipoLabel(p))}${p.tipo === 'punto' ? ` · llave ${esc(p.llave ?? '—')}` : ''}. La ubicación no se puede cambiar: si está mal, elimina la falla y vuelve a informarla.${esCircuito ? ' Los cambios también se aplican a todos los puntos del circuito.' : ''}</div>
+    <div id="fCuerpo">
+      <div class="dos-col">
+        <div class="col-izq">
+          ${conNotif ? htmlNotificadorApp(true) : ''}
+          ${fotoRep ? '<h3>Foto del reporte</h3><div id="fpActual" class="fotos"></div>' : (sinFotoYPuede ? htmlFotoReporte() : '')}
+          <h3>Orden externa (opcional)</h3>${htmlOrdenExterna()}
+          <h3>Comentario</h3>
+          <textarea id="fDesc" class="campo" placeholder="Opcional (obligatorio si eliges OTRO)"></textarea>
+        </div>
+        <div class="col-der">
+          <h3>Código de falla</h3>${htmlCodigos(cat, nomCat)}
+        </div>
+      </div>
+      <div class="acciones fija"><button id="fGuardar" class="btn btn-primario">Guardar cambios</button></div>
+    </div>`);
   $$('.codigo', h).forEach((b) => {
     if (b.dataset.c === codigo) b.classList.add('sel');
     b.addEventListener('click', () => { $$('.codigo', h).forEach((x) => x.classList.remove('sel')); b.classList.add('sel'); codigo = b.dataset.c; });
@@ -2447,6 +2484,17 @@ async function editarFallaApp(p) {
   $('#fDesc', h).value = fila.descripcion_otro || '';
   const m = /^([SET])-(.*)$/.exec(fila.orden_externa || '');
   if (m) { $('#fOeNum', h).dataset.p = m[1]; $('#fOeNum', h).value = m[2]; }
+  if (fotoRep) urlFoto(fotoRep.ruta).then((u) => {
+    const box = $('#fpActual', h); if (!u || !box) return;
+    box.innerHTML = `<button type="button" class="foto" aria-label="Ampliar foto"><img src="${esc(u)}" alt="Foto del reporte"></button>`;
+    $('.foto', box).addEventListener('click', () => abrirFotoGrande([u], 0, p.ot ? `OS${p.ot}_f` : null));
+  }).catch(() => {});
+  const leerFoto = sinFotoYPuede ? activarFotoReporte(h) : () => null;
+  if (conNotif) activarNotificadorApp(h).then(() => {   // deja seleccionado a quien ya figura como notificador
+    const sel = $('#fNotif', h); if (!sel || !fila.notificador_id) return;
+    if (![...sel.options].some((o) => o.value === fila.notificador_id)) sel.insertAdjacentHTML('beforeend', `<option value="${esc(fila.notificador_id)}">Notificador actual</option>`);
+    sel.value = fila.notificador_id;
+  });
   const gu = $('#fGuardar', h);
   gu.addEventListener('click', ocupar(gu, async () => {
     if (!codigo) { toast('Selecciona un código de falla.', 'error'); return; }
@@ -2454,8 +2502,16 @@ async function editarFallaApp(p) {
     if (codigo === 'OTRO' && !desc) { toast('Describe la falla.', 'error'); return; }
     const oe = leerOrdenExterna(h);
     if (oe.error) { toast(oe.error, 'error'); return; }
+    const cambios = { tipo_falla: codigo, descripcion_otro: desc || null, orden_externa: oe.valor };
+    if (conNotif) {
+      const nt = await leerNotificadorApp(h);
+      if (nt.error) { toast(nt.error, 'error'); return; }
+      if ((nt.id || null) !== (fila.notificador_id || null)) cambios.notificador_id = nt.id || null;
+    }
     gu.textContent = 'Guardando…';
-    await rpc('editar_falla', { p_id: p.id, p_cambios: { tipo_falla: codigo, descripcion_otro: desc || null, orden_externa: oe.valor } });
+    await rpc('editar_falla', { p_id: p.id, p_cambios: cambios });
+    const blob = leerFoto();
+    if (blob) { gu.textContent = 'Subiendo foto…'; await subirFotoReporte(p.id, blob); }
     cerrarHoja();
     toast('Falla actualizada', 'ok');
     cargarFallas();
@@ -2488,6 +2544,7 @@ const ICO_ACC = {
   alerta: _ia('<path d="M12 4l9 16H3z"/><path d="M12 10v4M12 17v.5"/>'),
   ok: _ia('<path d="M5 12.5l4.5 4.5L19 7.5"/>'),
   editar: _ia('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>'),
+  comentar: _ia('<path d="M4 5h16v11H9l-5 4z"/><path d="M8 9.5h8M8 12.5h5"/>'),
   nueva: _ia('<path d="M12 5v14M5 12h14"/>'),
   masivo: _ia('<path d="M7 4L3 8l4 4"/><path d="M3 8h14"/><path d="M17 20l4-4-4-4"/><path d="M21 16H7"/>'),
   camion: _ia('<path d="M3 7h11v9H3zM14 10h4l3 3v3h-7"/><circle cx="7" cy="17.5" r="1.7"/><circle cx="17" cy="17.5" r="1.7"/>'),
@@ -2588,6 +2645,7 @@ async function abrirFalla(p, geom) {
       ${puedeCerrarEsta ? `<button id="bCerrar" class="btn btn-primario" style="margin-top:0">${ICO_ACC.ok}Registrar reparación</button>` : ''}
       <div class="acc-mini">
         ${puedeEditarEsta ? `<button id="bEditar" class="acc-t">${ICO_ACC.editar}<span>Editar${tiene('falla_editar_cualquiera') ? '' : `<small>${minRestantes} min</small>`}</span></button>` : ''}
+        ${tiene('falla_comentar') && !p.cascada ? `<button id="bComentar" class="acc-t">${ICO_ACC.comentar}<span>Comentar</span></button>` : ''}
         ${puedeNuevaAqui ? `<button id="bNueva" class="acc-t">${ICO_ACC.nueva}<span>Nueva falla<small>${p.tipo === 'linea' ? 'en este circuito' : 'en este punto'}</small></span></button>` : ''}
         ${puedeAsignarEsta ? `<button id="bAsignar" class="acc-t">${ICO_ACC.camion}<span>${p.asignado_camion_id ? 'Cambiar camión' : 'Asignar camión'}</span></button>` : ''}
         <a class="acc-t" target="_blank" rel="noopener" href="${esc(urlComoLlegar(c))}">${ICO_ACC.ir}<span>Cómo llegar</span></a>
@@ -2616,6 +2674,8 @@ async function abrirFalla(p, geom) {
   if (bc) bc.addEventListener('click', () => formCierre(p));
   const bed = $('#bEditar', h);
   if (bed) bed.addEventListener('click', () => editarFallaApp(p));
+  const bcm = $('#bComentar', h);
+  if (bcm) bcm.addEventListener('click', () => comentarFallaApp(p));
   const bn = $('#bNueva', h);
   if (bn) bn.addEventListener('click', ocupar(bn, () => reportarNuevaSobre(p)));
   const ba = $('#bAsignar', h);
