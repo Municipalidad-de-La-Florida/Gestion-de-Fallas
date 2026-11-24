@@ -922,3 +922,15 @@ html[data-tema=oscuro] .av-tabs button{ background:#17201d; } html[data-tema=osc
 html[data-tema=oscuro] #toast{ background:#1e2925; color:#e7eeeb; border:1px solid #2a3833; }
 html[data-tema=oscuro] #toast.error{ background:#9b2217; color:#fff; } html[data-tema=oscuro] #toast.ok{ background:#1c6b3d; color:#fff; }
 html[data-tema=oscuro] #toast.insp{ background:#1b1608; color:#ffd24a; border:1px solid #ffd24a66; }
+
+/* ---- Píldoras de modo (inspección / cuaderno / requerimientos): flotan sobre el mapa en vez de una barra de borde a borde ---- */
+#pildas{ position:relative; z-index:900; height:0; display:flex; flex-direction:column; align-items:center; gap:6px; pointer-events:none; }
+#pildas .chip-modo{ pointer-events:auto; display:flex; align-items:center; gap:9px; margin-top:10px; max-width:calc(100vw - 24px); padding:7px 8px 7px 12px; border-radius:999px; background:#fff; color:#1c2b23; font-size:13px; line-height:1.2; font-weight:700; box-shadow:0 4px 16px rgba(0,0,0,.22); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#pildas .chip-modo[hidden]{ display:none; }
+#pildas .chip-modo::before{ content:''; flex:none; width:10px; height:10px; border-radius:50%; background:var(--pc); box-shadow:0 0 0 4px color-mix(in srgb, var(--pc) 28%, transparent); }
+#pildas .chip-modo::after{ content:'✕'; flex:none; margin-left:auto; width:24px; height:24px; border-radius:50%; background:#eef1ef; color:#4a5a51; font-size:12px; display:flex; align-items:center; justify-content:center; }
+#pildas .chip-modo.insp{ --pc:#e0a800; background:#fff; color:#1c2b23; }
+#pildas .chip-modo.cuad{ --pc:#3a8a5c; background:#fff; color:#1c2b23; }
+#pildas .chip-modo.reqm{ --pc:#6d3fc8; background:#fff; color:#1c2b23; padding:7px 8px 7px 12px; font-size:13px; }
+html[data-tema=oscuro] #pildas .chip-modo, html[data-tema=oscuro] #pildas .chip-modo.insp, html[data-tema=oscuro] #pildas .chip-modo.cuad, html[data-tema=oscuro] #pildas .chip-modo.reqm{ background:#26302b; color:#f1f5f2; }
+html[data-tema=oscuro] #pildas .chip-modo::after{ background:#3a463f; color:#dfe7e2; }

@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.13.4';
+const VERSION_APP = '2.13.5';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4028,7 +4028,7 @@ function pintarModo() {
   const on = S.modo.tipo === 'inspeccion';
   n.classList.toggle('sel', on);
   c.hidden = !on;
-  c.textContent = on ? `📋 Inspección del ${fmtFechaCorta(S.modo.fecha)} activa · toca para terminar` : '';
+  c.textContent = on ? `Inspección · ${fmtFechaCorta(S.modo.fecha)}` : '';
 }
 function guardarModo() {
   try {
@@ -4117,7 +4117,7 @@ function pintarCuaderno() {
   bd.hidden = !pc || !CQ.total; bd.textContent = CQ.total > 99 ? '99+' : CQ.total;
   nc.classList.toggle('sel', CQ.abierto);
   cb.hidden = !(pc && CQ.abierto);
-  cb.textContent = CQ.abierto ? `📓 Cuaderno abierto · ${CQ.total} en total${CQ.mias ? ` · +${CQ.mias} tuyas` : ''} · toca para cerrar` : '';
+  cb.textContent = CQ.abierto ? `Cuaderno · ${CQ.total} en total${CQ.mias ? ` · +${CQ.mias} tuyas` : ''}` : '';
   $('#navInferior').classList.toggle('apretado', $$('#navInferior .nav-btn:not([hidden])').length >= 4);
 }
 function abrirCuaderno() {
@@ -4784,7 +4784,7 @@ function rqDibujarMapa(centrar) {
 function pintarChipReq() {
   const c = $('#chipReq'); if (!c) return;
   c.hidden = !S.reqMapa;
-  c.textContent = S.reqMapa ? `📋 ${RQM.solo ? RQM.solo.nombre + ': ' + RQM.n + ' asignado' + (RQM.n === 1 ? '' : 's') : RQM.n + ' activo' + (RQM.n === 1 ? '' : 's')}${rqCrea() && !RQM.solo ? ' · toca un punto para ingresar' : ''} · ✕ salir` : '';
+  c.textContent = S.reqMapa ? `Requerimientos · ${RQM.solo ? RQM.solo.nombre + ': ' + RQM.n + ' asignado' + (RQM.n === 1 ? '' : 's') : RQM.n + ' activo' + (RQM.n === 1 ? '' : 's')}${rqCrea() && !RQM.solo ? ' · toca un punto' : ''}` : '';
 }
 async function rqEntrarMapa(sinCentrar) {
   S.reqMapa = true; RQ.filtro = 'abiertos'; RQ.texto = ''; $('#rqBuscar').value = '';

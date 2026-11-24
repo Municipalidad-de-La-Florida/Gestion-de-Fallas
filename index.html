@@ -12003,10 +12003,9 @@ async function rqModoMapa(lat, lng, sinCentrar){
   RQ.mapa = true;
   if(!rqEl('rqMapaBar')){
     const b = document.createElement('div'); b.id = 'rqMapaBar'; b.className = 'rq-mapbar';
-    b.innerHTML = '<span></span><button type="button" id="rqMapaLista" title="Ver la lista de requerimientos">Lista</button><button type="button" id="rqMapaSalir" title="Salir de requerimientos">✕ Salir</button>';
+    b.innerHTML = '<span></span><button type="button" id="rqMapaSalir" title="Salir de requerimientos">✕ Salir</button>';
     document.body.appendChild(b);
     rqEl('rqMapaSalir').onclick = rqSalirMapa;
-    rqEl('rqMapaLista').onclick = () => abrirRequerimientos();
     b.title = rqCrea() ? 'Haz clic en un punto del catastro o en un lugar vacío para ingresar un requerimiento' : 'Requerimientos activos en el mapa';
   }
   await rqRefrescarMapa(lat == null && !sinCentrar, lat != null ? [lat, lng] : null);
