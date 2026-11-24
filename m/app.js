@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.2';
+const VERSION_APP = '2.14.3';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -182,6 +182,13 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 function esc(v) {
   return String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+// Texto seguro con los teléfonos de 9 dígitos (móvil 9… o fijo 2…) convertidos en botón de llamada
+function escTel(v) {
+  return esc(v).replace(/(?<![\d+])(?<![A-Za-z]-)((?:\+?56[ ]?)?[29](?:[ .\-]?\d){8})(?!\d)/g, (m) => {
+    const d = m.replace(/\D/g, '');
+    return `<a class="tel-btn" href="tel:+${d.length > 9 ? d : '56' + d}">📞 ${m}</a>`;
+  });
 }
 
 /* Fechas en hora de Chile (misma lógica que la página web) */
@@ -1826,7 +1833,7 @@ async function abrirHistorial(tipo, gid, titulo, geom) {
           <button type="button" class="hx-abrir" data-id="${esc(f.falla_id)}">Abrir falla →</button>
         </div>
         <div class="hx-tl">${ev.map((e) => `<div class="hx-ev" style="--c:${colPunto[e.c]}"><span class="hx-pt"></span>
-          <div class="hx-q"><div class="hx-l1"><span class="hx-b ${e.c}">${e.k}</span><span class="hx-quien">${esc(e.q || '—')}</span><span class="hx-fh">${esc(fmtFechaHoraCorta(e.t))}</span></div>${e.d ? `<div class="hx-det">${esc(e.d)}</div>` : ''}</div></div>`).join('')}</div>
+          <div class="hx-q"><div class="hx-l1"><span class="hx-b ${e.c}">${e.k}</span><span class="hx-quien">${esc(e.q || '—')}</span><span class="hx-fh">${esc(fmtFechaHoraCorta(e.t))}</span></div>${e.d ? `<div class="hx-det">${escTel(e.d)}</div>` : ''}</div></div>`).join('')}</div>
       </div>`;
     }).join('')}</div>`;
     h.querySelectorAll('.hx-abrir').forEach((b) => b.addEventListener('click', () => { cerrarHoja(); abrirFallaPorId(b.dataset.id); }));
@@ -2608,7 +2615,7 @@ async function abrirFalla(p, geom) {
   if (p.estado === 'pendiente' || (p.estado === 'reparada' && p.pendiente_por_nombre)) {
     evFicha.push({ t: p.fecha_pendiente, html: `<div class="info-warn"><h3>Pendiente</h3>
       <dl class="kv"><dt>Responde</dt><dd>${esc(p.pendiente_por_nombre || '—')}</dd><dt>Fecha respuesta</dt><dd>${esc(fmtFecha(p.fecha_pendiente))}</dd></dl>
-      <h4>Motivo ${tiene('falla_editar_cualquiera') && p.estado === 'pendiente' && !p.cascada ? '<button type="button" id="bEditPend" class="btn-link" title="Editar el motivo" aria-label="Editar el motivo" style="font-size:13px;padding:0 6px">✏️</button>' : ''}</h4><pre class="texto" id="motPend">${esc(p.motivo_pendiente || '')}</pre>
+      <h4>Motivo ${tiene('falla_editar_cualquiera') && p.estado === 'pendiente' && !p.cascada ? '<button type="button" id="bEditPend" class="btn-link" title="Editar el motivo" aria-label="Editar el motivo" style="font-size:13px;padding:0 6px">✏️</button>' : ''}</h4><pre class="texto" id="motPend">${escTel(p.motivo_pendiente || '')}</pre>
     </div>` });
   }
   // Los comentarios que repiten el motivo del pendiente o el trabajo realizado ya salen en sus tarjetas: no se duplican
@@ -2620,14 +2627,14 @@ async function abrirFalla(p, geom) {
   comsFicha = comsFicha.filter((r) => r.tipo === 'asignacion' || r.tipo === 'revision' || r.tipo === 'reparacion_anulada' || !yaMostrados.has(normCom(r.comentario)));
   if (hayRevision) comsFicha = comsFicha.filter((r) => r.tipo !== 'reparacion');   // su texto sale en la tarjeta "Reparación"
   comsFicha.forEach((r) => evFicha.push({ t: r.creado_en, html: r.tipo === 'revision'
-    ? `<div class="com-bloque t-revision"><div class="quien">🛠 <b>Revisión del administrador</b> · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre></div>`
+    ? `<div class="com-bloque t-revision"><div class="quien">🛠 <b>Revisión del administrador</b> · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${escTel(r.comentario)}</pre></div>`
     : r.tipo === 'reparacion_anulada'
-    ? `<div class="com-bloque t-anulada"><div class="quien">↩ <b>Reparación anulada</b><br>Respuesta del camión: ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre><div class="fotos-anul"></div></div>`
-    : `<div class="com-bloque t-${esc(r.tipo)}"><div class="quien">💬 ${r.tipo === 'asignacion' ? 'Comentario de asignación' : 'Comentario'} · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${esc(r.comentario)}</pre></div>` }));
+    ? `<div class="com-bloque t-anulada"><div class="quien">↩ <b>Reparación anulada</b><br>Respuesta del camión: ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${escTel(r.comentario)}</pre><div class="fotos-anul"></div></div>`
+    : `<div class="com-bloque t-${esc(r.tipo)}"><div class="quien">💬 ${r.tipo === 'asignacion' ? 'Comentario de asignación' : 'Comentario'} · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${escTel(r.comentario)}</pre></div>` }));
   if (p.estado === 'reparada') {
     evFicha.push({ t: p.fecha_reparacion, html: `<div class="info-ok"><h3>Reparación</h3>
       <dl class="kv">${kvRespuesta.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
-      ${hayRevision && repOriginal ? `<h4>Trabajo realizado (respuesta del camión)</h4><pre class="texto">${esc(repOriginal.comentario)}</pre>` : p.descripcion_reparacion ? `<h4>Trabajo realizado</h4><pre class="texto">${esc(p.descripcion_reparacion)}</pre>` : ''}
+      ${hayRevision && repOriginal ? `<h4>Trabajo realizado (respuesta del camión)</h4><pre class="texto">${escTel(repOriginal.comentario)}</pre>` : p.descripcion_reparacion ? `<h4>Trabajo realizado</h4><pre class="texto">${escTel(p.descripcion_reparacion)}</pre>` : ''}
       <div id="fotosFalla"></div>
     </div>` });
   }
@@ -4542,7 +4549,7 @@ function rqPintarDetalle() {
   }).join('');
   const tl = d.historial.map((x) => {
     const txt = esc(RQ_TXT[x.accion] || x.accion).replace('{d}', `<b>${esc(x.destino || '—')}</b>`);
-    return `<div class="rq-ev" style="--c:${RQ_COLOR[x.accion] || '#6d3fc8'}"><b>${esc(x.usuario || '—')}</b> ${txt}<small>${esc(rqFecha(x.fecha))}</small>${x.comentario && x.accion !== 'crear' ? `<div class="rq-cm">${esc(x.comentario)}</div>` : ''}</div>`;
+    return `<div class="rq-ev" style="--c:${RQ_COLOR[x.accion] || '#6d3fc8'}"><b>${esc(x.usuario || '—')}</b> ${txt}<small>${esc(rqFecha(x.fecha))}</small>${x.comentario && x.accion !== 'crear' ? `<div class="rq-cm">${escTel(x.comentario)}</div>` : ''}</div>`;
   }).join('');
   const quien = [`Solicitó <b>${esc(r.creado_por.nombre || '—')}</b>`, r.derivado_a.nombre ? `Contratista: <b>${esc(r.derivado_a.nombre)}</b>` : '', r.asignado_a.nombre ? `Cuadrilla: <b>${esc(r.asignado_a.nombre)}</b>` : ''].filter(Boolean).join(' · ');
   const h = $('#hojaContenido');
@@ -4553,7 +4560,7 @@ function rqPintarDetalle() {
       <div class="rq-sub">${esc(r.ubicacion)}${r.lat != null ? ` · <a href="#" id="rqMapa" style="color:var(--pri);font-weight:700;">Ver en el mapa</a>` : ''}</div>
       ${rqDistTxt(r)}
       ${r.lat != null ? `<div class="rq-acc" style="margin:8px 0 0;"><a class="rq-btn rq-ir" id="rqIr" href="${esc(urlComoLlegar([r.lat, r.lng]))}" target="_blank" rel="noopener">🧭 Cómo llegar</a></div>` : ''}
-      <div class="rq-box"><b>Solicitud</b><div class="rq-txt">${esc(r.descripcion)}</div>${fSol.length ? rqFotosHtml(fSol, 'solicitud', false) : ''}</div>
+      <div class="rq-box"><b>Solicitud</b><div class="rq-txt">${escTel(r.descripcion)}</div>${fSol.length ? rqFotosHtml(fSol, 'solicitud', false) : ''}</div>
       <div class="rq-sub">${quien}</div>${ejecBox}
       ${botones ? `<div class="rq-acc" id="rqAcc">${botones}</div><div id="rqForm"></div>` : ''}
     </div>
