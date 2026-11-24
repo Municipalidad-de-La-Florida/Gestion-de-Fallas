@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.0';
+const VERSION_APP = '2.14.1';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4389,7 +4389,7 @@ function rqDistTxt(r){
 }
 const rqClaseEst = (r) => (r.estado === 'ejecutado' || r.estado === 'revisado') ? ' rq-c-' + r.estado : '';
 const RQ = { orden: 'desc', filtro: 'abiertos', texto: '', lista: [], conteos: {}, destinos: null, det: null, urls: {}, timer: null, busq: null };
-const rqVe = () => !!S.perfil && (rol() === 'admin' || rol() === 'camion' || tiene('req_crear') || tiene('req_gestionar'));
+const rqVe = () => !!S.perfil;   // todos ven los requerimientos (las cuadrillas solo los suyos, lo decide la base); solo participan quienes la base indique
 const rqLuzHtml = '<div class="rq-luz"><div class="rq-estela"></div><div class="rq-halo"></div><div class="rq-nucleo"></div></div>';
 const rqAbierto = (r) => !['cerrado', 'anulado'].includes(r.estado);
 function rqFecha(iso) {

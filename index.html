@@ -11647,7 +11647,7 @@ const RQ_ESTADOS = {derivado:'Solicitado', asignado:'Derivado', ejecutado:'Ejecu
 const RQ_TIPOS = [['despeje','Despeje de luminaria'], ['retiro','Retiro de luminaria'], ['instalacion','Instalación de luminaria'], ['otro','Otro']];
 const RQ = {orden:'desc', filtro:'abiertos', texto:'', chip:'', lista:[], conteos:{}, destinos:null, nuevo:null, vista:'lista', id:null, det:null, urls:{}, badgeTimer:null, marcador:null, busq:null};
 const rqEsAdmin = () => !!currentUser && currentUser.rol === 'admin';
-const rqVe = () => !!currentUser && !modoVista && (rqEsAdmin() || tieneReal('req_crear') || tieneReal('req_gestionar'));
+const rqVe = () => !!currentUser && !modoVista;   // todos ven los requerimientos; solo participan (actúan) quienes la base indique
 const rqCrea = () => !!currentUser && (rqEsAdmin() || tieneReal('req_crear'));
 const rqEl = id => document.getElementById(id);
 function rqFecha(iso){
