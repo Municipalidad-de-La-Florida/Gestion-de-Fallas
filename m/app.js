@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.13.8';
+const VERSION_APP = '2.13.9';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4689,7 +4689,7 @@ function rqAbrirNuevo(conservar) {
   const n = RQ.nuevo = conservar && RQ.nuevo ? RQ.nuevo : rqNuevoVacio();
   const gs = (RQ.destinos && RQ.destinos.gestores) || [];
   const h = abrirHoja(`<div class="rq-wrap" style="--pri:#6d3fc8;--lil:#f3eefc;--lilb:#d9ccf5;--rojo:#e23b33;--rline:#e2dcee;--rsoft:#6a607f;">
-    <div style="display:flex;align-items:center;gap:8px;margin:0 0 8px;"><h2 style="color:var(--pri);margin:0;flex:1;">Nuevo requerimiento</h2><label class="rq-urgt"><input type="checkbox" id="rnUrg" ${n.urgente ? 'checked' : ''}> 🔴 Urgente</label></div>
+    <div style="display:flex;align-items:center;gap:8px;margin:0 0 8px;padding-right:48px;"><h2 style="color:var(--pri);margin:0;flex:1;">Nuevo requerimiento</h2><label class="rq-urgt"><input type="checkbox" id="rnUrg" ${n.urgente ? 'checked' : ''}> 🔴 Urgente</label></div>
     <div class="rq-form">
     <label style="margin-top:0;">Solicitud</label><div class="rqs-wrap"><div id="rnDesc" class="rqs-ed" contenteditable="true" role="textbox" aria-multiline="true"></div></div><div class="rqs-hint">Toca la burbuja morada para cambiar el tipo y sigue escribiendo.</div><div id="rnSFrases" class="rqs-chips"></div>
     <label>Punto <span class="rq-req">*</span></label>
