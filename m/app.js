@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.1';
+const VERSION_APP = '2.14.2';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4757,7 +4757,7 @@ function rqAbrirNuevo(conservar) {
     <label>Derivar a <span class="rq-req">*</span></label><select id="rnDer"><option value="">— Elige el contratista —</option>${gs.map((g) => `<option value="${esc(g.id)}" ${n.derivar === g.id ? 'selected' : ''}>${esc(g.nombre)}</option>`).join('')}</select>
     <label>Fotos (opcional, máximo 5)</label><div id="rnFotos"></div>
     <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;"><button type="button" class="rq-btn rq-p" id="rnOk">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rnNo">Cancelar</button></div><div class="rq-err" id="rnErr"></div></div></div>`);
-  const leer = () => { const tb = $('#rnDesc', h).querySelector('.rqsb.tipo'); if (tb) n.tipo = tb.dataset.k; n.desc = rqSolTexto($('#rnDesc', h)); n.descHtml = $('#rnDesc', h).innerHTML; n.derivar = $('#rnDer', h).value; n.urgente = $('#rnUrg', h).checked; const q = $('#rnQ', h); if (q) n.q = q.value; const u = $('#rnUbic', h); if (u) n.ubic = u.value; };
+  const leer = () => { const tb = $('#rnDesc', h).querySelector('.rqsb.tipo'); n.tipo = tb ? tb.dataset.k : 'otro'; n.desc = rqSolTexto($('#rnDesc', h)); n.descHtml = $('#rnDesc', h).innerHTML; n.derivar = $('#rnDer', h).value; n.urgente = $('#rnUrg', h).checked; const q = $('#rnQ', h); if (q) n.q = q.value; const u = $('#rnUbic', h); if (u) n.ubic = u.value; };
   const cambiaTipo = (k) => { rqSolCambiarTipo($('#rnDesc', h), k); n.tipo = k; leer(); };
   rqSolMontar($('#rnDesc', h), $('#rnSChips', h), n, rpc, cambiaTipo, $('#rnSFrases', h));
   const okBtn = () => { $('#rnOk', h).disabled = !$('#rnDer', h).value; }; $('#rnDer', h).addEventListener('change', okBtn); okBtn();
