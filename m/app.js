@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.13.6';
+const VERSION_APP = '2.13.9';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4135,10 +4135,9 @@ function abrirCuaderno() {
   if (a) a.addEventListener('click', () => {
     if (S.modo.tipo === 'inspeccion') { toast('Termina tu inspección para abrir el Cuaderno.', 'error'); return; }
     CQ.abierto = true; CQ.desde = Date.now(); guardarCuad(); pintarModo(); cerrarHoja(); cambiarVista('mapa');
-    toast('Cuaderno abierto. Toca un punto o circuito para anotar la falla.', 'ok');
   });
   const c = $('#cqCerrar', h);
-  if (c) c.addEventListener('click', () => { cerrarCuaderno(); cerrarHoja(); toast('Cuaderno cerrado'); });
+  if (c) c.addEventListener('click', () => { cerrarCuaderno(); cerrarHoja(); });
   $('#cqVer', h).addEventListener('click', () => { CQ.pag = 0; abrirListaCuaderno(); });
 }
 async function anotarEnCuaderno(tipo, gid, codigo, desc, a) {
@@ -4661,10 +4660,11 @@ function rqSolMontar(ed, chips, n, rpcFn, onTipo, frases){
   if(n.descHtml){ ed.innerHTML = n.descHtml; } else rqSolBase(ed, n.tipo);
   ['keyup', 'mouseup', 'input', 'blur', 'touchend'].forEach(ev => ed.addEventListener(ev, () => { const s = window.getSelection(); if(s.rangeCount && ed.contains(s.anchorNode)) ed._r = s.getRangeAt(0).cloneRange(); }));
   ed.addEventListener('keydown', e => { if(e.key === 'Enter') e.preventDefault(); });
+  ed.addEventListener('mousedown', e => { if(e.target.closest('.rqsb.tipo')) e.preventDefault(); });   // tocar la burbuja no enfoca el texto: el teclado no se abre hasta tocar el cuadro
   ed.addEventListener('paste', e => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, ' '); document.execCommand('insertText', false, t); });
   ed.addEventListener('click', e => {
     const x = e.target.closest('.rqsx'); if(x){ const b = x.parentNode; if(b.nextSibling && b.nextSibling.nodeType === 3) b.nextSibling.nodeValue = b.nextSibling.nodeValue.replace(/^ /, ''); b.remove(); return; }
-    const t = e.target.closest('.rqsb.tipo'); if(t){ e.stopPropagation(); rqSolMenu(ed, t, k => { onTipo(k); }); }
+    const t = e.target.closest('.rqsb.tipo'); if(t){ e.stopPropagation(); ed.blur(); rqSolMenu(ed, t, k => { onTipo(k); }); }
   });
   if(frases){
     frases.innerHTML = '';
@@ -4689,7 +4689,7 @@ function rqAbrirNuevo(conservar) {
   const n = RQ.nuevo = conservar && RQ.nuevo ? RQ.nuevo : rqNuevoVacio();
   const gs = (RQ.destinos && RQ.destinos.gestores) || [];
   const h = abrirHoja(`<div class="rq-wrap" style="--pri:#6d3fc8;--lil:#f3eefc;--lilb:#d9ccf5;--rojo:#e23b33;--rline:#e2dcee;--rsoft:#6a607f;">
-    <div style="display:flex;align-items:center;gap:8px;margin:0 0 8px;"><h2 style="color:var(--pri);margin:0;flex:1;">Nuevo requerimiento</h2><label class="rq-urgt"><input type="checkbox" id="rnUrg" ${n.urgente ? 'checked' : ''}> 🔴 Urgente</label></div>
+    <div style="display:flex;align-items:center;gap:8px;margin:0 0 8px;padding-right:48px;"><h2 style="color:var(--pri);margin:0;flex:1;">Nuevo requerimiento</h2><label class="rq-urgt"><input type="checkbox" id="rnUrg" ${n.urgente ? 'checked' : ''}> 🔴 Urgente</label></div>
     <div class="rq-form">
     <label style="margin-top:0;">Solicitud</label><div class="rqs-wrap"><div id="rnDesc" class="rqs-ed" contenteditable="true" role="textbox" aria-multiline="true"></div></div><div class="rqs-hint">Toca la burbuja morada para cambiar el tipo y sigue escribiendo.</div><div id="rnSFrases" class="rqs-chips"></div>
     <label>Punto <span class="rq-req">*</span></label>
