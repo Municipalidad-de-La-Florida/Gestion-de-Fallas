@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.13.7';
+const VERSION_APP = '2.13.8';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4660,10 +4660,11 @@ function rqSolMontar(ed, chips, n, rpcFn, onTipo, frases){
   if(n.descHtml){ ed.innerHTML = n.descHtml; } else rqSolBase(ed, n.tipo);
   ['keyup', 'mouseup', 'input', 'blur', 'touchend'].forEach(ev => ed.addEventListener(ev, () => { const s = window.getSelection(); if(s.rangeCount && ed.contains(s.anchorNode)) ed._r = s.getRangeAt(0).cloneRange(); }));
   ed.addEventListener('keydown', e => { if(e.key === 'Enter') e.preventDefault(); });
+  ed.addEventListener('mousedown', e => { if(e.target.closest('.rqsb.tipo')) e.preventDefault(); });   // tocar la burbuja no enfoca el texto: el teclado no se abre hasta tocar el cuadro
   ed.addEventListener('paste', e => { e.preventDefault(); const t = (e.clipboardData || window.clipboardData).getData('text').replace(/\s+/g, ' '); document.execCommand('insertText', false, t); });
   ed.addEventListener('click', e => {
     const x = e.target.closest('.rqsx'); if(x){ const b = x.parentNode; if(b.nextSibling && b.nextSibling.nodeType === 3) b.nextSibling.nodeValue = b.nextSibling.nodeValue.replace(/^ /, ''); b.remove(); return; }
-    const t = e.target.closest('.rqsb.tipo'); if(t){ e.stopPropagation(); rqSolMenu(ed, t, k => { onTipo(k); }); }
+    const t = e.target.closest('.rqsb.tipo'); if(t){ e.stopPropagation(); ed.blur(); rqSolMenu(ed, t, k => { onTipo(k); }); }
   });
   if(frases){
     frases.innerHTML = '';
