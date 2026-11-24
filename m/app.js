@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.13.3';
+const VERSION_APP = '2.13.5';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4028,7 +4028,7 @@ function pintarModo() {
   const on = S.modo.tipo === 'inspeccion';
   n.classList.toggle('sel', on);
   c.hidden = !on;
-  c.textContent = on ? `📋 Inspección del ${fmtFechaCorta(S.modo.fecha)} activa · toca para terminar` : '';
+  c.textContent = on ? `Inspección · ${fmtFechaCorta(S.modo.fecha)}` : '';
 }
 function guardarModo() {
   try {
@@ -4117,7 +4117,7 @@ function pintarCuaderno() {
   bd.hidden = !pc || !CQ.total; bd.textContent = CQ.total > 99 ? '99+' : CQ.total;
   nc.classList.toggle('sel', CQ.abierto);
   cb.hidden = !(pc && CQ.abierto);
-  cb.textContent = CQ.abierto ? `📓 Cuaderno abierto · ${CQ.total} en total${CQ.mias ? ` · +${CQ.mias} tuyas` : ''} · toca para cerrar` : '';
+  cb.textContent = CQ.abierto ? `Cuaderno · ${CQ.total} en total${CQ.mias ? ` · +${CQ.mias} tuyas` : ''}` : '';
   $('#navInferior').classList.toggle('apretado', $$('#navInferior .nav-btn:not([hidden])').length >= 4);
 }
 function abrirCuaderno() {
@@ -4635,7 +4635,6 @@ const RQ_TRABAJOS = [
   {t: 'Luminaria colgando', urg: 1}, {t: 'Retirar gancho en desuso', ind: 'vial o peatonal'}, {t: 'Retirar luminaria', ind: 'indicar cuál'},
   {t: 'Instalar luminaria', ind: 'indicar cuál'}, {t: 'Poste energizado', urg: 1}, {t: 'Calpe colgando energizado', urg: 1}
 ];
-const RQ_FRASES = ['por encontrarse en el área de influencia de un monoposte', 'por interferir con el arbolado', 'por daño tras un choque', 'a solicitud de los vecinos'];
 function rqSolMontar(ed, chips, n, rpcFn, onTipo, frases){
   if(n.descHtml){ ed.innerHTML = n.descHtml; } else rqSolBase(ed, n.tipo);
   ['keyup', 'mouseup', 'input', 'blur', 'touchend'].forEach(ev => ed.addEventListener(ev, () => { const s = window.getSelection(); if(s.rangeCount && ed.contains(s.anchorNode)) ed._r = s.getRangeAt(0).cloneRange(); }));
@@ -4658,8 +4657,6 @@ function rqSolMontar(ed, chips, n, rpcFn, onTipo, frases){
       };
       frases.appendChild(b);
     });
-    const hf = document.createElement('span'); hf.className = 'rqs-h'; hf.style.marginTop = '6px'; hf.textContent = 'Frases rápidas'; frases.appendChild(hf);
-    RQ_FRASES.forEach(f => { const b = document.createElement('button'); b.type = 'button'; b.className = 'rqs-chip fr'; b.textContent = f; b.onmousedown = e => e.preventDefault(); b.onclick = () => rqSolInsertarTexto(ed, f); frases.appendChild(b); });
     const r = document.createElement('button'); r.type = 'button'; r.className = 'rqs-rei'; r.textContent = '↺ Reiniciar texto'; r.onclick = () => { const k = (ed.querySelector('.rqsb.tipo') || {dataset: {}}).dataset.k || n.tipo; rqSolBase(ed, k); ed.focus(); }; frases.appendChild(r);
   }
   chips.innerHTML = '';
@@ -4787,7 +4784,7 @@ function rqDibujarMapa(centrar) {
 function pintarChipReq() {
   const c = $('#chipReq'); if (!c) return;
   c.hidden = !S.reqMapa;
-  c.textContent = S.reqMapa ? `📋 ${RQM.solo ? RQM.solo.nombre + ': ' + RQM.n + ' asignado' + (RQM.n === 1 ? '' : 's') : RQM.n + ' activo' + (RQM.n === 1 ? '' : 's')}${rqCrea() && !RQM.solo ? ' · toca un punto para ingresar' : ''} · ✕ salir` : '';
+  c.textContent = S.reqMapa ? `Requerimientos · ${RQM.solo ? RQM.solo.nombre + ': ' + RQM.n + ' asignado' + (RQM.n === 1 ? '' : 's') : RQM.n + ' activo' + (RQM.n === 1 ? '' : 's')}${rqCrea() && !RQM.solo ? ' · toca un punto' : ''}` : '';
 }
 async function rqEntrarMapa(sinCentrar) {
   S.reqMapa = true; RQ.filtro = 'abiertos'; RQ.texto = ''; $('#rqBuscar').value = '';
