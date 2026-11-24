@@ -12135,7 +12135,7 @@ function rqVistaNuevo(){ rqAncho(false);
     <label class="rq-lbl">Derivar a <span class="rq-req">*</span></label><select id="rqDer"><option value="">— Elige el contratista —</option>${gs.map(g => `<option value="${g.id}" ${n.derivar === g.id ? 'selected' : ''}>${escHtml(g.nombre)}</option>`).join('')}</select>
     <label class="rq-lbl">Fotos (opcional, máximo 5)</label><div id="rqFotosN"></div>
     <div style="margin-top:16px;display:flex;gap:8px;align-items:center;"><button type="button" class="rq-btn rq-p" id="rqCrear">Ingresar requerimiento</button><button type="button" class="rq-btn" id="rqCancelar">Cancelar</button><span class="rq-err" id="rqErr"></span></div></div>`;
-  const leer = () => { const tb = rqEl('rqDesc').querySelector('.rqsb.tipo'); if(tb) n.tipo = tb.dataset.k; n.desc = rqSolTexto(rqEl('rqDesc')); n.descHtml = rqEl('rqDesc').innerHTML; n.derivar = rqEl('rqDer').value; n.urgente = rqEl('rqUrg').checked; const q = rqEl('rqQ2'); if(q) n.q = q.value; const u = rqEl('rqUbic'); if(u) n.ubic = u.value; };
+  const leer = () => { const tb = rqEl('rqDesc').querySelector('.rqsb.tipo'); n.tipo = tb ? tb.dataset.k : 'otro'; n.desc = rqSolTexto(rqEl('rqDesc')); n.descHtml = rqEl('rqDesc').innerHTML; n.derivar = rqEl('rqDer').value; n.urgente = rqEl('rqUrg').checked; const q = rqEl('rqQ2'); if(q) n.q = q.value; const u = rqEl('rqUbic'); if(u) n.ubic = u.value; };
   const cambiaTipo = k => { rqSolCambiarTipo(rqEl('rqDesc'), k); n.tipo = k; leer(); };
   rqSolMontar(rqEl('rqDesc'), rqEl('rqSChips'), n, (f, a) => db.rpc(f, a), cambiaTipo, rqEl('rqSFrases'));
   const okBtn = () => { rqEl('rqCrear').disabled = !rqEl('rqDer').value; }; rqEl('rqDer').addEventListener('change', okBtn); okBtn();
