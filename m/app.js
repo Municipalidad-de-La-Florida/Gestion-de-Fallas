@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.13.6';
+const VERSION_APP = '2.13.7';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4135,10 +4135,9 @@ function abrirCuaderno() {
   if (a) a.addEventListener('click', () => {
     if (S.modo.tipo === 'inspeccion') { toast('Termina tu inspección para abrir el Cuaderno.', 'error'); return; }
     CQ.abierto = true; CQ.desde = Date.now(); guardarCuad(); pintarModo(); cerrarHoja(); cambiarVista('mapa');
-    toast('Cuaderno abierto. Toca un punto o circuito para anotar la falla.', 'ok');
   });
   const c = $('#cqCerrar', h);
-  if (c) c.addEventListener('click', () => { cerrarCuaderno(); cerrarHoja(); toast('Cuaderno cerrado'); });
+  if (c) c.addEventListener('click', () => { cerrarCuaderno(); cerrarHoja(); });
   $('#cqVer', h).addEventListener('click', () => { CQ.pag = 0; abrirListaCuaderno(); });
 }
 async function anotarEnCuaderno(tipo, gid, codigo, desc, a) {
