@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.10';
+const VERSION_APP = '2.14.11';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -2613,7 +2613,7 @@ async function abrirFalla(p, geom) {
   const minRestantes = Math.max(1, Math.ceil(15 - minDesdeIngreso));
   // Cronología de la ficha: pendiente, comentarios y reparación en el orden en que ocurrieron
   let comsFicha = [];
-  try { comsFicha = await Promise.race([select('fallas_comentarios', `falla_id=eq.${p.id}&select=tipo,comentario,autor_nombre,creado_en&order=creado_en.asc`), new Promise((r) => setTimeout(() => r([]), 4000))]) || []; } catch (e) { /* sin comentarios */ }
+  try { comsFicha = await Promise.race([select('fallas_comentarios', `falla_id=eq.${p.id}&select=tipo,comentario,autor_id,autor_nombre,creado_en&order=creado_en.asc`), new Promise((r) => setTimeout(() => r([]), 4000))]) || []; } catch (e) { /* sin comentarios */ }
   let luminariaFicha = null;
   if (p.tipo === 'punto' && !p.cascada) {
     try {
@@ -2639,7 +2639,7 @@ async function abrirFalla(p, geom) {
   comsFicha = comsFicha.filter((r) => r.tipo === 'asignacion' || r.tipo === 'revision' || r.tipo === 'reparacion_anulada' || !yaMostrados.has(normCom(r.comentario)));
   if (hayRevision) comsFicha = comsFicha.filter((r) => r.tipo !== 'reparacion');   // su texto sale en la tarjeta "Reparación"
   comsFicha.forEach((r) => evFicha.push({ t: r.creado_en, html: r.tipo === 'revision'
-    ? `<div class="com-bloque t-revision"><div class="quien">🛠 <b>Revisión del administrador</b> · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${escTel(r.comentario)}</pre></div>`
+    ? `<div class="com-bloque t-revision"><div class="quien">${repOriginal && r.autor_id && r.autor_id === repOriginal.autor_id ? '✏️ <b>Respuesta corregida</b>' : '🛠 <b>Revisión del administrador</b>'} · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${escTel(r.comentario)}</pre></div>`
     : r.tipo === 'reparacion_anulada'
     ? `<div class="com-bloque t-anulada"><div class="quien">↩ <b>Reparación anulada</b><br>Respuesta del camión: ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${escTel(r.comentario)}</pre><div class="fotos-anul"></div></div>`
     : `<div class="com-bloque t-${esc(r.tipo)}"><div class="quien">💬 ${r.tipo === 'asignacion' ? 'Comentario de asignación' : 'Comentario'} · ${esc(r.autor_nombre || '—')} · ${esc(fmtFecha(r.creado_en))}</div><pre class="texto">${escTel(r.comentario)}</pre></div>` }));
