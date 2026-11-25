@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.4';
+const VERSION_APP = '2.14.5';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -733,9 +733,11 @@ function cerrarHoja(desdePop) {
   if (S.borradorId) { S.borradorId = null; bdDel('cierre'); }
   if (!desdePop && history.state && history.state.hoja) { hojaVolviendo = true; try { history.back(); } catch (e) { hojaVolviendo = false; } }
 }
-window.addEventListener('popstate', () => { if (hojaVolviendo) { hojaVolviendo = false; return; } if (hojaAbierta) { cerrarHoja(true); return; } if (window._cuPop && !$('#pantallaCuad').hidden) { window._cuPop(); return; } if (window._usrPop) window._usrPop(); });
-$('#velo').addEventListener('click', () => cerrarHoja());
-$('#hojaCerrar').addEventListener('click', () => cerrarHoja());
+// Si la ficha se abrió desde una lista de la cuadrilla, al cerrarla a mano se vuelve a esa lista
+function cuVolverLista() { const k = window.CU && CU.lista; if (!k || $('#pantallaCuad').hidden) return; CU.lista = null; setTimeout(() => cuAbrirDetalle(k), 0); }
+window.addEventListener('popstate', () => { if (hojaVolviendo) { hojaVolviendo = false; return; } if (hojaAbierta) { cerrarHoja(true); cuVolverLista(); return; } if (window._cuPop && !$('#pantallaCuad').hidden) { window._cuPop(); return; } if (window._usrPop) window._usrPop(); });
+$('#velo').addEventListener('click', () => { cerrarHoja(); cuVolverLista(); });
+$('#hojaCerrar').addEventListener('click', () => { cerrarHoja(); cuVolverLista(); });
 
 /* ----------------------------- login ----------------------------- */
 function mostrarLogin(msg) {
@@ -3484,7 +3486,7 @@ function cuAbrirDetalle(k) {
     return `<button class="cu-fila" data-f="${esc(i.falla_id)}"><b>${esc(izq)}</b> · OS ${esc(i.ot || '—')} · ${esc(i.tipo_falla || '')}<div class="s">${esc(i.direccion || '—')}</div><div class="s" style="color:${col};font-weight:600">${etq}</div></button>`;
   };
   const h = abrirHoja(`<div class="rq-wrap"><h2 style="margin:0 0 2px">${esc(titulo)} (${lista.length})</h2><div class="s" style="margin:0 0 8px;color:var(--tinta-2)">${esc(c.nombre)} · toca una falla para abrirla</div>${lista.length ? lista.map(fila).join('') : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">No hay fallas en esta categoría.</div>'}</div>`);
-  h.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { cerrarHoja(); cerrarCuadrillas(); abrirFallaPorId(b.dataset.f); }));
+  h.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { CU.lista = k; abrirFallaPorId(b.dataset.f, true); }));   // la ficha reemplaza la lista; al cerrarla se vuelve a ella
 }
 const cuBarra = (r, p, s) => { const t = r + p + s || 1; return `<div class="cu-sbar"><i style="width:${100 * r / t}%;background:${CU_COL.reparada}"></i><i style="width:${100 * p / t}%;background:${CU_COL.pendiente}"></i><i style="width:${100 * s / t}%;background:${CU_COL.sin}"></i></div>`; };
 const cuLeyenda = (r, p, s, largo, k) => { const it = (n, c, l, kk) => `<${k ? 'button type="button" data-k="' + kk + '"' : 'span'} style="--c:${c}"><b>${n}</b>${largo ? ' ' + l : ''}</${k ? 'button' : 'span'}>`; return `<div class="cu-lgd">${it(r, CU_COL.reparada, 'reparadas', 'reparadas')}${it(p, CU_COL.pendiente, 'pendientes', 'pendientes')}${it(s, CU_COL.sin, 'sin atender', 'sin')}</div>`; };
@@ -3553,7 +3555,7 @@ function pintarCuadrillas() {
   cont.querySelectorAll('[data-rq]').forEach((b) => b.addEventListener('click', () => cuAbrirReqs(selId)));
   cont.querySelectorAll('[data-k]').forEach((b) => b.addEventListener('click', () => cuAbrirDetalle(b.dataset.k)));
   cont.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => { $('#cuSel').value = b.dataset.c; pintarCuadrillas(); cont.scrollTop = 0; }));
-  cont.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { cerrarCuadrillas(); abrirFallaPorId(b.dataset.f); }));
+  cont.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { CU.lista = null; abrirFallaPorId(b.dataset.f, true); }));   // se abre encima: al cerrarla sigues en la misma cuadrilla
 }
 /* Camiones en el mapa (admin o con permiso de Cuadrillas): se actualizan solos cada minuto */
 const CAM = { capa: null, timer: null };
@@ -4896,7 +4898,7 @@ function pintarCuadernoClicks() {
 pintarCuadernoClicks();
 
 /* ------------------------- abrir una falla desde un aviso ------------------------- */
-async function abrirFallaPorId(id) {
+async function abrirFallaPorId(id, enCuad) {
   // Siempre se pide la falla actualizada: la copia en memoria puede estar vieja (p. ej. una falla recién reparada
   // aún figura como activa) y el aviso justamente llega cuando algo cambió. Si no hay red, se usa la copia local.
   let f = S.features.find((x) => x.properties.id === id);
@@ -4915,6 +4917,7 @@ async function abrirFallaPorId(id) {
     if (e.name === 'SesionExpirada') throw e;
   }
   if (!f) { avisoDiag('no-encontrada'); toast('No se encontró la falla del aviso (puede haber sido eliminada).', 'error'); return; }
+  if (enCuad) { abrirFalla(f.properties, f.geometry); return; }   // desde Cuadrillas: la ficha se abre encima, sin salir de la pantalla
   cambiarVista('mapa');
   // Entrando por un aviso el mapa se queda en la falla: sin centrado inicial en tu ubicación y sin seguimiento
   S.centrarAlFijar = false; detenerSeguir();
