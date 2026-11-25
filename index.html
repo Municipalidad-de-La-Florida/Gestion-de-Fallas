@@ -11730,15 +11730,18 @@ function rqCardHtml(r){
     ${toca ? `<div class="rq-toca">👉 Te toca: ${rqQueToca(r)}</div>` : ''}</div>`;
 }
 // ===== Lista en tabla (pantalla amplia): contadores, columnas ordenables, asignación rápida y acciones en lote =====
-RQ.sel = new Set(); RQ.sort = {k: 'creado_en', dir: 'desc'};
+RQ.sel = new Set(); RQ.sort = {k: 'prioridad', dir: 'desc'};
 const RQ_COLS = [['codigo', 'Código'], ['tipo_label', 'Tipo'], ['ubicacion', 'Ubicación'], ['solicito', 'Solicitó'], ['contratista', 'Contratista'], ['cuadrilla', 'Cuadrilla'], ['estado', 'Estado'], ['creado_en', 'Antigüedad']];
 const rqValOrden = (r, k) => k === 'solicito' ? (r.creado_por.nombre || '') : k === 'contratista' ? (r.derivado_a.nombre || '') : k === 'cuadrilla' ? (r.asignado_a.nombre || '') : k === 'creado_en' ? new Date(r.creado_en).getTime() : k === 'estado' ? ['derivado', 'asignado', 'ejecutado', 'revisado', 'devuelto', 'cerrado', 'anulado'].indexOf(r.estado) : (r[k] || '');
+// Prioridad: 1.º urgentes abiertos (los que me tocan primero), 2.º los que requieren mi gestión, 3.º el resto; dentro de cada grupo, los más recientes primero
+const rqPrio = r => { const u = r.urgente && !['cerrado', 'anulado'].includes(r.estado), t = rqTeToca(r); return u ? (t ? 4 : 3) : (t ? 2 : 1); };
 function rqFilasVisibles(){
   let ls = [...RQ.lista];
   if(RQ.chip === 'urg') ls = ls.filter(r => r.urgente && !['cerrado', 'anulado'].includes(r.estado));
   else if(RQ.chip === 'mios') ls = ls.filter(rqTeToca);
   else if(RQ.chip) ls = ls.filter(r => r.estado === RQ.chip);
   const {k, dir} = RQ.sort, m = dir === 'asc' ? 1 : -1;
+  if(k === 'prioridad') return ls.sort((a, b) => (rqPrio(b) - rqPrio(a)) || (new Date(b.creado_en) - new Date(a.creado_en)));
   return ls.sort((a, b) => { const x = rqValOrden(a, k), y = rqValOrden(b, k); return m * (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'es', {numeric: true})); });
 }
 function rqCuadrillaCelda(r){
@@ -11770,7 +11773,7 @@ function rqPintarLista(){
   if(!ls.length){ z.innerHTML = `<div class="rq-vacio">${RQ.texto || RQ.chip ? 'Ningún requerimiento coincide con la búsqueda.' : (RQ.filtro === 'abiertos' ? 'No hay requerimientos activos.' : 'No hay requerimientos en esta lista.')}</div>`; return; }
   const th = RQ_COLS.map(([k, t]) => `<th class="s${RQ.sort.k === k ? ' on' : ''}" data-k="${k}">${t}${RQ.sort.k === k ? (RQ.sort.dir === 'asc' ? ' ▲' : ' ▼') : ''}</th>`).join('');
   z.innerHTML = `<div class="rq-n">${ls.length} requerimiento${ls.length === 1 ? '' : 's'}</div><div class="rq-tw"><table class="rq-tb"><thead><tr><th class="c"><input type="checkbox" id="rqChkTodos" ${ls.every(r => RQ.sel.has(r.id)) ? 'checked' : ''}></th>${th}<th></th></tr></thead><tbody>${ls.map(rqFilaTabla).join('')}</tbody></table></div><div id="rqLote"></div>`;
-  z.querySelectorAll('th.s').forEach(t => t.onclick = () => { const k = t.dataset.k; RQ.sort = {k, dir: RQ.sort.k === k && RQ.sort.dir === 'asc' ? 'desc' : 'asc'}; rqPintarLista(); });
+  z.querySelectorAll('th.s').forEach(t => t.onclick = () => { const k = t.dataset.k; RQ.sort = RQ.sort.k === k && RQ.sort.dir === 'desc' ? {k: 'prioridad', dir: 'desc'} : {k, dir: RQ.sort.k === k && RQ.sort.dir === 'asc' ? 'desc' : 'asc'};   // 3.er clic: vuelve al orden por prioridad rqPintarLista(); });
   z.querySelectorAll('tbody tr').forEach(tr => tr.onclick = e => { if(e.target.closest('input,select')) return; rqVistaDetalle(tr.dataset.id); });
   z.querySelectorAll('.rq-chk').forEach(cb => cb.onchange = () => { if(cb.checked) RQ.sel.add(cb.dataset.id); else RQ.sel.delete(cb.dataset.id); cb.closest('tr').classList.toggle('sel', cb.checked); rqPintarLote(ls); });
   rqEl('rqChkTodos').onchange = e => { ls.forEach(r => { if(e.target.checked) RQ.sel.add(r.id); else RQ.sel.delete(r.id); }); z.querySelectorAll('.rq-chk').forEach(cb => { cb.checked = e.target.checked; cb.closest('tr').classList.toggle('sel', e.target.checked); }); rqPintarLote(ls); };

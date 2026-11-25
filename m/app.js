@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.3';
+const VERSION_APP = '2.14.4';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4467,7 +4467,9 @@ function rqPintarLista() {
   $$('#rqSeg button').forEach((b) => b.addEventListener('click', () => { RQ.filtro = b.dataset.f; RQ.lista = []; rqCargar(); }));
   const ob = $('#rqOrden'); ob.textContent = RQ.orden === 'asc' ? '⇅ Más antiguas primero' : '⇅ Más recientes primero';
   ob.onclick = () => { RQ.orden = RQ.orden === 'asc' ? 'desc' : 'asc'; rqPintarLista(); };
-  const lista = [...RQ.lista].sort((a, b) => (RQ.orden === 'asc' ? 1 : -1) * (new Date(a.creado_en) - new Date(b.creado_en)));
+  // 1.º urgentes abiertos (los que me tocan primero), 2.º los que requieren mi gestión, 3.º el resto; dentro de cada grupo, por fecha según el botón
+  const prio = (r) => { const u = r.urgente && !['cerrado', 'anulado'].includes(r.estado), t = rqTeToca(r); return u ? (t ? 4 : 3) : (t ? 2 : 1); };
+  const lista = [...RQ.lista].sort((a, b) => (prio(b) - prio(a)) || (RQ.orden === 'asc' ? 1 : -1) * (new Date(a.creado_en) - new Date(b.creado_en)));
   const z = $('#rqItems');
   z.innerHTML = lista.length ? lista.map((r) => {
     const urg = r.urgente && rqAbierto(r), toca = rqQueToca(r) && rqTeToca(r);
