@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.6';
+const VERSION_APP = '2.14.7';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -3489,13 +3489,25 @@ function cuAbrirDetalle(k) {
     aportes: ['Aportes', r.aps.slice().sort((p, q) => new Date(q.reparada_en) - new Date(p.reparada_en))],
   };
   const [titulo, lista] = T[k] || ['', []];
+  const estOf = (i) => k === 'aportes' ? 'ap' : i.reparada ? 'rep' : i.pendiente ? 'pen' : 'sin';
+  const COL = { sin: CU_COL.sin, pen: CU_COL.pendiente, rep: CU_COL.reparada, ap: '#6b4fa0' }, ETQ = { sin: 'Sin atender', pen: 'Pendiente', rep: '✔ Reparada', ap: '🛠 Aporte' }, SEC = { sin: 'Sin atender', pen: 'Pendientes', rep: 'Reparadas', ap: 'Aportes' };
+  const espera = (i) => { const t = i.asignado_en ? Date.now() - new Date(i.asignado_en).getTime() : NaN; if (!(t > 0)) return ''; const m = Math.round(t / 60000); return '⏱ ' + (m >= 60 ? Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0') : m + ' min'); };
   const fila = (i) => {
-    const izq = k === 'aportes' ? cuHora(i.reparada_en) : hecha(i) ? cuHora(i.reparada ? i.reparada_en : i.fecha_pendiente) : (i.inicio ? (i.inicioPend ? 'Antes del turno (ya pendiente)' : 'Antes del turno') : 'Asignada ' + cuHora(i.asignado_en));
-    const etq = k === 'aportes' ? '🛠 Aporte · ' + (i.maestro || 'maestro') : i.reparada ? '✔ Reparada' : i.pendiente ? '● Pendiente' : '● Sin atender';
-    const col = k === 'aportes' ? '#6b4fa0' : i.reparada ? CU_COL.reparada : i.pendiente ? CU_COL.pendiente : CU_COL.sin;
-    return `<button class="cu-fila" data-f="${esc(i.falla_id)}"><b>${esc(izq)}</b> · OS ${esc(i.ot || '—')} · ${esc(i.tipo_falla || '')}<div class="s">${esc(i.direccion || '—')}</div><div class="s" style="color:${col};font-weight:600">${etq}</div></button>`;
+    const e = estOf(i), col = COL[e];
+    const hora = k === 'aportes' ? cuHora(i.reparada_en) : hecha(i) ? cuHora(i.reparada ? i.reparada_en : i.fecha_pendiente) : '';
+    const der = e === 'sin' ? espera(i) : hora;
+    const asig = k === 'aportes' ? ('Maestro: ' + (i.maestro || '—')) : hecha(i) ? '' : (i.inicio ? (i.inicioPend ? 'Antes del turno (ya pendiente)' : 'Antes del turno') : 'Asignada ' + cuHora(i.asignado_en));
+    return `<button class="cu-tj" style="--c:${col}" data-f="${esc(i.falla_id)}"><div class="r1"><b>${esc(i.tipo_falla || 'Falla')}</b><span${e === 'sin' ? ' class="esp"' : ''}>${esc(der)}</span></div><div class="r2"><span class="os">OS ${esc(i.ot || '—')}</span>📍 ${esc(i.direccion || '—')}</div><div class="r3"><span class="tag">${ETQ[e]}</span>${asig ? `<span class="tag g">${esc(asig)}</span>` : ''}${i.urgente ? '<span class="tag" style="--c:#c1443c">🔴 Urgente</span>' : ''}</div></button>`;
   };
-  const h = abrirHoja(`<div class="rq-wrap"><h2 style="margin:0 0 2px">${esc(titulo)} (${lista.length})</h2><div class="s" style="margin:0 0 8px;color:var(--tinta-2)">${esc(c.nombre)} · toca una falla para abrirla</div>${lista.length ? lista.map(fila).join('') : '<div class="s" style="margin:0 2px;color:var(--tinta-2)">No hay fallas en esta categoría.</div>'}</div>`);
+  // Filtros rápidos (cambian de categoría sin volver a la cuadrilla) y secciones por estado
+  const chips = [['total', 'Todas', r.items.length], ['sin', 'Sin atender', r.items.filter((i) => !hecha(i)).length], ['pendientes', 'Pendientes', r.items.filter((i) => i.pendiente && !i.reparada).length], ['reparadas', 'Reparadas', r.items.filter((i) => i.reparada).length]];
+  const chipsH = `<div class="cu-chips">${chips.map(([kk, l, n]) => `<button type="button" class="${kk === k ? 'on' : ''}" data-ch="${kk}">${l} ${n}</button>`).join('')}</div>`;
+  let cuerpo = '';
+  if (!lista.length) cuerpo = '<div class="s" style="margin:0 2px;color:var(--tinta-2)">No hay fallas en esta categoría.</div>';
+  else if (k === 'aportes') cuerpo = lista.map(fila).join('');
+  else ['sin', 'pen', 'rep'].forEach((e) => { const g = lista.filter((i) => estOf(i) === e); if (g.length) cuerpo += `<div class="cu-secx" style="--c:${COL[e]}"><i></i>${SEC[e]} · ${g.length}</div>` + g.map(fila).join(''); });
+  const h = abrirHoja(`<div class="rq-wrap"><h2 style="margin:0 0 2px">${esc(titulo)} (${lista.length})</h2><div class="s" style="margin:0 0 6px;color:var(--tinta-2)">${esc(c.nombre)} · toca una falla para abrirla</div>${k === 'aportes' ? '' : chipsH}${cuerpo}</div>`);
+  h.querySelectorAll('[data-ch]').forEach((b) => b.addEventListener('click', () => { const kk = b.dataset.ch; CU.lista = null; cuAbrirDetalle(kk === 'sin' ? 'sin' : kk); }));
   h.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => { CU.lista = k; abrirFallaPorId(b.dataset.f, true); }));   // la ficha reemplaza la lista; al cerrarla se vuelve a ella
 }
 const cuBarra = (r, p, s) => { const t = r + p + s || 1; return `<div class="cu-sbar"><i style="width:${100 * r / t}%;background:${CU_COL.reparada}"></i><i style="width:${100 * p / t}%;background:${CU_COL.pendiente}"></i><i style="width:${100 * s / t}%;background:${CU_COL.sin}"></i></div>`; };

@@ -941,3 +941,12 @@ a.tel-btn:active{ background:#cfe6d9; }
 /* Botón para volver a la cuadrilla tras abrir una falla en el mapa */
 #cuVolverBtn{ position:fixed; top:calc(var(--safe-t, 0px) + 10px); left:10px; z-index:950; padding:9px 14px; border:0; border-radius:999px; background:#fff; color:#1c2b23; font-size:13px; font-weight:700; box-shadow:0 4px 16px rgba(0,0,0,.25); }
 #cuVolverBtn[hidden]{ display:none; }
+
+/* Tarjetas de trabajos de la cuadrilla: falla, luego OS y dirección, y etiquetas */
+.cu-chips{ display:flex; gap:6px; overflow-x:auto; padding:2px 0 8px; } .cu-chips button{ flex:none; padding:6px 10px; border-radius:99px; border:1px solid var(--linea); background:#fff; color:inherit; font:700 11.5px/1 inherit; } .cu-chips button.on{ background:var(--verde); color:#fff; border-color:var(--verde); }
+.cu-secx{ margin:10px 2px 5px; font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--c); display:flex; align-items:center; gap:6px; } .cu-secx i{ width:9px; height:9px; border-radius:3px; background:var(--c); }
+.cu-tj{ display:block; width:100%; text-align:left; background:#fff; color:inherit; font:inherit; border:0; border-left:5px solid var(--c); border-radius:12px; padding:10px 12px 10px 14px; margin:0 0 7px; box-shadow:0 1px 3px #0002; }
+.cu-tj .r1{ display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14.5px; } .cu-tj .r1 span{ font-size:11px; color:var(--tinta-2); font-weight:600; } .cu-tj .r1 .esp{ color:#c1443c; font-weight:700; }
+.cu-tj .r2{ margin-top:3px; font-size:12.5px; } .cu-tj .os{ font-size:11.5px; font-weight:700; background:#eef2ef; border-radius:6px; padding:2px 6px; margin-right:6px; color:#334; }
+.cu-tj .r3{ display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; font-size:11px; } .cu-tj .tag{ padding:2px 8px; border-radius:99px; font-weight:700; background:color-mix(in srgb, var(--c) 16%, #fff); color:var(--c); } .cu-tj .tag.g{ background:#eef2ef; color:#556; }
+html[data-tema=oscuro] .cu-tj,html[data-tema=oscuro] .cu-chips button{ background:#17201d; } html[data-tema=oscuro] .cu-tj .os,html[data-tema=oscuro] .cu-tj .tag.g{ background:#26302c; color:#cfd8d3; }
