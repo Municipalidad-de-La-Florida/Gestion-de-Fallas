@@ -937,3 +937,7 @@ html[data-tema=oscuro] #pildas .chip-modo::after{ background:#3a463f; color:#dfe
 /* Botón de llamada en comentarios (número de 9 dígitos) */
 a.tel-btn{ display:inline-flex; align-items:center; gap:4px; padding:2px 10px; margin:1px 0; border-radius:999px; background:#e7f3ec; color:#1f6b45; font-weight:700; text-decoration:none; white-space:nowrap; }
 a.tel-btn:active{ background:#cfe6d9; }
+
+/* Botón para volver a la cuadrilla tras abrir una falla en el mapa */
+#cuVolverBtn{ position:fixed; top:calc(var(--safe-t, 0px) + 10px); left:10px; z-index:950; padding:9px 14px; border:0; border-radius:999px; background:#fff; color:#1c2b23; font-size:13px; font-weight:700; box-shadow:0 4px 16px rgba(0,0,0,.25); }
+#cuVolverBtn[hidden]{ display:none; }
