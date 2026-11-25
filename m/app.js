@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.5';
+const VERSION_APP = '2.14.6';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -734,10 +734,18 @@ function cerrarHoja(desdePop) {
   if (!desdePop && history.state && history.state.hoja) { hojaVolviendo = true; try { history.back(); } catch (e) { hojaVolviendo = false; } }
 }
 // Si la ficha se abrió desde una lista de la cuadrilla, al cerrarla a mano se vuelve a esa lista
-function cuVolverLista() { const k = window.CU && CU.lista; if (!k || $('#pantallaCuad').hidden) return; CU.lista = null; setTimeout(() => cuAbrirDetalle(k), 0); }
-window.addEventListener('popstate', () => { if (hojaVolviendo) { hojaVolviendo = false; return; } if (hojaAbierta) { cerrarHoja(true); cuVolverLista(); return; } if (window._cuPop && !$('#pantallaCuad').hidden) { window._cuPop(); return; } if (window._usrPop) window._usrPop(); });
-$('#velo').addEventListener('click', () => { cerrarHoja(); cuVolverLista(); });
-$('#hojaCerrar').addEventListener('click', () => { cerrarHoja(); cuVolverLista(); });
+function cuVolverLista() {
+  if (!window.CU || !CU.retorno) return;
+  CU.retorno = false; $('#cuVolverBtn').hidden = true;
+  if (hojaAbierta) cerrarHoja(true);
+  $('#pantallaCuad').hidden = false;
+  const k = CU.lista; CU.lista = null;
+  if (k) setTimeout(() => cuAbrirDetalle(k), 0);
+}
+$('#cuVolverBtn').addEventListener('click', cuVolverLista);
+window.addEventListener('popstate', () => { if (hojaVolviendo) { hojaVolviendo = false; return; } if (hojaAbierta) { cerrarHoja(true); return; } if (window._cuPop && !$('#pantallaCuad').hidden) { window._cuPop(); return; } if (window._usrPop) window._usrPop(); });
+$('#velo').addEventListener('click', () => cerrarHoja());
+$('#hojaCerrar').addEventListener('click', () => cerrarHoja());
 
 /* ----------------------------- login ----------------------------- */
 function mostrarLogin(msg) {
@@ -3097,6 +3105,7 @@ $('#filtrosListaLimpiar').addEventListener('click', () => {
 
 function cambiarVista(v) {
   S.vista = v;
+  if (v !== 'mapa' && window.CU && CU.retorno) { CU.retorno = false; $('#cuVolverBtn').hidden = true; }
   $('#vistaMapa').hidden = v !== 'mapa';
   $('#vistaLista').hidden = v !== 'lista';
   $('#vistaInsp').hidden = v !== 'insp';
@@ -3395,6 +3404,7 @@ function cuCalcular(todasFilas, desde, hasta) {
 }
 function abrirCuadrillas() {
   if (!puedeCuadrillas()) return;
+  CU.retorno = false; $('#cuVolverBtn').hidden = true;
   if (hojaAbierta) cerrarHoja(true); else { try { history.pushState({ pant: 1 }, ''); } catch (e) { /* */ } }
   $('#cuMapa').hidden = !puedeUbicacion();
   CU.hist = true;
@@ -4917,7 +4927,7 @@ async function abrirFallaPorId(id, enCuad) {
     if (e.name === 'SesionExpirada') throw e;
   }
   if (!f) { avisoDiag('no-encontrada'); toast('No se encontró la falla del aviso (puede haber sido eliminada).', 'error'); return; }
-  if (enCuad) { abrirFalla(f.properties, f.geometry); return; }   // desde Cuadrillas: la ficha se abre encima, sin salir de la pantalla
+  if (enCuad) { $('#pantallaCuad').hidden = true; CU.retorno = true; $('#cuVolverBtn').hidden = false; }   // desde Cuadrillas: se abre el mapa con la falla y queda un botón para volver
   cambiarVista('mapa');
   // Entrando por un aviso el mapa se queda en la falla: sin centrado inicial en tu ubicación y sin seguimiento
   S.centrarAlFijar = false; detenerSeguir();
