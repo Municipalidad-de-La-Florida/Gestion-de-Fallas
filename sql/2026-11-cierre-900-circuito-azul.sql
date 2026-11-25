@@ -1,0 +1,7 @@
+-- Cierre 900 «Cortado desde la Distribución»: la falla sigue PENDIENTE (como desde el 20/11) y además el circuito se dibuja en azul
+-- mientras siga cortado. Se quita con el cierre 902 «Restitución del suministro» (o con «restablecer» de un administrador).
+-- Aplicado en Supabase el 2026-11-25 (migración cierre_900_circuito_azul_902_restablece).
+-- · _reparacion_marca_corte(): con un cierre 900 inserta el corte activo del circuito (n_cliente); con un 902 lo desactiva.
+-- · Triggers trg_reparacion_marca_corte (insert) y trg_reparacion_marca_corte_upd (update de descripcion) en reparaciones.
+-- · Relleno: las fallas hoy pendientes cuyo último cierre es 900 (sin 902 posterior) vuelven a marcar su circuito.
+-- La app y la web ya dibujaban los cortes (cortes_geojson / cortes_activos): no requieren cambios.
