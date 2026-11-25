@@ -1,0 +1,9 @@
+-- Informe mensual de reparaciones (y correo a Autopista): una falla salía repetida porque se unía con codigos_falla solo por 'codigo',
+-- y esa tabla repite códigos en varias categorías (F02/F03: circuito y monoposte; OTRO: circuito, monoposte y punto).
+-- Aplicado en Supabase el 2026-11-25 (migraciones informe_reparaciones_una_descripcion_por_falla y autopista_pendientes_una_descripcion_por_falla).
+-- Cambio: en informe_reparaciones (2 lugares) y autopista_pendientes_envio, el
+--     left join public.codigos_falla cf on cf.codigo = f.tipo_falla
+-- pasó a una sola fila por falla:
+--     left join lateral (select x.descripcion from public.codigos_falla x where x.codigo = f.tipo_falla
+--        order by (x.categoria = case when f.tipo = 'linea' then 'circuito' else 'punto' end) desc, (x.categoria = 'monoposte') desc, x.orden limit 1) cf on true
+-- (en autopista solo hay puntos: prefiere 'punto' y luego 'monoposte').
