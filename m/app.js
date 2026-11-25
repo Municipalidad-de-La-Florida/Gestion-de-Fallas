@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.8';
+const VERSION_APP = '2.14.9';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -735,7 +735,7 @@ function cerrarHoja(desdePop) {
 }
 // Si la ficha se abrió desde una lista de la cuadrilla, al cerrarla a mano se vuelve a esa lista
 function cuVolverLista() {
-  if (!window.CU || !CU.retorno) return;
+  if (!CU.retorno) return;
   CU.retorno = false; $('#cuVolverBtn').hidden = true;
   if (hojaAbierta) cerrarHoja(true);
   $('#pantallaCuad').hidden = false;
@@ -3105,7 +3105,7 @@ $('#filtrosListaLimpiar').addEventListener('click', () => {
 
 function cambiarVista(v) {
   S.vista = v;
-  if (v !== 'mapa' && window.CU && CU.retorno) { CU.retorno = false; $('#cuVolverBtn').hidden = true; }
+  if (v !== 'mapa' && CU.retorno) { CU.retorno = false; $('#cuVolverBtn').hidden = true; }
   $('#vistaMapa').hidden = v !== 'mapa';
   $('#vistaLista').hidden = v !== 'lista';
   $('#vistaInsp').hidden = v !== 'insp';
