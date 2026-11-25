@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.7';
+const VERSION_APP = '2.14.8';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -3479,6 +3479,9 @@ function cuAbrirReqs(id) {
   });
 }
 // Detalle de una tarjeta de la cuadrilla (reparadas, por atender, pendientes...): lista de fallas que se pueden abrir
+// «Daniel Castillo Pérez» → «D. Castillo»
+const cuNomCorto = (n) => { const p = String(n || '').trim().split(/\s+/).filter(Boolean); return p.length < 2 ? p[0] || '' : p[0][0].toUpperCase() + '. ' + (p.length > 2 && p[1].length <= 3 ? p[1] + ' ' + p[2] : p[1]); };
+const cuNomFalla = (c) => { const x = [].concat(typeof CAT_PUNTO !== 'undefined' ? CAT_PUNTO : [], typeof CAT_MONOPOSTE !== 'undefined' ? CAT_MONOPOSTE : [], typeof CAT_CIRCUITO !== 'undefined' ? CAT_CIRCUITO : []).find((y) => y.c === c); return x ? x.d : ''; };
 function cuAbrirDetalle(k) {
   const { c, r } = CU.ult || {}; if (!r) return;
   const hecha = (i) => i.reparada || i.pendiente, orden = (p, q) => (q.reparada ? q.rep : new Date(q.fecha_pendiente)) - (p.reparada ? p.rep : new Date(p.fecha_pendiente));
@@ -3497,7 +3500,7 @@ function cuAbrirDetalle(k) {
     const hora = k === 'aportes' ? cuHora(i.reparada_en) : hecha(i) ? cuHora(i.reparada ? i.reparada_en : i.fecha_pendiente) : '';
     const der = e === 'sin' ? espera(i) : hora;
     const asig = k === 'aportes' ? ('Maestro: ' + (i.maestro || '—')) : hecha(i) ? '' : (i.inicio ? (i.inicioPend ? 'Antes del turno (ya pendiente)' : 'Antes del turno') : 'Asignada ' + cuHora(i.asignado_en));
-    return `<button class="cu-tj" style="--c:${col}" data-f="${esc(i.falla_id)}"><div class="r1"><b>${esc(i.tipo_falla || 'Falla')}</b><span${e === 'sin' ? ' class="esp"' : ''}>${esc(der)}</span></div><div class="r2"><span class="os">OS ${esc(i.ot || '—')}</span>📍 ${esc(i.direccion || '—')}</div><div class="r3"><span class="tag">${ETQ[e]}</span>${asig ? `<span class="tag g">${esc(asig)}</span>` : ''}${i.urgente ? '<span class="tag" style="--c:#c1443c">🔴 Urgente</span>' : ''}</div></button>`;
+    return `<button class="cu-tj" style="--c:${col}" data-f="${esc(i.falla_id)}"><div class="r1"><b>${esc(i.tipo_falla || 'Falla')}${cuNomFalla(i.tipo_falla) ? ' · ' + esc(cuNomFalla(i.tipo_falla)) : ''}</b><span${e === 'sin' ? ' class="esp"' : ''}>${esc(der)}</span></div><div class="r2"><span class="os">OS ${esc(i.ot || '—')}</span>📍 ${esc(i.direccion || '—')}</div>${i.descripcion ? `<div class="r4">${esc(i.descripcion)}</div>` : ''}<div class="r3"><span class="tag">${ETQ[e]}</span>${asig ? `<span class="tag g">${esc(asig)}</span>` : ''}${i.urgente ? '<span class="tag" style="--c:#c1443c">🔴 Urgente</span>' : ''}${i.enviado_por ? `<span class="tag env">👤 ${esc(cuNomCorto(i.enviado_por))}</span>` : ''}</div></button>`;
   };
   // Filtros rápidos (cambian de categoría sin volver a la cuadrilla) y secciones por estado
   const chips = [['total', 'Todas', r.items.length], ['sin', 'Sin atender', r.items.filter((i) => !hecha(i)).length], ['pendientes', 'Pendientes', r.items.filter((i) => i.pendiente && !i.reparada).length], ['reparadas', 'Reparadas', r.items.filter((i) => i.reparada).length]];

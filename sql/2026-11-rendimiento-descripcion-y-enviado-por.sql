@@ -1,0 +1,5 @@
+-- Rendimiento de cuadrillas: cada fila de 'filas' suma 'descripcion' (descripcion_otro de la falla) y 'enviado_por'
+-- (nombre de quien informó la falla; si no hay, de quien la ingresó). Solo agrega dos claves al JSON; lo demás queda igual.
+-- Cambio en rendimiento_cuadrillas_v2 (bloque 'filas'):
+--     'descripcion', nullif(f.descripcion_otro, ''),
+--     'enviado_por', (select u2.nombre from public.usuarios u2 where u2.id = coalesce(f.informado_por, f.creado_por)),
