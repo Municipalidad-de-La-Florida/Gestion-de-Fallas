@@ -1704,6 +1704,8 @@ function inicializarBuscadorDirecciones(){
 
 let currentUser = null; // {id, nombre, rol}
 let modoVista = null; // permite a un admin "ver como" otro rol, sin cambiar sus permisos reales
+// Número de cliente de un empalme: «número-DV» si hay DV; solo el número si no hay DV; null si no hay cliente (el archivo guarda 0 o vacío)
+const clienteEmpalme = (p) => { const f = String(p.cliente_full ?? '').trim(); if (f) return f; const n = parseFloat(p.cliente_1); return n > 0 ? String(Math.round(n)) + (String(p.cliente_dv ?? '').trim() ? '-' + String(p.cliente_dv).trim() : '') : null; };
 let map, layerCalles, layerCircuitos, layerPuntos, layerLoteos, layerEmpalmes, fallasLayerGroup, fallasPeriodoLayerGroup, searchResultLayerGroup;
 let fallasEnArea = [];
 
@@ -2582,7 +2584,7 @@ function initMap(){
       L.DomEvent.stopPropagation(e);
       mostrarPanel(`<b>Empalme</b>
         <div class="hint">N.° de Medidor: <b>${f.properties.n_empalmes ?? '—'}</b></div>
-        <div class="hint">Cliente: <b>${f.properties.cliente_1 ?? '—'}</b></div>`);
+        <div class="hint">Cliente: <b>${clienteEmpalme(f.properties) ? clienteEmpalme(f.properties) : '<i style="font-weight:400">No hay número de cliente</i>'}</b></div>`);
     })
   });
   fallasLayerGroup = L.layerGroup().addTo(map);

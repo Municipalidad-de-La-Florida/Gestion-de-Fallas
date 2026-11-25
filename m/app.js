@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.9';
+const VERSION_APP = '2.14.10';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1129,12 +1129,14 @@ async function cargarEmpalmes(bbox, forzar) {
     return false;
   }
 }
+// Número de cliente de un empalme: «número-DV» si hay DV; solo el número si no hay DV; null si no hay cliente (el archivo guarda 0 o vacío)
+const clienteEmpalme = (p) => { const f = String(p.cliente_full ?? '').trim(); if (f) return f; const n = parseFloat(p.cliente_1); return n > 0 ? String(Math.round(n)) + (String(p.cliente_dv ?? '').trim() ? '-' + String(p.cliente_dv).trim() : '') : null; };
 function abrirEmpalme(p) {
   abrirHoja(`
     <h2>Empalme</h2>
     <dl class="kv">
       <dt>N.° de medidor</dt><dd>${esc(p.n_empalmes ?? '—')}</dd>
-      <dt>Cliente</dt><dd>${esc(p.cliente_1 ?? '—')}</dd>
+      <dt>Cliente</dt><dd>${clienteEmpalme(p) ? esc(clienteEmpalme(p)) : '<i>No hay número de cliente</i>'}</dd>
     </dl>
     ${infoSoloLectura()}`);
 }
