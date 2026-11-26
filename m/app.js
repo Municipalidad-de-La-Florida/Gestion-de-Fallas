@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.11';
+const VERSION_APP = '2.14.12';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -1619,7 +1619,7 @@ async function cargarRepBusq() {
 
 async function cargarFallas(manual) {
   // Suministro y cortes cambian poco: no se piden en cada ciclo de 60 s sino cada 3 min (o al actualizar a mano)
-  if (manual || !S.ultCatalogos || Date.now() - S.ultCatalogos > 180000) { S.ultCatalogos = Date.now(); cargarSuministro(); cargarCortes(); }
+  if (manual || !S.ultCatalogos || Date.now() - S.ultCatalogos > 180000) { S.ultCatalogos = Date.now(); cargarSuministro(); cargarCortes(); cqMapaIniciar(); cqMapaCargar(); }
   if (!Object.keys(CONTR).length) cargarContratosEtiqueta();
   const btn = $('#btnActualizar');
   if (manual) btn.classList.add('girando');
@@ -4238,7 +4238,7 @@ function abrirCuaderno() {
 }
 async function anotarEnCuaderno(tipo, gid, codigo, desc, a) {
   const r = await rpc('cuaderno_agregar', { p_tipo: tipo, p_gid: gid, p_tipo_falla: codigo, p_descripcion: desc || null, p_uso_grupo: a.p_uso_grupo || null, p_contrato_id: a.p_contrato_id || null, p_mantenedor_id: a.p_mantenedor_id || null, p_masivo: false });
-  cerrarHoja();
+  cerrarHoja(); cqMapaCargar();
   if (r.ya_existe) {
     const h = abrirHoja(`<h2>Ya está en el Cuaderno</h2>
       <div class="aviso" style="background:#fbe7e5"><b>${esc(r.tipo_falla || '')}</b> · lo anotó ${esc(nombreCorto(r.anotado_por))} ${esc(hace(r.anotado_en))}.<br>Un punto o circuito tiene una sola anotación; puedes editarla desde el Cuaderno.</div>
@@ -4300,6 +4300,82 @@ async function cargarCuaderno(mas) {
   $('#cqBuscar').addEventListener('input', (e) => { CQ.f.texto = e.target.value.trim(); clearTimeout(t); t = setTimeout(() => cargarCuaderno(false), 300); });
   $('#cqOrden').addEventListener('click', () => { CQ.f.orden = CQ.f.orden === 'desc' ? 'asc' : 'desc'; cargarCuaderno(false); });
 }
+// ===== Cuaderno en el mapa (solo administrador): puntos y circuitos anotados, en morado =====
+let cqMapaVer = false, cqMapaCtl = null, cqMapaLayer = null, cqMapaBusy = false;
+try { cqMapaVer = localStorage.getItem('fa_cq_mapa') === '1'; } catch (e) { cqMapaVer = false; }
+function cqMapaPuede() { return (rol() === 'admin' && tiene('cuaderno')); }
+function cqMapaIniciar() {
+  if (!map || cqMapaCtl || !cqMapaPuede()) return;
+  const Ctl = L.Control.extend({ options: { position: 'topright' }, onAdd() {
+    const d = L.DomUtil.create('div', 'cqm-ctl'); L.DomEvent.disableClickPropagation(d);
+    d.innerHTML = '<button type="button" class="cqm-btn" aria-pressed="false">📓 Cuaderno</button>';
+    d.querySelector('button').addEventListener('click', () => { cqMapaVer = !cqMapaVer; try { localStorage.setItem('fa_cq_mapa', cqMapaVer ? '1' : '0'); } catch (e) {} cqMapaPintarBtn(); cqMapaCargar(); });
+    return d; } });
+  cqMapaCtl = new Ctl().addTo(map); cqMapaPintarBtn(); cqMapaCargar();
+}
+function cqMapaPintarBtn() { const b = cqMapaCtl && cqMapaCtl.getContainer().querySelector('button'); if (b) { b.classList.toggle('on', cqMapaVer); b.setAttribute('aria-pressed', cqMapaVer ? 'true' : 'false'); } }
+function cqMapaQuitar() { if (cqMapaLayer && map) map.removeLayer(cqMapaLayer); cqMapaLayer = null; }
+async function cqMapaCargar() {
+  if (!map || !cqMapaCtl) return;
+  if (!cqMapaVer) { cqMapaQuitar(); return; }
+  if (cqMapaBusy) return; cqMapaBusy = true;
+  try {
+    let items = [], total = 0;
+    do {
+      const r = await rpc('cuaderno_listar', { p_orden: 'desc', p_limite: 100, p_desde: items.length });
+      const lote = (r && r.items) || []; total = (r && r.total) || 0;
+      items = items.concat(lote);
+      if (!lote.length) break;
+    } while (items.length < total && items.length < 2000);
+    cqMapaPintar(items);
+  } catch (e) { console.warn('cuaderno en el mapa', e); }
+  cqMapaBusy = false;
+}
+function cqMapaFicha(it) {
+  const dir = it.tipo === 'circuito' ? 'Circuito ' + esc(it.circuito_id ?? '') : esc(it.direccion || 'Sin dirección') + (it.llave != null ? ' · llave ' + esc(it.llave) : '');
+  const cuando = new Date(it.anotado_en).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return `<div class="cqm-it"><b>${esc(it.tipo_falla || '')}</b><div>${dir}</div>${it.descripcion ? `<div>“${esc(it.descripcion)}”</div>` : ''}<div class="cqm-s">Anotó ${esc(it.anotador || '—')} · ${esc(cuando)}</div><button type="button" class="cqm-inf" data-id="${esc(it.id)}">Informar esta falla</button></div>`;
+}
+function cqMapaPopup(lista) {
+  const el = document.createElement('div'); el.className = 'cqm-pop';
+  el.innerHTML = `<div class="cqm-h">📓 Cuaderno${lista.length > 1 ? ' · ' + lista.length + ' anotaciones' : ''}</div>` + lista.map(cqMapaFicha).join('');
+  el.querySelectorAll('.cqm-inf').forEach(b => b.addEventListener('click', async () => {
+    b.disabled = true; b.textContent = 'Informando…';
+    try {
+      const r = await rpc('cuaderno_informar', { p_id: b.dataset.id, p_inspeccion_id: null });
+      if (r && r.ya_no_esta) toast('Esa anotación ya no existe.');
+      else if (r && r.ya_informada) toast('Ya estaba informada · OS ' + r.ot);
+      else toast('Falla informada · OS ' + (r && r.ot));
+      map.closePopup(); cqMapaCargar(); cargarFallas();
+    } catch (e) { b.disabled = false; b.textContent = 'Informar esta falla'; toast('No se pudo informar: ' + e.message); }
+  }));
+  return el;
+}
+function cqMapaPintar(items) {
+  cqMapaQuitar();
+  if (!map.getPane('cqMapaPane')) { map.createPane('cqMapaPane'); map.getPane('cqMapaPane').style.zIndex = 640; }
+  const capas = [], grupos = new Map();
+  items.forEach(it => {
+    if (it.tipo === 'circuito' && it.geo) {
+      const g = L.geoJSON(it.geo, { pane: 'cqMapaPane', style: { color: '#7b3fe4', weight: 5, opacity: 0.9, dashArray: '9 7' }, pointToLayer: () => L.circleMarker([0, 0], { radius: 0, opacity: 0, fillOpacity: 0, interactive: false }) });
+      g.bindPopup(() => cqMapaPopup([it]), { maxWidth: 300 });
+      capas.push(g);
+    } else if (it.lat != null && it.lng != null) {
+      const k = it.lat.toFixed(5) + ',' + it.lng.toFixed(5);
+      if (!grupos.has(k)) grupos.set(k, []);
+      grupos.get(k).push(it);
+    }
+  });
+  grupos.forEach(lista => {
+    const n = lista.length;
+    const ic = L.divIcon({ className: 'cqm-mk', html: `<span>📓</span>${n > 1 ? `<i>${n}</i>` : ''}`, iconSize: [30, 30], iconAnchor: [15, 15] });
+    const m = L.marker([lista[0].lat, lista[0].lng], { icon: ic, pane: 'cqMapaPane' });
+    m.bindPopup(() => cqMapaPopup(lista), { maxWidth: 300 });
+    capas.push(m);
+  });
+  cqMapaLayer = L.layerGroup(capas).addTo(map);
+}
+
 // Marca anaranjada del punto o circuito de la anotación elegida (solo para ubicarla; se quita al cerrar)
 let cqMarca = null;
 function quitarMarcaCuaderno() { if (cqMarca && map) { map.removeLayer(cqMarca); } cqMarca = null; }
