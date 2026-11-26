@@ -1768,6 +1768,7 @@ async function cargarPerfilYIniciar(userId){
     currentUser = data[0];
     try{ MODO_MANT = !!(await db.rpc('es_usuario_mantenedor', {})); }catch(_){ MODO_MANT = false; }   // sin el SQL: colores de siempre
     setTimeout(iniciarNotifs, 1500);
+    { let _n = 0; const _t = setInterval(() => { cqMapaIniciar(); if(cqMapaCtl || ++_n > 20) clearInterval(_t); }, 1000); }
     cargarLibreria(); cargarCortesWeb();   // códigos de falla y de cierre desde la Librería (sin bloquear el inicio)
     currentUser.ver_cuadrillas = false; currentUser.ver_ubicacion = false; currentUser.ubic_col = false;
     currentUser.ver_fiscalizacion = false; currentUser.fisc_col = false;
