@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = 'https://rcwtqvhssgtufgypnobn.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_7DTKNsCtPUlaQVDhiwVtoA_o5A_dIcu';
-const VERSION_APP = '2.14.12';
+const VERSION_APP = '2.14.13';
 
 /* --- Tema: Automático (sigue al teléfono) / Claro / Oscuro --- */
 function temaGuardado() { try { return localStorage.getItem('fm_tema') || 'auto'; } catch (e) { return 'auto'; } }
@@ -4306,14 +4306,12 @@ try { cqMapaVer = localStorage.getItem('fa_cq_mapa') === '1'; } catch (e) { cqMa
 function cqMapaPuede() { return (rol() === 'admin' && tiene('cuaderno')); }
 function cqMapaIniciar() {
   if (!map || cqMapaCtl || !cqMapaPuede()) return;
-  const Ctl = L.Control.extend({ options: { position: 'topright' }, onAdd() {
-    const d = L.DomUtil.create('div', 'cqm-ctl'); L.DomEvent.disableClickPropagation(d);
-    d.innerHTML = '<button type="button" class="cqm-btn" aria-pressed="false">📓 Cuaderno</button>';
-    d.querySelector('button').addEventListener('click', () => { cqMapaVer = !cqMapaVer; try { localStorage.setItem('fa_cq_mapa', cqMapaVer ? '1' : '0'); } catch (e) {} cqMapaPintarBtn(); cqMapaCargar(); });
-    return d; } });
-  cqMapaCtl = new Ctl().addTo(map); cqMapaPintarBtn(); cqMapaCargar();
+  const b = document.getElementById('btnCuadMapa'); if (!b) return;
+  b.hidden = false; cqMapaCtl = b;
+  b.addEventListener('click', () => { cqMapaVer = !cqMapaVer; try { localStorage.setItem('fa_cq_mapa', cqMapaVer ? '1' : '0'); } catch (e) {} cqMapaPintarBtn(); cqMapaCargar(); });
+  cqMapaPintarBtn(); cqMapaCargar();
 }
-function cqMapaPintarBtn() { const b = cqMapaCtl && cqMapaCtl.getContainer().querySelector('button'); if (b) { b.classList.toggle('on', cqMapaVer); b.setAttribute('aria-pressed', cqMapaVer ? 'true' : 'false'); } }
+function cqMapaPintarBtn() { const b = cqMapaCtl; if (b) { b.classList.toggle('activo', cqMapaVer); b.setAttribute('aria-pressed', cqMapaVer ? 'true' : 'false'); } }
 function cqMapaQuitar() { if (cqMapaLayer && map) map.removeLayer(cqMapaLayer); cqMapaLayer = null; }
 async function cqMapaCargar() {
   if (!map || !cqMapaCtl) return;
