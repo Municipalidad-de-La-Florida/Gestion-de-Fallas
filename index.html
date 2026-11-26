@@ -3196,14 +3196,15 @@ try { cqMapaVer = localStorage.getItem('fa_cq_mapa') === '1'; } catch (e) { cqMa
 function cqMapaPuede() { return (currentUser && currentUser.rol === 'admin'); }
 function cqMapaIniciar() {
   if (!map || cqMapaCtl || !cqMapaPuede()) return;
-  const Ctl = L.Control.extend({ options: { position: 'topright' }, onAdd() {
-    const d = L.DomUtil.create('div', 'cqm-ctl'); L.DomEvent.disableClickPropagation(d);
-    d.innerHTML = '<button type="button" class="cqm-btn" aria-pressed="false">📓 Cuaderno</button>';
-    d.querySelector('button').addEventListener('click', () => { cqMapaVer = !cqMapaVer; try { localStorage.setItem('fa_cq_mapa', cqMapaVer ? '1' : '0'); } catch (e) {} cqMapaPintarBtn(); cqMapaCargar(); });
-    return d; } });
+  const Ctl = L.Control.extend({ options: { position: 'bottomright' }, onAdd() {
+    const a = L.DomUtil.create('a', 'leaflet-control leaflet-control-zonas'); a.href = '#'; a.role = 'button'; a.id = 'btnCuadMapa';
+    a.title = 'Cuaderno en el mapa'; a.setAttribute('aria-label', 'Cuaderno en el mapa'); a.textContent = '📓';
+    L.DomEvent.disableClickPropagation(a); L.DomEvent.on(a, 'click', L.DomEvent.preventDefault);
+    L.DomEvent.on(a, 'click', () => { cqMapaVer = !cqMapaVer; try { localStorage.setItem('fa_cq_mapa', cqMapaVer ? '1' : '0'); } catch (e) {} cqMapaPintarBtn(); cqMapaCargar(); });
+    return a; } });
   cqMapaCtl = new Ctl().addTo(map); cqMapaPintarBtn(); cqMapaCargar();
 }
-function cqMapaPintarBtn() { const b = cqMapaCtl && cqMapaCtl.getContainer().querySelector('button'); if (b) { b.classList.toggle('on', cqMapaVer); b.setAttribute('aria-pressed', cqMapaVer ? 'true' : 'false'); } }
+function cqMapaPintarBtn() { const b = cqMapaCtl && cqMapaCtl.getContainer(); if (b) { b.classList.toggle('activo', cqMapaVer); b.setAttribute('aria-pressed', cqMapaVer ? 'true' : 'false'); } }
 function cqMapaQuitar() { if (cqMapaLayer && map) map.removeLayer(cqMapaLayer); cqMapaLayer = null; }
 async function cqMapaCargar() {
   if (!map || !cqMapaCtl) return;
